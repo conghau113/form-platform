@@ -1,0 +1,45 @@
+import type { LeafField } from "@org/form-schema";
+
+/** The `dataSource` config of a select field (the contract owns the shape). */
+export type SelectDataSource = NonNullable<Extract<LeafField, { type: "select" }>["dataSource"]>;
+
+/** A normalized option ready for any renderer's select control. */
+export interface DataSourceOption {
+  label: string;
+  value: string | number;
+}
+
+/**
+ * Build the request URL for a select's dataSource. When the field depends on a
+ * parent field, the parent's current value is sent as a query param NAMED AFTER
+ * `dependsOn` (e.g. dependsOn "country" -> `?country=VN`). Existing query strings
+ * on the configured url are preserved. Platform-agnostic — shared by web + native.
+ */
+export function buildDataSourceUrl(ds: SelectDataSource, dependsOnValue: unknown): string {
+  if (!ds.dependsOn) return ds.url;
+  const isAbsolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(ds.url);
+  const url = new URL(ds.url, "http://_relative_base_");
+  url.searchParams.set(ds.dependsOn, String(dependsOnValue));
+  // Strip the synthetic base for relative urls; keep absolute urls intact.
+  return isAbsolute ? url.toString() : `${url.pathname}${url.search}`;
+}
+
+/**
+ * Fetch and normalize remote select options. Maps each row via the dataSource's
+ * `labelKey`/`valueKey`. Throws on a non-ok response so callers (react-query on
+ * web, etc.) can surface an error state. The fetch impl is injectable for tests
+ * and non-DOM environments.
+ */
+export async function fetchDataSourceOptions(
+  ds: SelectDataSource,
+  dependsOnValue: unknown,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DataSourceOption[]> {
+  const res = await fetchImpl(buildDataSourceUrl(ds, dependsOnValue));
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  const rows = (await res.json()) as Array<Record<string, unknown>>;
+  return rows.map((row) => ({
+    label: String(row[ds.labelKey]),
+    value: row[ds.valueKey] as string | number,
+  }));
+}

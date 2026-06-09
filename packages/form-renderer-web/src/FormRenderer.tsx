@@ -1,6 +1,15 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type AccessContext, buildZodSchema, canEdit, canView, isVisible } from "@org/form-core";
+import {
+  type AccessContext,
+  buildZodSchema,
+  canEdit,
+  canView,
+  type DataSourceOption,
+  fetchDataSourceOptions,
+  isVisible,
+} from "@org/form-core";
 import { type FieldNode, type FormSchema, type LeafField, migrate } from "@org/form-schema";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   Button,
   Checkbox,
@@ -15,21 +24,70 @@ import {
   type ThemeConfig,
 } from "antd";
 import type React from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Controller, type Resolver, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
 
 type DateValue = React.ComponentProps<typeof DatePicker>["value"];
 type SelectValue = string | number | Array<string | number> | undefined;
+type SelectField = Extract<LeafField, { type: "select" }>;
+
+/** A select whose options may come from a remote dataSource via react-query.
+ *  Fetching + option mapping live in form-core so native reuses them; only the
+ *  antd control + react-query wiring + loading/error UI are web-specific. */
+function SelectControl(props: {
+  node: SelectField;
+  value: SelectValue;
+  disabled?: boolean;
+  onChange: (v: unknown) => void;
+  /** Current value of the `dataSource.dependsOn` parent field, if any. */
+  dependsOnValue?: unknown;
+}) {
+  const { node, value, disabled, onChange, dependsOnValue } = props;
+  const ds = node.dataSource;
+
+  // A dependent select waits until its parent has a value before fetching.
+  const waitingOnParent = !!ds?.dependsOn && (dependsOnValue == null || dependsOnValue === "");
+
+  const query = useQuery<DataSourceOption[]>({
+    queryKey: ["form-datasource", ds?.url, ds?.dependsOn ? dependsOnValue : null],
+    enabled: !!ds && !waitingOnParent,
+    // ds is defined whenever the query is enabled.
+    queryFn: () => fetchDataSourceOptions(ds as NonNullable<typeof ds>, dependsOnValue),
+  });
+
+  // Static options pass straight through; remote options come from the query.
+  const options = ds ? (query.data ?? []) : node.options;
+
+  let notFoundContent: React.ReactNode;
+  if (waitingOnParent) notFoundContent = `Select ${ds?.dependsOn} first`;
+  else if (query.isError) notFoundContent = (query.error as Error).message;
+
+  return (
+    <Select
+      style={{ width: "100%" }}
+      value={value}
+      disabled={disabled}
+      mode={node.multiple ? "multiple" : undefined}
+      options={options}
+      loading={!!ds && query.isFetching}
+      status={query.isError ? "error" : undefined}
+      notFoundContent={notFoundContent}
+      onChange={onChange}
+    />
+  );
+}
 
 function FieldControl(props: {
   node: LeafField;
   value: unknown;
   disabled?: boolean;
   onChange: (v: unknown) => void;
+  /** Current value of a select's `dataSource.dependsOn` parent field, if any. */
+  dependsOnValue?: unknown;
 }) {
-  const { node, value, disabled, onChange } = props;
+  const { node, value, disabled, onChange, dependsOnValue } = props;
   switch (node.type) {
     case "text":
       return (
@@ -65,13 +123,12 @@ function FieldControl(props: {
       );
     case "select":
       return (
-        <Select
-          style={{ width: "100%" }}
+        <SelectControl
+          node={node}
           value={value as SelectValue}
           disabled={disabled}
-          mode={node.multiple ? "multiple" : undefined}
-          options={node.options}
           onChange={onChange}
+          dependsOnValue={dependsOnValue}
         />
       );
     case "date":
@@ -121,6 +178,12 @@ export function FormRenderer({
 }: FormRendererProps) {
   const form: FormSchema = useMemo(() => migrate(schema), [schema]);
 
+  // Self-contained QueryClient so consumers don't have to provide one. Retries
+  // are off so dataSource error states surface immediately. Created once.
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
+
   // Validation rebuilds per call so visibility (and RBAC) reflect current values:
   // hidden fields are excluded from validation and stripped from the output.
   const resolver: Resolver<Values> = (values, context, options) =>
@@ -160,6 +223,9 @@ export function FormRenderer({
     // Responsive: read per-breakpoint colSpan; antd collapses to xs on small screens.
     const span = { ...DEFAULT_SPAN, ...(node.layout?.colSpan ?? {}) };
     const editable = canEdit(node, access);
+    // A select with a dependent dataSource reads its parent field's current value.
+    const dependsOn = node.type === "select" ? node.dataSource?.dependsOn : undefined;
+    const dependsOnValue = dependsOn ? values[dependsOn] : undefined;
     return (
       <Col key={node.name} {...span}>
         <Controller
@@ -177,6 +243,7 @@ export function FormRenderer({
                 value={field.value}
                 disabled={!editable}
                 onChange={field.onChange}
+                dependsOnValue={dependsOnValue}
               />
             </Form.Item>
           )}
@@ -186,15 +253,17 @@ export function FormRenderer({
   };
 
   return (
-    <ConfigProvider theme={theme}>
-      <Form layout="vertical" component={false}>
-        <form onSubmit={submit} noValidate>
-          <Row gutter={16}>{form.fields.map(renderNode)}</Row>
-          <Button type="primary" htmlType="submit">
-            {submitLabel}
-          </Button>
-        </form>
-      </Form>
-    </ConfigProvider>
+    <QueryClientProvider client={queryClient}>
+      <ConfigProvider theme={theme}>
+        <Form layout="vertical" component={false}>
+          <form onSubmit={submit} noValidate>
+            <Row gutter={16}>{form.fields.map(renderNode)}</Row>
+            <Button type="primary" htmlType="submit">
+              {submitLabel}
+            </Button>
+          </form>
+        </Form>
+      </ConfigProvider>
+    </QueryClientProvider>
   );
 }
