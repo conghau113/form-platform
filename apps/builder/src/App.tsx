@@ -8,7 +8,18 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { FormRenderer } from "@org/form-renderer-web";
-import { Alert, Button, Input, message, Segmented, Space, Typography } from "antd";
+import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
+import {
+  Alert,
+  Button,
+  ConfigProvider,
+  Input,
+  message,
+  Segmented,
+  Space,
+  Typography,
+  theme,
+} from "antd";
 import { Component, type ReactNode, useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { CANVAS_ID, Canvas } from "./Canvas";
@@ -23,6 +34,7 @@ import {
 } from "./model";
 import { Palette, paletteType } from "./Palette";
 import { PropertyPanel } from "./PropertyPanel";
+import { ThemeEditor } from "./ThemeEditor";
 
 const API = "http://localhost:3001";
 
@@ -52,12 +64,37 @@ class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error 
   }
 }
 
+/** The themed preview card. Reads antd's themed tokens (so it follows the
+ *  default/dark algorithm) from inside the surrounding ConfigProvider. */
+function PreviewSurface({ maxWidth, children }: { maxWidth: number; children: ReactNode }) {
+  const { token } = theme.useToken();
+  return (
+    <div
+      style={{
+        maxWidth,
+        margin: "0 auto",
+        padding: 24,
+        background: token.colorBgContainer,
+        borderRadius: token.borderRadiusLG,
+        boxShadow: token.boxShadow,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function App() {
   const history = useHistory(() => fromFormSchema(example));
   const model = history.present;
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [viewport, setViewport] = useState<Viewport>("Desktop");
   const [rightTab, setRightTab] = useState<"preview" | "json">("preview");
+  const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
+
+  // The neutral design tokens are mapped to an antd ThemeConfig that wraps the
+  // preview, so editing a token re-themes the rendered form live.
+  const antdTheme = useMemo(() => toAntdTheme(tokens), [tokens]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -127,7 +164,18 @@ export function App() {
         message.error(`Save failed: ${data.message ?? res.statusText}`);
         return;
       }
-      message.success(`Saved "${data.id}"`);
+      // Persist the theme alongside the form under the same id.
+      const themeRes = await fetch(`${API}/themes/${encodeURIComponent(data.id)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(tokens),
+      });
+      if (!themeRes.ok) {
+        const themeData = await themeRes.json().catch(() => ({}));
+        message.error(`Theme save failed: ${themeData.message ?? themeRes.statusText}`);
+        return;
+      }
+      message.success(`Saved "${data.id}" (form + theme)`);
     } catch (e) {
       message.error(`Save failed: ${(e as Error).message}`);
     }
@@ -143,10 +191,23 @@ export function App() {
       }
       history.reset(fromFormSchema(data));
       setSelectedUid(null);
-      message.success(`Loaded "${model.id}"`);
+      // Reapply the saved theme if one exists; a missing theme is not an error.
+      const themeRes = await fetch(`${API}/themes/${encodeURIComponent(data.id)}`);
+      setTokens(themeRes.ok ? migrateTheme(await themeRes.json()) : DEFAULT_TOKENS);
+      message.success(`Loaded "${data.id}"`);
     } catch (e) {
       message.error(`Load failed: ${(e as Error).message}`);
     }
+  }
+
+  function onExportTheme() {
+    const blob = new Blob([JSON.stringify(tokens, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${model.id || "theme"}.theme.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -254,22 +315,20 @@ export function App() {
             </div>
 
             {rightTab === "preview" ? (
-              <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#f5f5f5" }}>
-                <div
-                  style={{
-                    maxWidth: VIEWPORTS[viewport],
-                    margin: "0 auto",
-                    padding: 24,
-                    background: "#fff",
-                    borderRadius: 8,
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-                  }}
-                >
-                  <PreviewBoundary key={json}>
-                    <FormRenderer schema={schema} access={{ roles: ["admin"] }} />
-                  </PreviewBoundary>
+              <>
+                <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+                  <ThemeEditor tokens={tokens} onChange={setTokens} onExport={onExportTheme} />
                 </div>
-              </div>
+                <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#f5f5f5" }}>
+                  <ConfigProvider theme={antdTheme}>
+                    <PreviewSurface maxWidth={VIEWPORTS[viewport]}>
+                      <PreviewBoundary key={json}>
+                        <FormRenderer schema={schema} access={{ roles: ["admin"] }} />
+                      </PreviewBoundary>
+                    </PreviewSurface>
+                  </ConfigProvider>
+                </div>
+              </>
             ) : (
               <Input.TextArea
                 value={json}

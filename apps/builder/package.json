@@ -16,6 +16,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@org/form-schema": "workspace:*",
+    "@org/form-theme": "workspace:*",
     "@org/form-renderer-web": "workspace:*",
     "antd": "^5.0.0",
     "react": "^18.3.0",
