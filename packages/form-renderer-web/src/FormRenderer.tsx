@@ -1,6 +1,8 @@
-import { type AccessContext, canEdit, canView, isVisible } from "@org/form-core";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { type AccessContext, buildZodSchema, canEdit, canView, isVisible } from "@org/form-core";
 import { type FieldNode, type FormSchema, migrate } from "@org/form-schema";
 import {
+  Button,
   Checkbox,
   Col,
   ConfigProvider,
@@ -13,7 +15,8 @@ import {
   type ThemeConfig,
 } from "antd";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { Controller, type Resolver, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
 
@@ -28,9 +31,20 @@ function FieldControl(props: {
     case "text":
       return (
         <Input
-          value={value}
+          value={value ?? ""}
           disabled={disabled}
           maxLength={node.maxLength}
+          placeholder={node.placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case "textarea":
+      return (
+        <Input.TextArea
+          value={value ?? ""}
+          disabled={disabled}
+          maxLength={node.maxLength}
+          rows={node.rows}
           placeholder={node.placeholder}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -39,7 +53,7 @@ function FieldControl(props: {
       return (
         <InputNumber
           style={{ width: "100%" }}
-          value={value}
+          value={value ?? null}
           disabled={disabled}
           min={node.min}
           max={node.max}
@@ -58,7 +72,14 @@ function FieldControl(props: {
         />
       );
     case "date":
-      return <DatePicker style={{ width: "100%" }} disabled={disabled} onChange={onChange} />;
+      return (
+        <DatePicker
+          style={{ width: "100%" }}
+          value={value ?? null}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
     case "checkbox":
       return (
         <Checkbox
@@ -80,8 +101,12 @@ export interface FormRendererProps {
   access?: AccessContext;
   /** Seed values, e.g. when editing an existing submission. Drives conditional visibility. */
   initialValues?: Record<string, unknown>;
+  /** Receives a clean, typed values object — only visible/permitted fields. */
   onSubmit?: (values: Record<string, unknown>) => void;
+  submitLabel?: string;
 }
+
+type Values = Record<string, unknown>;
 
 export function FormRenderer({
   schema,
@@ -89,10 +114,30 @@ export function FormRenderer({
   access = { roles: [] },
   initialValues,
   onSubmit,
+  submitLabel = "Submit",
 }: FormRendererProps) {
   const form: FormSchema = useMemo(() => migrate(schema), [schema]);
-  const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
-  const setValue = (name: string, v: unknown) => setValues((s) => ({ ...s, [name]: v }));
+
+  // Validation rebuilds per call so visibility (and RBAC) reflect current values:
+  // hidden fields are excluded from validation and stripped from the output.
+  const resolver: Resolver<Values> = (values, context, options) =>
+    (zodResolver(buildZodSchema(form, { values, access })) as Resolver<Values>)(
+      values,
+      context,
+      options,
+    );
+
+  const { control, handleSubmit, watch } = useForm<Values>({
+    defaultValues: initialValues ?? {},
+    resolver,
+  });
+  const values = watch();
+
+  const submit = handleSubmit((data) => {
+    // Parse once more to strip hidden/non-viewable keys -> a clean typed payload.
+    const clean = buildZodSchema(form, { values: data, access }).parse(data);
+    onSubmit?.(clean);
+  });
 
   const renderNode = (node: FieldNode): React.ReactNode => {
     if (!isVisible(node, values)) return null; // shared conditional logic
@@ -114,22 +159,38 @@ export function FormRenderer({
     const editable = canEdit(node, access);
     return (
       <Col key={node.name} {...span}>
-        <Form.Item label={node.label} required={node.required} help={node.helpText}>
-          <FieldControl
-            node={node}
-            value={values[node.name]}
-            disabled={!editable}
-            onChange={(v) => setValue(node.name, v)}
-          />
-        </Form.Item>
+        <Controller
+          name={node.name}
+          control={control}
+          render={({ field, fieldState }) => (
+            <Form.Item
+              label={node.label}
+              required={node.required}
+              validateStatus={fieldState.error ? "error" : undefined}
+              help={fieldState.error?.message ?? node.helpText}
+            >
+              <FieldControl
+                node={node}
+                value={field.value}
+                disabled={!editable}
+                onChange={field.onChange}
+              />
+            </Form.Item>
+          )}
+        />
       </Col>
     );
   };
 
   return (
     <ConfigProvider theme={theme}>
-      <Form layout="vertical" onFinish={() => onSubmit?.(values)}>
-        <Row gutter={16}>{form.fields.map(renderNode)}</Row>
+      <Form layout="vertical" component={false}>
+        <form onSubmit={submit} noValidate>
+          <Row gutter={16}>{form.fields.map(renderNode)}</Row>
+          <Button type="primary" htmlType="submit">
+            {submitLabel}
+          </Button>
+        </form>
       </Form>
     </ConfigProvider>
   );

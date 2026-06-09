@@ -39,7 +39,11 @@
       "Bash(git --version)",
       "Bash(git config *)",
       "Bash(gh auth *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(cat packages/form-core/vitest.config.ts)",
+      "Bash(cat packages/form-renderer-web/vitest.config.*)",
+      "Bash(cat packages/form-core/vitest.config.*)",
+      "Bash(cat packages/form-renderer-web/vitest.setup.ts)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
