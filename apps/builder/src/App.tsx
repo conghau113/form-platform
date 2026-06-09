@@ -35,6 +35,7 @@ import {
 import { Palette, paletteType } from "./Palette";
 import { PropertyPanel } from "./PropertyPanel";
 import { ThemeEditor } from "./ThemeEditor";
+import { WorkflowEditor } from "./WorkflowEditor";
 
 const API = "http://localhost:3001";
 
@@ -91,6 +92,7 @@ export function App() {
   const [viewport, setViewport] = useState<Viewport>("Desktop");
   const [rightTab, setRightTab] = useState<"preview" | "json">("preview");
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
+  const [mode, setMode] = useState<"form" | "workflow">("form");
 
   // The neutral design tokens are mapped to an antd ThemeConfig that wraps the
   // preview, so editing a token re-themes the rendered form live.
@@ -181,9 +183,9 @@ export function App() {
     }
   }
 
-  async function onLoad() {
+  async function onLoad(id: string = model.id) {
     try {
-      const res = await fetch(`${API}/forms/${encodeURIComponent(model.id)}`);
+      const res = await fetch(`${API}/forms/${encodeURIComponent(id)}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         message.error(`Load failed: ${data.message ?? res.statusText}`);
@@ -198,6 +200,13 @@ export function App() {
     } catch (e) {
       message.error(`Load failed: ${(e as Error).message}`);
     }
+  }
+
+  // A workflow node "opens the existing form builder to bind its form": switch to
+  // form mode and load that form id from the API.
+  function onEditForm(formId: string) {
+    setMode("form");
+    void onLoad(formId);
   }
 
   function onExportTheme() {
@@ -223,129 +232,144 @@ export function App() {
           }}
         >
           <Typography.Title level={4} style={{ margin: 0, whiteSpace: "nowrap" }}>
-            Form Builder
+            Builder
           </Typography.Title>
-          <Input
-            value={model.title}
-            onChange={(e) => history.set({ ...model, title: e.target.value })}
-            placeholder="form title"
-            style={{ width: 200 }}
+          <Segmented
+            options={["form", "workflow"]}
+            value={mode}
+            onChange={(v) => setMode(v as "form" | "workflow")}
           />
-          <Input
-            value={model.id}
-            onChange={(e) => history.set({ ...model, id: e.target.value })}
-            placeholder="form id"
-            style={{ width: 160 }}
-          />
-          <Space>
-            <Button icon={<UndoOutlined />} disabled={!history.canUndo} onClick={history.undo}>
-              Undo
-            </Button>
-            <Button icon={<RedoOutlined />} disabled={!history.canRedo} onClick={history.redo}>
-              Redo
-            </Button>
-            <Button type="primary" onClick={onSave}>
-              Save
-            </Button>
-            <Button onClick={onLoad}>Load</Button>
-          </Space>
+          {mode === "form" && (
+            <>
+              <Input
+                value={model.title}
+                onChange={(e) => history.set({ ...model, title: e.target.value })}
+                placeholder="form title"
+                style={{ width: 200 }}
+              />
+              <Input
+                value={model.id}
+                onChange={(e) => history.set({ ...model, id: e.target.value })}
+                placeholder="form id"
+                style={{ width: 160 }}
+              />
+              <Space>
+                <Button icon={<UndoOutlined />} disabled={!history.canUndo} onClick={history.undo}>
+                  Undo
+                </Button>
+                <Button icon={<RedoOutlined />} disabled={!history.canRedo} onClick={history.redo}>
+                  Redo
+                </Button>
+                <Button type="primary" onClick={onSave}>
+                  Save
+                </Button>
+                <Button onClick={() => onLoad()}>Load</Button>
+              </Space>
+            </>
+          )}
         </header>
 
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-          <aside
-            style={{ width: 150, borderRight: "1px solid rgba(0,0,0,0.08)", overflow: "auto" }}
-          >
-            <Palette />
-          </aside>
+        {mode === "workflow" ? (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <WorkflowEditor onEditForm={onEditForm} />
+          </div>
+        ) : (
+          <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+            <aside
+              style={{ width: 150, borderRight: "1px solid rgba(0,0,0,0.08)", overflow: "auto" }}
+            >
+              <Palette />
+            </aside>
 
-          <section
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              width: 320,
-              borderRight: "1px solid rgba(0,0,0,0.08)",
-              minHeight: 0,
-            }}
-          >
-            <Canvas
-              model={model}
-              selectedUid={selectedUid}
-              onSelect={setSelectedUid}
-              onRemove={onRemove}
-            />
-          </section>
-
-          <aside
-            style={{
-              width: 340,
-              borderRight: "1px solid rgba(0,0,0,0.08)",
-              minHeight: 0,
-              overflow: "auto",
-            }}
-          >
-            <PropertyPanel
-              selected={selected}
-              siblings={model.fields}
-              onChange={(uid, patch) => history.set(updateField(model, uid, patch))}
-            />
-          </aside>
-
-          <section style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-            <div
+            <section
               style={{
                 display: "flex",
-                gap: 12,
-                justifyContent: "space-between",
-                padding: "8px 12px",
-                borderBottom: "1px solid rgba(0,0,0,0.08)",
+                flexDirection: "column",
+                width: 320,
+                borderRight: "1px solid rgba(0,0,0,0.08)",
+                minHeight: 0,
               }}
             >
-              <Segmented
-                options={["preview", "json"]}
-                value={rightTab}
-                onChange={(v) => setRightTab(v as "preview" | "json")}
+              <Canvas
+                model={model}
+                selectedUid={selectedUid}
+                onSelect={setSelectedUid}
+                onRemove={onRemove}
               />
-              {rightTab === "preview" && (
+            </section>
+
+            <aside
+              style={{
+                width: 340,
+                borderRight: "1px solid rgba(0,0,0,0.08)",
+                minHeight: 0,
+                overflow: "auto",
+              }}
+            >
+              <PropertyPanel
+                selected={selected}
+                siblings={model.fields}
+                onChange={(uid, patch) => history.set(updateField(model, uid, patch))}
+              />
+            </aside>
+
+            <section style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  justifyContent: "space-between",
+                  padding: "8px 12px",
+                  borderBottom: "1px solid rgba(0,0,0,0.08)",
+                }}
+              >
                 <Segmented
-                  options={Object.keys(VIEWPORTS)}
-                  value={viewport}
-                  onChange={(v) => setViewport(v as Viewport)}
+                  options={["preview", "json"]}
+                  value={rightTab}
+                  onChange={(v) => setRightTab(v as "preview" | "json")}
+                />
+                {rightTab === "preview" && (
+                  <Segmented
+                    options={Object.keys(VIEWPORTS)}
+                    value={viewport}
+                    onChange={(v) => setViewport(v as Viewport)}
+                  />
+                )}
+              </div>
+
+              {rightTab === "preview" ? (
+                <>
+                  <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+                    <ThemeEditor tokens={tokens} onChange={setTokens} onExport={onExportTheme} />
+                  </div>
+                  <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#f5f5f5" }}>
+                    <ConfigProvider theme={antdTheme}>
+                      <PreviewSurface maxWidth={VIEWPORTS[viewport]}>
+                        <PreviewBoundary key={json}>
+                          <FormRenderer schema={schema} access={{ roles: ["admin"] }} />
+                        </PreviewBoundary>
+                      </PreviewSurface>
+                    </ConfigProvider>
+                  </div>
+                </>
+              ) : (
+                <Input.TextArea
+                  value={json}
+                  readOnly
+                  spellCheck={false}
+                  style={{
+                    flex: 1,
+                    fontFamily: "monospace",
+                    fontSize: 13,
+                    border: "none",
+                    borderRadius: 0,
+                    resize: "none",
+                  }}
                 />
               )}
-            </div>
-
-            {rightTab === "preview" ? (
-              <>
-                <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
-                  <ThemeEditor tokens={tokens} onChange={setTokens} onExport={onExportTheme} />
-                </div>
-                <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#f5f5f5" }}>
-                  <ConfigProvider theme={antdTheme}>
-                    <PreviewSurface maxWidth={VIEWPORTS[viewport]}>
-                      <PreviewBoundary key={json}>
-                        <FormRenderer schema={schema} access={{ roles: ["admin"] }} />
-                      </PreviewBoundary>
-                    </PreviewSurface>
-                  </ConfigProvider>
-                </div>
-              </>
-            ) : (
-              <Input.TextArea
-                value={json}
-                readOnly
-                spellCheck={false}
-                style={{
-                  flex: 1,
-                  fontFamily: "monospace",
-                  fontSize: 13,
-                  border: "none",
-                  borderRadius: 0,
-                  resize: "none",
-                }}
-              />
-            )}
-          </section>
-        </div>
+            </section>
+          </div>
+        )}
       </div>
     </DndContext>
   );

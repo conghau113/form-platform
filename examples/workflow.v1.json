@@ -1,0 +1,27 @@
+{
+  "workflowVersion": 1,
+  "id": "onboarding",
+  "title": "Onboarding",
+  "start": "created",
+  "nodes": [
+    { "id": "created", "status": "created", "formId": "intake", "position": { "x": 0, "y": 0 } },
+    {
+      "id": "inprogress",
+      "status": "inprogress",
+      "formId": "review",
+      "position": { "x": 280, "y": 0 }
+    },
+    { "id": "done", "status": "done", "formId": "summary", "position": { "x": 560, "y": 0 } }
+  ],
+  "transitions": [
+    { "id": "t1", "from": "created", "to": "inprogress", "action": "submit" },
+    {
+      "id": "t2",
+      "from": "inprogress",
+      "to": "done",
+      "action": "approve",
+      "role": "manager",
+      "guard": { "rule": { "==": [{ "var": "approved" }, true] } }
+    }
+  ]
+}
