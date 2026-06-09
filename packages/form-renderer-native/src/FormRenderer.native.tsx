@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import { type AccessContext, canView, isVisible } from "@org/form-core";
 // On a real RN project these come from react-native + a native UI kit such as
 // @ant-design/react-native or react-native-paper. Stubbed here so the package
 // builds in a web-only workspace without native toolchain.
 // import { View, Text } from "react-native";
-import { migrate, type FieldNode, type FormSchema } from "@org/form-schema";
-import { isVisible, canView, type AccessContext } from "@org/form-core";
+import { type FieldNode, type FormSchema, migrate } from "@org/form-schema";
+import type React from "react";
+import { useMemo, useState } from "react";
 
 export interface NativeFormRendererProps {
   schema: unknown;

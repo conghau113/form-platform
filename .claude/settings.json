@@ -44,7 +44,17 @@
       "Bash(cat packages/form-renderer-web/vitest.config.*)",
       "Bash(cat packages/form-core/vitest.config.*)",
       "Bash(cat packages/form-renderer-web/vitest.setup.ts)",
-      "Bash(xargs grep -l \"buildZodSchema\")"
+      "Bash(xargs grep -l \"buildZodSchema\")",
+      "Bash(ls -la bash.exe.stackdump)",
+      "Bash(rm -f bash.exe.stackdump)",
+      "Bash(cat apps/builder/vite.config.*)",
+      "Bash(cat apps/builder/vitest.config.*)",
+      "Bash(ls node_modules/@xyflow)",
+      "Bash(cat apps/builder/vitest.setup.ts)",
+      "Bash(ls .changeset/)",
+      "Bash(grep -rn \"eval\\(\\\\|new Function\" packages/workflow-schema/src packages/workflow-core/src apps/builder/src/workflow-model.ts apps/builder/src/WorkflowEditor.tsx)",
+      "Bash(grep -rn \"react\\\\|React\" packages/workflow-core/src packages/workflow-schema/src)",
+      "Bash(grep -rn \": any\\\\|<any>\\\\|any\\\\[\\\\]\\\\|as any\" packages/workflow-core/src packages/workflow-schema/src)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

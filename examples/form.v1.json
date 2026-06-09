@@ -21,10 +21,7 @@
       "type": "select",
       "name": "country",
       "label": "Country",
-      "options": [
-        { "label": "Vietnam", "value": "VN" },
-        { "label": "Other", "value": "OTHER" }
-      ]
+      "options": [{ "label": "Vietnam", "value": "VN" }, { "label": "Other", "value": "OTHER" }]
     },
     {
       "type": "text",

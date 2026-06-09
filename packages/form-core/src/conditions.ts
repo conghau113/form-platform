@@ -1,5 +1,5 @@
-import jsonLogic from "json-logic-js";
 import type { FieldNode } from "@org/form-schema";
+import jsonLogic from "json-logic-js";
 
 /**
  * SAFE conditional evaluation. The rule is plain JSON data interpreted by

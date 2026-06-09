@@ -43,9 +43,7 @@ describe("FormRenderer dataSource (web)", () => {
 
     render(<FormRenderer schema={schema} />);
 
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("https://api.test/countries"),
-    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("https://api.test/countries"));
 
     await userEvent.click(screen.getByRole("combobox"));
     expect(await screen.findByText("Vietnam")).toBeInTheDocument();

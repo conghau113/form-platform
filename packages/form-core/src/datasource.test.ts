@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  buildDataSourceUrl,
-  fetchDataSourceOptions,
-  type SelectDataSource,
-} from "./datasource.js";
+import { buildDataSourceUrl, fetchDataSourceOptions, type SelectDataSource } from "./datasource.js";
 
 const countries: SelectDataSource = {
   url: "https://api.test/countries",

@@ -1,4 +1,4 @@
-import { CURRENT_FORM_VERSION, formSchema, type FormSchema } from "./schema.js";
+import { CURRENT_FORM_VERSION, type FormSchema, formSchema } from "./schema.js";
 
 type Migration = (doc: any) => any;
 
@@ -51,7 +51,7 @@ export function migrate(input: unknown): FormSchema {
   if (doc.formVersion > CURRENT_FORM_VERSION) {
     throw new Error(
       `Form schema v${doc.formVersion} is newer than this renderer supports ` +
-        `(v${CURRENT_FORM_VERSION}). Upgrade @org/form-renderer-* to read it.`
+        `(v${CURRENT_FORM_VERSION}). Upgrade @org/form-renderer-* to read it.`,
     );
   }
   while (doc.formVersion < CURRENT_FORM_VERSION) {
