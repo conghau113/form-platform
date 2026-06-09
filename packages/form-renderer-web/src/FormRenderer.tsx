@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type AccessContext, buildZodSchema, canEdit, canView, isVisible } from "@org/form-core";
-import { type FieldNode, type FormSchema, migrate } from "@org/form-schema";
+import { type FieldNode, type FormSchema, type LeafField, migrate } from "@org/form-schema";
 import {
   Button,
   Checkbox,
@@ -20,18 +20,21 @@ import { Controller, type Resolver, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
 
+type DateValue = React.ComponentProps<typeof DatePicker>["value"];
+type SelectValue = string | number | Array<string | number> | undefined;
+
 function FieldControl(props: {
-  node: any;
-  value: any;
+  node: LeafField;
+  value: unknown;
   disabled?: boolean;
-  onChange: (v: any) => void;
+  onChange: (v: unknown) => void;
 }) {
   const { node, value, disabled, onChange } = props;
   switch (node.type) {
     case "text":
       return (
         <Input
-          value={value ?? ""}
+          value={(value as string) ?? ""}
           disabled={disabled}
           maxLength={node.maxLength}
           placeholder={node.placeholder}
@@ -41,7 +44,7 @@ function FieldControl(props: {
     case "textarea":
       return (
         <Input.TextArea
-          value={value ?? ""}
+          value={(value as string) ?? ""}
           disabled={disabled}
           maxLength={node.maxLength}
           rows={node.rows}
@@ -53,7 +56,7 @@ function FieldControl(props: {
       return (
         <InputNumber
           style={{ width: "100%" }}
-          value={value ?? null}
+          value={(value as number | null) ?? null}
           disabled={disabled}
           min={node.min}
           max={node.max}
@@ -64,7 +67,7 @@ function FieldControl(props: {
       return (
         <Select
           style={{ width: "100%" }}
-          value={value}
+          value={value as SelectValue}
           disabled={disabled}
           mode={node.multiple ? "multiple" : undefined}
           options={node.options}
@@ -75,7 +78,7 @@ function FieldControl(props: {
       return (
         <DatePicker
           style={{ width: "100%" }}
-          value={value ?? null}
+          value={(value as DateValue) ?? null}
           disabled={disabled}
           onChange={onChange}
         />
