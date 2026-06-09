@@ -1,0 +1,13 @@
+---
+description: Core project conventions (always on)
+alwaysApply: true
+---
+- Monorepo: pnpm workspaces + Turborepo. `packages/*` (libraries), `apps/*` (apps).
+- The JSON schema is the contract. `form-schema` (Zod + types) is the single source
+  of truth. Renderers consume it — never duplicate validation/logic in a renderer.
+- `formVersion` is decoupled from the npm version. Changing the JSON shape = bump
+  `CURRENT_FORM_VERSION` + add a migration + a migration test. Never break old JSON.
+- `react` / `react-dom` / `antd` / `react-native` are peerDependencies in renderers.
+- Conditional logic uses JSONLogic via `form-core`. NEVER eval() on schema rules.
+- TypeScript strict, no `any` in public APIs. Small modules + barrel `index.ts`.
+- Tooling: Biome (lint+format), Vitest (test), Changesets (release).

@@ -1,0 +1,10 @@
+---
+description: Rules for the schema/contract packages
+globs: packages/form-schema/**,packages/workflow-schema/**
+---
+- Any change to the JSON shape requires three things together: (1) bump the version
+  constant, (2) add a migration N->N+1, (3) a test migrating an old fixture to current.
+- Zod is the single source: export inferred types, do not hand-write parallel
+  interfaces (recursive nodes are the only exception, via `z.lazy`).
+- Keep these packages tiny and dependency-light (zod only). No React, no antd,
+  no platform code may enter here.

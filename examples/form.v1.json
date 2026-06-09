@@ -1,0 +1,43 @@
+{
+  "formVersion": 1,
+  "id": "contact-request",
+  "title": "Contact request",
+  "fields": [
+    {
+      "type": "text",
+      "name": "fullName",
+      "label": "Full name",
+      "required": true,
+      "colSpanDesktop": 12
+    },
+    {
+      "type": "text",
+      "name": "email",
+      "label": "Email",
+      "required": true,
+      "colSpanDesktop": 12
+    },
+    {
+      "type": "select",
+      "name": "country",
+      "label": "Country",
+      "options": [
+        { "label": "Vietnam", "value": "VN" },
+        { "label": "Other", "value": "OTHER" }
+      ]
+    },
+    {
+      "type": "text",
+      "name": "otherCountry",
+      "label": "Specify country",
+      "visibleWhen": { "rule": { "==": [{ "var": "country" }, "OTHER"] } }
+    },
+    {
+      "type": "text",
+      "name": "internalNote",
+      "label": "Internal note",
+      "permissions": { "viewRoles": ["admin"] },
+      "layout": { "hideOnMobile": true }
+    }
+  ]
+}
