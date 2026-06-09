@@ -38,7 +38,13 @@ const commonFields = {
   name: z.string().min(1),
   label: z.string(),
   helpText: z.string().optional(),
+  /** Short hint rendered as an info tooltip next to the label. */
+  tooltip: z.string().optional(),
   required: z.boolean().optional(),
+  /** Render the control read-only / non-interactive. */
+  disabled: z.boolean().optional(),
+  /** Seed value applied when a fresh form is rendered with no initialValues. */
+  defaultValue: z.any().optional(),
   layout: layoutSchema.optional(),
   visibleWhen: conditionSchema.optional(),
   permissions: permissionSchema.optional(),
@@ -87,15 +93,57 @@ export const selectFieldSchema = z.object({
 });
 
 export const dateFieldSchema = z.object({ type: z.literal("date"), ...commonFields });
+export const timeFieldSchema = z.object({ type: z.literal("time"), ...commonFields });
 export const checkboxFieldSchema = z.object({ type: z.literal("checkbox"), ...commonFields });
+export const switchFieldSchema = z.object({ type: z.literal("switch"), ...commonFields });
+
+/** Single choice rendered as a radio group. Shares the option/dataSource shape
+ *  with select so authoring tooling can reuse it. */
+export const radioFieldSchema = z.object({
+  type: z.literal("radio"),
+  ...commonFields,
+  options: z.array(optionSchema).optional(),
+});
+
+export const passwordFieldSchema = z.object({
+  type: z.literal("password"),
+  ...commonFields,
+  placeholder: z.string().optional(),
+  maxLength: z.number().int().optional(),
+});
+
+export const sliderFieldSchema = z.object({
+  type: z.literal("slider"),
+  ...commonFields,
+  min: z.number().optional(),
+  max: z.number().optional(),
+  step: z.number().optional(),
+});
+
+export const rateFieldSchema = z.object({
+  type: z.literal("rate"),
+  ...commonFields,
+  /** Number of stars; defaults to 5 in the renderer. */
+  count: z.number().int().optional(),
+  allowHalf: z.boolean().optional(),
+});
+
+export const colorFieldSchema = z.object({ type: z.literal("color"), ...commonFields });
 
 export type LeafField =
   | z.infer<typeof textFieldSchema>
   | z.infer<typeof textareaFieldSchema>
   | z.infer<typeof numberFieldSchema>
   | z.infer<typeof selectFieldSchema>
+  | z.infer<typeof radioFieldSchema>
   | z.infer<typeof dateFieldSchema>
-  | z.infer<typeof checkboxFieldSchema>;
+  | z.infer<typeof timeFieldSchema>
+  | z.infer<typeof checkboxFieldSchema>
+  | z.infer<typeof switchFieldSchema>
+  | z.infer<typeof passwordFieldSchema>
+  | z.infer<typeof sliderFieldSchema>
+  | z.infer<typeof rateFieldSchema>
+  | z.infer<typeof colorFieldSchema>;
 
 export interface GroupField {
   type: "group";
@@ -127,8 +175,15 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     textareaFieldSchema,
     numberFieldSchema,
     selectFieldSchema,
+    radioFieldSchema,
     dateFieldSchema,
+    timeFieldSchema,
     checkboxFieldSchema,
+    switchFieldSchema,
+    passwordFieldSchema,
+    sliderFieldSchema,
+    rateFieldSchema,
+    colorFieldSchema,
     groupFieldSchema,
   ]),
 );

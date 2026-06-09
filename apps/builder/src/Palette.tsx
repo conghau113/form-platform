@@ -1,6 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Card, Typography } from "antd";
-import { FIELD_TYPES, type FieldType, fieldTypeLabel } from "./model";
+import { type FieldType, fieldsByCategory, fieldTypeLabel } from "./field-registry";
+import { FIELD_TYPES } from "./model";
 
 export const PALETTE_PREFIX = "palette:";
 
@@ -30,15 +31,19 @@ function PaletteItem({ type }: { type: FieldType }) {
   );
 }
 
-/** Left column: draggable chips, one per authorable field type. */
+/** Left column: draggable chips, one per authorable field type, grouped by category. */
 export function Palette() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12 }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12, textTransform: "uppercase" }}>
-        Fields
-      </Typography.Text>
-      {FIELD_TYPES.map((type) => (
-        <PaletteItem key={type} type={type} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
+      {fieldsByCategory().map(({ category, items }) => (
+        <div key={category} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12, textTransform: "uppercase" }}>
+            {category}
+          </Typography.Text>
+          {items.map((d) => (
+            <PaletteItem key={d.type} type={d.type} />
+          ))}
+        </div>
       ))}
     </div>
   );

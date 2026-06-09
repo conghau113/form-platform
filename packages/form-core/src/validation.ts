@@ -23,7 +23,8 @@ function leafZod(node: LeafField): z.ZodTypeAny {
 
   switch (node.type) {
     case "text":
-    case "textarea": {
+    case "textarea":
+    case "password": {
       // When required, an undefined/empty value must surface the same message,
       // so set the type-error too (z.string() otherwise reports "Required").
       let s = required
@@ -32,26 +33,40 @@ function leafZod(node: LeafField): z.ZodTypeAny {
       if (node.maxLength != null) s = s.max(node.maxLength);
       return required ? s.min(1, requiredMsg) : s.optional();
     }
-    case "number": {
+    case "number":
+    case "slider":
+    case "rate": {
       let s = z.number({ required_error: requiredMsg, invalid_type_error: requiredMsg });
-      if (node.min != null) s = s.min(node.min);
-      if (node.max != null) s = s.max(node.max);
+      if (node.type !== "rate") {
+        if (node.min != null) s = s.min(node.min);
+        if (node.max != null) s = s.max(node.max);
+      }
       return required ? s : s.optional();
     }
-    case "select": {
+    case "select":
+    case "radio": {
       const value = z.union([z.string(), z.number()]);
-      if (node.multiple) {
+      if (node.type === "select" && node.multiple) {
         const arr = z.array(value);
         return required ? arr.min(1, requiredMsg) : arr.optional();
       }
       return required ? value.refine((v) => v !== "" && v != null, requiredMsg) : value.optional();
     }
-    case "checkbox": {
+    case "checkbox":
+    case "switch": {
       const b = z.boolean();
       return required ? b.refine((v) => v === true, requiredMsg) : b.optional();
     }
-    case "date": {
-      // Date values are platform-specific (dayjs on web, string on native), so
+    case "color": {
+      // A color is a string (hex/rgb); only presence is asserted when required.
+      const s = required
+        ? z.string({ required_error: requiredMsg, invalid_type_error: requiredMsg })
+        : z.string();
+      return required ? s.min(1, requiredMsg) : s.optional();
+    }
+    case "date":
+    case "time": {
+      // Date/time values are platform-specific (dayjs on web, string on native), so
       // we only assert presence when required and leave the shape to the renderer.
       return required
         ? z.any().refine((v) => v != null && v !== "", requiredMsg)

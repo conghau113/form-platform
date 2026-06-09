@@ -78,6 +78,45 @@ describe("buildZodSchema", () => {
     expect(schema.safeParse({ age: 30, code: "ab" }).success).toBe(true);
   });
 
+  it("validates the new control field types", () => {
+    const schema = buildZodSchema(
+      form([
+        { type: "radio", name: "plan", label: "Plan", required: true },
+        { type: "switch", name: "agree", label: "Agree", required: true },
+        { type: "slider", name: "vol", label: "Volume", min: 0, max: 100 },
+        { type: "rate", name: "stars", label: "Stars", required: true },
+        { type: "password", name: "pw", label: "Password", required: true, maxLength: 4 },
+        { type: "color", name: "brand", label: "Brand", required: true },
+      ]),
+    );
+    // all required ones missing / boundary violations fail
+    expect(schema.safeParse({ vol: 150 }).success).toBe(false);
+    expect(
+      schema.safeParse({
+        plan: "pro",
+        agree: true,
+        vol: 50,
+        stars: 4,
+        pw: "abcde", // exceeds maxLength 4
+        brand: "#fff",
+      }).success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        plan: "pro",
+        agree: true,
+        vol: 50,
+        stars: 4,
+        pw: "abcd",
+        brand: "#fff",
+      }).success,
+    ).toBe(true);
+    // a switch left false must block a required switch (same rule as checkbox)
+    expect(
+      schema.safeParse({ plan: "pro", agree: false, stars: 4, pw: "ok", brand: "#fff" }).success,
+    ).toBe(false);
+  });
+
   it("excludes fields the role cannot view when access is supplied", () => {
     const schema = buildZodSchema(
       form([

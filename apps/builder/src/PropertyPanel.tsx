@@ -1,5 +1,6 @@
 import type { LeafField } from "@org/form-schema";
 import { Button, Checkbox, Divider, Empty, Form, Input, InputNumber, Select, Space } from "antd";
+import { describeField } from "./field-registry";
 import type { EditorField } from "./model";
 
 /** A breakpoint colSpan; antd Col span is 1..24. */
@@ -82,76 +83,34 @@ export function PropertyPanel({
             onChange={(e) => set({ helpText: e.target.value || undefined })}
           />
         </Form.Item>
-        <Form.Item>
-          <Checkbox
-            checked={!!field.required}
-            onChange={(e) => set({ required: e.target.checked || undefined })}
-          >
-            Required
-          </Checkbox>
+        <Form.Item label="Tooltip">
+          <Input
+            value={field.tooltip ?? ""}
+            onChange={(e) => set({ tooltip: e.target.value || undefined })}
+          />
         </Form.Item>
-
-        {/* Type-specific properties */}
-        {(field.type === "text" || field.type === "textarea") && (
-          <>
-            <Form.Item label="Placeholder">
-              <Input
-                value={field.placeholder ?? ""}
-                onChange={(e) => set({ placeholder: e.target.value || undefined })}
-              />
-            </Form.Item>
-            <Form.Item label="Max length">
-              <InputNumber
-                style={{ width: "100%" }}
-                value={field.maxLength ?? null}
-                onChange={(v) => set({ maxLength: v ?? undefined })}
-              />
-            </Form.Item>
-          </>
-        )}
-        {field.type === "textarea" && (
-          <Form.Item label="Rows">
-            <InputNumber
-              style={{ width: "100%" }}
-              value={field.rows ?? null}
-              onChange={(v) => set({ rows: v ?? undefined })}
-            />
+        <Space>
+          <Form.Item>
+            <Checkbox
+              checked={!!field.required}
+              onChange={(e) => set({ required: e.target.checked || undefined })}
+            >
+              Required
+            </Checkbox>
           </Form.Item>
-        )}
-        {field.type === "number" && (
-          <Space>
-            <Form.Item label="Min">
-              <InputNumber
-                value={field.min ?? null}
-                onChange={(v) => set({ min: v ?? undefined })}
-              />
-            </Form.Item>
-            <Form.Item label="Max">
-              <InputNumber
-                value={field.max ?? null}
-                onChange={(v) => set({ max: v ?? undefined })}
-              />
-            </Form.Item>
-          </Space>
-        )}
-        {field.type === "select" && (
-          <>
-            <Form.Item>
-              <Checkbox
-                checked={!!field.multiple}
-                onChange={(e) => set({ multiple: e.target.checked || undefined })}
-              >
-                Allow multiple
-              </Checkbox>
-            </Form.Item>
-            <Form.Item label="Options">
-              <OptionsEditor
-                options={field.options ?? []}
-                onChange={(options) => set({ options })}
-              />
-            </Form.Item>
-          </>
-        )}
+          <Form.Item>
+            <Checkbox
+              checked={!!field.disabled}
+              onChange={(e) => set({ disabled: e.target.checked || undefined })}
+            >
+              Disabled
+            </Checkbox>
+          </Form.Item>
+        </Space>
+
+        {/* Type-specific properties, driven by the registry descriptor */}
+        <TypeSettings field={field} set={set} />
+        <DefaultValueEditor field={field} set={set} />
 
         <Divider orientation="left" plain>
           Layout
@@ -253,6 +212,94 @@ export function PropertyPanel({
         </Form.Item>
       </Form>
     </div>
+  );
+}
+
+/** Read a dynamic property off a leaf field without widening its type to `any`. */
+function prop(field: LeafField, key: string): unknown {
+  return (field as Record<string, unknown>)[key];
+}
+
+/** Renders the type-specific settings declared by the field's registry descriptor.
+ *  Adding a new type/setting needs only a registry entry — no edit here. */
+function TypeSettings({ field, set }: { field: LeafField; set: (patch: Patch) => void }) {
+  const { settings } = describeField(field.type);
+  return (
+    <>
+      {settings.map((s) => {
+        const setKey = (value: unknown) => set({ [s.key]: value } as Patch);
+        switch (s.control) {
+          case "text":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <Input
+                  value={(prop(field, s.key) as string) ?? ""}
+                  onChange={(e) => setKey(e.target.value || undefined)}
+                />
+              </Form.Item>
+            );
+          case "number":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  value={(prop(field, s.key) as number | null) ?? null}
+                  onChange={(v) => setKey(v ?? undefined)}
+                />
+              </Form.Item>
+            );
+          case "checkbox":
+            return (
+              <Form.Item key={s.key}>
+                <Checkbox
+                  checked={!!prop(field, s.key)}
+                  onChange={(e) => setKey(e.target.checked || undefined)}
+                >
+                  {s.label}
+                </Checkbox>
+              </Form.Item>
+            );
+          case "options":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <OptionsEditor
+                  options={(prop(field, s.key) as Option[]) ?? []}
+                  onChange={(options) => setKey(options)}
+                />
+              </Form.Item>
+            );
+          default:
+            return null;
+        }
+      })}
+    </>
+  );
+}
+
+/** A small "Default value" editor whose control follows the registry descriptor's
+ *  `defaultValueKind`. Date/time types declare "none" (value shape is platform-specific). */
+function DefaultValueEditor({ field, set }: { field: LeafField; set: (patch: Patch) => void }) {
+  const { defaultValueKind } = describeField(field.type);
+  if (defaultValueKind === "none") return null;
+  const dv = prop(field, "defaultValue");
+  const setDefault = (value: unknown) => set({ defaultValue: value } as Patch);
+  return (
+    <Form.Item label="Default value">
+      {defaultValueKind === "boolean" ? (
+        <Checkbox checked={!!dv} onChange={(e) => setDefault(e.target.checked || undefined)} />
+      ) : defaultValueKind === "number" ? (
+        <InputNumber
+          style={{ width: "100%" }}
+          value={(dv as number | null) ?? null}
+          onChange={(v) => setDefault(v ?? undefined)}
+        />
+      ) : (
+        <Input
+          value={(dv as string) ?? ""}
+          onChange={(e) => setDefault(e.target.value || undefined)}
+        />
+      )}
+    </Form.Item>
   );
 }
 

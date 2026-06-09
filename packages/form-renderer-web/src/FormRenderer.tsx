@@ -14,14 +14,20 @@ import {
   Button,
   Checkbox,
   Col,
+  ColorPicker,
   ConfigProvider,
   DatePicker,
   Form,
   Input,
   InputNumber,
+  Radio,
+  Rate,
   Row,
   Select,
+  Slider,
+  Switch,
   type ThemeConfig,
+  TimePicker,
 } from "antd";
 import type React from "react";
 import { useMemo, useState } from "react";
@@ -30,6 +36,7 @@ import { Controller, type Resolver, useForm } from "react-hook-form";
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
 
 type DateValue = React.ComponentProps<typeof DatePicker>["value"];
+type TimeValue = React.ComponentProps<typeof TimePicker>["value"];
 type SelectValue = string | number | Array<string | number> | undefined;
 type SelectField = Extract<LeafField, { type: "select" }>;
 
@@ -121,6 +128,16 @@ function FieldControl(props: {
           onChange={onChange}
         />
       );
+    case "password":
+      return (
+        <Input.Password
+          value={(value as string) ?? ""}
+          disabled={disabled}
+          maxLength={node.maxLength}
+          placeholder={node.placeholder}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
     case "select":
       return (
         <SelectControl
@@ -131,11 +148,58 @@ function FieldControl(props: {
           dependsOnValue={dependsOnValue}
         />
       );
+    case "radio":
+      return (
+        <Radio.Group
+          value={value}
+          disabled={disabled}
+          options={node.options ?? []}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case "slider":
+      return (
+        <Slider
+          value={(value as number) ?? node.min ?? 0}
+          disabled={disabled}
+          min={node.min}
+          max={node.max}
+          step={node.step}
+          onChange={onChange}
+        />
+      );
+    case "rate":
+      return (
+        <Rate
+          value={(value as number) ?? 0}
+          disabled={disabled}
+          count={node.count ?? 5}
+          allowHalf={node.allowHalf}
+          onChange={onChange}
+        />
+      );
+    case "color":
+      return (
+        <ColorPicker
+          value={(value as string) ?? undefined}
+          disabled={disabled}
+          onChange={(_, hex) => onChange(hex)}
+        />
+      );
     case "date":
       return (
         <DatePicker
           style={{ width: "100%" }}
           value={(value as DateValue) ?? null}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
+    case "time":
+      return (
+        <TimePicker
+          style={{ width: "100%" }}
+          value={(value as TimeValue) ?? null}
           disabled={disabled}
           onChange={onChange}
         />
@@ -148,6 +212,8 @@ function FieldControl(props: {
           onChange={(e) => onChange(e.target.checked)}
         />
       );
+    case "switch":
+      return <Switch checked={!!value} disabled={disabled} onChange={onChange} />;
     default:
       return null;
   }
@@ -167,6 +233,19 @@ export interface FormRendererProps {
 }
 
 type Values = Record<string, unknown>;
+
+/** Collect per-field `defaultValue`s declared in the schema. Explicit
+ *  `initialValues` (e.g. an existing submission) always win over these. */
+function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
+  for (const node of nodes) {
+    if (node.type === "group") {
+      schemaDefaults(node.children, into);
+    } else if (node.defaultValue !== undefined) {
+      into[node.name] = node.defaultValue;
+    }
+  }
+  return into;
+}
 
 export function FormRenderer({
   schema,
@@ -193,8 +272,13 @@ export function FormRenderer({
       options,
     );
 
+  const defaultValues = useMemo<Values>(
+    () => ({ ...schemaDefaults(form.fields), ...initialValues }),
+    [form, initialValues],
+  );
+
   const { control, handleSubmit, watch } = useForm<Values>({
-    defaultValues: initialValues ?? {},
+    defaultValues,
     resolver,
   });
   const values = watch();
@@ -222,7 +306,7 @@ export function FormRenderer({
 
     // Responsive: read per-breakpoint colSpan; antd collapses to xs on small screens.
     const span = { ...DEFAULT_SPAN, ...(node.layout?.colSpan ?? {}) };
-    const editable = canEdit(node, access);
+    const editable = canEdit(node, access) && node.disabled !== true;
     // A select with a dependent dataSource reads its parent field's current value.
     const dependsOn = node.type === "select" ? node.dataSource?.dependsOn : undefined;
     const dependsOnValue = dependsOn ? values[dependsOn] : undefined;
@@ -234,6 +318,7 @@ export function FormRenderer({
           render={({ field, fieldState }) => (
             <Form.Item
               label={node.label}
+              tooltip={node.tooltip}
               required={node.required}
               validateStatus={fieldState.error ? "error" : undefined}
               help={fieldState.error?.message ?? node.helpText}

@@ -1,23 +1,10 @@
 import { CURRENT_FORM_VERSION, type FormSchema, type LeafField, migrate } from "@org/form-schema";
+import { describeField, type FieldType } from "./field-registry";
 
-/** The leaf field types the palette can author. `group` is intentionally excluded
- *  from visual authoring in this phase. */
-export const FIELD_TYPES = ["text", "textarea", "number", "select", "date", "checkbox"] as const;
-
-export type FieldType = (typeof FIELD_TYPES)[number];
-
-const FIELD_TYPE_LABELS: Record<FieldType, string> = {
-  text: "Text",
-  textarea: "Textarea",
-  number: "Number",
-  select: "Select",
-  date: "Date",
-  checkbox: "Checkbox",
-};
-
-export function fieldTypeLabel(type: FieldType): string {
-  return FIELD_TYPE_LABELS[type];
-}
+// The authorable field types, their labels and palette grouping live in the
+// meta-driven field registry. `group` is intentionally excluded from visual
+// authoring in this phase.
+export { FIELD_TYPES, type FieldType, fieldTypeLabel } from "./field-registry";
 
 /**
  * The editor's working model. `uid` is a stable id used ONLY by dnd-kit and React
@@ -53,16 +40,14 @@ function uniqueName(type: FieldType, taken: ReadonlySet<string>): string {
   return name;
 }
 
-/** Build a valid, minimal leaf field of the given type with a unique name. */
+/** Build a valid, minimal leaf field of the given type with a unique name.
+ *  Seed props come from the registry descriptor, so adding a type needs no edit here.
+ *  The `as LeafField` cast trusts the descriptor's `defaults`; field-registry.test.ts
+ *  guards it by parsing every seeded field against the contract. */
 export function newField(type: FieldType, taken: ReadonlySet<string> = new Set()): LeafField {
   const name = uniqueName(type, taken);
-  const label = fieldTypeLabel(type);
-  switch (type) {
-    case "select":
-      return { type, name, label, options: [] };
-    default:
-      return { type, name, label };
-  }
+  const { label, defaults } = describeField(type);
+  return { type, name, label, ...defaults } as LeafField;
 }
 
 function takenNames(model: EditorModel, except?: string): Set<string> {

@@ -16,6 +16,45 @@ describe("schema field types", () => {
     expect(out.fields[0]).toMatchObject({ type: "textarea", rows: 5 });
   });
 
+  it("accepts the new control field types (additive)", () => {
+    const doc = {
+      formVersion: 3,
+      id: "controls",
+      title: "Controls",
+      fields: [
+        { type: "radio", name: "plan", label: "Plan", options: [{ label: "Pro", value: "pro" }] },
+        { type: "switch", name: "active", label: "Active", defaultValue: true },
+        { type: "slider", name: "vol", label: "Volume", min: 0, max: 100, step: 5 },
+        { type: "rate", name: "stars", label: "Rating", count: 5, allowHalf: true },
+        { type: "password", name: "pw", label: "Password", maxLength: 64 },
+        { type: "time", name: "at", label: "At" },
+        { type: "color", name: "brand", label: "Brand", tooltip: "Hex color", disabled: true },
+      ],
+    };
+    const out = formSchema.parse(doc);
+    expect(out.fields.map((f) => f.type)).toEqual([
+      "radio",
+      "switch",
+      "slider",
+      "rate",
+      "password",
+      "time",
+      "color",
+    ]);
+  });
+
+  it("accepts the additive common props on existing types", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "common",
+      title: "Common",
+      fields: [
+        { type: "text", name: "n", label: "N", tooltip: "hi", disabled: true, defaultValue: "x" },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ tooltip: "hi", disabled: true, defaultValue: "x" });
+  });
+
   it("rejects an unknown field type", () => {
     expect(() =>
       formSchema.parse({
