@@ -43,7 +43,8 @@
       "Bash(cat packages/form-core/vitest.config.ts)",
       "Bash(cat packages/form-renderer-web/vitest.config.*)",
       "Bash(cat packages/form-core/vitest.config.*)",
-      "Bash(cat packages/form-renderer-web/vitest.setup.ts)"
+      "Bash(cat packages/form-renderer-web/vitest.setup.ts)",
+      "Bash(xargs grep -l \"buildZodSchema\")"
     ],
     "deny": [
       "Bash(rm -rf:*)",
