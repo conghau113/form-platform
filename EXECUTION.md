@@ -6,10 +6,13 @@ Execute top to bottom, ONE phase at a time. After each phase, run the Closing Lo
 ## North star (what "done" means)
 A schema-driven platform where you visually build a form (drag-drop + property panel),
 theme it live, export versioned JSON that the backend stores and the frontend reloads to
-render — on responsive web AND React Native — with conditional logic, field-level RBAC,
+render on responsive web — with conditional logic, field-level RBAC,
 validation and dynamic data sources; later extended into a drag-drop workflow builder
 (React Flow) where each node binds a form. Built as a maintainable pnpm monorepo and
 driven autonomously by Claude Code.
+(React Native rendering is planned but DEFERRED — the focus is web first. The
+schema/core packages already stay platform-neutral so a native renderer can be
+added later without reworking the contract.)
 
 ## The Closing Loop (run after EVERY phase)
 1. The agent self-verifies: `pnpm typecheck` + `pnpm test` until green.
@@ -129,18 +132,7 @@ Acceptance: change a token -> preview updates live; export theme JSON; reload ap
 ```
 GATE: theme is editable, previewed live, exported, persisted, reapplied.
 
-## Phase 10 — React Native renderer
-```
-Plan first. Scope: packages/form-renderer-native only.
-Implement leaf components (text/number/select/date/checkbox) with react-native-paper (or
-@ant-design/react-native). Single column; honor only hideOnMobile/mobileOrder. Reuse
-migrate / isVisible / RBAC / the Zod validation helper from form-core — do not reimplement.
-Tests with @testing-library/react-native.
-Acceptance: the example renders on native with the same conditional + RBAC behavior as web.
-```
-GATE: same schema renders correctly on native.
-
-## Phase 11 — workflow builder (expansion)
+## Phase 10 — workflow builder (expansion)
 ```
 Plan first. Scope: new packages/workflow-schema, packages/workflow-core, apps/builder.
 workflow-schema: versioned contract (workflowVersion + migrations). Nodes carry id, status,
@@ -157,7 +149,7 @@ instance honoring guards + roles; definition exports as JSON.
 ```
 GATE: a dynamic workflow runs end-to-end on top of forms.
 
-## Phase 12 — CI + release
+## Phase 11 — CI + release
 ```
 Plan first. Scope: .github/workflows + root config only.
 PR workflow: pnpm install, turbo typecheck, turbo test, biome check, changeset status check.
@@ -174,9 +166,9 @@ GATE: every agent PR is gated automatically; releases are one-click.
 - [ ] Drag-drop form builder with layout + per-field config, antd-based (P8)
 - [ ] Theme editor like antd: live preview, apply, export JSON (P9)
 - [ ] Export JSON -> BE stores -> FE reloads -> renders (P5)
-- [ ] Same schema renders on responsive web AND React Native (P3, P10)
-- [ ] Workflow builder on top, nodes bind forms, runs dynamically (P11)
-- [ ] Maintainable/reusable monorepo, latest tooling, CI-gated (whole repo, P12)
+- [ ] Same schema renders on responsive web (P3) — React Native deferred
+- [ ] Workflow builder on top, nodes bind forms, runs dynamically (P10)
+- [ ] Maintainable/reusable monorepo, latest tooling, CI-gated (whole repo, P11)
 
 ## Context discipline (keep token cost down)
 Plan before multi-file work · delegate discovery to the explorer subagent · @-mention files,

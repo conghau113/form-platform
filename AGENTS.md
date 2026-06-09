@@ -25,7 +25,7 @@ packages/
   form-schema       contract: types, Zod, formVersion + migrations (zod only, tiny)
   form-core         shared runtime: JSONLogic conditions, RBAC, registry interface
   form-renderer-web    antd renderer, responsive (24-col xs/sm/md/lg)
-  form-renderer-native React Native renderer, single column
+  form-renderer-native React Native renderer, single column — DEFERRED (web first)
   workflow-schema   (later) state machine contract; nodes reference forms by id
   workflow-core     (later) engine, runs on FE AND NestJS BE
 apps/

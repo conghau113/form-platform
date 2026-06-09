@@ -9,8 +9,11 @@ A schema-driven form builder split so one JSON contract drives many platforms.
 | `@org/form-schema` | The CONTRACT: types, Zod validation, `formVersion` + migration chain | tiny | everyone |
 | `@org/form-core` | Platform-agnostic runtime: safe conditional logic, RBAC, registry interface | small | every renderer |
 | `@org/form-renderer-web` | antd renderer, responsive (24-col, xs/sm/md/lg) | medium | every web project |
-| `@org/form-renderer-native` | React Native renderer, single-column | medium | every mobile project |
+| `@org/form-renderer-native` | React Native renderer, single-column — **DEFERRED** (web first) | medium | every mobile project |
 | `@app/builder` | The drag-drop builder app, hosted ONCE | heavy | nobody (it's an app) |
+
+> Mobile is **deferred** — the current focus is web. `form-schema`/`form-core` stay
+> platform-neutral so the native renderer can be picked up later without reworking the contract.
 
 ## The two ideas that make this last
 

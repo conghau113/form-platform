@@ -14,7 +14,7 @@ One phase = one branch = one PR = one changeset. No skipping ahead.
 | 4 | `apps/builder` skeleton (Vite+antd) | preview pane renders; MVP edit = JSON textarea + viewport toggle |
 | 5 | drag-drop canvas (dnd-kit) + property panel | a field can be dropped + configured |
 | 6 | theme editor (ConfigProvider tokens, live preview, export) | theme JSON exports + applies live |
-| 7 | `form-renderer-native` (RN) | same example renders on native; reuses schema+core |
+| ~~7~~ | ~~`form-renderer-native` (RN)~~ | **DEFERRED — web first**, mobile not in current scope |
 | 8 | workflow-schema + workflow-core + @xyflow/react editor | a 3-state flow runs end-to-end |
 
 ## Per-task loop
