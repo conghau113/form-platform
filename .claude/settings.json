@@ -54,7 +54,10 @@
       "Bash(ls .changeset/)",
       "Bash(grep -rn \"eval\\(\\\\|new Function\" packages/workflow-schema/src packages/workflow-core/src apps/builder/src/workflow-model.ts apps/builder/src/WorkflowEditor.tsx)",
       "Bash(grep -rn \"react\\\\|React\" packages/workflow-core/src packages/workflow-schema/src)",
-      "Bash(grep -rn \": any\\\\|<any>\\\\|any\\\\[\\\\]\\\\|as any\" packages/workflow-core/src packages/workflow-schema/src)"
+      "Bash(grep -rn \": any\\\\|<any>\\\\|any\\\\[\\\\]\\\\|as any\" packages/workflow-core/src packages/workflow-schema/src)",
+      "Bash(cd e:/web/web-tool/form-platform-starter/form-platform)",
+      "Bash(cat .changeset/field-validation-rules.md)",
+      "Bash(grep -n \"validations\" packages/form-renderer-web/src/*.ts*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

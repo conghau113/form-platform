@@ -117,6 +117,141 @@ describe("buildZodSchema", () => {
     ).toBe(false);
   });
 
+  it("enforces format/pattern/len validation rules with custom messages", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "email",
+          label: "Email",
+          required: true,
+          validations: [{ type: "format", format: "email", message: "Bad email" }],
+        },
+        {
+          type: "text",
+          name: "code",
+          label: "Code",
+          validations: [{ type: "pattern", value: "^[A-Z]{3}$", message: "3 caps" }],
+        },
+        {
+          type: "text",
+          name: "pin",
+          label: "PIN",
+          required: true,
+          validations: [{ type: "len", value: 4 }],
+        },
+      ]),
+    );
+    // invalid email surfaces the rule's custom message
+    const bad = schema.safeParse({ email: "nope", pin: "1234" });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message === "Bad email")).toBe(true);
+    }
+    // an optional pattern field accepts empty (untouched) but rejects a non-match
+    expect(schema.safeParse({ email: "a@b.co", pin: "1234", code: "" }).success).toBe(true);
+    expect(schema.safeParse({ email: "a@b.co", pin: "1234", code: "ab" }).success).toBe(false);
+    expect(schema.safeParse({ email: "a@b.co", pin: "1234", code: "ABC" }).success).toBe(true);
+    // len rule: exactly 4 chars
+    expect(schema.safeParse({ email: "a@b.co", pin: "123" }).success).toBe(false);
+    expect(schema.safeParse({ email: "a@b.co", pin: "1234" }).success).toBe(true);
+  });
+
+  it("accepts the url and phone format checks", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "site",
+          label: "Site",
+          validations: [{ type: "format", format: "url" }],
+        },
+        {
+          type: "text",
+          name: "tel",
+          label: "Tel",
+          validations: [{ type: "format", format: "phone" }],
+        },
+      ]),
+    );
+    expect(schema.safeParse({ site: "not a url" }).success).toBe(false);
+    expect(schema.safeParse({ site: "https://example.com" }).success).toBe(true);
+    expect(schema.safeParse({ tel: "abc" }).success).toBe(false);
+    expect(schema.safeParse({ tel: "+84 90 123 4567" }).success).toBe(true);
+  });
+
+  it("treats a `required` validation rule like the required flag", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "name",
+          label: "Name",
+          validations: [{ type: "required", message: "Need a name" }],
+        },
+      ]),
+    );
+    const result = schema.safeParse({});
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("Need a name");
+    }
+    expect(schema.safeParse({ name: "Ada" }).success).toBe(true);
+  });
+
+  it("applies number min/max validation rules", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "number",
+          name: "qty",
+          label: "Qty",
+          required: true,
+          validations: [
+            { type: "min", value: 1, message: "At least 1" },
+            { type: "max", value: 9 },
+          ],
+        },
+      ]),
+    );
+    expect(schema.safeParse({ qty: 0 }).success).toBe(false);
+    expect(schema.safeParse({ qty: 10 }).success).toBe(false);
+    expect(schema.safeParse({ qty: 5 }).success).toBe(true);
+  });
+
+  it("ignores a malformed regex pattern instead of throwing", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "x",
+          label: "X",
+          validations: [{ type: "pattern", value: "([unclosed" }],
+        },
+      ]),
+    );
+    // bad pattern is skipped, so any value passes
+    expect(schema.safeParse({ x: "anything" }).success).toBe(true);
+  });
+
+  it("does not run validation rules for a hidden field", () => {
+    const schema = buildZodSchema(
+      form([
+        { type: "select", name: "kind", label: "Kind" },
+        {
+          type: "text",
+          name: "email",
+          label: "Email",
+          validations: [{ type: "format", format: "email" }],
+          visibleWhen: { rule: { "==": [{ var: "kind" }, "EMAIL"] } },
+        },
+      ]),
+      { values: { kind: "SMS" } },
+    );
+    // hidden -> its email rule must not run even with a bad value present
+    expect(schema.safeParse({ kind: "SMS", email: "not-an-email" }).success).toBe(true);
+  });
+
   it("excludes fields the role cannot view when access is supplied", () => {
     const schema = buildZodSchema(
       form([

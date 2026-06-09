@@ -1,4 +1,4 @@
-import type { LeafField } from "@org/form-schema";
+import type { LeafField, ValidationRule } from "@org/form-schema";
 
 /**
  * Meta-driven field registry — the single source of truth the builder uses to
@@ -26,6 +26,21 @@ export interface SettingDescriptor {
 /** How the shared "Default value" editor renders for this type. */
 export type DefaultValueKind = "text" | "number" | "boolean" | "none";
 
+/** A validation rule kind, mirrored from the schema contract. */
+export type ValidationRuleType = ValidationRule["type"];
+
+/** Rule kinds offered for text-like inputs (string length, regex, named formats). */
+export const STRING_RULES: ValidationRuleType[] = [
+  "required",
+  "len",
+  "min",
+  "max",
+  "pattern",
+  "format",
+];
+/** Rule kinds offered for numeric inputs. */
+export const NUMBER_RULES: ValidationRuleType[] = ["required", "min", "max"];
+
 export interface FieldDescriptor {
   type: FieldType;
   label: string;
@@ -36,6 +51,9 @@ export interface FieldDescriptor {
   /** Type-specific settings rendered in the property panel. */
   settings: SettingDescriptor[];
   defaultValueKind: DefaultValueKind;
+  /** Validation rule kinds the panel offers for this type. Omitted/empty hides the
+   *  Validation section (the field has no meaningful field-level rules to add). */
+  validations?: ValidationRuleType[];
 }
 
 const placeholder: SettingDescriptor = {
@@ -55,6 +73,7 @@ export const FIELD_REGISTRY: FieldDescriptor[] = [
     defaults: {},
     settings: [placeholder, maxLength],
     defaultValueKind: "text",
+    validations: STRING_RULES,
   },
   {
     type: "textarea",
@@ -63,6 +82,7 @@ export const FIELD_REGISTRY: FieldDescriptor[] = [
     defaults: {},
     settings: [placeholder, maxLength, { key: "rows", label: "Rows", control: "number" }],
     defaultValueKind: "text",
+    validations: STRING_RULES,
   },
   {
     type: "password",
@@ -71,6 +91,7 @@ export const FIELD_REGISTRY: FieldDescriptor[] = [
     defaults: {},
     settings: [placeholder, maxLength],
     defaultValueKind: "none",
+    validations: STRING_RULES,
   },
   {
     type: "number",
@@ -82,6 +103,7 @@ export const FIELD_REGISTRY: FieldDescriptor[] = [
       { key: "max", label: "Max", control: "number" },
     ],
     defaultValueKind: "number",
+    validations: NUMBER_RULES,
   },
   {
     type: "select",
@@ -126,6 +148,7 @@ export const FIELD_REGISTRY: FieldDescriptor[] = [
       { key: "step", label: "Step", control: "number" },
     ],
     defaultValueKind: "number",
+    validations: NUMBER_RULES,
   },
   {
     type: "rate",
@@ -161,6 +184,7 @@ export const FIELD_REGISTRY: FieldDescriptor[] = [
     defaults: {},
     settings: [],
     defaultValueKind: "text",
+    validations: STRING_RULES,
   },
 ];
 

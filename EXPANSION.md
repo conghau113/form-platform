@@ -36,16 +36,22 @@ generated from it instead of hard-coded switches. Guard test:
 `apps/builder/src/field-registry.test.ts` parses every seeded field against the contract.
 Changeset: `.changeset/expanded-field-types.md`.
 
-## Phase B — Full validation rules  ← NEXT
+## Phase B — Full validation rules ✅ DONE (2026-06-10)
 Scope: `packages/form-schema` + `packages/form-core` + `apps/builder`.
-Schema: add an optional `validations[]` to leaf fields — `{ type: "required" | "len" |
-"min" | "max" | "pattern" | "format", value?, format?: "email"|"url"|"phone", message? }`.
-form-core: translate each rule into the Zod schema in `buildZodSchema` (regex compiled
-from a string literal — NEVER `new Function`; use `new RegExp(pattern)` guarded/try-caught).
-builder: a "Validation" section in PropertyPanel driven by descriptors (reuse the
-registry pattern). Tests: each rule blocks/passes; a hidden field's rules don't run.
+Added an optional `validations[]` to every leaf field (via `commonFields`) — `{ type:
+"required" | "len" | "min" | "max" | "pattern" | "format", value?, format?:
+"email"|"url"|"phone", message? }` — defined as `validationRuleSchema` in `form-schema`.
+Additive → old JSON parses → no `CURRENT_FORM_VERSION` bump. form-core's `buildZodSchema`
+compiles each rule: string fields honor len/min/max/pattern/format, numeric fields honor
+min/max, a `required` rule == the `required` flag; patterns use `new RegExp` in a guarded
+try/catch (malformed → skipped, never eval), and optional string fields treat an empty
+value as absent. The builder's PropertyPanel gained a descriptor-driven "Validation"
+section: each `FieldDescriptor` declares its allowed rule kinds (`STRING_RULES` /
+`NUMBER_RULES` in `field-registry.ts`). Tests in `form-core/src/validation.test.ts` cover
+every rule kind, custom messages, url/phone, the malformed-pattern guard and hidden-field
+skipping. Changeset: `.changeset/field-validation-rules.md`.
 
-## Phase C — Array fields / Form List  ⭐ (user's top ask)
+## Phase C — Array fields / Form List  ⭐ (user's top ask)  ← NEXT
 Schema: new `array` node holding `itemFields: FieldNode[]` (recursive like `group`) +
 optional `minItems`/`maxItems`. form-core: build a Zod array + item schema + min/max.
 renderer-web: render ArrayItems/ArrayCards style (add/remove/reorder rows) via

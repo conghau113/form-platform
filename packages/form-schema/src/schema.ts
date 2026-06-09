@@ -34,6 +34,21 @@ export const permissionSchema = z.object({
   editRoles: z.array(z.string()).optional(),
 });
 
+/** A single field validation rule. Translated to Zod by form-core's buildZodSchema.
+ *  - `len`/`min`/`max`: numeric `value` (string length or numeric bound by field type).
+ *  - `pattern`: `value` is a regex SOURCE string — compiled via `new RegExp`, NEVER eval.
+ *  - `format`: a named check selected by `format` (email | url | phone).
+ *  - `required`: presence; equivalent to the `required` flag, kept here for a custom message.
+ *  `message` overrides the default error text when the rule fails. */
+export const validationRuleSchema = z.object({
+  type: z.enum(["required", "len", "min", "max", "pattern", "format"]),
+  value: z.union([z.string(), z.number()]).optional(),
+  format: z.enum(["email", "url", "phone"]).optional(),
+  message: z.string().optional(),
+});
+
+export type ValidationRule = z.infer<typeof validationRuleSchema>;
+
 const commonFields = {
   name: z.string().min(1),
   label: z.string(),
@@ -45,6 +60,9 @@ const commonFields = {
   disabled: z.boolean().optional(),
   /** Seed value applied when a fresh form is rendered with no initialValues. */
   defaultValue: z.any().optional(),
+  /** Field-level validation rules, compiled to Zod by form-core. Additive: old
+   *  JSON without this key keeps parsing, so no formVersion bump is required. */
+  validations: z.array(validationRuleSchema).optional(),
   layout: layoutSchema.optional(),
   visibleWhen: conditionSchema.optional(),
   permissions: permissionSchema.optional(),

@@ -1,7 +1,21 @@
-import type { LeafField } from "@org/form-schema";
+import type { LeafField, ValidationRule } from "@org/form-schema";
 import { Button, Checkbox, Divider, Empty, Form, Input, InputNumber, Select, Space } from "antd";
-import { describeField } from "./field-registry";
+import { describeField, type ValidationRuleType } from "./field-registry";
 import type { EditorField } from "./model";
+
+const RULE_LABELS: Record<ValidationRuleType, string> = {
+  required: "Required",
+  len: "Exact length",
+  min: "Min",
+  max: "Max",
+  pattern: "Pattern (regex)",
+  format: "Format",
+};
+const FORMAT_OPTIONS = [
+  { label: "Email", value: "email" },
+  { label: "URL", value: "url" },
+  { label: "Phone", value: "phone" },
+];
 
 /** A breakpoint colSpan; antd Col span is 1..24. */
 type ColKey = "xs" | "sm" | "md" | "lg";
@@ -111,6 +125,8 @@ export function PropertyPanel({
         {/* Type-specific properties, driven by the registry descriptor */}
         <TypeSettings field={field} set={set} />
         <DefaultValueEditor field={field} set={set} />
+
+        <ValidationEditor field={field} set={set} />
 
         <Divider orientation="left" plain>
           Layout
@@ -300,6 +316,86 @@ function DefaultValueEditor({ field, set }: { field: LeafField; set: (patch: Pat
         />
       )}
     </Form.Item>
+  );
+}
+
+/** A "Validation" section whose available rule kinds come from the registry
+ *  descriptor. Each rule edits a `{ type, value?, format?, message? }` entry that
+ *  form-core compiles to Zod. Hidden when the type declares no validation kinds. */
+function ValidationEditor({ field, set }: { field: LeafField; set: (patch: Patch) => void }) {
+  const { validations: allowed } = describeField(field.type);
+  if (!allowed || allowed.length === 0) return null;
+  const rules = field.validations ?? [];
+  const commit = (next: ValidationRule[]) =>
+    set({ validations: next.length ? next : undefined } as Patch);
+  const update = (i: number, patch: Partial<ValidationRule>) =>
+    commit(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const remove = (i: number) => commit(rules.filter((_, idx) => idx !== i));
+  const add = () => commit([...rules, { type: allowed[0] }]);
+
+  const ruleOptions = allowed.map((t) => ({ label: RULE_LABELS[t], value: t }));
+
+  return (
+    <>
+      <Divider orientation="left" plain>
+        Validation
+      </Divider>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rules.map((rule, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rules have no stable id; index is fine for this small editor
+          <Space key={i} wrap align="start">
+            <Select
+              style={{ width: 130 }}
+              value={rule.type}
+              options={ruleOptions}
+              onChange={(type: ValidationRuleType) =>
+                update(i, {
+                  type,
+                  value: undefined,
+                  format: type === "format" ? "email" : undefined,
+                })
+              }
+            />
+            {(rule.type === "len" || rule.type === "min" || rule.type === "max") && (
+              <InputNumber
+                style={{ width: 90 }}
+                placeholder="value"
+                value={(rule.value as number | null) ?? null}
+                onChange={(v) => update(i, { value: v ?? undefined })}
+              />
+            )}
+            {rule.type === "pattern" && (
+              <Input
+                style={{ width: 130 }}
+                placeholder="regex source"
+                value={(rule.value as string) ?? ""}
+                onChange={(e) => update(i, { value: e.target.value })}
+              />
+            )}
+            {rule.type === "format" && (
+              <Select
+                style={{ width: 100 }}
+                value={rule.format ?? "email"}
+                options={FORMAT_OPTIONS}
+                onChange={(format: ValidationRule["format"]) => update(i, { format })}
+              />
+            )}
+            <Input
+              style={{ width: 140 }}
+              placeholder="message (optional)"
+              value={rule.message ?? ""}
+              onChange={(e) => update(i, { message: e.target.value || undefined })}
+            />
+            <Button type="text" size="small" danger onClick={() => remove(i)}>
+              ✕
+            </Button>
+          </Space>
+        ))}
+        <Button size="small" onClick={add}>
+          Add rule
+        </Button>
+      </div>
+    </>
   );
 }
 
