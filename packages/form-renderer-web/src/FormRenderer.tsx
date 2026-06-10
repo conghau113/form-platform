@@ -22,6 +22,7 @@ import {
   Card,
   Checkbox,
   Col,
+  Collapse,
   ColorPicker,
   ConfigProvider,
   DatePicker,
@@ -36,6 +37,7 @@ import {
   Space,
   Switch,
   Table,
+  Tabs,
   type ThemeConfig,
   TimePicker,
 } from "antd";
@@ -44,6 +46,15 @@ import { Fragment, useMemo, useState } from "react";
 import { type Control, Controller, type Resolver, useFieldArray, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
+
+/** antd Col sizing — either a fixed `span` or per-breakpoint widths. */
+type ColSpanProps = {
+  span?: number;
+  xs?: number;
+  sm?: number;
+  md?: number;
+  lg?: number;
+};
 
 type DateValue = React.ComponentProps<typeof DatePicker>["value"];
 type TimeValue = React.ComponentProps<typeof TimePicker>["value"];
@@ -60,8 +71,9 @@ function SelectControl(props: {
   onChange: (v: unknown) => void;
   /** Current value of the `dataSource.dependsOn` parent field, if any. */
   dependsOnValue?: unknown;
+  id?: string;
 }) {
-  const { node, value, disabled, onChange, dependsOnValue } = props;
+  const { node, value, disabled, onChange, dependsOnValue, id } = props;
   const ds = node.dataSource;
 
   // A dependent select waits until its parent has a value before fetching.
@@ -83,6 +95,7 @@ function SelectControl(props: {
 
   return (
     <Select
+      id={id}
       style={{ width: "100%" }}
       value={value}
       disabled={disabled}
@@ -103,12 +116,15 @@ function FieldControl(props: {
   onChange: (v: unknown) => void;
   /** Current value of a select's `dataSource.dependsOn` parent field, if any. */
   dependsOnValue?: unknown;
+  /** DOM id linking the control to its Form.Item label (htmlFor). */
+  id?: string;
 }) {
-  const { node, value, disabled, onChange, dependsOnValue } = props;
+  const { node, value, disabled, onChange, dependsOnValue, id } = props;
   switch (node.type) {
     case "text":
       return (
         <Input
+          id={id}
           value={(value as string) ?? ""}
           disabled={disabled}
           maxLength={node.maxLength}
@@ -119,6 +135,7 @@ function FieldControl(props: {
     case "textarea":
       return (
         <Input.TextArea
+          id={id}
           value={(value as string) ?? ""}
           disabled={disabled}
           maxLength={node.maxLength}
@@ -130,6 +147,7 @@ function FieldControl(props: {
     case "number":
       return (
         <InputNumber
+          id={id}
           style={{ width: "100%" }}
           value={(value as number | null) ?? null}
           disabled={disabled}
@@ -141,6 +159,7 @@ function FieldControl(props: {
     case "password":
       return (
         <Input.Password
+          id={id}
           value={(value as string) ?? ""}
           disabled={disabled}
           maxLength={node.maxLength}
@@ -156,11 +175,13 @@ function FieldControl(props: {
           disabled={disabled}
           onChange={onChange}
           dependsOnValue={dependsOnValue}
+          id={id}
         />
       );
     case "radio":
       return (
         <Radio.Group
+          id={id}
           value={value}
           disabled={disabled}
           options={node.options ?? []}
@@ -170,6 +191,7 @@ function FieldControl(props: {
     case "slider":
       return (
         <Slider
+          id={id}
           value={(value as number) ?? node.min ?? 0}
           disabled={disabled}
           min={node.min}
@@ -181,6 +203,7 @@ function FieldControl(props: {
     case "rate":
       return (
         <Rate
+          id={id}
           value={(value as number) ?? 0}
           disabled={disabled}
           count={node.count ?? 5}
@@ -190,6 +213,7 @@ function FieldControl(props: {
       );
     case "color":
       return (
+        // antd ColorPicker exposes no `id` prop; its label stays unassociated.
         <ColorPicker
           value={(value as string) ?? undefined}
           disabled={disabled}
@@ -199,6 +223,7 @@ function FieldControl(props: {
     case "date":
       return (
         <DatePicker
+          id={id}
           style={{ width: "100%" }}
           value={(value as DateValue) ?? null}
           disabled={disabled}
@@ -208,6 +233,7 @@ function FieldControl(props: {
     case "time":
       return (
         <TimePicker
+          id={id}
           style={{ width: "100%" }}
           value={(value as TimeValue) ?? null}
           disabled={disabled}
@@ -217,13 +243,14 @@ function FieldControl(props: {
     case "checkbox":
       return (
         <Checkbox
+          id={id}
           checked={!!value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
         />
       );
     case "switch":
-      return <Switch checked={!!value} disabled={disabled} onChange={onChange} />;
+      return <Switch id={id} checked={!!value} disabled={disabled} onChange={onChange} />;
     default:
       return null;
   }
@@ -331,7 +358,12 @@ function ArrayFieldSection(props: {
             style={{ marginBottom: 8 }}
             extra={<RowControls index={i} count={fields.length} move={move} remove={remove} />}
           >
-            <Row gutter={16}>{node.itemFields.map((c) => renderNode(c, `${name}.${i}.`))}</Row>
+            <Row gutter={16}>
+              {node.itemFields.map((c, j) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: item fields are static per render
+                <Fragment key={j}>{renderNode(c, `${name}.${i}.`)}</Fragment>
+              ))}
+            </Row>
           </Card>
         ))}
         {addButton}
@@ -424,21 +456,31 @@ export function FormRenderer({
 
   // `namePrefix` lets fields nested in an array bind to `name.{index}.{child}` while
   // top-level fields keep their bare name. `opts` lets a table cell render the control
-  // label-less (the column header carries the label) and un-wrapped (full-width cell).
+  // label-less (the column header carries the label) and un-wrapped (full-width cell);
+  // `span` lets a grid assign the cell width (the field's own colSpan still wins).
   const renderNode = (
     node: FieldNode,
     namePrefix = "",
-    opts?: { hideLabel?: boolean; bare?: boolean },
+    opts?: { hideLabel?: boolean; bare?: boolean; span?: ColSpanProps },
   ): React.ReactNode => {
     if (!isVisible(node, values)) return null; // shared conditional logic
     if (!canView(node, access)) return null; // shared RBAC
 
+    // Children of any container render through this same closure, so visibility,
+    // RBAC and array name-prefixes apply at every depth.
+    const renderChildren = (children: FieldNode[], childOpts?: { span?: ColSpanProps }) =>
+      children.map((c, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: schema children are static per render
+        <Fragment key={i}>{renderNode(c, namePrefix, childOpts)}</Fragment>
+      ));
+    const containerSpan = opts?.span ?? { span: 24 };
+
     if (node.type === "group") {
       return (
-        <Col key={node.name} span={24}>
+        <Col key={node.name} {...containerSpan}>
           <fieldset style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, padding: 16 }}>
             {node.label ? <legend style={{ padding: "0 8px" }}>{node.label}</legend> : null}
-            <Row gutter={16}>{node.children.map((c) => renderNode(c, namePrefix))}</Row>
+            <Row gutter={16}>{renderChildren(node.children)}</Row>
           </fieldset>
         </Col>
       );
@@ -447,7 +489,7 @@ export function FormRenderer({
     if (node.type === "array") {
       const name = `${namePrefix}${node.name}`;
       return (
-        <Col key={name} span={24}>
+        <Col key={name} {...containerSpan}>
           <ArrayFieldSection
             node={node}
             control={control as Control}
@@ -459,24 +501,93 @@ export function FormRenderer({
       );
     }
 
-    if (isLayoutContainer(node)) {
-      // Remaining layout containers (tabs/collapse/card/grid/space and orphaned
-      // panes) currently render as a transparent pass-through row; their values
-      // already hoist correctly via form-core. Dedicated antd rendering lands in D3.
+    if (node.type === "tabs") {
+      // `forceRender` is load-bearing: antd lazy-mounts inactive panes, and an
+      // unmounted pane never registers its RHF Controllers — defaults would be
+      // dropped and required errors would point at fields the user can't see.
+      const panes = node.children.filter((p) => isVisible(p, values) && canView(p, access));
       return (
-        <Col key={`${namePrefix}${node.type}`} span={24}>
+        <Col key={`${namePrefix}tabs`} {...containerSpan}>
+          <Tabs
+            items={panes.map((pane, i) => ({
+              key: String(i),
+              label: pane.label,
+              forceRender: true,
+              children: <Row gutter={16}>{renderChildren(pane.children)}</Row>,
+            }))}
+          />
+        </Col>
+      );
+    }
+
+    if (node.type === "collapse") {
+      const panels = node.children.filter((p) => isVisible(p, values) && canView(p, access));
+      const keys = panels.map((_, i) => String(i));
+      return (
+        <Col key={`${namePrefix}collapse`} {...containerSpan}>
+          <Collapse
+            accordion={node.accordion}
+            // All panels start open (first only under accordion) so required
+            // fields are visible; forceRender keeps closed panels registered.
+            defaultActiveKey={node.accordion ? keys.slice(0, 1) : keys}
+            items={panels.map((panel, i) => ({
+              key: String(i),
+              label: panel.label,
+              forceRender: true,
+              children: <Row gutter={16}>{renderChildren(panel.children)}</Row>,
+            }))}
+          />
+        </Col>
+      );
+    }
+
+    if (node.type === "card") {
+      return (
+        <Col key={`${namePrefix}card`} {...containerSpan}>
+          <Card title={node.title}>
+            <Row gutter={16}>{renderChildren(node.children)}</Row>
+          </Card>
+        </Col>
+      );
+    }
+
+    if (node.type === "grid") {
+      const cell = Math.max(1, Math.floor(24 / (node.cols ?? 2)));
+      return (
+        <Col key={`${namePrefix}grid`} {...containerSpan}>
           <Row gutter={16}>
-            {node.children.map((c, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: schema children are static per render
-              <Fragment key={i}>{renderNode(c, namePrefix)}</Fragment>
-            ))}
+            {renderChildren(node.children, { span: { xs: 24, sm: 24, md: cell, lg: cell } })}
           </Row>
         </Col>
       );
     }
 
-    // Responsive: read per-breakpoint colSpan; antd collapses to xs on small screens.
-    const span = { ...DEFAULT_SPAN, ...(node.layout?.colSpan ?? {}) };
+    if (node.type === "space") {
+      return (
+        <Col key={`${namePrefix}space`} {...containerSpan}>
+          <Space direction={node.direction ?? "horizontal"} wrap>
+            {node.children.map((c, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: schema children are static per render
+              <Fragment key={i}>{renderNode(c, namePrefix, { bare: true })}</Fragment>
+            ))}
+          </Space>
+        </Col>
+      );
+    }
+
+    if (isLayoutContainer(node)) {
+      // Orphaned tab-pane / collapse-panel placed outside their parent (possible
+      // in hand-written JSON): render their children as a plain transparent row.
+      return (
+        <Col key={`${namePrefix}${node.type}`} {...containerSpan}>
+          <Row gutter={16}>{renderChildren(node.children)}</Row>
+        </Col>
+      );
+    }
+
+    // Responsive: a grid-assigned span (if any) replaces the default; the field's
+    // own per-breakpoint colSpan always wins. antd collapses to xs on small screens.
+    const span = { ...(opts?.span ?? DEFAULT_SPAN), ...(node.layout?.colSpan ?? {}) };
     const editable = canEdit(node, access) && node.disabled !== true;
     // A select with a dependent dataSource reads its parent field's current value.
     const dependsOn = node.type === "select" ? node.dataSource?.dependsOn : undefined;
@@ -489,11 +600,13 @@ export function FormRenderer({
         render={({ field, fieldState }) => (
           <Form.Item
             label={opts?.hideLabel ? undefined : node.label}
+            htmlFor={opts?.hideLabel ? undefined : fieldName}
             tooltip={opts?.hideLabel ? undefined : node.tooltip}
             required={opts?.hideLabel ? undefined : node.required}
             style={opts?.bare ? { marginBottom: 0 } : undefined}
             validateStatus={fieldState.error ? "error" : undefined}
             help={fieldState.error?.message ?? (opts?.hideLabel ? undefined : node.helpText)}
+            {...node.decoratorProps}
           >
             <FieldControl
               node={node}
@@ -501,6 +614,7 @@ export function FormRenderer({
               disabled={!editable}
               onChange={field.onChange}
               dependsOnValue={dependsOnValue}
+              id={fieldName}
             />
           </Form.Item>
         )}
@@ -515,12 +629,27 @@ export function FormRenderer({
     );
   };
 
+  const lp = form.layoutProps;
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider theme={theme}>
-        <Form layout="vertical" component={false}>
+        <Form
+          component={false}
+          layout={lp?.layout ?? "vertical"}
+          labelCol={lp?.labelCol}
+          wrapperCol={lp?.wrapperCol}
+          size={lp?.size}
+          colon={lp?.colon}
+          labelAlign={lp?.labelAlign}
+          labelWrap={lp?.labelWrap}
+        >
           <form onSubmit={submit} noValidate>
-            <Row gutter={16}>{form.fields.map((n) => renderNode(n))}</Row>
+            <Row gutter={16}>
+              {form.fields.map((n, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: schema fields are static per render
+                <Fragment key={i}>{renderNode(n)}</Fragment>
+              ))}
+            </Row>
             <Button type="primary" htmlType="submit">
               {submitLabel}
             </Button>

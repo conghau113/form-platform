@@ -361,3 +361,136 @@ describe("buildZodSchema", () => {
     expect(schema.safeParse({ rows: [{ v: "a" }] }).success).toBe(true);
   });
 });
+
+describe("buildZodSchema with layout containers", () => {
+  it("hoists fields inside tabs/card/grid/space into the flat shape", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "tabs",
+          children: [
+            {
+              type: "tab-pane",
+              label: "Main",
+              children: [
+                {
+                  type: "card",
+                  title: "Inner",
+                  children: [
+                    {
+                      type: "grid",
+                      cols: 2,
+                      children: [{ type: "text", name: "a", label: "A", required: true }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { type: "space", children: [{ type: "switch", name: "b", label: "B" }] },
+      ]),
+    );
+    expect(schema.safeParse({}).success).toBe(false); // nested `a` is required
+    const ok = schema.safeParse({ a: "x", b: true });
+    expect(ok.success).toBe(true);
+    if (ok.success) expect(ok.data).toEqual({ a: "x", b: true });
+  });
+
+  it("excludes all descendants of a container hidden by visibleWhen", () => {
+    const fields: FormSchema["fields"] = [
+      { type: "select", name: "mode", label: "Mode" },
+      {
+        type: "card",
+        visibleWhen: { rule: { "==": [{ var: "mode" }, "full"] } },
+        children: [{ type: "text", name: "details", label: "Details", required: true }],
+      },
+    ];
+    const hidden = buildZodSchema(form(fields), { values: { mode: "lite" } });
+    expect(hidden.safeParse({ mode: "lite" }).success).toBe(true);
+    const shown = buildZodSchema(form(fields), { values: { mode: "full" } });
+    expect(shown.safeParse({ mode: "full" }).success).toBe(false);
+  });
+
+  it("excludes fields inside a hidden tab-pane", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "tabs",
+          children: [
+            {
+              type: "tab-pane",
+              label: "Hidden",
+              visibleWhen: { rule: { "==": [1, 0] } },
+              children: [{ type: "text", name: "secret", label: "Secret", required: true }],
+            },
+          ],
+        },
+      ]),
+    );
+    const result = schema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("excludes container descendants the role cannot view", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "card",
+          permissions: { viewRoles: ["admin"] },
+          children: [{ type: "text", name: "note", label: "Note", required: true }],
+        },
+      ]),
+      { access: { roles: ["user"] } },
+    );
+    expect(schema.safeParse({}).success).toBe(true);
+  });
+
+  it("validates a container inside an array's itemFields (children hoist per row)", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "jobs",
+          label: "Jobs",
+          itemFields: [
+            {
+              type: "card",
+              title: "Details",
+              children: [{ type: "text", name: "company", label: "Company", required: true }],
+            },
+          ],
+        },
+      ]),
+    );
+    expect(schema.safeParse({ jobs: [{}] }).success).toBe(false);
+    expect(schema.safeParse({ jobs: [{ company: "ACME" }] }).success).toBe(true);
+  });
+
+  it("validates an array nested inside a tab pane at the top level", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "tabs",
+          children: [
+            {
+              type: "tab-pane",
+              label: "Exp",
+              children: [
+                {
+                  type: "array",
+                  name: "rows",
+                  label: "Rows",
+                  minItems: 1,
+                  itemFields: [{ type: "text", name: "v", label: "V" }],
+                },
+              ],
+            },
+          ],
+        },
+      ]),
+    );
+    expect(schema.safeParse({ rows: [] }).success).toBe(false);
+    expect(schema.safeParse({ rows: [{ v: "x" }] }).success).toBe(true);
+  });
+});
