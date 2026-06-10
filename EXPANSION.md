@@ -87,43 +87,92 @@ from a nested edit, so App's editor↔schema boundary is unchanged. Changeset
 `.changeset/array-table-and-item-config.md`. Drag-based nested authoring on the canvas
 (outline tree) still belongs to Phase D.
 
-## Phase D — Designer engine & tree foundation  ← NEXT
+## Phase D — Designer engine & tree foundation  ← IN PROGRESS (D1–D4 done, NEXT: D5)
 Rebuild the relevant parts of `@designable/core` as pure, tested TS (no UI yet), and
 teach the contract the container/layout vocabulary Designable has. Heaviest refactor;
 each step lands in its own commit with `pnpm typecheck` + `pnpm test` green.
 
-- [ ] **D1 — schema (containers):** add container nodes `tabs` (panes with label +
-      children), `collapse` (panels), `card` (title + children), `grid` (cols +
-      children), `space` to the discriminated union. Optional/additive → no version
-      bump; `migrate`'s walk recurses their children. Nested fixtures + round-trip tests.
-- [ ] **D2 — schema (form-level layout):** optional `layoutProps` on the root —
-      `labelCol`, `wrapperCol`, `layout` (horizontal/vertical/inline), `size`, `colon`,
-      `labelAlign`, `labelWrap` — mirroring Designable's Form `defaultProps`
-      (labelCol 6 / wrapperCol 12). Additive. Per-field decorator overrides optional.
-- [ ] **D3 — form-core + renderer-web consume D1/D2:** `buildShape` treats layout
-      containers as *transparent* for values (children hoist to the parent object —
-      only `array` nests values); hidden container hides descendants. renderer-web
-      renders antd `Tabs`/`Collapse`/`Card`/`Row+Col`/`Space` via `renderNode`
-      recursion and applies `layoutProps` on the antd `Form`. Tests incl.
-      container-inside-array and array-inside-tab.
-- [ ] **D4 — designer tree model** (`apps/builder/src/engine/`): `TreeNode`
-      { uid, node, children } with pure ops — `insertBefore/After`, `append`, `remove`,
-      `move`, `clone` (uid+name regeneration) — guarded by metas (D6). Replaces the
-      flat `EditorModel`; `node-path.ts` logic folds into it. Own commit + tests
-      BEFORE any UI changes.
-- [ ] **D5 — operation state:** pure modules for `Selection` (multi-select),
-      `Hover`, `Clipboard`, and `History` generalized from `history.ts` to tree
-      snapshots (undo/redo + named-state list for the History panel).
-- [ ] **D6 — ComponentMeta registry v2:** extend `field-registry.ts` per Designable's
-      `createBehavior`/`createResource`: per type — `droppable`,
-      `allowAppend(parent, child)`, `draggable/cloneable/deletable` (root Form: all
-      false, droppable true), palette resource (icon, group: Inputs/Layouts/Arrays/
-      Displays), settings descriptors, `defaultProps`. Containers + `group` (Object)
-      + `array` included; guard test seeds every entry and parses it.
-- [ ] **D7 — transformer:** TreeNode tree ↔ `FormSchema` (the root Form node carries
-      id/title/layoutProps). Round-trip test: schema → tree → schema is identity for
-      every fixture.
-- [ ] **D8 — close:** reviewer subagent, changeset, commit.
+**Approved plan (2026-06-11):** full step-by-step plan lives at
+`C:\Users\ASUS\.claude\plans\synthetic-wibbling-rabin.md` — read it before resuming.
+User-confirmed decisions: (a) **pane-as-node** — `tab-pane`/`collapse-panel` are union
+members (uniform tree recursion; tabs/collapse children structurally restricted to
+panes); (b) **containers stay OUT of the palette until Phase E** (`showInPalette:
+false` in D6) — Phase D's user-visible win is lossless load/save of container JSON +
+containers render in Preview. Step order: D1→D8 with an added **D7b** (builder
+integration) because the App swap needs D6 metas + D7 transformer.
+
+- [x] **D1 — schema (containers)** ✅ commit `238ecc0`. 7 union types: `tabs`,
+      `tab-pane`, `collapse`, `collapse-panel`, `card`, `grid` (cols 1–24, default 2),
+      `space` — manual interfaces + z.lazy like group; containers are NAMELESS and
+      value-transparent. New `packages/form-schema/src/containers.ts`:
+      `isLayoutContainer` / `childrenOf` / `childrenKeyOf` (single source for walks).
+      form-core `buildShape` hoists via `isLayoutContainer` (pulled forward from D3 to
+      keep the commit green); renderer got a transparent pass-through (upgraded in D3);
+      PropertyPanel got nameless-tolerant `nodeName`/`nodeLabel` accessors. Fixture
+      `examples/form.v3.json` (container-inside-array + array-inside-tab). No version
+      bump — CURRENT_FORM_VERSION stays 3.
+- [x] **D2 — schema (form-level layout)** ✅ commit `6b5dd3e`. `formLayoutPropsSchema`
+      (layout/labelCol/wrapperCol/size/colon/labelAlign/labelWrap) optional on root;
+      `decoratorPropsSchema` optional on every leaf via `commonFields`.
+- [x] **D3 — form-core + renderer-web consume D1/D2** ✅ commit `146df8e`.
+      renderer-web renders real antd `Tabs`/`Collapse` (**forceRender: true is
+      load-bearing** — without it RHF Controllers in unvisited panes never register),
+      `Card`, `Grid` (Row+Col, cell = 24/cols, field colSpan wins), `Space` (bare
+      children); hidden panes filtered via isVisible/canView; `layoutProps` applied on
+      antd `Form`, `decoratorProps` spread onto `Form.Item`. Also an a11y fix the tests
+      rely on: `Form.Item htmlFor` + control `id` = RHF fieldName (ColorPicker has no
+      id prop — skipped). renderNode opts now `{hideLabel, bare, span}`. Tests:
+      `FormRenderer.containers.test.tsx` (8) + 6 container tests in form-core.
+- [x] **D4 — designer tree model** ✅ commit `299865c` (`apps/builder/src/engine/`): `tree.ts` —
+      `TreeNode { uid, node: EngineProps, children }` where `EngineProps = FormProps
+      (type:"form", id/title/layoutProps/settings) | FieldProps (FieldNode minus
+      children/itemFields)`. Pure path-copying ops: `append`, `insertBefore/After`,
+      `remove`, `move(before|after|append)`, `patchNode`, `clone` (fresh uids +
+      `uniqueName`); queries `findNode/findParent/ancestorsOf/contains/collectNames`.
+      Invalid op ⇒ SAME root reference; caller-injected `InsertGuard` (D6 will pass
+      the meta guard); engine invariants: no second root, root unmovable/undeletable,
+      cycle guard. `uid.ts` (makeUid moved here; model.ts re-exports until D7b),
+      `names.ts` (uniqueName: "text1"→"text2"). 11 tests in `engine/tree.test.ts`.
+      NO UI changes yet — App/Canvas/PropertyPanel still run on the flat EditorModel.
+- [ ] **D5 — operation state** ← NEXT. Pure modules in `apps/builder/src/engine/`:
+      `selection.ts` (SelectionState {selected: string[]} + select/toggle/selectMany/
+      clearSelection/isSelected/pruneSelection(s, root)), `hover.ts` (trivial shape),
+      `clipboard.ts` (copyNodes = deep-copy top-most-only selection; pasteAfter/
+      pasteInto via engine `clone` ⇒ fresh uids+names), `engine/history.ts` (pure:
+      HistoryEntry{value,label?}, createHistory/pushHistory/resetHistory/undoHistory/
+      redoHistory/jumpTo/historyEntries). Then refactor `src/history.ts` `useHistory`
+      to DELEGATE to the pure module — public API preserved (App.tsx untouched,
+      existing `src/history.test.ts` must pass UNMODIFIED), additive `set(next,
+      label?)` + `entries`/`jumpTo`. Tests: engine/history|selection|clipboard.test.ts.
+- [ ] **D6 — ComponentMeta registry v2:** extend `field-registry.ts` IN PLACE (keep
+      every existing export). `FieldType = FieldNode["type"]` (widened), `NodeType =
+      FieldType | "form"`; `ComponentBehavior { droppable, draggable, cloneable,
+      deletable, allowAppend?, allowParents? }`; `ComponentMeta` adds behavior/icon/
+      `showInPalette` (false for ALL containers in D)/`named` (false = nameless).
+      SettingDescriptor gains `control:"select"` + choices (PropertyPanel TypeSettings
+      gets the case). New entries: form (droppable only, settings = layoutProps
+      descriptors), group(Object), tabs (allowAppend only tab-pane), tab-pane
+      (allowParents [tabs]), collapse/collapse-panel mirror, card, grid (defaults
+      cols:2), space. `canInsert(parent, child)` + `metaGuard(): InsertGuard`.
+      `newField` skips `name` for named:false. PropertyPanel ITEM_TYPES filter →
+      showInPalette-based. Guard tests incl. canInsert matrix + palette-unchanged.
+- [ ] **D7 — transformer:** `engine/transform.ts` — `schemaToTree`/`fieldToTree`
+      (strip children via childrenKeyOf, fresh uids), `treeToField`/`treeToSchema`
+      (array ALWAYS emits itemFields even []; omit undefined optionals),
+      `replaceField(root, uid, field)` (keeps target uid — PropertyPanel boundary).
+      Transformer NEVER renames. Round-trip identity test for form.v1.json,
+      form.v3.json + inline fixtures.
+- [ ] **D7b — builder integration:** App.tsx switches `useHistory<TreeNode>`;
+      onDragEnd → engine insert/move + metaGuard; selection → SelectionState +
+      pruneSelection; PropertyPanel selected widens to FieldNode, named-only sections;
+      Canvas takes root's TreeNode[] (title fallback label??title??name??type);
+      `node-path.ts` → `engine/field-path.ts` walking `childrenOf` (fixes latent no-op
+      patch bug for container children inside itemFields); DELETE EditorModel + flat
+      ops + model.test.ts; Palette filters showInPalette. Flat canvas UX unchanged.
+      NOTE: replaceField regenerates descendant uids — fine in D (only top-level
+      selectable), Phase E must switch the settings panel to patchNode-style edits.
+- [ ] **D8 — close:** reviewer subagent, changeset (minor: form-schema, form-core,
+      form-renderer-web + builder note), mark Phase D ✅ here, update memory, commit.
 
 ## Phase E — WYSIWYG canvas + Designable-grade drag & drop
 The canvas stops being a row list (`Canvas.tsx` today) and renders **real antd
@@ -223,9 +272,24 @@ Ordered by value; each is a normal phase with the same Closing Loop.
 ---
 
 ## How to resume in a fresh session
-After `/clear`, start the next phase with:
-> Read AGENTS.md and EXPANSION.md. Enter plan mode. Continue the Formily-parity roadmap —
-> the next unchecked phase is the one to do. Plan it first, then implement following the
-> Closing Loop.
+**Phase D is mid-flight (D1–D4 committed, D5 next).** After `/clear`, resume with:
+> Read AGENTS.md and EXPANSION.md (Phase D section), then read the approved plan at
+> `C:\Users\ASUS\.claude\plans\synthetic-wibbling-rabin.md`. D1–D4 are committed —
+> continue from D5 WITHOUT re-planning. Implement D5 → D6 → D7 → D7b → D8 in order,
+> one commit per step, `pnpm typecheck` + `pnpm test` + `pnpm biome check --write .`
+> green before each commit.
 
-Keep this file's phase statuses current (mark ✅ DONE with a date as you finish each).
+Context that saves re-discovery when resuming:
+- The D5 step refactors `apps/builder/src/history.ts` to delegate to a new pure
+  `apps/builder/src/engine/history.ts`; the hook's public API must NOT change and
+  the existing `src/history.test.ts` must pass unmodified.
+- The engine (D4) is in `apps/builder/src/engine/{tree,uid,names}.ts` — read
+  `tree.ts`'s header comment first; ops return the SAME root reference on invalid
+  input, guard type is `InsertGuard`.
+- Shared container helpers live in `packages/form-schema/src/containers.ts`
+  (`isLayoutContainer`/`childrenOf`/`childrenKeyOf`) — use them, never type-switch.
+- `pnpm biome check .` reports 27 pre-existing warnings (noExplicitAny in old
+  tests/migrations etc.) — that count is the baseline, don't try to fix them.
+
+For phases after D: enter plan mode, plan first, then implement following the
+Closing Loop. Keep this file's phase statuses current (mark ✅ DONE with a date).
