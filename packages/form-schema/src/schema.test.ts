@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formSchema } from "./index.js";
+import {
+  childrenKeyOf,
+  childrenOf,
+  type FieldNode,
+  formSchema,
+  isLayoutContainer,
+  LAYOUT_CONTAINER_TYPES,
+} from "./index.js";
 
 describe("schema field types", () => {
   it("accepts a textarea field (additive type)", () => {
@@ -116,5 +123,133 @@ describe("schema field types", () => {
         fields: [{ type: "bogus", name: "q", label: "Q" }],
       }),
     ).toThrow();
+  });
+});
+
+describe("layout containers (additive)", () => {
+  const wrap = (fields: unknown[]) => ({
+    formVersion: 3,
+    id: "containers",
+    title: "Containers",
+    fields,
+  });
+
+  it("accepts every container type, nested three deep, without names", () => {
+    const out = formSchema.parse(
+      wrap([
+        {
+          type: "tabs",
+          children: [
+            {
+              type: "tab-pane",
+              label: "Main",
+              children: [
+                {
+                  type: "card",
+                  title: "Inner",
+                  children: [
+                    {
+                      type: "grid",
+                      cols: 3,
+                      children: [{ type: "text", name: "a", label: "A" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: "collapse",
+          accordion: true,
+          children: [
+            {
+              type: "collapse-panel",
+              label: "More",
+              children: [
+                {
+                  type: "space",
+                  direction: "vertical",
+                  children: [{ type: "switch", name: "b", label: "B" }],
+                },
+              ],
+            },
+          ],
+        },
+      ]),
+    );
+    expect(out.fields.map((f) => f.type)).toEqual(["tabs", "collapse"]);
+  });
+
+  it("accepts visibleWhen/permissions on containers and panes", () => {
+    const out = formSchema.parse(
+      wrap([
+        {
+          type: "card",
+          visibleWhen: { rule: { "==": [{ var: "x" }, 1] } },
+          permissions: { viewRoles: ["admin"] },
+          children: [],
+        },
+        {
+          type: "tabs",
+          children: [
+            {
+              type: "tab-pane",
+              label: "T",
+              visibleWhen: { rule: { "==": [1, 1] } },
+              children: [],
+            },
+          ],
+        },
+      ]),
+    );
+    expect(out.fields).toHaveLength(2);
+  });
+
+  it("rejects a non-pane child directly inside tabs", () => {
+    expect(() =>
+      formSchema.parse(
+        wrap([{ type: "tabs", children: [{ type: "text", name: "x", label: "X" }] }]),
+      ),
+    ).toThrow();
+  });
+
+  it("rejects a non-panel child directly inside collapse", () => {
+    expect(() =>
+      formSchema.parse(
+        wrap([{ type: "collapse", children: [{ type: "text", name: "x", label: "X" }] }]),
+      ),
+    ).toThrow();
+  });
+
+  it("requires a label on tab-pane", () => {
+    expect(() =>
+      formSchema.parse(wrap([{ type: "tabs", children: [{ type: "tab-pane", children: [] }] }])),
+    ).toThrow();
+  });
+
+  it("rejects grid cols outside 1..24", () => {
+    expect(() => formSchema.parse(wrap([{ type: "grid", cols: 0, children: [] }]))).toThrow();
+    expect(() => formSchema.parse(wrap([{ type: "grid", cols: 25, children: [] }]))).toThrow();
+  });
+
+  it("classifies containers/array/leaves via the shared helpers", () => {
+    const text: FieldNode = { type: "text", name: "t", label: "T" };
+    const card: FieldNode = { type: "card", children: [text] };
+    const arr: FieldNode = { type: "array", name: "rows", itemFields: [text] };
+
+    for (const type of LAYOUT_CONTAINER_TYPES) {
+      expect(childrenKeyOf(type)).toBe("children");
+    }
+    expect(childrenKeyOf("array")).toBe("itemFields");
+    expect(childrenKeyOf("text")).toBeNull();
+
+    expect(isLayoutContainer(card)).toBe(true);
+    expect(isLayoutContainer(arr)).toBe(false);
+    expect(isLayoutContainer(text)).toBe(false);
+
+    expect(childrenOf(card)).toEqual([text]);
+    expect(childrenOf(arr)).toEqual([text]);
+    expect(childrenOf(text)).toBeNull();
   });
 });

@@ -1,9 +1,10 @@
-import type {
-  ArrayField,
-  FieldNode,
-  FormSchema,
-  LeafField,
-  ValidationRule,
+import {
+  type ArrayField,
+  type FieldNode,
+  type FormSchema,
+  isLayoutContainer,
+  type LeafField,
+  type ValidationRule,
 } from "@org/form-schema";
 import { z } from "zod";
 import { isVisible } from "./conditions.js";
@@ -175,7 +176,10 @@ function buildShape(
   for (const node of nodes) {
     if (!isVisible(node, values)) continue;
     if (access && !canView(node, access)) continue;
-    if (node.type === "group") {
+    if (isLayoutContainer(node)) {
+      // Layout containers (group/tabs/card/...) are transparent for values:
+      // their children hoist into this flat shape. A container hidden above
+      // (visibleWhen / RBAC) was already skipped, hiding its whole subtree.
       Object.assign(shape, buildShape(node.children, values, access));
       continue;
     }

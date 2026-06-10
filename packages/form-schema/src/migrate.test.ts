@@ -56,6 +56,42 @@ describe("migrate", () => {
     expect(item.colSpanDesktop).toBeUndefined();
   });
 
+  it("passes the container fixture examples/form.v3.json through unchanged (additive, no bump)", () => {
+    const url = new URL("../../../examples/form.v3.json", import.meta.url);
+    const doc = JSON.parse(readFileSync(url, "utf8"));
+    expect(doc.formVersion).toBe(CURRENT_FORM_VERSION);
+
+    const out = migrate(doc);
+
+    // Containers are additive: a current-version doc with containers migrates
+    // as a no-op and round-trips structurally identical.
+    expect(out).toEqual(doc);
+  });
+
+  it("migrates legacy props on fields nested inside container children", () => {
+    const v1 = {
+      formVersion: 1,
+      id: "container-nested",
+      title: "Container nested",
+      fields: [
+        {
+          type: "tabs",
+          children: [
+            {
+              type: "tab-pane",
+              label: "Main",
+              children: [{ type: "text", name: "city", label: "City", colSpanDesktop: 6 }],
+            },
+          ],
+        },
+      ],
+    };
+    const out = migrate(v1);
+    const leaf = (out.fields[0] as any).children[0].children[0];
+    expect(leaf.layout.colSpan.lg).toBe(6);
+    expect(leaf.colSpanDesktop).toBeUndefined();
+  });
+
   it("rejects a document newer than the renderer supports", () => {
     expect(() => migrate({ formVersion: 999, id: "x", title: "x", fields: [] })).toThrow();
   });

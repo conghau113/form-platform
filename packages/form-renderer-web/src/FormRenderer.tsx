@@ -12,6 +12,7 @@ import {
   type ArrayField,
   type FieldNode,
   type FormSchema,
+  isLayoutContainer,
   type LeafField,
   migrate,
 } from "@org/form-schema";
@@ -39,7 +40,7 @@ import {
   TimePicker,
 } from "antd";
 import type React from "react";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { type Control, Controller, type Resolver, useFieldArray, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
@@ -292,9 +293,15 @@ function ArrayFieldSection(props: {
     // actions column. dataSource carries each row's react-hook-form index.
     type RowRec = { key: string; index: number };
     const columns = [
-      ...node.itemFields.map((child) => ({
-        title: child.label || child.name,
-        key: child.name,
+      // Nameless layout containers can appear among itemFields; fall back to their
+      // label/title (or type) for the header and the index for column identity.
+      ...node.itemFields.map((child, col) => ({
+        title:
+          ("label" in child && child.label) ||
+          ("title" in child && child.title) ||
+          ("name" in child && child.name) ||
+          child.type,
+        key: "name" in child ? child.name : `${child.type}-${col}`,
         render: (_: unknown, rec: RowRec) =>
           renderNode(child, `${name}.${rec.index}.`, { hideLabel: true, bare: true }),
       })),
@@ -360,7 +367,7 @@ type Values = Record<string, unknown>;
  *  `initialValues` (e.g. an existing submission) always win over these. */
 function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
   for (const node of nodes) {
-    if (node.type === "group") {
+    if (isLayoutContainer(node)) {
       schemaDefaults(node.children, into);
     } else if (node.type === "array") {
       // Seed an empty list so useFieldArray stays controlled; row defaults are
@@ -448,6 +455,22 @@ export function FormRenderer({
             seedRow={() => schemaDefaults(node.itemFields)}
             renderNode={renderNode}
           />
+        </Col>
+      );
+    }
+
+    if (isLayoutContainer(node)) {
+      // Remaining layout containers (tabs/collapse/card/grid/space and orphaned
+      // panes) currently render as a transparent pass-through row; their values
+      // already hoist correctly via form-core. Dedicated antd rendering lands in D3.
+      return (
+        <Col key={`${namePrefix}${node.type}`} span={24}>
+          <Row gutter={16}>
+            {node.children.map((c, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: schema children are static per render
+              <Fragment key={i}>{renderNode(c, namePrefix)}</Fragment>
+            ))}
+          </Row>
         </Col>
       );
     }

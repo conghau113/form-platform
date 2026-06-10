@@ -195,7 +195,93 @@ export interface ArrayField {
   itemFields: FieldNode[];
 }
 
-export type FieldNode = LeafField | GroupField | ArrayField;
+/* ----------------------------------------------------------------------------
+ * Layout containers (additive, no formVersion bump). They are TRANSPARENT for
+ * values: their children's values hoist to the parent object — only `array`
+ * nests values. They carry no `name`. A hidden container (visibleWhen /
+ * permissions) hides its whole subtree.
+ *
+ * `tab-pane` / `collapse-panel` are union members of their own so the designer
+ * tree can treat every node uniformly (select/drag a pane like any node), but
+ * their PLACEMENT is structurally restricted: `tabs.children` only accepts
+ * panes, `collapse.children` only panels. A pane appearing elsewhere in
+ * hand-written JSON still parses — builder metas prevent authoring that, and
+ * renderers fall back to rendering its children as a plain row.
+ * ------------------------------------------------------------------------- */
+
+export interface TabPaneField {
+  type: "tab-pane";
+  label: string;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: FieldNode[];
+}
+
+export interface TabsField {
+  type: "tabs";
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: TabPaneField[];
+}
+
+export interface CollapsePanelField {
+  type: "collapse-panel";
+  label: string;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: FieldNode[];
+}
+
+export interface CollapseField {
+  type: "collapse";
+  /** Only one panel open at a time. */
+  accordion?: boolean;
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: CollapsePanelField[];
+}
+
+export interface CardField {
+  type: "card";
+  title?: string;
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: FieldNode[];
+}
+
+export interface GridField {
+  type: "grid";
+  /** Columns per row (1–24). Renderers default to 2. */
+  cols?: number;
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: FieldNode[];
+}
+
+export interface SpaceField {
+  type: "space";
+  direction?: "horizontal" | "vertical";
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: FieldNode[];
+}
+
+export type FieldNode =
+  | LeafField
+  | GroupField
+  | ArrayField
+  | TabsField
+  | TabPaneField
+  | CollapseField
+  | CollapsePanelField
+  | CardField
+  | GridField
+  | SpaceField;
 
 export const groupFieldSchema: z.ZodType<GroupField> = z.lazy(() =>
   z.object({
@@ -227,6 +313,80 @@ export const arrayFieldSchema: z.ZodType<ArrayField> = z.lazy(() =>
   }),
 );
 
+export const tabPaneFieldSchema: z.ZodType<TabPaneField> = z.lazy(() =>
+  z.object({
+    type: z.literal("tab-pane"),
+    label: z.string(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(fieldNodeSchema),
+  }),
+);
+
+export const tabsFieldSchema: z.ZodType<TabsField> = z.lazy(() =>
+  z.object({
+    type: z.literal("tabs"),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(tabPaneFieldSchema),
+  }),
+);
+
+export const collapsePanelFieldSchema: z.ZodType<CollapsePanelField> = z.lazy(() =>
+  z.object({
+    type: z.literal("collapse-panel"),
+    label: z.string(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(fieldNodeSchema),
+  }),
+);
+
+export const collapseFieldSchema: z.ZodType<CollapseField> = z.lazy(() =>
+  z.object({
+    type: z.literal("collapse"),
+    accordion: z.boolean().optional(),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(collapsePanelFieldSchema),
+  }),
+);
+
+export const cardFieldSchema: z.ZodType<CardField> = z.lazy(() =>
+  z.object({
+    type: z.literal("card"),
+    title: z.string().optional(),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(fieldNodeSchema),
+  }),
+);
+
+export const gridFieldSchema: z.ZodType<GridField> = z.lazy(() =>
+  z.object({
+    type: z.literal("grid"),
+    cols: z.number().int().min(1).max(24).optional(),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(fieldNodeSchema),
+  }),
+);
+
+export const spaceFieldSchema: z.ZodType<SpaceField> = z.lazy(() =>
+  z.object({
+    type: z.literal("space"),
+    direction: z.enum(["horizontal", "vertical"]).optional(),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(fieldNodeSchema),
+  }),
+);
+
 export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
   z.union([
     textFieldSchema,
@@ -244,6 +404,13 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     colorFieldSchema,
     groupFieldSchema,
     arrayFieldSchema,
+    tabsFieldSchema,
+    tabPaneFieldSchema,
+    collapseFieldSchema,
+    collapsePanelFieldSchema,
+    cardFieldSchema,
+    gridFieldSchema,
+    spaceFieldSchema,
   ]),
 );
 

@@ -53,6 +53,17 @@ function readEquals(field: AuthoredField): { field: string; value: string } | nu
   return { field: left.var, value: String(eq[1] ?? "") };
 }
 
+/** Identity accessors tolerant of nameless layout containers (tabs/card/...)
+ *  that can appear in loaded JSON among item fields. */
+function nodeName(node: FieldNode): string | undefined {
+  return "name" in node ? node.name : undefined;
+}
+function nodeLabel(node: FieldNode): string | undefined {
+  if ("label" in node && node.label) return node.label;
+  if ("title" in node && node.title) return node.title;
+  return undefined;
+}
+
 function csv(values: string[] | undefined): string {
   return (values ?? []).join(", ");
 }
@@ -65,14 +76,14 @@ function parseCsv(text: string): string[] {
 
 /** Labels along a drill path, for the breadcrumb (root field + each drilled item). */
 function pathCrumbs(root: FieldNode, path: NodePath): string[] {
-  const crumbs = [root.label || root.name];
+  const crumbs = [nodeLabel(root) || nodeName(root) || root.type];
   let node: FieldNode = root;
   for (const index of path) {
     const items = node.type === "array" ? node.itemFields : [];
     const child = items[index];
     if (!child) break;
     node = child;
-    crumbs.push(child.label || child.name || `#${index}`);
+    crumbs.push(nodeLabel(child) || nodeName(child) || `#${index}`);
   }
   return crumbs;
 }
@@ -118,8 +129,8 @@ export function PropertyPanel({
   const parent = path.length ? nodeAtPath(root, path.slice(0, -1)) : null;
   const siblingNames = path.length
     ? (parent?.type === "array" ? parent.itemFields : [])
-        .map((f) => f.name)
-        .filter((n) => n !== node.name)
+        .map((f) => nodeName(f))
+        .filter((n): n is string => Boolean(n) && n !== node.name)
     : siblings.map((s) => s.field.name).filter((n) => n !== node.name);
 
   const crumbs = pathCrumbs(root, path);
@@ -553,7 +564,12 @@ function ItemFieldsEditor({
     commit(next);
   };
   const namesExcept = (i: number) =>
-    new Set(items.filter((_, idx) => idx !== i).map((f) => f.name));
+    new Set(
+      items
+        .filter((_, idx) => idx !== i)
+        .map((f) => nodeName(f))
+        .filter((n): n is string => Boolean(n)),
+    );
   const add = () => commit([...items, newField("text", namesExcept(-1))]);
   // Change an item's type, keeping its name/label/required and reseeding the rest.
   const changeType = (i: number, type: FieldType) => {
@@ -561,8 +577,8 @@ function ItemFieldsEditor({
     const seeded = newField(type, namesExcept(i));
     update(i, {
       ...seeded,
-      name: it.name,
-      label: it.label ?? seeded.label,
+      name: nodeName(it) ?? seeded.name,
+      label: nodeLabel(it) ?? seeded.label,
       required: (prop(it, "required") as boolean | undefined) || undefined,
     } as FieldNode);
   };
@@ -600,13 +616,13 @@ function ItemFieldsEditor({
             <Input
               style={{ width: 100 }}
               placeholder="label"
-              value={it.label ?? ""}
+              value={nodeLabel(it) ?? ""}
               onChange={(e) => update(i, { ...it, label: e.target.value } as FieldNode)}
             />
             <Input
               style={{ width: 90 }}
               placeholder="name"
-              value={it.name}
+              value={nodeName(it) ?? ""}
               onChange={(e) => update(i, { ...it, name: e.target.value } as FieldNode)}
             />
             <Button size="small" onClick={() => onConfigure(i)}>

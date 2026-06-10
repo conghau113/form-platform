@@ -1,0 +1,88 @@
+{
+  "formVersion": 3,
+  "id": "employee-onboarding",
+  "title": "Employee onboarding",
+  "fields": [
+    {
+      "type": "tabs",
+      "children": [
+        {
+          "type": "tab-pane",
+          "label": "Profile",
+          "children": [
+            {
+              "type": "card",
+              "title": "Identity",
+              "children": [
+                {
+                  "type": "grid",
+                  "cols": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "name": "firstName",
+                      "label": "First name",
+                      "required": true
+                    },
+                    { "type": "text", "name": "lastName", "label": "Last name", "required": true },
+                    { "type": "date", "name": "birthDate", "label": "Birth date" },
+                    {
+                      "type": "select",
+                      "name": "department",
+                      "label": "Department",
+                      "options": [
+                        { "label": "Engineering", "value": "eng" },
+                        { "label": "Design", "value": "design" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab-pane",
+          "label": "Experience",
+          "children": [
+            {
+              "type": "array",
+              "name": "jobs",
+              "label": "Previous jobs",
+              "itemFields": [
+                { "type": "text", "name": "company", "label": "Company", "required": true },
+                {
+                  "type": "card",
+                  "title": "Details",
+                  "children": [
+                    { "type": "text", "name": "role", "label": "Role" },
+                    { "type": "number", "name": "years", "label": "Years" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "collapse",
+      "children": [
+        {
+          "type": "collapse-panel",
+          "label": "Extras",
+          "children": [
+            {
+              "type": "space",
+              "direction": "horizontal",
+              "children": [
+                { "type": "switch", "name": "remote", "label": "Remote" },
+                { "type": "switch", "name": "newsletter", "label": "Newsletter" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
