@@ -173,7 +173,29 @@ export interface GroupField {
   children: FieldNode[];
 }
 
-export type FieldNode = LeafField | GroupField;
+/** A repeatable list of fields (a.k.a. Form List). Its value is an array of row
+ *  objects keyed by the item fields' names: `name: [{...}, {...}]`. `itemFields` is
+ *  recursive like `group.children`, so rows can contain any node (including nested
+ *  arrays/groups). Presence/length is bounded by `required` (≥1) / minItems / maxItems. */
+export interface ArrayField {
+  type: "array";
+  name: string;
+  label?: string;
+  helpText?: string;
+  tooltip?: string;
+  required?: boolean;
+  minItems?: number;
+  maxItems?: number;
+  /** How the renderer lays out the rows. Defaults to "card" (one card per row);
+   *  "table" renders an antd-style table with one column per item field. */
+  variant?: "card" | "table";
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  itemFields: FieldNode[];
+}
+
+export type FieldNode = LeafField | GroupField | ArrayField;
 
 export const groupFieldSchema: z.ZodType<GroupField> = z.lazy(() =>
   z.object({
@@ -184,6 +206,24 @@ export const groupFieldSchema: z.ZodType<GroupField> = z.lazy(() =>
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
     children: z.array(fieldNodeSchema),
+  }),
+);
+
+export const arrayFieldSchema: z.ZodType<ArrayField> = z.lazy(() =>
+  z.object({
+    type: z.literal("array"),
+    name: z.string().min(1),
+    label: z.string().optional(),
+    helpText: z.string().optional(),
+    tooltip: z.string().optional(),
+    required: z.boolean().optional(),
+    minItems: z.number().int().min(0).optional(),
+    maxItems: z.number().int().min(0).optional(),
+    variant: z.enum(["card", "table"]).optional(),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    itemFields: z.array(fieldNodeSchema),
   }),
 );
 
@@ -203,6 +243,7 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     rateFieldSchema,
     colorFieldSchema,
     groupFieldSchema,
+    arrayFieldSchema,
   ]),
 );
 

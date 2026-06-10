@@ -10,7 +10,9 @@ import type { LeafField, ValidationRule } from "@org/form-schema";
  * contract rather than replacing it.
  */
 
-export type FieldType = LeafField["type"];
+/** Authorable node types: every leaf type plus the `array` (Form List) container.
+ *  `group` is still excluded from visual authoring (Phase D's nested canvas). */
+export type FieldType = LeafField["type"] | "array";
 
 /** A control kind the property panel knows how to render for a setting. */
 export type SettingControl = "text" | "number" | "checkbox" | "options";
@@ -185,6 +187,20 @@ export const FIELD_REGISTRY: FieldDescriptor[] = [
     settings: [],
     defaultValueKind: "text",
     validations: STRING_RULES,
+  },
+  {
+    type: "array",
+    label: "Array (list)",
+    category: "Layout",
+    // A fresh Form List starts with no item fields; they're authored in the
+    // PropertyPanel's Item fields editor. minItems/maxItems render via the
+    // generic number settings below.
+    defaults: { itemFields: [] },
+    settings: [
+      { key: "minItems", label: "Min items", control: "number" },
+      { key: "maxItems", label: "Max items", control: "number" },
+    ],
+    defaultValueKind: "none",
   },
 ];
 

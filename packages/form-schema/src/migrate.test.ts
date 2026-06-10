@@ -33,6 +33,29 @@ describe("migrate", () => {
     expect((out.fields[0] as any).colSpanDesktop).toBeUndefined();
   });
 
+  it("migrates legacy props on fields nested inside an array's itemFields", () => {
+    // The walk recurses itemFields, so the v1->v2 colSpanDesktop migration must reach
+    // a field nested inside an array node (forward-proofing for array-nested fields).
+    const v1 = {
+      formVersion: 1,
+      id: "nested",
+      title: "Nested",
+      fields: [
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          itemFields: [{ type: "text", name: "city", label: "City", colSpanDesktop: 8 }],
+        },
+      ],
+    };
+    const out = migrate(v1);
+    expect(out.formVersion).toBe(CURRENT_FORM_VERSION);
+    const item = (out.fields[0] as any).itemFields[0];
+    expect(item.layout.colSpan.lg).toBe(8);
+    expect(item.colSpanDesktop).toBeUndefined();
+  });
+
   it("rejects a document newer than the renderer supports", () => {
     expect(() => migrate({ formVersion: 999, id: "x", title: "x", fields: [] })).toThrow();
   });

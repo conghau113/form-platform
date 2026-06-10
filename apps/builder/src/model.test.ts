@@ -99,4 +99,27 @@ describe("pure mutators", () => {
     const json = JSON.stringify(toFormSchema(authorExample()));
     expect(json).not.toContain("uid");
   });
+
+  it("authors an array (Form List) node with item fields into valid JSON", () => {
+    let model: EditorModel = { id: "list", title: "List", fields: [] };
+    model = insertField(model, "array", 0);
+    const uid = model.fields[0].uid;
+    model = updateField(model, uid, {
+      name: "contacts",
+      label: "Contacts",
+      minItems: 1,
+      itemFields: [
+        { type: "text", name: "fullName", label: "Full name", required: true },
+        { type: "number", name: "age", label: "Age" },
+      ],
+    } as Parameters<typeof updateField>[2]);
+
+    const built = toFormSchema(model);
+    expect(() => formSchema.parse(built)).not.toThrow();
+    expect(built.fields[0]).toMatchObject({
+      type: "array",
+      name: "contacts",
+      minItems: 1,
+    });
+  });
 });

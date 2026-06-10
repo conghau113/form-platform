@@ -282,4 +282,82 @@ describe("buildZodSchema", () => {
     expect(schema.safeParse({}).success).toBe(false);
     expect(schema.safeParse({ city: "Hanoi" }).success).toBe(true);
   });
+
+  it("validates an array (Form List) as a nested array of row objects", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "contacts",
+          label: "Contacts",
+          itemFields: [
+            { type: "text", name: "fullName", label: "Full name", required: true },
+            { type: "number", name: "age", label: "Age" },
+          ],
+        },
+      ]),
+    );
+    // a row missing the required item field fails, pointing into the array path
+    const bad = schema.safeParse({ contacts: [{ age: 30 }] });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues[0]?.path).toEqual(["contacts", 0, "fullName"]);
+    }
+    expect(schema.safeParse({ contacts: [{ fullName: "Ada", age: 30 }] }).success).toBe(true);
+    // an optional array accepts an empty list (and undefined)
+    expect(schema.safeParse({ contacts: [] }).success).toBe(true);
+    expect(schema.safeParse({}).success).toBe(true);
+  });
+
+  it("enforces minItems/maxItems and required on an array", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          minItems: 1,
+          maxItems: 2,
+          itemFields: [{ type: "text", name: "v", label: "V" }],
+        },
+      ]),
+    );
+    expect(schema.safeParse({ rows: [] }).success).toBe(false); // below minItems
+    expect(schema.safeParse({ rows: [{ v: "a" }] }).success).toBe(true);
+    expect(schema.safeParse({ rows: [{ v: "a" }, { v: "b" }, { v: "c" }] }).success).toBe(false); // above max
+  });
+
+  it("treats `required` on an array as minItems 1", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          required: true,
+          itemFields: [{ type: "text", name: "v", label: "V" }],
+        },
+      ]),
+    );
+    expect(schema.safeParse({ rows: [] }).success).toBe(false);
+    expect(schema.safeParse({ rows: [{ v: "a" }] }).success).toBe(true);
+  });
+
+  it("does not let an explicit minItems 0 cancel required on an array", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          required: true,
+          minItems: 0,
+          itemFields: [{ type: "text", name: "v", label: "V" }],
+        },
+      ]),
+    );
+    // required wins over the looser minItems:0 -> an empty list still fails
+    expect(schema.safeParse({ rows: [] }).success).toBe(false);
+    expect(schema.safeParse({ rows: [{ v: "a" }] }).success).toBe(true);
+  });
 });

@@ -1,5 +1,15 @@
-import { CURRENT_FORM_VERSION, type FormSchema, type LeafField, migrate } from "@org/form-schema";
+import {
+  type ArrayField,
+  CURRENT_FORM_VERSION,
+  type FormSchema,
+  type LeafField,
+  migrate,
+} from "@org/form-schema";
 import { describeField, type FieldType } from "./field-registry";
+
+/** What the flat builder canvas can hold: any leaf field plus an `array` (Form List)
+ *  container. `group` is still excluded from visual authoring (Phase D). */
+export type AuthoredField = LeafField | ArrayField;
 
 // The authorable field types, their labels and palette grouping live in the
 // meta-driven field registry. `group` is intentionally excluded from visual
@@ -13,7 +23,7 @@ export { FIELD_TYPES, type FieldType, fieldTypeLabel } from "./field-registry";
  */
 export interface EditorField {
   uid: string;
-  field: LeafField;
+  field: AuthoredField;
 }
 
 export interface EditorModel {
@@ -44,10 +54,10 @@ function uniqueName(type: FieldType, taken: ReadonlySet<string>): string {
  *  Seed props come from the registry descriptor, so adding a type needs no edit here.
  *  The `as LeafField` cast trusts the descriptor's `defaults`; field-registry.test.ts
  *  guards it by parsing every seeded field against the contract. */
-export function newField(type: FieldType, taken: ReadonlySet<string> = new Set()): LeafField {
+export function newField(type: FieldType, taken: ReadonlySet<string> = new Set()): AuthoredField {
   const name = uniqueName(type, taken);
   const { label, defaults } = describeField(type);
-  return { type, name, label, ...defaults } as LeafField;
+  return { type, name, label, ...defaults } as AuthoredField;
 }
 
 function takenNames(model: EditorModel, except?: string): Set<string> {
@@ -75,7 +85,8 @@ export function fromFormSchema(raw: unknown): EditorModel {
     id: form.id,
     title: form.title,
     fields: form.fields
-      .filter((f): f is LeafField => f.type !== "group")
+      // Keep leaf fields and `array` containers; `group` stays non-authorable (Phase D).
+      .filter((f): f is AuthoredField => f.type !== "group")
       .map((field) => ({ uid: makeUid(), field })),
   };
 }
@@ -107,12 +118,12 @@ export function moveField(model: EditorModel, fromUid: string, toUid: string): E
 export function updateField(
   model: EditorModel,
   uid: string,
-  patch: Partial<LeafField>,
+  patch: Partial<AuthoredField>,
 ): EditorModel {
   return {
     ...model,
     fields: model.fields.map((f) =>
-      f.uid === uid ? { uid, field: { ...f.field, ...patch } as LeafField } : f,
+      f.uid === uid ? { uid, field: { ...f.field, ...patch } as AuthoredField } : f,
     ),
   };
 }

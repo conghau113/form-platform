@@ -6,6 +6,7 @@ function walk(fields: any[], fn: (f: any) => void): void {
   for (const f of fields ?? []) {
     fn(f);
     if (f && Array.isArray(f.children)) walk(f.children, fn);
+    if (f && Array.isArray(f.itemFields)) walk(f.itemFields, fn);
   }
 }
 

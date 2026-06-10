@@ -8,10 +8,17 @@ import {
   fetchDataSourceOptions,
   isVisible,
 } from "@org/form-core";
-import { type FieldNode, type FormSchema, type LeafField, migrate } from "@org/form-schema";
+import {
+  type ArrayField,
+  type FieldNode,
+  type FormSchema,
+  type LeafField,
+  migrate,
+} from "@org/form-schema";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   Button,
+  Card,
   Checkbox,
   Col,
   ColorPicker,
@@ -25,13 +32,15 @@ import {
   Row,
   Select,
   Slider,
+  Space,
   Switch,
+  Table,
   type ThemeConfig,
   TimePicker,
 } from "antd";
 import type React from "react";
 import { useMemo, useState } from "react";
-import { Controller, type Resolver, useForm } from "react-hook-form";
+import { type Control, Controller, type Resolver, useFieldArray, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
 
@@ -219,6 +228,119 @@ function FieldControl(props: {
   }
 }
 
+/** How `ArrayFieldSection` calls back into the renderer for a nested node. */
+type RenderNode = (
+  node: FieldNode,
+  namePrefix: string,
+  opts?: { hideLabel?: boolean; bare?: boolean },
+) => React.ReactNode;
+
+/** Per-row reorder/remove controls, shared by the card and table variants. */
+function RowControls(props: {
+  index: number;
+  count: number;
+  move: (from: number, to: number) => void;
+  remove: (index: number) => void;
+}) {
+  const { index, count, move, remove } = props;
+  return (
+    <Space size={4}>
+      <Button
+        size="small"
+        type="text"
+        disabled={index === 0}
+        onClick={() => move(index, index - 1)}
+      >
+        ↑
+      </Button>
+      <Button
+        size="small"
+        type="text"
+        disabled={index === count - 1}
+        onClick={() => move(index, index + 1)}
+      >
+        ↓
+      </Button>
+      <Button size="small" type="text" danger onClick={() => remove(index)}>
+        Remove
+      </Button>
+    </Space>
+  );
+}
+
+/** Renders an `array` (Form List) node: a repeatable set of rows authored from the
+ *  node's `itemFields`. `useFieldArray` owns add/remove/reorder; each control binds to
+ *  `name.{index}.{child}` via `renderNode`. `variant` picks the card or table layout. */
+function ArrayFieldSection(props: {
+  node: ArrayField;
+  control: Control;
+  name: string;
+  /** Seed object for a freshly appended row (item-field defaultValues). */
+  seedRow: () => Record<string, unknown>;
+  renderNode: RenderNode;
+}) {
+  const { node, control, name, seedRow, renderNode } = props;
+  const { fields, append, remove, move } = useFieldArray({ control, name });
+  const addButton = <Button onClick={() => append(seedRow())}>Add {node.label || "item"}</Button>;
+  const help = node.helpText ? (
+    <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12, marginTop: 8 }}>{node.helpText}</div>
+  ) : null;
+
+  let body: React.ReactNode;
+  if (node.variant === "table") {
+    // One column per item field (cells render the control bare + label-less) plus an
+    // actions column. dataSource carries each row's react-hook-form index.
+    type RowRec = { key: string; index: number };
+    const columns = [
+      ...node.itemFields.map((child) => ({
+        title: child.label || child.name,
+        key: child.name,
+        render: (_: unknown, rec: RowRec) =>
+          renderNode(child, `${name}.${rec.index}.`, { hideLabel: true, bare: true }),
+      })),
+      {
+        title: "",
+        key: "_actions",
+        width: 130,
+        render: (_: unknown, rec: RowRec) => (
+          <RowControls index={rec.index} count={fields.length} move={move} remove={remove} />
+        ),
+      },
+    ];
+    const dataSource: RowRec[] = fields.map((row, i) => ({ key: row.id, index: i }));
+    body = (
+      <>
+        <Table size="small" pagination={false} columns={columns} dataSource={dataSource} />
+        <div style={{ marginTop: 8 }}>{addButton}</div>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        {fields.map((row, i) => (
+          <Card
+            key={row.id}
+            size="small"
+            style={{ marginBottom: 8 }}
+            extra={<RowControls index={i} count={fields.length} move={move} remove={remove} />}
+          >
+            <Row gutter={16}>{node.itemFields.map((c) => renderNode(c, `${name}.${i}.`))}</Row>
+          </Card>
+        ))}
+        {addButton}
+      </>
+    );
+  }
+
+  return (
+    <fieldset style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, padding: 16 }}>
+      {node.label ? <legend style={{ padding: "0 8px" }}>{node.label}</legend> : null}
+      {body}
+      {help}
+    </fieldset>
+  );
+}
+
 export interface FormRendererProps {
   /** Raw JSON of any saved version. Migrated to the current shape internally. */
   schema: unknown;
@@ -240,6 +362,10 @@ function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
   for (const node of nodes) {
     if (node.type === "group") {
       schemaDefaults(node.children, into);
+    } else if (node.type === "array") {
+      // Seed an empty list so useFieldArray stays controlled; row defaults are
+      // applied per-row on append, not here.
+      into[node.name] = [];
     } else if (node.defaultValue !== undefined) {
       into[node.name] = node.defaultValue;
     }
@@ -289,7 +415,14 @@ export function FormRenderer({
     onSubmit?.(clean);
   });
 
-  const renderNode = (node: FieldNode): React.ReactNode => {
+  // `namePrefix` lets fields nested in an array bind to `name.{index}.{child}` while
+  // top-level fields keep their bare name. `opts` lets a table cell render the control
+  // label-less (the column header carries the label) and un-wrapped (full-width cell).
+  const renderNode = (
+    node: FieldNode,
+    namePrefix = "",
+    opts?: { hideLabel?: boolean; bare?: boolean },
+  ): React.ReactNode => {
     if (!isVisible(node, values)) return null; // shared conditional logic
     if (!canView(node, access)) return null; // shared RBAC
 
@@ -298,8 +431,23 @@ export function FormRenderer({
         <Col key={node.name} span={24}>
           <fieldset style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, padding: 16 }}>
             {node.label ? <legend style={{ padding: "0 8px" }}>{node.label}</legend> : null}
-            <Row gutter={16}>{node.children.map(renderNode)}</Row>
+            <Row gutter={16}>{node.children.map((c) => renderNode(c, namePrefix))}</Row>
           </fieldset>
+        </Col>
+      );
+    }
+
+    if (node.type === "array") {
+      const name = `${namePrefix}${node.name}`;
+      return (
+        <Col key={name} span={24}>
+          <ArrayFieldSection
+            node={node}
+            control={control as Control}
+            name={name}
+            seedRow={() => schemaDefaults(node.itemFields)}
+            renderNode={renderNode}
+          />
         </Col>
       );
     }
@@ -310,29 +458,36 @@ export function FormRenderer({
     // A select with a dependent dataSource reads its parent field's current value.
     const dependsOn = node.type === "select" ? node.dataSource?.dependsOn : undefined;
     const dependsOnValue = dependsOn ? values[dependsOn] : undefined;
+    const fieldName = `${namePrefix}${node.name}`;
+    const control_ = (
+      <Controller
+        name={fieldName}
+        control={control}
+        render={({ field, fieldState }) => (
+          <Form.Item
+            label={opts?.hideLabel ? undefined : node.label}
+            tooltip={opts?.hideLabel ? undefined : node.tooltip}
+            required={opts?.hideLabel ? undefined : node.required}
+            style={opts?.bare ? { marginBottom: 0 } : undefined}
+            validateStatus={fieldState.error ? "error" : undefined}
+            help={fieldState.error?.message ?? (opts?.hideLabel ? undefined : node.helpText)}
+          >
+            <FieldControl
+              node={node}
+              value={field.value}
+              disabled={!editable}
+              onChange={field.onChange}
+              dependsOnValue={dependsOnValue}
+            />
+          </Form.Item>
+        )}
+      />
+    );
+    // A table cell renders the control bare (full width); otherwise wrap in a responsive Col.
+    if (opts?.bare) return control_;
     return (
-      <Col key={node.name} {...span}>
-        <Controller
-          name={node.name}
-          control={control}
-          render={({ field, fieldState }) => (
-            <Form.Item
-              label={node.label}
-              tooltip={node.tooltip}
-              required={node.required}
-              validateStatus={fieldState.error ? "error" : undefined}
-              help={fieldState.error?.message ?? node.helpText}
-            >
-              <FieldControl
-                node={node}
-                value={field.value}
-                disabled={!editable}
-                onChange={field.onChange}
-                dependsOnValue={dependsOnValue}
-              />
-            </Form.Item>
-          )}
-        />
+      <Col key={fieldName} {...span}>
+        {control_}
       </Col>
     );
   };
@@ -342,7 +497,7 @@ export function FormRenderer({
       <ConfigProvider theme={theme}>
         <Form layout="vertical" component={false}>
           <form onSubmit={submit} noValidate>
-            <Row gutter={16}>{form.fields.map(renderNode)}</Row>
+            <Row gutter={16}>{form.fields.map((n) => renderNode(n))}</Row>
             <Button type="primary" htmlType="submit">
               {submitLabel}
             </Button>

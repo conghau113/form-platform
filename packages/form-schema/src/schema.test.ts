@@ -55,6 +55,58 @@ describe("schema field types", () => {
     expect(out.fields[0]).toMatchObject({ tooltip: "hi", disabled: true, defaultValue: "x" });
   });
 
+  it("accepts an array (Form List) node with recursive itemFields", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "with-array",
+      title: "With array",
+      fields: [
+        {
+          type: "array",
+          name: "contacts",
+          label: "Contacts",
+          minItems: 1,
+          maxItems: 5,
+          itemFields: [
+            { type: "text", name: "fullName", label: "Full name", required: true },
+            { type: "number", name: "age", label: "Age" },
+          ],
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ type: "array", minItems: 1, maxItems: 5 });
+    expect(out.fields[0]).toHaveProperty("itemFields");
+  });
+
+  it("accepts the optional table variant on an array node", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "array-table",
+      title: "Array table",
+      fields: [
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          variant: "table",
+          itemFields: [{ type: "text", name: "v", label: "V" }],
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ type: "array", variant: "table" });
+  });
+
+  it("rejects an array whose itemFields is not an array", () => {
+    expect(() =>
+      formSchema.parse({
+        formVersion: 3,
+        id: "bad-array",
+        title: "Bad array",
+        fields: [{ type: "array", name: "rows", label: "Rows", itemFields: "nope" }],
+      }),
+    ).toThrow();
+  });
+
   it("rejects an unknown field type", () => {
     expect(() =>
       formSchema.parse({

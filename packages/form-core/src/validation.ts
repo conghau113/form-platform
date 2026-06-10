@@ -1,4 +1,10 @@
-import type { FieldNode, FormSchema, LeafField, ValidationRule } from "@org/form-schema";
+import type {
+  ArrayField,
+  FieldNode,
+  FormSchema,
+  LeafField,
+  ValidationRule,
+} from "@org/form-schema";
 import { z } from "zod";
 import { isVisible } from "./conditions.js";
 import { type AccessContext, canView } from "./rbac.js";
@@ -140,32 +146,59 @@ function leafZod(node: LeafField): z.ZodTypeAny {
   }
 }
 
+/** Compile an `array` (Form List) node to a Zod array of row objects. The item
+ *  schema is built from `itemFields` treating them as always-visible: a single static
+ *  schema can't model per-row `visibleWhen` (the row's own values aren't known here).
+ *  KNOWN LIMITATION — candidate for Phase F reactions. `required` implies minItems 1. */
+function arrayZod(node: ArrayField, access?: AccessContext): z.ZodTypeAny {
+  const item = z.object(buildShape(node.itemFields, {}, access));
+  let arr = z.array(item);
+  // `required` means ≥1; when both are set the stricter bound wins, so an explicit
+  // `minItems: 0` never silently cancels `required: true`.
+  const min = node.required ? Math.max(node.minItems ?? 0, 1) : node.minItems;
+  if (min != null && min > 0)
+    arr = arr.min(min, `${labelOf(node)} requires at least ${min} item(s)`);
+  if (node.maxItems != null)
+    arr = arr.max(node.maxItems, `${labelOf(node)} allows at most ${node.maxItems} item(s)`);
+  return min ? arr : arr.optional();
+}
+
+/** Build the Zod shape for a list of nodes against `values` (drives visibility) and
+ *  optional `access` (drives RBAC). Recurses into groups (their children join this
+ *  flat shape) and arrays (compiled to a nested array-of-objects). */
+function buildShape(
+  nodes: FieldNode[],
+  values: Record<string, unknown>,
+  access?: AccessContext,
+): z.ZodRawShape {
+  const shape: z.ZodRawShape = {};
+  for (const node of nodes) {
+    if (!isVisible(node, values)) continue;
+    if (access && !canView(node, access)) continue;
+    if (node.type === "group") {
+      Object.assign(shape, buildShape(node.children, values, access));
+      continue;
+    }
+    if (node.type === "array") {
+      shape[node.name] = arrayZod(node, access);
+      continue;
+    }
+    shape[node.name] = leafZod(node);
+  }
+  return shape;
+}
+
 /**
  * Build a Zod schema from a FormSchema. Reusable cross-platform: web and native
  * both validate against the SAME shape. Fields hidden by `visibleWhen` (or, when
  * `access` is supplied, by RBAC) are excluded, so they never block submit and are
  * stripped from the parsed output. Groups contribute their children to the flat
- * value object — group nodes hold no value of their own.
+ * value object — group nodes hold no value of their own. Array nodes hold a nested
+ * array-of-objects value keyed by their item fields.
  */
 export function buildZodSchema(
   form: FormSchema,
   opts: BuildZodOptions = {},
 ): z.ZodObject<z.ZodRawShape> {
-  const values = opts.values ?? {};
-  const shape: z.ZodRawShape = {};
-
-  const walk = (nodes: FieldNode[]): void => {
-    for (const node of nodes) {
-      if (!isVisible(node, values)) continue;
-      if (opts.access && !canView(node, opts.access)) continue;
-      if (node.type === "group") {
-        walk(node.children);
-        continue;
-      }
-      shape[node.name] = leafZod(node);
-    }
-  };
-
-  walk(form.fields);
-  return z.object(shape);
+  return z.object(buildShape(form.fields, opts.values ?? {}, opts.access));
 }
