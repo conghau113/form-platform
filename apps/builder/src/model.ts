@@ -5,6 +5,7 @@ import {
   type LeafField,
   migrate,
 } from "@org/form-schema";
+import { makeUid } from "./engine/uid";
 import { describeField, type FieldType } from "./field-registry";
 
 /** What the flat builder canvas can hold: any leaf field plus an `array` (Form List)
@@ -32,12 +33,9 @@ export interface EditorModel {
   fields: EditorField[];
 }
 
-let uidCounter = 0;
-/** Monotonic, collision-free id for dnd-kit + React keys (not persisted). */
-export function makeUid(): string {
-  uidCounter += 1;
-  return `f${uidCounter}`;
-}
+// Moved to the designer engine; re-exported here until the D7b integration
+// removes the flat model entirely.
+export { makeUid };
 
 /** A schema `name` unique within the model, derived from the field type. */
 function uniqueName(type: FieldType, taken: ReadonlySet<string>): string {
