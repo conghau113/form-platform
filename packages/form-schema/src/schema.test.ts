@@ -233,6 +233,48 @@ describe("layout containers (additive)", () => {
     expect(() => formSchema.parse(wrap([{ type: "grid", cols: 25, children: [] }]))).toThrow();
   });
 
+  it("accepts root layoutProps and per-field decoratorProps (additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "layout",
+      title: "Layout",
+      layoutProps: {
+        layout: "horizontal",
+        labelCol: { span: 6 },
+        wrapperCol: { span: 12, offset: 1 },
+        size: "small",
+        colon: false,
+        labelAlign: "left",
+        labelWrap: true,
+      },
+      fields: [
+        {
+          type: "text",
+          name: "n",
+          label: "N",
+          decoratorProps: { labelCol: { span: 8 }, colon: true, labelAlign: "right" },
+        },
+      ],
+    });
+    expect(out.layoutProps).toMatchObject({ layout: "horizontal", labelCol: { span: 6 } });
+    expect(out.fields[0]).toMatchObject({ decoratorProps: { labelCol: { span: 8 } } });
+  });
+
+  it("still parses a root without layoutProps and rejects a bad layout enum", () => {
+    expect(
+      formSchema.parse({ formVersion: 3, id: "plain", title: "Plain", fields: [] }).layoutProps,
+    ).toBeUndefined();
+    expect(() =>
+      formSchema.parse({
+        formVersion: 3,
+        id: "bad",
+        title: "Bad",
+        layoutProps: { layout: "diagonal" },
+        fields: [],
+      }),
+    ).toThrow();
+  });
+
   it("classifies containers/array/leaves via the shared helpers", () => {
     const text: FieldNode = { type: "text", name: "t", label: "T" };
     const card: FieldNode = { type: "card", children: [text] };

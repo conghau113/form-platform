@@ -49,6 +49,36 @@ export const validationRuleSchema = z.object({
 
 export type ValidationRule = z.infer<typeof validationRuleSchema>;
 
+/** antd-style column geometry for label/control alignment (horizontal layouts). */
+const formColSchema = z.object({
+  span: z.number().int().min(0).max(24).optional(),
+  offset: z.number().int().min(0).max(24).optional(),
+});
+
+/** Form-level layout, mirrored from antd `Form` (Designable's root Form
+ *  defaultProps are labelCol 6 / wrapperCol 12). All optional → additive. */
+export const formLayoutPropsSchema = z.object({
+  layout: z.enum(["horizontal", "vertical", "inline"]).optional(),
+  labelCol: formColSchema.optional(),
+  wrapperCol: formColSchema.optional(),
+  size: z.enum(["small", "middle", "large"]).optional(),
+  colon: z.boolean().optional(),
+  labelAlign: z.enum(["left", "right"]).optional(),
+  labelWrap: z.boolean().optional(),
+});
+
+export type FormLayoutProps = z.infer<typeof formLayoutPropsSchema>;
+
+/** Per-field overrides of the form-level decorator (antd `Form.Item`) props. */
+export const decoratorPropsSchema = z.object({
+  labelCol: formColSchema.optional(),
+  wrapperCol: formColSchema.optional(),
+  colon: z.boolean().optional(),
+  labelAlign: z.enum(["left", "right"]).optional(),
+});
+
+export type DecoratorProps = z.infer<typeof decoratorPropsSchema>;
+
 const commonFields = {
   name: z.string().min(1),
   label: z.string(),
@@ -64,6 +94,8 @@ const commonFields = {
    *  JSON without this key keeps parsing, so no formVersion bump is required. */
   validations: z.array(validationRuleSchema).optional(),
   layout: layoutSchema.optional(),
+  /** Per-field Form.Item overrides of the root `layoutProps` (labelCol etc.). */
+  decoratorProps: decoratorPropsSchema.optional(),
   visibleWhen: conditionSchema.optional(),
   permissions: permissionSchema.optional(),
 };
@@ -418,6 +450,9 @@ export const formSchema = z.object({
   formVersion: z.number().int(),
   id: z.string(),
   title: z.string(),
+  /** Form-wide antd layout (label/wrapper cols, horizontal/vertical…). Optional
+   *  → additive; renderers fall back to their historical defaults when absent. */
+  layoutProps: formLayoutPropsSchema.optional(),
   fields: z.array(fieldNodeSchema),
   settings: z.object({ submitUrl: z.string().optional() }).optional(),
 });
