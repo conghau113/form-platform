@@ -1,12 +1,4 @@
 import { RedoOutlined, UndoOutlined } from "@ant-design/icons";
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
 import { FormRenderer } from "@org/form-renderer-web";
 import { migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
@@ -23,8 +15,14 @@ import {
 } from "antd";
 import { Component, type ReactNode, useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
-import { CANVAS_ID, Canvas } from "./Canvas";
-import { emptySelection, pruneSelection, type SelectionState, select } from "./engine/selection";
+import { DesignCanvas, DesignerProvider, type DesignerValue } from "./DesignCanvas";
+import {
+  emptySelection,
+  pruneSelection,
+  type SelectionState,
+  select,
+  selectMany,
+} from "./engine/selection";
 import {
   fieldToTree,
   replaceField,
@@ -33,22 +31,21 @@ import {
   treeToSchema,
 } from "./engine/transform";
 import {
-  append,
+  clone,
   collectNames,
   type FormProps,
   findNode,
-  insertBefore,
-  type MoveTarget,
-  move,
+  insertAfter,
   patchNode,
   remove,
   type TreeNode,
 } from "./engine/tree";
 import { describeNode, metaGuard, newField } from "./field-registry";
 import { useHistory } from "./history";
-import { Palette, paletteType } from "./Palette";
+import { Palette } from "./Palette";
 import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
 import { ThemeEditor } from "./ThemeEditor";
+import { useDragon } from "./useDragon";
 import { WorkflowEditor } from "./WorkflowEditor";
 
 const API = "http://localhost:3001";
@@ -114,8 +111,6 @@ export function App() {
   // preview, so editing a token re-themes the rendered form live.
   const antdTheme = useMemo(() => toAntdTheme(tokens), [tokens]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
   // The schema is derived from the designer tree — the read-only JSON view and the
   // live preview both read this single boundary conversion.
   const schema = useMemo(() => treeToSchema(tree), [tree]);
@@ -156,35 +151,18 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [history]);
 
-  function onDragEnd({ active, over }: DragEndEvent) {
-    if (!over) return;
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const type = paletteType(activeId);
-
-    if (type) {
-      // Drop a fresh palette field: append to the root, or insert before the hovered row.
-      const child = fieldToTree(newField(type, collectNames(tree)));
-      const next =
-        overId === CANVAS_ID
-          ? append(tree, tree.uid, child, metaGuard())
-          : insertBefore(tree, overId, child, metaGuard());
-      if (next !== tree) {
-        history.set(next);
-        setSelection(select(emptySelection, child.uid));
-      }
-      return;
-    }
-    if (overId !== CANVAS_ID && activeId !== overId) {
-      // Reorder a top-level node: match dnd-kit's arrayMove (land at the target index).
-      const fromIdx = tree.children.findIndex((c) => c.uid === activeId);
-      const toIdx = tree.children.findIndex((c) => c.uid === overId);
-      if (fromIdx === -1 || toIdx === -1) return;
-      const target: MoveTarget =
-        fromIdx < toIdx ? { kind: "after", uid: overId } : { kind: "before", uid: overId };
-      history.set(move(tree, activeId, target, metaGuard()));
-    }
-  }
+  // Pointer drag engine: palette "create" drags and on-canvas "move" drags both
+  // commit a single tree op and select the result. A press that doesn't drag selects.
+  const dragon = useDragon({
+    getTree: () => tree,
+    guard: metaGuard(),
+    createNode: (type, taken) => fieldToTree(newField(type, taken)),
+    commit: (next, dropped) => {
+      history.set(next);
+      setSelection(selectMany(emptySelection, dropped));
+    },
+    onClickSelect: (uids) => setSelection(select(emptySelection, uids[0])),
+  });
 
   function onRemove(uid: string) {
     const node = findNode(tree, uid);
@@ -194,6 +172,30 @@ export function App() {
     history.set(remove(tree, uid));
     if (selectedUid === uid) setSelection(emptySelection);
   }
+
+  // Duplicate a node in place (right after itself), with fresh uids + unique names.
+  function onCopy(uid: string) {
+    const node = findNode(tree, uid);
+    if (!node || node.node.type === "form" || !describeNode(node.node.type).behavior.cloneable) {
+      return;
+    }
+    const dup = clone(node, collectNames(tree));
+    const next = insertAfter(tree, uid, dup, metaGuard());
+    if (next !== tree) {
+      history.set(next);
+      setSelection(select(emptySelection, dup.uid));
+    }
+  }
+
+  const designer: DesignerValue = {
+    selected: selection.selected,
+    drag: dragon.drag,
+    beginMove: dragon.beginMove,
+    beginCreate: dragon.beginCreate,
+    copy: onCopy,
+    remove: onRemove,
+    clearSelection: () => setSelection(emptySelection),
+  };
 
   async function onSave() {
     try {
@@ -261,7 +263,7 @@ export function App() {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DesignerProvider value={designer}>
       <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
         <header
           style={{
@@ -326,17 +328,13 @@ export function App() {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                width: 320,
+                flex: 1,
+                minWidth: 0,
                 borderRight: "1px solid rgba(0,0,0,0.08)",
                 minHeight: 0,
               }}
             >
-              <Canvas
-                nodes={tree.children}
-                selectedUid={selectedUid}
-                onSelect={(uid) => setSelection((s) => select(s, uid))}
-                onRemove={onRemove}
-              />
+              <DesignCanvas schema={schema} json={json} tree={tree} theme={antdTheme} />
             </section>
 
             <aside
@@ -412,6 +410,6 @@ export function App() {
           </div>
         )}
       </div>
-    </DndContext>
+    </DesignerProvider>
   );
 }

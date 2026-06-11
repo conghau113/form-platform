@@ -1,29 +1,18 @@
-import { useDraggable } from "@dnd-kit/core";
 import { Card, Typography } from "antd";
-import { type FieldType, fieldsByCategory, fieldTypeLabel, PALETTE_TYPES } from "./field-registry";
+import { useDesigner } from "./DesignCanvas";
+import { type FieldType, fieldsByCategory, fieldTypeLabel } from "./field-registry";
 
-export const PALETTE_PREFIX = "palette:";
-
-/** Resolve a dnd-kit active id back to a palette field type, or null if it's not one. */
-export function paletteType(activeId: string): FieldType | null {
-  if (!activeId.startsWith(PALETTE_PREFIX)) return null;
-  const type = activeId.slice(PALETTE_PREFIX.length) as FieldType;
-  return PALETTE_TYPES.includes(type) ? type : null;
-}
-
+/** A palette chip. Pressing it starts a "create" drag through the pointer engine;
+ *  releasing over a droppable canvas node inserts a fresh field there. */
 function PaletteItem({ type }: { type: FieldType }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `${PALETTE_PREFIX}${type}`,
-  });
+  const { beginCreate } = useDesigner();
   return (
     <Card
-      ref={setNodeRef}
       size="small"
       hoverable
-      style={{ cursor: "grab", opacity: isDragging ? 0.4 : 1, userSelect: "none" }}
+      style={{ cursor: "grab", userSelect: "none", touchAction: "none" }}
       styles={{ body: { padding: "8px 12px" } }}
-      {...listeners}
-      {...attributes}
+      onPointerDown={(e) => beginCreate(type, e)}
     >
       {fieldTypeLabel(type)}
     </Card>
