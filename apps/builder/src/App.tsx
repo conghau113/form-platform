@@ -8,6 +8,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { FormRenderer } from "@org/form-renderer-web";
+import { migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
 import {
   Alert,
@@ -23,17 +24,30 @@ import {
 import { Component, type ReactNode, useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { CANVAS_ID, Canvas } from "./Canvas";
-import { useHistory } from "./history";
+import { emptySelection, pruneSelection, type SelectionState, select } from "./engine/selection";
 import {
-  fromFormSchema,
-  insertField,
-  moveField,
-  removeField,
-  toFormSchema,
-  updateField,
-} from "./model";
+  fieldToTree,
+  replaceField,
+  schemaToTree,
+  treeToField,
+  treeToSchema,
+} from "./engine/transform";
+import {
+  append,
+  collectNames,
+  type FormProps,
+  findNode,
+  insertBefore,
+  type MoveTarget,
+  move,
+  patchNode,
+  remove,
+  type TreeNode,
+} from "./engine/tree";
+import { describeNode, metaGuard, newField } from "./field-registry";
+import { useHistory } from "./history";
 import { Palette, paletteType } from "./Palette";
-import { PropertyPanel } from "./PropertyPanel";
+import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
 import { ThemeEditor } from "./ThemeEditor";
 import { WorkflowEditor } from "./WorkflowEditor";
 
@@ -86,9 +100,11 @@ function PreviewSurface({ maxWidth, children }: { maxWidth: number; children: Re
 }
 
 export function App() {
-  const history = useHistory(() => fromFormSchema(example));
-  const model = history.present;
-  const [selectedUid, setSelectedUid] = useState<string | null>(null);
+  const history = useHistory<TreeNode>(() => schemaToTree(migrate(example)));
+  const tree = history.present;
+  const form = tree.node as FormProps;
+  const [selection, setSelection] = useState<SelectionState>(emptySelection);
+  const selectedUid = selection.selected[0] ?? null;
   const [viewport, setViewport] = useState<Viewport>("Desktop");
   const [rightTab, setRightTab] = useState<"preview" | "json">("preview");
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
@@ -100,12 +116,25 @@ export function App() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  // The schema is derived from the model — the read-only JSON view and the live
-  // preview both read this single boundary conversion.
-  const schema = useMemo(() => toFormSchema(model), [model]);
+  // The schema is derived from the designer tree — the read-only JSON view and the
+  // live preview both read this single boundary conversion.
+  const schema = useMemo(() => treeToSchema(tree), [tree]);
   const json = useMemo(() => JSON.stringify(schema, null, 2), [schema]);
 
-  const selected = model.fields.find((f) => f.uid === selectedUid) ?? null;
+  // Drop selection highlights for nodes that no longer exist (after delete/undo/load).
+  useEffect(() => setSelection((s) => pruneSelection(s, tree)), [tree]);
+
+  // The selected node, resolved to a schema field for the property panel. The form
+  // root itself isn't editable here (its layoutProps land in Phase F's settings panel).
+  const selectedNode = selectedUid ? findNode(tree, selectedUid) : null;
+  const selected: SelectedNode | null =
+    selectedNode && selectedNode.node.type !== "form"
+      ? { uid: selectedNode.uid, field: treeToField(selectedNode) }
+      : null;
+  // visibleWhen condition candidates: the top-level named fields.
+  const siblingNames = tree.children
+    .map((c) => ("name" in c.node ? c.node.name : undefined))
+    .filter((n): n is string => Boolean(n));
 
   // Global undo/redo, except while typing in a form control.
   useEffect(() => {
@@ -134,24 +163,36 @@ export function App() {
     const type = paletteType(activeId);
 
     if (type) {
-      const overIndex =
+      // Drop a fresh palette field: append to the root, or insert before the hovered row.
+      const child = fieldToTree(newField(type, collectNames(tree)));
+      const next =
         overId === CANVAS_ID
-          ? model.fields.length
-          : model.fields.findIndex((f) => f.uid === overId);
-      const at = overIndex === -1 ? model.fields.length : overIndex;
-      const next = insertField(model, type, at);
-      history.set(next);
-      setSelectedUid(next.fields[at].uid);
+          ? append(tree, tree.uid, child, metaGuard())
+          : insertBefore(tree, overId, child, metaGuard());
+      if (next !== tree) {
+        history.set(next);
+        setSelection(select(emptySelection, child.uid));
+      }
       return;
     }
     if (overId !== CANVAS_ID && activeId !== overId) {
-      history.set(moveField(model, activeId, overId));
+      // Reorder a top-level node: match dnd-kit's arrayMove (land at the target index).
+      const fromIdx = tree.children.findIndex((c) => c.uid === activeId);
+      const toIdx = tree.children.findIndex((c) => c.uid === overId);
+      if (fromIdx === -1 || toIdx === -1) return;
+      const target: MoveTarget =
+        fromIdx < toIdx ? { kind: "after", uid: overId } : { kind: "before", uid: overId };
+      history.set(move(tree, activeId, target, metaGuard()));
     }
   }
 
   function onRemove(uid: string) {
-    history.set(removeField(model, uid));
-    if (selectedUid === uid) setSelectedUid(null);
+    const node = findNode(tree, uid);
+    if (!node || node.node.type === "form" || !describeNode(node.node.type).behavior.deletable) {
+      return;
+    }
+    history.set(remove(tree, uid));
+    if (selectedUid === uid) setSelection(emptySelection);
   }
 
   async function onSave() {
@@ -183,7 +224,7 @@ export function App() {
     }
   }
 
-  async function onLoad(id: string = model.id) {
+  async function onLoad(id: string = form.id) {
     try {
       const res = await fetch(`${API}/forms/${encodeURIComponent(id)}`);
       const data = await res.json().catch(() => ({}));
@@ -191,8 +232,8 @@ export function App() {
         message.error(`Load failed: ${data.message ?? res.statusText}`);
         return;
       }
-      history.reset(fromFormSchema(data));
-      setSelectedUid(null);
+      history.reset(schemaToTree(migrate(data)));
+      setSelection(emptySelection);
       // Reapply the saved theme if one exists; a missing theme is not an error.
       const themeRes = await fetch(`${API}/themes/${encodeURIComponent(data.id)}`);
       setTokens(themeRes.ok ? migrateTheme(await themeRes.json()) : DEFAULT_TOKENS);
@@ -214,7 +255,7 @@ export function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${model.id || "theme"}.theme.json`;
+    a.download = `${form.id || "theme"}.theme.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -242,14 +283,14 @@ export function App() {
           {mode === "form" && (
             <>
               <Input
-                value={model.title}
-                onChange={(e) => history.set({ ...model, title: e.target.value })}
+                value={form.title}
+                onChange={(e) => history.set(patchNode(tree, tree.uid, { title: e.target.value }))}
                 placeholder="form title"
                 style={{ width: 200 }}
               />
               <Input
-                value={model.id}
-                onChange={(e) => history.set({ ...model, id: e.target.value })}
+                value={form.id}
+                onChange={(e) => history.set(patchNode(tree, tree.uid, { id: e.target.value }))}
                 placeholder="form id"
                 style={{ width: 160 }}
               />
@@ -291,9 +332,9 @@ export function App() {
               }}
             >
               <Canvas
-                model={model}
+                nodes={tree.children}
                 selectedUid={selectedUid}
-                onSelect={setSelectedUid}
+                onSelect={(uid) => setSelection((s) => select(s, uid))}
                 onRemove={onRemove}
               />
             </section>
@@ -308,8 +349,8 @@ export function App() {
             >
               <PropertyPanel
                 selected={selected}
-                siblings={model.fields}
-                onChange={(uid, patch) => history.set(updateField(model, uid, patch))}
+                siblingNames={siblingNames}
+                onChange={(uid, field) => history.set(replaceField(tree, uid, field))}
               />
             </aside>
 

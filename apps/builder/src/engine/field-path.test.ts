@@ -1,6 +1,6 @@
-import type { ArrayField, FieldNode } from "@org/form-schema";
+import type { ArrayField, CardField, FieldNode } from "@org/form-schema";
 import { describe, expect, it } from "vitest";
-import { nodeAtPath, patchNodeAtPath } from "./node-path";
+import { nodeAtPath, patchNodeAtPath } from "./field-path";
 
 /** An array node nested two levels deep, used across the path tests. */
 function tree(): ArrayField {
@@ -20,6 +20,22 @@ function tree(): ArrayField {
   };
 }
 
+/** An array whose row holds a card (container) wrapping a leaf — the case the old
+ *  node-path helper dropped edits on. */
+function arrayWithCard(): ArrayField {
+  return {
+    type: "array",
+    name: "jobs",
+    itemFields: [
+      {
+        type: "card",
+        title: "Details",
+        children: [{ type: "text", name: "role", label: "Role" }],
+      },
+    ],
+  };
+}
+
 describe("nodeAtPath", () => {
   it("resolves nodes at depth 0, 1 and 2", () => {
     const root = tree();
@@ -29,10 +45,16 @@ describe("nodeAtPath", () => {
     expect(nodeAtPath(root, [1, 0])).toMatchObject({ name: "city" });
   });
 
+  it("descends through a container's children, not just array item fields", () => {
+    const root = arrayWithCard();
+    expect(nodeAtPath(root, [0])).toMatchObject({ type: "card" });
+    expect(nodeAtPath(root, [0, 0])).toMatchObject({ name: "role", type: "text" });
+  });
+
   it("returns null for an out-of-range / stale index", () => {
     const root = tree();
     expect(nodeAtPath(root, [9])).toBeNull();
-    expect(nodeAtPath(root, [0, 0])).toBeNull(); // `title` is a leaf, has no item fields
+    expect(nodeAtPath(root, [0, 0])).toBeNull(); // `title` is a leaf, has no children
   });
 });
 
@@ -57,10 +79,16 @@ describe("patchNodeAtPath", () => {
     expect((root.itemFields[1] as ArrayField).itemFields[0]).toEqual(origInner.itemFields[0]);
   });
 
-  it("is a no-op when the path runs through a non-array node", () => {
+  it("patches a leaf nested under a container inside an array (the old drop bug)", () => {
+    const root = arrayWithCard();
+    const next = patchNodeAtPath(root, [0, 0], { label: "Job role" }) as ArrayField;
+    const card = next.itemFields[0] as CardField;
+    expect(card.children[0]).toMatchObject({ name: "role", label: "Job role" });
+  });
+
+  it("is a no-op when the path runs through a childless leaf", () => {
     const root = tree();
-    const next = patchNodeAtPath(root, [0, 5], { label: "x" } as Record<string, unknown>);
-    // `title` (path [0]) is a leaf, so descending further changes nothing structurally
+    const next = patchNodeAtPath(root, [0, 5], { label: "x" });
     expect((next as ArrayField).itemFields[0]).toMatchObject({ name: "title", label: "Title" });
   });
 });

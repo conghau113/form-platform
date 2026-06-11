@@ -7,9 +7,9 @@ import {
   FIELD_TYPES,
   type FieldType,
   metaGuard,
+  newField,
   PALETTE_TYPES,
 } from "./field-registry";
-import { newField } from "./model";
 
 describe("field registry", () => {
   it("every registered type seeds a node the contract accepts", () => {

@@ -1,4 +1,11 @@
-import type { ArrayField, FieldNode, ValidationRule } from "@org/form-schema";
+import {
+  type ArrayField,
+  childrenOf,
+  type FieldNode,
+  isLayoutContainer,
+  type LeafField,
+  type ValidationRule,
+} from "@org/form-schema";
 import {
   Button,
   Checkbox,
@@ -13,15 +20,25 @@ import {
   Typography,
 } from "antd";
 import { useEffect, useState } from "react";
+import { type NodePath, nodeAtPath, patchNodeAtPath } from "./engine/field-path";
 import {
   describeField,
   type FieldType,
   fieldTypeLabel,
+  newField,
   PALETTE_TYPES,
   type ValidationRuleType,
 } from "./field-registry";
-import { type AuthoredField, type EditorField, newField } from "./model";
-import { type NodePath, nodeAtPath, patchNodeAtPath } from "./node-path";
+
+/** The leaf/array nodes the full field editor handles. Layout containers render a
+ *  minimal settings-only editor instead (they are nameless / value-transparent). */
+type AuthoredField = LeafField | ArrayField;
+
+/** The PropertyPanel's selected node: a uid plus the resolved schema field. */
+export interface SelectedNode {
+  uid: string;
+  field: FieldNode;
+}
 
 const RULE_LABELS: Record<ValidationRuleType, string> = {
   required: "Required",
@@ -74,13 +91,12 @@ function parseCsv(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Labels along a drill path, for the breadcrumb (root field + each drilled item). */
+/** Labels along a drill path, for the breadcrumb (root field + each drilled child). */
 function pathCrumbs(root: FieldNode, path: NodePath): string[] {
   const crumbs = [nodeLabel(root) || nodeName(root) || root.type];
   let node: FieldNode = root;
   for (const index of path) {
-    const items = node.type === "array" ? node.itemFields : [];
-    const child = items[index];
+    const child = childrenOf(node)?.[index];
     if (!child) break;
     node = child;
     crumbs.push(nodeLabel(child) || nodeName(child) || `#${index}`);
@@ -93,17 +109,18 @@ function pathCrumbs(root: FieldNode, path: NodePath): string[] {
  *  patch on the top-level field via `patchNodeAtPath`, so App's onChange is unchanged. */
 export function PropertyPanel({
   selected,
-  siblings,
+  siblingNames: topSiblingNames,
   onChange,
 }: {
-  selected: EditorField | null;
-  /** Other field names, candidates for a visibleWhen condition. */
-  siblings: EditorField[];
-  onChange: (uid: string, patch: Patch) => void;
+  selected: SelectedNode | null;
+  /** Top-level field names, candidates for a visibleWhen condition. */
+  siblingNames: string[];
+  /** Emits the rebuilt top-level node (App swaps it into the tree via replaceField). */
+  onChange: (uid: string, field: FieldNode) => void;
 }) {
   const [drillPath, setDrillPath] = useState<NodePath>([]);
-  // Leaving the current field resets the drill; a stale path (e.g. after undo) too.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the selected field changes
+  // Leaving the current node resets the drill; a stale path (e.g. after undo) too.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset only when the selected node changes
   useEffect(() => setDrillPath([]), [selected?.uid]);
 
   if (!selected) {
@@ -118,50 +135,67 @@ export function PropertyPanel({
   // Resolve the drilled node; if the path no longer resolves, fall back to the root.
   const resolved = nodeAtPath(root, drillPath);
   const path = resolved ? drillPath : [];
-  const node = (resolved ?? root) as AuthoredField;
+  const node = resolved ?? root;
 
-  // `patchNodeAtPath` returns the WHOLE rebuilt top-level field; updateField's shallow
-  // merge then replaces the selected field with it. (Not a partial patch — it carries
-  // every key, so a removed key is reflected because the whole node is re-emitted.)
-  const set = (patch: Patch) => onChange(uid, patchNodeAtPath(root, path, patch) as Patch);
+  // `patchNodeAtPath` returns the WHOLE rebuilt top-level node; App's replaceField then
+  // swaps it into the tree. (Not a partial patch — it carries every key, so a removed
+  // key is reflected because the whole node is re-emitted.)
+  const set = (patch: Patch) => onChange(uid, patchNodeAtPath(root, path, patch));
+
+  const crumbs = pathCrumbs(root, path);
+  const breadcrumb = path.length > 0 && (
+    <div style={{ marginBottom: 8 }}>
+      {crumbs.map((label, depth) =>
+        depth < crumbs.length - 1 ? (
+          <Button
+            // biome-ignore lint/suspicious/noArrayIndexKey: crumb position is its identity
+            key={depth}
+            type="link"
+            size="small"
+            style={{ padding: 0, height: "auto" }}
+            onClick={() => setDrillPath(path.slice(0, depth))}
+          >
+            {label} ›{" "}
+          </Button>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: crumb position is its identity
+          <Typography.Text key={depth} strong>
+            {label}
+          </Typography.Text>
+        ),
+      )}
+    </div>
+  );
+
+  // Layout containers (tabs/card/grid/...) are nameless and value-transparent: show a
+  // minimal, settings-only editor. Drag-based authoring of their children is Phase E.
+  if (isLayoutContainer(node)) {
+    return (
+      <div style={{ padding: 16, overflow: "auto", height: "100%" }}>
+        {breadcrumb}
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+          {fieldTypeLabel(node.type)} container — its fields are edited on the canvas.
+        </Typography.Paragraph>
+        <Form layout="vertical" size="small">
+          <TypeSettings field={node} set={set} />
+        </Form>
+      </div>
+    );
+  }
 
   // Visibility candidates: sibling fields in the same container as the edited node.
   const parent = path.length ? nodeAtPath(root, path.slice(0, -1)) : null;
   const siblingNames = path.length
-    ? (parent?.type === "array" ? parent.itemFields : [])
+    ? (parent ? (childrenOf(parent) ?? []) : [])
         .map((f) => nodeName(f))
-        .filter((n): n is string => Boolean(n) && n !== node.name)
-    : siblings.map((s) => s.field.name).filter((n) => n !== node.name);
-
-  const crumbs = pathCrumbs(root, path);
+        .filter((n): n is string => Boolean(n) && n !== nodeName(node))
+    : topSiblingNames.filter((n) => n !== nodeName(node));
 
   return (
     <div style={{ padding: 16, overflow: "auto", height: "100%" }}>
-      {path.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          {crumbs.map((label, depth) =>
-            depth < crumbs.length - 1 ? (
-              <Button
-                // biome-ignore lint/suspicious/noArrayIndexKey: crumb position is its identity
-                key={depth}
-                type="link"
-                size="small"
-                style={{ padding: 0, height: "auto" }}
-                onClick={() => setDrillPath(path.slice(0, depth))}
-              >
-                {label} ›{" "}
-              </Button>
-            ) : (
-              // biome-ignore lint/suspicious/noArrayIndexKey: crumb position is its identity
-              <Typography.Text key={depth} strong>
-                {label}
-              </Typography.Text>
-            ),
-          )}
-        </div>
-      )}
+      {breadcrumb}
       <FieldForm
-        field={node}
+        field={node as AuthoredField}
         siblingNames={siblingNames}
         set={set}
         onDrill={(index) => setDrillPath([...path, index])}
@@ -371,7 +405,7 @@ function prop(field: FieldNode, key: string): unknown {
 
 /** Renders the type-specific settings declared by the field's registry descriptor.
  *  Adding a new type/setting needs only a registry entry — no edit here. */
-function TypeSettings({ field, set }: { field: AuthoredField; set: (patch: Patch) => void }) {
+function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) => void }) {
   const { settings } = describeField(field.type);
   return (
     <>

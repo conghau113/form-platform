@@ -3,9 +3,21 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button, Empty, Tag, Typography } from "antd";
-import { type EditorField, type EditorModel, fieldTypeLabel } from "./model";
+import type { EngineProps, TreeNode } from "./engine/tree";
+import { fieldTypeLabel } from "./field-registry";
 
 export const CANVAS_ID = "canvas";
+
+/** A row's display name: label / title / name / type, tolerant of nameless containers. */
+function nodeTitle(node: EngineProps): string {
+  if ("label" in node && node.label) return node.label;
+  if ("title" in node && node.title) return node.title;
+  if (node.type !== "form" && "name" in node && node.name) return node.name;
+  return node.type;
+}
+function nodeSubtitle(node: EngineProps): string {
+  return node.type !== "form" && "name" in node && node.name ? node.name : node.type;
+}
 
 function CanvasRow({
   item,
@@ -13,7 +25,7 @@ function CanvasRow({
   onSelect,
   onRemove,
 }: {
-  item: EditorField;
+  item: TreeNode;
   selected: boolean;
   onSelect: () => void;
   onRemove: () => void;
@@ -39,8 +51,8 @@ function CanvasRow({
       <span {...attributes} {...listeners} style={{ cursor: "grab", color: "rgba(0,0,0,0.4)" }}>
         <HolderOutlined />
       </span>
-      {/* The field summary is the selection target — a real button so keyboard
-          users can select the field; the drag handle and delete stay separate. */}
+      {/* The node summary is the selection target — a real button so keyboard
+          users can select it; the drag handle and delete stay separate. */}
       <button
         type="button"
         onClick={onSelect}
@@ -55,13 +67,13 @@ function CanvasRow({
         }}
       >
         <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {item.field.label || item.field.name}
+          {nodeTitle(item.node)}
         </div>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {item.field.name}
+          {nodeSubtitle(item.node)}
         </Typography.Text>
       </button>
-      <Tag>{fieldTypeLabel(item.field.type)}</Tag>
+      <Tag>{fieldTypeLabel(item.node.type)}</Tag>
       <Button
         type="text"
         size="small"
@@ -75,14 +87,14 @@ function CanvasRow({
   );
 }
 
-/** Middle column: the sortable list of authored fields. */
+/** Middle column: the sortable list of the form root's top-level nodes. */
 export function Canvas({
-  model,
+  nodes,
   selectedUid,
   onSelect,
   onRemove,
 }: {
-  model: EditorModel;
+  nodes: TreeNode[];
   selectedUid: string | null;
   onSelect: (uid: string) => void;
   onRemove: (uid: string) => void;
@@ -98,14 +110,11 @@ export function Canvas({
         background: isOver ? "#f0f7ff" : undefined,
       }}
     >
-      {model.fields.length === 0 ? (
+      {nodes.length === 0 ? (
         <Empty description="Drag a field here to start" style={{ marginTop: 48 }} />
       ) : (
-        <SortableContext
-          items={model.fields.map((f) => f.uid)}
-          strategy={verticalListSortingStrategy}
-        >
-          {model.fields.map((item) => (
+        <SortableContext items={nodes.map((n) => n.uid)} strategy={verticalListSortingStrategy}>
+          {nodes.map((item) => (
             <CanvasRow
               key={item.uid}
               item={item}
