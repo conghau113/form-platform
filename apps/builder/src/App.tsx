@@ -17,15 +17,24 @@ import { Component, type ReactNode, useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { DesignCanvas, DesignerProvider, type DesignerValue } from "./DesignCanvas";
 import {
+  type Clipboard,
+  copyNodes,
+  emptyClipboard,
+  hasContent,
+  pasteAfter,
+  pasteInto,
+} from "./engine/clipboard";
+import {
   emptySelection,
   pruneSelection,
   type SelectionState,
   select,
   selectMany,
+  toggle,
 } from "./engine/selection";
 import {
+  applyFieldEdit,
   fieldToTree,
-  replaceField,
   schemaToTree,
   treeToField,
   treeToSchema,
@@ -106,6 +115,7 @@ export function App() {
   const [rightTab, setRightTab] = useState<"preview" | "json">("preview");
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
   const [mode, setMode] = useState<"form" | "workflow">("form");
+  const [clipboard, setClipboard] = useState<Clipboard>(emptyClipboard);
 
   // The neutral design tokens are mapped to an antd ThemeConfig that wraps the
   // preview, so editing a token re-themes the rendered form live.
@@ -131,25 +141,65 @@ export function App() {
     .map((c) => ("name" in c.node ? c.node.name : undefined))
     .filter((n): n is string => Boolean(n));
 
-  // Global undo/redo, except while typing in a form control.
+  // Canvas shortcuts, suppressed while typing in a real control (header/panel inputs).
+  // undo/redo · select-all · copy/paste (fresh uids + unique names) · delete.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) {
-        return;
-      }
-      if (e.key === "z" && !e.shiftKey) {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      if (mod && key === "z" && !e.shiftKey) {
         e.preventDefault();
         history.undo();
-      } else if ((e.key === "z" && e.shiftKey) || e.key === "y") {
+      } else if (mod && ((key === "z" && e.shiftKey) || key === "y")) {
         e.preventDefault();
         history.redo();
+      } else if (mod && key === "a") {
+        e.preventDefault();
+        setSelection(
+          selectMany(
+            emptySelection,
+            tree.children.map((c) => c.uid),
+          ),
+        );
+      } else if (mod && key === "c") {
+        const clip = copyNodes(tree, selection);
+        if (hasContent(clip)) setClipboard(clip);
+      } else if (mod && key === "v") {
+        if (!hasContent(clipboard)) return;
+        e.preventDefault();
+        // Paste after the last-selected node, or into the form root if nothing is selected.
+        const anchor = selection.selected[selection.selected.length - 1];
+        const next = anchor
+          ? pasteAfter(tree, anchor, clipboard, metaGuard())
+          : pasteInto(tree, tree.uid, clipboard, metaGuard());
+        if (next !== tree) history.set(next);
+      } else if (key === "delete" || key === "backspace") {
+        if (selection.selected.length === 0) return;
+        e.preventDefault();
+        let next = tree;
+        for (const uid of selection.selected) {
+          const node = findNode(next, uid);
+          if (
+            node &&
+            node.node.type !== "form" &&
+            describeNode(node.node.type).behavior.deletable
+          ) {
+            next = remove(next, uid);
+          }
+        }
+        if (next !== tree) {
+          history.set(next);
+          setSelection(emptySelection);
+        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [history]);
+  }, [history, tree, selection, clipboard]);
 
   // Pointer drag engine: palette "create" drags and on-canvas "move" drags both
   // commit a single tree op and select the result. A press that doesn't drag selects.
@@ -161,7 +211,8 @@ export function App() {
       history.set(next);
       setSelection(selectMany(emptySelection, dropped));
     },
-    onClickSelect: (uids) => setSelection(select(emptySelection, uids[0])),
+    onClickSelect: (uids, additive) =>
+      setSelection((s) => (additive ? toggle(s, uids[0]) : select(emptySelection, uids[0]))),
   });
 
   function onRemove(uid: string) {
@@ -348,7 +399,7 @@ export function App() {
               <PropertyPanel
                 selected={selected}
                 siblingNames={siblingNames}
-                onChange={(uid, field) => history.set(replaceField(tree, uid, field))}
+                onChange={(uid, field) => history.set(applyFieldEdit(tree, uid, field))}
               />
             </aside>
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { axisOf, canDrop, type DragSource, performDrop } from "./engine/dragon";
 import { type DropIntent, dropIntent, type Rect } from "./engine/move-helper";
-import { findNode, findParent, type InsertGuard, type TreeNode } from "./engine/tree";
+import { findNode, findParent, type InsertGuard, type TreeNode, topMostUids } from "./engine/tree";
 import { describeNode, type FieldType, fieldTypeLabel } from "./field-registry";
 
 /* ----------------------------------------------------------------------------
@@ -32,6 +32,9 @@ interface Pending {
   label: string;
   start: { x: number; y: number };
   additive: boolean;
+  /** The uid a click (no drag) selects — the pressed node, even when dragging a
+   *  larger multi-selection. */
+  clickUid: string | null;
   active: boolean;
   intent: DropIntent | null;
   valid: boolean;
@@ -49,7 +52,9 @@ export interface UseDragonOptions {
 
 export interface Dragon {
   drag: DragState | null;
-  beginMove: (uids: string[], e: React.PointerEvent) => void;
+  /** Start moving `uids` (filtered to top-most). `clickUid` is the node a non-drag
+   *  press selects (defaults to the first uid). */
+  beginMove: (uids: string[], e: React.PointerEvent, clickUid?: string) => void;
   beginCreate: (type: FieldType, e: React.PointerEvent) => void;
 }
 
@@ -124,8 +129,10 @@ export function useDragon(opts: UseDragonOptions): Dragon {
       cleanup();
       if (!p) return;
       if (!p.active) {
-        // A click, not a drag: only an existing node carries a selection intent.
-        if (p.source.kind === "move") ref.current.opts.onClickSelect(p.source.uids, p.additive);
+        // A click, not a drag: select the pressed node (not the whole drag set).
+        if (p.source.kind === "move" && p.clickUid) {
+          ref.current.opts.onClickSelect([p.clickUid], p.additive);
+        }
         return;
       }
       if (p.intent && p.valid) {
@@ -152,7 +159,13 @@ export function useDragon(opts: UseDragonOptions): Dragon {
     }
     cleanupRef.current = cleanup;
 
-    const begin = (source: DragSource, label: string, e: React.PointerEvent, additive: boolean) => {
+    const begin = (
+      source: DragSource,
+      label: string,
+      e: React.PointerEvent,
+      additive: boolean,
+      clickUid: string | null,
+    ) => {
       e.preventDefault();
       cleanup();
       ref.current.pend = {
@@ -160,6 +173,7 @@ export function useDragon(opts: UseDragonOptions): Dragon {
         label,
         start: { x: e.clientX, y: e.clientY },
         additive,
+        clickUid,
         active: false,
         intent: null,
         valid: false,
@@ -172,15 +186,20 @@ export function useDragon(opts: UseDragonOptions): Dragon {
 
     api.current = {
       drag: null,
-      beginMove: (uids, e) =>
+      beginMove: (uids, e, clickUid) => {
+        const tree = ref.current.opts.getTree();
+        // Drag parents once, not their already-selected children.
+        const tops = topMostUids(tree, uids);
         begin(
-          { kind: "move", uids },
-          moveLabel(ref.current.opts.getTree(), uids),
+          { kind: "move", uids: tops },
+          moveLabel(tree, tops),
           e,
           e.ctrlKey || e.metaKey,
-        ),
+          clickUid ?? uids[0] ?? null,
+        );
+      },
       beginCreate: (type, e) =>
-        begin({ kind: "create", fieldType: type }, fieldTypeLabel(type), e, false),
+        begin({ kind: "create", fieldType: type }, fieldTypeLabel(type), e, false, null),
     };
   }
 

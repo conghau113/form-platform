@@ -14,6 +14,7 @@ import {
   patchNode,
   remove,
   type TreeNode,
+  topMostUids,
 } from "./tree";
 
 /** Terse node factory: leaf("a") or branch("card-1", {type:"card"}, [children]). */
@@ -51,6 +52,14 @@ describe("tree queries", () => {
     expect(contains(findNode(root, "c1") as TreeNode, "d")).toBe(false);
 
     expect(collectNames(root)).toEqual(new Set(["a", "b", "c", "d", "rows"]));
+  });
+
+  it("filters a selection to its top-most nodes (parent over its children)", () => {
+    const root = sample();
+    // c1 + its descendants b/arr/c selected → only c1 survives, plus the unrelated a.
+    expect(topMostUids(root, ["a", "c1", "b", "arr", "c"])).toEqual(["a", "c1"]);
+    // siblings are all kept; an absent uid is dropped.
+    expect(topMostUids(root, ["a", "d", "gone"])).toEqual(["a", "d"]);
   });
 });
 

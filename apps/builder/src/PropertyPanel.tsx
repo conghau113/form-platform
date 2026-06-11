@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { type NodePath, nodeAtPath, patchNodeAtPath } from "./engine/field-path";
 import {
   describeField,
+  describeNode,
   type FieldType,
   fieldTypeLabel,
   newField,
@@ -177,6 +178,13 @@ export function PropertyPanel({
           {fieldTypeLabel(node.type)} container — its fields are edited on the canvas.
         </Typography.Paragraph>
         <Form layout="vertical" size="small">
+          {/* A named container (today only `group`) carries a schema key once it is
+              authorable/selectable on the canvas. */}
+          {describeNode(node.type).named && (
+            <Form.Item label="Name (schema key)">
+              <Input value={nodeName(node) ?? ""} onChange={(e) => set({ name: e.target.value })} />
+            </Form.Item>
+          )}
           <TypeSettings field={node} set={set} />
         </Form>
       </div>

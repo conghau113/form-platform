@@ -82,6 +82,18 @@ export function contains(node: TreeNode, uid: string): boolean {
   return findNode(node, uid) !== null;
 }
 
+/** Of `uids`, those with no ancestor also in the set — the "top-most" nodes, so a
+ *  multi-selection drag/copy moves a parent once instead of also moving its children.
+ *  Input order is preserved; uids absent from the tree are dropped. */
+export function topMostUids(root: TreeNode, uids: string[]): string[] {
+  const set = new Set(uids);
+  return uids.filter((uid) => {
+    const path = ancestorsOf(root, uid);
+    if (!path) return false;
+    return !path.slice(0, -1).some((a) => set.has(a.uid));
+  });
+}
+
 /** Every schema `name` in the tree (nameless containers are skipped). */
 export function collectNames(root: TreeNode): Set<string> {
   const names = new Set<string>();

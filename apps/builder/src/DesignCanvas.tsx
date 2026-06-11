@@ -30,7 +30,7 @@ const RED = "#ff4d4f";
 export interface DesignerValue {
   selected: string[];
   drag: DragState | null;
-  beginMove: (uids: string[], e: React.PointerEvent) => void;
+  beginMove: (uids: string[], e: React.PointerEvent, clickUid?: string) => void;
   beginCreate: (type: import("./field-registry").FieldType, e: React.PointerEvent) => void;
   copy: (uid: string) => void;
   remove: (uid: string) => void;
@@ -93,6 +93,14 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
   const meta = describeNode(node.type);
   const empty = meta.behavior.droppable && (childrenOf(node)?.length ?? 0) === 0;
 
+  // Pressing a member of a multi-selection drags the whole selection; otherwise just
+  // this node. Either way a non-drag click selects THIS node (passed as the clickUid).
+  const dragSet = selected && d.selected.length > 1 ? d.selected : [uid];
+  const startMove = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    d.beginMove(dragSet, e, uid);
+  };
+
   const outline = selected
     ? `2px solid ${BLUE}`
     : isHovered
@@ -104,10 +112,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
   return (
     <div
       data-designer-node-id={uid}
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        d.beginMove([uid], e);
-      }}
+      onPointerDown={startMove}
       onPointerOver={(e) => {
         e.stopPropagation();
         setHovered(uid);
@@ -164,13 +169,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
           <span style={{ fontSize: 11, padding: "0 4px", whiteSpace: "nowrap" }}>
             {nodeLabel(node)}
           </span>
-          <ToolbarButton
-            title="Drag"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              d.beginMove([uid], e);
-            }}
-          >
+          <ToolbarButton title="Drag" onPointerDown={startMove}>
             <HolderOutlined />
           </ToolbarButton>
           {meta.behavior.cloneable && (

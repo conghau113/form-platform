@@ -4,8 +4,17 @@ import {
   childrenOf,
   type FieldNode,
   type FormSchema,
+  isLayoutContainer,
 } from "@org/form-schema";
-import { type FieldProps, type FormProps, findNode, replaceAt, type TreeNode } from "./tree";
+import {
+  type EngineProps,
+  type FieldProps,
+  type FormProps,
+  findNode,
+  patchNode,
+  replaceAt,
+  type TreeNode,
+} from "./tree";
 import { makeUid } from "./uid";
 
 /* ----------------------------------------------------------------------------
@@ -86,4 +95,20 @@ export function replaceField(root: TreeNode, uid: string, field: FieldNode): Tre
   if (!findNode(root, uid)) return root;
   const subtree = fieldToTree(field);
   return replaceAt(root, uid, () => ({ ...subtree, uid }));
+}
+
+/** Apply a PropertyPanel edit. A layout container patches its OWN props only — its
+ *  children subtree (and every descendant uid) stays put, so a selected/nested node
+ *  isn't orphaned (the container is now selectable; `replaceField` would regenerate
+ *  descendant uids). Leaf/array nodes have no selectable descendants, so they are
+ *  swapped wholesale via `replaceField`. */
+export function applyFieldEdit(root: TreeNode, uid: string, field: FieldNode): TreeNode {
+  if (isLayoutContainer(field)) {
+    // patchNode is a shallow merge: it adds/overwrites the container's own props but
+    // can't clear an optional one. Fine today — the panel's `set` only ever sets keys.
+    const key = childrenKeyOf(field.type);
+    const { [key as string]: _children, ...own } = field as unknown as Record<string, unknown>;
+    return patchNode(root, uid, own as Partial<EngineProps>);
+  }
+  return replaceField(root, uid, field);
 }

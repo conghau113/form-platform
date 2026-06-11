@@ -48,7 +48,8 @@ describe("DesignCanvas", () => {
     const uid = tree.children[0].uid;
     const shell = container.querySelector(`[data-designer-node-id="${uid}"]`) as HTMLElement;
     fireEvent.pointerDown(shell);
-    expect(value.beginMove).toHaveBeenCalledWith([uid], expect.anything());
+    // Single node: drag set is [uid] and the click-select uid is the pressed node.
+    expect(value.beginMove).toHaveBeenCalledWith([uid], expect.anything(), uid);
   });
 
   it("shows the selection toolbar (copy/delete) for the selected node", () => {

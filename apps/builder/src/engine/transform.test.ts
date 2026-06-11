@@ -2,7 +2,14 @@ import { CURRENT_FORM_VERSION, type FormSchema, formSchema, migrate } from "@org
 import { describe, expect, it } from "vitest";
 import formV1 from "../../../../examples/form.v1.json";
 import formV3 from "../../../../examples/form.v3.json";
-import { fieldToTree, replaceField, schemaToTree, treeToField, treeToSchema } from "./transform";
+import {
+  applyFieldEdit,
+  fieldToTree,
+  replaceField,
+  schemaToTree,
+  treeToField,
+  treeToSchema,
+} from "./transform";
 import { findNode } from "./tree";
 
 /** treeToSchema(schemaToTree(x)) must deep-equal x for any valid, current-version form. */
@@ -141,5 +148,38 @@ describe("transform — replaceField", () => {
 
   it("fieldToTree on a leaf yields no children", () => {
     expect(fieldToTree({ type: "text", name: "x", label: "X" }).children).toEqual([]);
+  });
+});
+
+describe("transform — applyFieldEdit (D8: containers patch, leaves replace)", () => {
+  const tree = schemaToTree({
+    formVersion: CURRENT_FORM_VERSION,
+    id: "f",
+    title: "F",
+    fields: [
+      { type: "card", title: "Card", children: [{ type: "text", name: "a", label: "A" }] },
+      { type: "text", name: "b", label: "B" },
+    ],
+  });
+  const cardUid = tree.children[0].uid;
+  const childUid = tree.children[0].children[0].uid;
+  const leafUid = tree.children[1].uid;
+
+  it("patches a container's own props while KEEPING descendant uids", () => {
+    // The edit carries the whole card incl. its child (as PropertyPanel emits it).
+    const edited = { ...(treeToField(tree.children[0]) as object), title: "Renamed" };
+    const next = applyFieldEdit(tree, cardUid, edited as never);
+    expect((findNode(next, cardUid)?.node as { title?: string }).title).toBe("Renamed");
+    // The child node is the SAME uid — not regenerated (replaceField would have).
+    const child = findNode(next, childUid);
+    expect(child).not.toBeNull();
+    expect((child?.node as { name?: string }).name).toBe("a");
+  });
+
+  it("replaces a leaf wholesale, keeping its own uid", () => {
+    const next = applyFieldEdit(tree, leafUid, { type: "number", name: "b", label: "B2" });
+    const hit = findNode(next, leafUid);
+    expect(hit?.uid).toBe(leafUid);
+    expect(treeToField(hit as never)).toEqual({ type: "number", name: "b", label: "B2" });
   });
 });
