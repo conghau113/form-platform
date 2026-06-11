@@ -1,15 +1,16 @@
 import { CloseOutlined, SettingOutlined } from "@ant-design/icons";
 import { Button, Tooltip, Typography } from "antd";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { ancestorsOf, type TreeNode } from "../engine/tree";
 import { nodeLabel } from "./OutlineTree";
+import { isBoolean, usePersistentState } from "./persist";
 
 /* ----------------------------------------------------------------------------
  * SettingsPanel — the right rail (Designable's SettingsForm shell). A header
  * with the selected node's ancestor breadcrumb (each crumb selects that
  * ancestor) and a close toggle that collapses the panel to a slim rail; the
- * body is the PropertyPanel passed as children. Open/closed is local UI state
- * (persisted in F5).
+ * body is the PropertyPanel passed as children. Open/closed is panel-local UI
+ * state, persisted across reloads.
  * ------------------------------------------------------------------------- */
 
 export function SettingsPanel({
@@ -24,7 +25,7 @@ export function SettingsPanel({
   onSelect: (uid: string) => void;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = usePersistentState("settingsOpen", true, isBoolean);
 
   if (!open) {
     return (

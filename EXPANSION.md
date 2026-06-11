@@ -251,24 +251,34 @@ in E4.
 
 ## Phase F — Workbench shell (panel parity with the Designable playground)
 Layout: CompositePanel (left) | Toolbar + Viewport (center) | SettingsPanel (right).
+**COMPLETE (F1–F5 committed on `feat/phase-f-workbench`).** All new chrome lives in
+`apps/builder/src/workbench/`; builder is changeset-ignored, so no changeset.
 
-- [ ] **F1 — CompositePanel** with three tabs: **Components** (palette grouped by
-      D6 resource groups), **Outline tree** (mirrors the model: select/hover sync
-      both ways, expand/collapse, drag-reorder through the SAME MoveHelper as E2),
-      **History** (named undo states, click to jump).
-- [ ] **F2 — ToolbarPanel:** undo/redo buttons, device simulator switch
-      (desktop/tablet/mobile canvas widths over the 24-col responsive grid),
-      view-mode switch + preview "play" button.
-- [ ] **F3 — ViewPanel modes** (Designable's DESIGNABLE/JSONTREE/PREVIEW):
-      design canvas; **two-way JSON editor** (edits go through
-      `formSchema.safeParse` → patch the tree on success, inline Zod errors on
-      failure — never crash the canvas); live PREVIEW rendering the real,
-      interactive `FormRenderer`.
-- [ ] **F4 — SettingsPanel:** breadcrumb of the selected node's ancestor path
-      (like "1. Form /"), pin/close, and PropertyPanel rendered ENTIRELY from D6
-      meta descriptors — including the root Form settings (labelCol / wrapperCol /
-      layout / size / colon / labelAlign…), generalizing Phase A.
-- [ ] **F5 — close:** panel-state persistence, polish, tests, changeset, reviewer.
+- [x] **F1 — CompositePanel** (`add17f7`) with FOUR tabs: **Components** (palette),
+      **Outline tree** (`OutlineTree.tsx`: select/hover sync both ways via the shared
+      `workbench/hover.tsx` HoverProvider, expand/collapse, drag-reorder through the
+      SAME pointer engine — rows are `data-designer-node-id` targets), **History**
+      (`HistoryPanel.tsx`: labeled undo states, click to jump via `history.index`/
+      `jumpTo`) and **Theme** (the ThemeEditor moved out of the preview pane).
+- [x] **F2 — ToolbarPanel** (`6f975de`): undo/redo (out of the header), device
+      simulator Desktop/Tablet/Mobile (drives `maxWidth` for canvas AND preview),
+      view-mode switch + preview "play" button; center collapsed to a single
+      `ViewPanel` column.
+- [x] **F3 — ViewPanel modes** (`2042915`): design canvas; **two-way JSON editor**
+      (`JsonEditor.tsx`: local buffer + debounce, `JSON.parse` → `migrate` (Zod),
+      valid → one "Edit JSON" history step, invalid → inline issues + Revert, never
+      crashes the canvas); live PREVIEW rendering the real, interactive `FormRenderer`.
+- [x] **F4 — SettingsPanel** (`317e3bc`): ancestor breadcrumb via `ancestorsOf`
+      (crumb click selects), close/reopen toggle, and the root Form selectable
+      (empty-canvas click) + editable through the descriptor-driven
+      `FormSettingsEditor` (FORM_META.settings on `layoutProps` + labelCol/wrapperCol,
+      merged so authored offsets survive), generalizing Phase A. Header slimmed to
+      mode + Save/Load.
+- [x] **F5 — close:** `workbench/persist.ts` `usePersistentState` (guarded
+      localStorage) persists composite tab, view-mode, device and settings-panel
+      open state; Vitest coverage for OutlineTree / HistoryPanel / JsonEditor /
+      SettingsPanel / persist; reviewer ran each sub-phase; no changeset (builder
+      is private + changeset-ignored).
 
 ## Phase G — Reactions / Linkage (Formily core idea)
 Schema: optional `reactions[]` — `{ when: <JSONLogic>, then: { set?: visible|disabled|
@@ -319,12 +329,15 @@ Ordered by value; each is a normal phase with the same Closing Loop.
 ---
 
 ## How to resume in a fresh session
-**Phase E is COMPLETE (E1–E5 committed).** Next up is **Phase F — Workbench shell**
-(CompositePanel | Toolbar + Viewport | SettingsPanel). After `/clear`, resume with:
-> Read AGENTS.md and EXPANSION.md (Phase F section). Phase E is done — the builder canvas is
-> a WYSIWYG surface (`DesignCanvas.tsx`) driven by the pointer drag engine (`useDragon.ts` +
-> `engine/{move-helper,dragon}.ts`) on the designer tree; selection/hover/clipboard live in
-> `engine/`. Enter plan mode and plan Phase F before implementing; follow the Closing Loop.
+**Phase F is COMPLETE (F1–F5 committed on `feat/phase-f-workbench`).** Next up is
+**Phase G — Reactions / Linkage**. After `/clear`, resume with:
+> Read AGENTS.md and EXPANSION.md (Phase G section). Phases A–F are done — the builder is a
+> 3-column workbench (`apps/builder/src/workbench/`): CompositePanel (Components/Outline/
+> History/Theme) | Toolbar + ViewPanel (Design / two-way JSON / Preview) | SettingsPanel
+> (breadcrumb + descriptor-driven editors, root Form included). The canvas is WYSIWYG
+> (`DesignCanvas.tsx`) on the pointer drag engine (`useDragon.ts` + `engine/`). Phase G is
+> schema + form-core work first (reactionSchema, computeReactions), then renderer + builder
+> UI. Enter plan mode and plan Phase G before implementing; follow the Closing Loop.
 
 Context that saves re-discovery when resuming:
 - The designer engine is `apps/builder/src/engine/{tree,uid,names,selection,hover,

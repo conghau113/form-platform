@@ -62,7 +62,14 @@
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(python -)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(python -c ' *)",
+      "Bash(git -C e:\\\\web\\\\web-tool\\\\form-platform-starter\\\\form-platform status --short)",
+      "Bash(git -C e:\\\\web\\\\web-tool\\\\form-platform-starter\\\\form-platform log --oneline -5)",
+      "Bash(git --no-pager diff --stat)",
+      "Bash(git --no-pager diff --staged --stat)",
+      "Bash(git --no-pager status)",
+      "Bash(git --no-pager diff apps/builder/src/App.tsx apps/builder/src/DesignCanvas.tsx apps/builder/src/PropertyPanel.tsx apps/builder/src/workbench/OutlineTree.tsx)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -78,7 +85,8 @@
       "Read(**/.env.*)",
       "Read(**/*.pem)",
       "Read(**/secrets/**)"
-    ]
+    ],
+    "additionalDirectories": ["C:\\Users\\ASUS\\.claude\\plans"]
   },
   "hooks": {
     "PostToolUse": [

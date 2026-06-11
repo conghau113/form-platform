@@ -44,6 +44,7 @@ import { useDragon } from "./useDragon";
 import { WorkflowEditor } from "./WorkflowEditor";
 import { CompositePanel } from "./workbench/CompositePanel";
 import { HoverProvider } from "./workbench/hover";
+import { oneOf, usePersistentState } from "./workbench/persist";
 import { SettingsPanel } from "./workbench/SettingsPanel";
 import { type Device, ToolbarPanel, type ViewMode } from "./workbench/ToolbarPanel";
 import { ViewPanel } from "./workbench/ViewPanel";
@@ -59,8 +60,16 @@ export function App() {
   const form = tree.node as FormProps;
   const [selection, setSelection] = useState<SelectionState>(emptySelection);
   const selectedUid = selection.selected[0] ?? null;
-  const [device, setDevice] = useState<Device>("Desktop");
-  const [viewMode, setViewMode] = useState<ViewMode>("design");
+  const [device, setDevice] = usePersistentState<Device>(
+    "device",
+    "Desktop",
+    oneOf("Desktop", "Tablet", "Mobile"),
+  );
+  const [viewMode, setViewMode] = usePersistentState<ViewMode>(
+    "viewMode",
+    "design",
+    oneOf("design", "json", "preview"),
+  );
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
   const [mode, setMode] = useState<"form" | "workflow">("form");
   const [clipboard, setClipboard] = useState<Clipboard>(emptyClipboard);

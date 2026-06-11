@@ -12,12 +12,16 @@ import { Palette } from "../Palette";
 import { ThemeEditor } from "../ThemeEditor";
 import { HistoryPanel } from "./HistoryPanel";
 import { OutlineTree } from "./OutlineTree";
+import { oneOf, usePersistentState } from "./persist";
+
+type CompositeTab = "components" | "outline" | "history" | "theme";
 
 /* ----------------------------------------------------------------------------
  * CompositePanel — the left rail of the workbench (Designable's CompositePanel).
  * Four tabs: Components (palette), Outline (model tree), History (undo timeline)
  * and Theme (design-token editor). Pure presentation: every bit of state it
- * shows is owned by App and threaded in.
+ * shows is owned by App and threaded in — except the active tab, which is
+ * panel-local UI state persisted across reloads.
  * ------------------------------------------------------------------------- */
 
 export function CompositePanel({
@@ -37,9 +41,15 @@ export function CompositePanel({
   onChangeTokens: (tokens: DesignTokens) => void;
   onExportTheme: () => void;
 }) {
+  const [tab, setTab] = usePersistentState<CompositeTab>(
+    "compositeTab",
+    "components",
+    oneOf("components", "outline", "history", "theme"),
+  );
   return (
     <Tabs
-      defaultActiveKey="components"
+      activeKey={tab}
+      onChange={(key) => setTab(key as CompositeTab)}
       size="small"
       style={{ height: "100%" }}
       tabBarStyle={{ paddingLeft: 8, marginBottom: 0 }}
