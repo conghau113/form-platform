@@ -87,7 +87,7 @@ from a nested edit, so App's editor↔schema boundary is unchanged. Changeset
 `.changeset/array-table-and-item-config.md`. Drag-based nested authoring on the canvas
 (outline tree) still belongs to Phase D.
 
-## Phase D — Designer engine & tree foundation  ← IN PROGRESS (D1–D6 done, NEXT: D7)
+## Phase D — Designer engine & tree foundation  ✅ DONE (2026-06-11)
 Rebuild the relevant parts of `@designable/core` as pure, tested TS (no UI yet), and
 teach the contract the container/layout vocabulary Designable has. Heaviest refactor;
 each step lands in its own commit with `pnpm typecheck` + `pnpm test` green.
@@ -168,28 +168,48 @@ integration) because the App swap needs D6 metas + D7 transformer.
       FIELD_TYPES/PALETTE_TYPES stay FieldType[]. Tests: canInsert matrix, metaGuard,
       form-meta flags, palette-freeze, named/nameless seeding. Builder-only → no
       changeset (deferred to D8).
-- [ ] **D7 — transformer:** `engine/transform.ts` — `schemaToTree`/`fieldToTree`
-      (strip children via childrenKeyOf, fresh uids), `treeToField`/`treeToSchema`
-      (array ALWAYS emits itemFields even []; omit undefined optionals),
-      `replaceField(root, uid, field)` (keeps target uid — PropertyPanel boundary).
-      Transformer NEVER renames. Round-trip identity test for form.v1.json,
-      form.v3.json + inline fixtures.
-- [ ] **D7b — builder integration:** App.tsx switches `useHistory<TreeNode>`;
-      onDragEnd → engine insert/move + metaGuard; selection → SelectionState +
-      pruneSelection; PropertyPanel selected widens to FieldNode, named-only sections;
-      Canvas takes root's TreeNode[] (title fallback label??title??name??type);
-      `node-path.ts` → `engine/field-path.ts` walking `childrenOf` (fixes latent no-op
-      patch bug for container children inside itemFields); DELETE EditorModel + flat
-      ops + model.test.ts; Palette filters showInPalette. Flat canvas UX unchanged.
-      NOTE: replaceField regenerates descendant uids — fine in D (only top-level
-      selectable), Phase E must switch the settings panel to patchNode-style edits.
-- [ ] **D8 — close:** reviewer subagent, changeset (minor: form-schema, form-core,
-      form-renderer-web + builder note), mark Phase D ✅ here, update memory, commit.
+- [x] **D7 — transformer** ✅ commit `fa28348`. `engine/transform.ts` —
+      `schemaToTree`/`fieldToTree` (strip children via `childrenKeyOf`, fresh uids),
+      `treeToField`/`treeToSchema` (array ALWAYS emits `itemFields` even []; omit
+      undefined optionals; at `CURRENT_FORM_VERSION`), `replaceField(root, uid, field)`
+      (keeps target uid — the PropertyPanel boundary; exported `replaceAt` from `tree.ts`
+      to path-copy). Transformer NEVER renames. Tests: round-trip identity for migrated
+      form.v1.json + form.v3.json, every container type incl. empty children, layoutProps/
+      decoratorProps/settings, fresh-uid uniqueness, replaceField uid semantics + sibling
+      `===` sharing (11).
+- [x] **D7b — builder integration** ✅ commit `7d7d86b`. App.tsx runs on
+      `useHistory<TreeNode>(schemaToTree(migrate(example)))`, `schema = treeToSchema(tree)`;
+      onDragEnd → `fieldToTree(newField(...))` + `append`/`insertBefore` + `metaGuard()`,
+      reorder via `move` (matches dnd-kit arrayMove), delete gated on `behavior.deletable`;
+      selection = `SelectionState` (single-select preserved) pruned after every tree change;
+      panel selection = `findNode` + `treeToField`, onChange → `replaceField`, title/id →
+      `patchNode` on root. Canvas renders root's `TreeNode[]` (title fallback
+      label??title??name??type). PropertyPanel `selected` widened to `{ uid, field:
+      FieldNode }`; layout containers get a minimal settings-only editor, leaves/array keep
+      the full editor; `siblings` → `siblingNames: string[]`. `node-path.ts` →
+      `engine/field-path.ts` walking `childrenOf` (fixes the latent no-op patch bug for a
+      leaf nested under a container inside `itemFields`). DELETED `model.ts` +
+      `model.test.ts`; `newField`/`seedName` now live in `field-registry.ts`. Flat canvas
+      UX unchanged. Tests: `engine/integration.test.ts` (load→reorder→nested patch→save on
+      v3, containers survive) + field-path container drilling. NOTE: `replaceField`
+      regenerates descendant uids — fine in D (only top-level selectable), Phase E must
+      switch the settings panel to `patchNode`-style edits.
+- [x] **D8 — close** ✅. reviewer subagent (no required fixes; flagged that a selectable
+      `group` will need a name editor in Phase E — see Phase E note), changeset
+      `.changeset/designer-containers-layout.md` (minor: form-schema, form-core,
+      form-renderer-web — covers D1–D3; builder is in the changeset ignore list), Phase D
+      marked ✅, memory updated.
 
 ## Phase E — WYSIWYG canvas + Designable-grade drag & drop
 The canvas stops being a row list (`Canvas.tsx` today) and renders **real antd
 components**, with Designable's pointer-driven drag engine and aux widgets — this is
 what makes it *feel* like designable-antd.formilyjs.org.
+
+> Note from D8 review: when containers become selectable here, the settings panel must
+> stop using `replaceField` (it regenerates descendant uids) and switch to `patchNode`-style
+> edits. Also `group` is a NAMED container — once it's selectable it needs a name editor
+> (today the D7b container editor is name-less, fine only because groups carry a name from
+> loaded JSON and aren't authorable yet).
 
 - [ ] **E1 — design-mode rendering:** reuse `FormRenderer` with a new optional
       `nodeWrapper` render-prop (additive renderer-web API) so every node renders
@@ -284,20 +304,24 @@ Ordered by value; each is a normal phase with the same Closing Loop.
 ---
 
 ## How to resume in a fresh session
-**Phase D is mid-flight (D1–D6 committed, D7 next).** After `/clear`, resume with:
-> Read AGENTS.md and EXPANSION.md (Phase D section), then read the approved plan at
-> `C:\Users\ASUS\.claude\plans\synthetic-wibbling-rabin.md`. D1–D6 are committed —
-> continue from D7 WITHOUT re-planning. Implement D7 → D7b → D8 in order,
-> one commit per step, `pnpm typecheck` + `pnpm test` + `pnpm biome check --write .`
-> green before each commit.
+**Phase D is COMPLETE (D1–D8 committed).** Next up is **Phase E — WYSIWYG canvas +
+pointer DnD**. After `/clear`, resume with:
+> Read AGENTS.md and EXPANSION.md (Phase E section + the D8 review note above it). Phase D
+> is done — the designer tree engine (`apps/builder/src/engine/`), ComponentMeta registry
+> v2 (`field-registry.ts`) and the transformer are in place and the builder runs on them.
+> Enter plan mode and plan Phase E before implementing; follow the Closing Loop per step.
 
 Context that saves re-discovery when resuming:
-- The D5 step refactors `apps/builder/src/history.ts` to delegate to a new pure
-  `apps/builder/src/engine/history.ts`; the hook's public API must NOT change and
-  the existing `src/history.test.ts` must pass unmodified.
-- The engine (D4) is in `apps/builder/src/engine/{tree,uid,names}.ts` — read
-  `tree.ts`'s header comment first; ops return the SAME root reference on invalid
-  input, guard type is `InsertGuard`.
+- The designer engine is `apps/builder/src/engine/{tree,uid,names,selection,hover,
+  clipboard,history,transform,field-path}.ts` — read `tree.ts`'s header comment first;
+  ops return the SAME root reference on invalid input, guard type is `InsertGuard`
+  (`field-registry.metaGuard()` supplies it from the metas).
+- `field-registry.ts` is the ComponentMeta registry: `behavior` (droppable/draggable/
+  cloneable/deletable + allowAppend/allowParents), `canInsert`/`metaGuard`, `newField`,
+  `showInPalette` (all containers false — Phase E adds them to the palette), `named`.
+- `App.tsx` holds the whole tree in `useHistory<TreeNode>`; PropertyPanel edits go through
+  `treeToField → patchNodeAtPath → replaceField`. Phase E must switch container settings
+  to `patchNode` (replaceField regenerates descendant uids — see the Phase E note).
 - Shared container helpers live in `packages/form-schema/src/containers.ts`
   (`isLayoutContainer`/`childrenOf`/`childrenKeyOf`) — use them, never type-switch.
 - `pnpm biome check .` reports 27 pre-existing warnings (noExplicitAny in old
