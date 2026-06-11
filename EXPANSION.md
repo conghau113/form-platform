@@ -87,7 +87,7 @@ from a nested edit, so App's editor↔schema boundary is unchanged. Changeset
 `.changeset/array-table-and-item-config.md`. Drag-based nested authoring on the canvas
 (outline tree) still belongs to Phase D.
 
-## Phase D — Designer engine & tree foundation  ← IN PROGRESS (D1–D5 done, NEXT: D6)
+## Phase D — Designer engine & tree foundation  ← IN PROGRESS (D1–D6 done, NEXT: D7)
 Rebuild the relevant parts of `@designable/core` as pure, tested TS (no UI yet), and
 teach the contract the container/layout vocabulary Designable has. Heaviest refactor;
 each step lands in its own commit with `pnpm typecheck` + `pnpm test` green.
@@ -148,18 +148,26 @@ integration) because the App swap needs D6 metas + D7 transformer.
       `src/history.test.ts` passes UNMODIFIED), additive `set(next, label?)` +
       `entries`/`jumpTo`. Tests: engine/history|selection|clipboard.test.ts (16).
       App-only change → no changeset (builder is in the changeset ignore list).
-- [ ] **D6 — ComponentMeta registry v2:** extend `field-registry.ts` IN PLACE (keep
-      every existing export). `FieldType = FieldNode["type"]` (widened), `NodeType =
-      FieldType | "form"`; `ComponentBehavior { droppable, draggable, cloneable,
-      deletable, allowAppend?, allowParents? }`; `ComponentMeta` adds behavior/icon/
-      `showInPalette` (false for ALL containers in D)/`named` (false = nameless).
-      SettingDescriptor gains `control:"select"` + choices (PropertyPanel TypeSettings
-      gets the case). New entries: form (droppable only, settings = layoutProps
-      descriptors), group(Object), tabs (allowAppend only tab-pane), tab-pane
-      (allowParents [tabs]), collapse/collapse-panel mirror, card, grid (defaults
-      cols:2), space. `canInsert(parent, child)` + `metaGuard(): InsertGuard`.
-      `newField` skips `name` for named:false. PropertyPanel ITEM_TYPES filter →
-      showInPalette-based. Guard tests incl. canInsert matrix + palette-unchanged.
+- [x] **D6 — ComponentMeta registry v2** ✅ commit `2aba7a5`. Extended
+      `field-registry.ts` in place (every existing export kept). `FieldType =
+      FieldNode["type"]` (widened), `NodeType = FieldType | "form"`. `ComponentBehavior
+      { droppable, draggable, cloneable, deletable, allowAppend?, allowParents? }` +
+      `ComponentMeta { behavior, icon?, showInPalette, named }` on every entry. New
+      nameless container metas (group/tabs/tab-pane/collapse/collapse-panel/card/grid/
+      space) + separate `FORM_META` root (droppable-only, `FORM_SETTINGS` = D2
+      layoutProps select/checkbox descriptors for F4). ALL containers
+      `showInPalette:false` → palette frozen; `PALETTE_TYPES` is the exact authorable
+      list, `fieldsByCategory`/`ITEM_TYPES`/`paletteType` filter on it. `canInsert(parent,
+      child)` central guard (form never inserted; parent droppable; tabs⇒tab-pane &
+      collapse⇒collapse-panel via `allowAppend`; panes pinned via `allowParents`) +
+      `metaGuard(): InsertGuard` for engine ops. `describeNode(NodeType)` covers form;
+      `describeField(FieldType)` unchanged. `SettingDescriptor` gained `control:"select"`
+      + `choices`; PropertyPanel `TypeSettings` renders it. `model.ts` `newField` is now
+      named-aware (skips `name` for nameless containers, seeds `children:[]`) and returns
+      `FieldNode`. NOTE: form lives in `FORM_META` (not the FIELD_REGISTRY array) so
+      FIELD_TYPES/PALETTE_TYPES stay FieldType[]. Tests: canInsert matrix, metaGuard,
+      form-meta flags, palette-freeze, named/nameless seeding. Builder-only → no
+      changeset (deferred to D8).
 - [ ] **D7 — transformer:** `engine/transform.ts` — `schemaToTree`/`fieldToTree`
       (strip children via childrenKeyOf, fresh uids), `treeToField`/`treeToSchema`
       (array ALWAYS emits itemFields even []; omit undefined optionals),
@@ -276,10 +284,10 @@ Ordered by value; each is a normal phase with the same Closing Loop.
 ---
 
 ## How to resume in a fresh session
-**Phase D is mid-flight (D1–D5 committed, D6 next).** After `/clear`, resume with:
+**Phase D is mid-flight (D1–D6 committed, D7 next).** After `/clear`, resume with:
 > Read AGENTS.md and EXPANSION.md (Phase D section), then read the approved plan at
-> `C:\Users\ASUS\.claude\plans\synthetic-wibbling-rabin.md`. D1–D5 are committed —
-> continue from D6 WITHOUT re-planning. Implement D6 → D7 → D7b → D8 in order,
+> `C:\Users\ASUS\.claude\plans\synthetic-wibbling-rabin.md`. D1–D6 are committed —
+> continue from D7 WITHOUT re-planning. Implement D7 → D7b → D8 in order,
 > one commit per step, `pnpm typecheck` + `pnpm test` + `pnpm biome check --write .`
 > green before each commit.
 
