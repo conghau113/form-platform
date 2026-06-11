@@ -1,21 +1,9 @@
-import { RedoOutlined, UndoOutlined } from "@ant-design/icons";
-import { FormRenderer } from "@org/form-renderer-web";
 import { migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
-import {
-  Alert,
-  Button,
-  ConfigProvider,
-  Input,
-  message,
-  Segmented,
-  Space,
-  Typography,
-  theme,
-} from "antd";
-import { Component, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Button, Input, message, Segmented, Space, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
-import { DesignCanvas, DesignerProvider, type DesignerValue } from "./DesignCanvas";
+import { DesignerProvider, type DesignerValue } from "./DesignCanvas";
 import {
   type Clipboard,
   copyNodes,
@@ -56,54 +44,13 @@ import { useDragon } from "./useDragon";
 import { WorkflowEditor } from "./WorkflowEditor";
 import { CompositePanel } from "./workbench/CompositePanel";
 import { HoverProvider } from "./workbench/hover";
+import { type Device, ToolbarPanel, type ViewMode } from "./workbench/ToolbarPanel";
+import { ViewPanel } from "./workbench/ViewPanel";
 
 const API = "http://localhost:3001";
 
+/** Canvas/preview content width per simulated device. */
 const VIEWPORTS = { Desktop: 1280, Tablet: 768, Mobile: 375 } as const;
-type Viewport = keyof typeof VIEWPORTS;
-
-/** Catches migrate()/validation throws from a transiently-invalid model (e.g. a field
- *  name was cleared) so a bad edit shows a message instead of crashing the preview.
- *  Remounted (via `key`) when the JSON changes, so it recovers once the model is valid. */
-class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null as Error | null };
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <Alert
-          type="error"
-          showIcon
-          message="Invalid schema"
-          description={this.state.error.message}
-        />
-      );
-    }
-    return this.props.children;
-  }
-}
-
-/** The themed preview card. Reads antd's themed tokens (so it follows the
- *  default/dark algorithm) from inside the surrounding ConfigProvider. */
-function PreviewSurface({ maxWidth, children }: { maxWidth: number; children: ReactNode }) {
-  const { token } = theme.useToken();
-  return (
-    <div
-      style={{
-        maxWidth,
-        margin: "0 auto",
-        padding: 24,
-        background: token.colorBgContainer,
-        borderRadius: token.borderRadiusLG,
-        boxShadow: token.boxShadow,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
 export function App() {
   const history = useHistory<TreeNode>(() => schemaToTree(migrate(example)));
@@ -111,8 +58,8 @@ export function App() {
   const form = tree.node as FormProps;
   const [selection, setSelection] = useState<SelectionState>(emptySelection);
   const selectedUid = selection.selected[0] ?? null;
-  const [viewport, setViewport] = useState<Viewport>("Desktop");
-  const [rightTab, setRightTab] = useState<"preview" | "json">("preview");
+  const [device, setDevice] = useState<Device>("Desktop");
+  const [viewMode, setViewMode] = useState<ViewMode>("design");
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
   const [mode, setMode] = useState<"form" | "workflow">("form");
   const [clipboard, setClipboard] = useState<Clipboard>(emptyClipboard);
@@ -353,13 +300,7 @@ export function App() {
                 placeholder="form id"
                 style={{ width: 160 }}
               />
-              <Space>
-                <Button icon={<UndoOutlined />} disabled={!history.canUndo} onClick={history.undo}>
-                  Undo
-                </Button>
-                <Button icon={<RedoOutlined />} disabled={!history.canRedo} onClick={history.redo}>
-                  Redo
-                </Button>
+              <Space style={{ marginLeft: "auto" }}>
                 <Button type="primary" onClick={onSave}>
                   Save
                 </Button>
@@ -407,13 +348,29 @@ export function App() {
                   minHeight: 0,
                 }}
               >
-                <DesignCanvas schema={schema} json={json} tree={tree} theme={antdTheme} />
+                <ToolbarPanel
+                  canUndo={history.canUndo}
+                  canRedo={history.canRedo}
+                  onUndo={history.undo}
+                  onRedo={history.redo}
+                  device={device}
+                  onDevice={setDevice}
+                  viewMode={viewMode}
+                  onViewMode={setViewMode}
+                />
+                <ViewPanel
+                  mode={viewMode}
+                  schema={schema}
+                  json={json}
+                  tree={tree}
+                  antdTheme={antdTheme}
+                  maxWidth={VIEWPORTS[device]}
+                />
               </section>
 
               <aside
                 style={{
                   width: 340,
-                  borderRight: "1px solid rgba(0,0,0,0.08)",
                   minHeight: 0,
                   overflow: "auto",
                 }}
@@ -426,57 +383,6 @@ export function App() {
                   }
                 />
               </aside>
-
-              <section style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    borderBottom: "1px solid rgba(0,0,0,0.08)",
-                  }}
-                >
-                  <Segmented
-                    options={["preview", "json"]}
-                    value={rightTab}
-                    onChange={(v) => setRightTab(v as "preview" | "json")}
-                  />
-                  {rightTab === "preview" && (
-                    <Segmented
-                      options={Object.keys(VIEWPORTS)}
-                      value={viewport}
-                      onChange={(v) => setViewport(v as Viewport)}
-                    />
-                  )}
-                </div>
-
-                {rightTab === "preview" ? (
-                  <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#f5f5f5" }}>
-                    <ConfigProvider theme={antdTheme}>
-                      <PreviewSurface maxWidth={VIEWPORTS[viewport]}>
-                        <PreviewBoundary key={json}>
-                          <FormRenderer schema={schema} access={{ roles: ["admin"] }} />
-                        </PreviewBoundary>
-                      </PreviewSurface>
-                    </ConfigProvider>
-                  </div>
-                ) : (
-                  <Input.TextArea
-                    value={json}
-                    readOnly
-                    spellCheck={false}
-                    style={{
-                      flex: 1,
-                      fontFamily: "monospace",
-                      fontSize: 13,
-                      border: "none",
-                      borderRadius: 0,
-                      resize: "none",
-                    }}
-                  />
-                )}
-              </section>
             </div>
           </HoverProvider>
         )}
