@@ -200,39 +200,54 @@ integration) because the App swap needs D6 metas + D7 transformer.
       form-renderer-web — covers D1–D3; builder is in the changeset ignore list), Phase D
       marked ✅, memory updated.
 
-## Phase E — WYSIWYG canvas + Designable-grade drag & drop
-The canvas stops being a row list (`Canvas.tsx` today) and renders **real antd
-components**, with Designable's pointer-driven drag engine and aux widgets — this is
-what makes it *feel* like designable-antd.formilyjs.org.
+## Phase E — WYSIWYG canvas + Designable-grade drag & drop  ✅ DONE (2026-06-11)
+The canvas stopped being a row list and now renders **real antd components**, with
+Designable's pointer-driven drag engine and aux widgets — this is what makes it *feel*
+like designable-antd.formilyjs.org.
 
-> Note from D8 review: when containers become selectable here, the settings panel must
-> stop using `replaceField` (it regenerates descendant uids) and switch to `patchNode`-style
-> edits. Also `group` is a NAMED container — once it's selectable it needs a name editor
-> (today the D7b container editor is name-less, fine only because groups carry a name from
-> loaded JSON and aren't authorable yet).
+**Approved plan (2026-06-11):** `C:\Users\ASUS\.claude\plans\curious-dazzling-diffie.md`.
+Key decisions: (a) the rendered-node→uid bridge is a **positional path** (not object
+identity — `FormRenderer` deep-clones via `migrate()`, so a WeakMap would miss); (b) array
+item-field authoring stays in the **PropertyPanel** (on-canvas drag-into-array deferred);
+(c) the D8 review follow-ups (container settings via `patchNode`, group name editor) land
+in E4.
 
-- [ ] **E1 — design-mode rendering:** reuse `FormRenderer` with a new optional
-      `nodeWrapper` render-prop (additive renderer-web API) so every node renders
-      inside a shell `<div data-designer-node-id>`; inputs are made pointer-inert by
-      a capture overlay (NOT `disabled`, so visuals stay true to runtime).
-- [ ] **E2 — drag engine (Designable's "Dragon"):** pointer-event driver replacing
-      dnd-kit on the canvas. Drag sources = palette resources + canvas nodes
-      (incl. multi-selection). Hit-test: `document.elementFromPoint` → nearest node
-      shell → a `MoveHelper` computes the closest direction (BEFORE/AFTER from the
-      rect midline; INNER when over an empty droppable container), validates against
-      D6 metas (`droppable`/`allowAppend`), and emits ONE tree `move`/`insert` op on
-      drop. MoveHelper math is pure and unit-tested.
-- [ ] **E3 — aux widgets (the Designable look in the screenshot):** insertion line,
-      hover dashed outline + component name tag, selection box with floating toolbar
-      (title / drag handle / copy / delete), drag ghost following the cursor, "+"
-      placeholder inside empty droppable containers, canvas empty-state legend
-      (Selection ⌘+Click · Copy ⌘+C/V · Delete).
-- [ ] **E4 — shortcuts:** click select; ctrl/⌘+click multi-select; ctrl/⌘+A;
-      copy/paste (paste regenerates uids + unique names); Delete; undo/redo
-      ctrl/⌘+Z / ctrl/⌘+shift+Z — all routed through D5 operation state so canvas,
-      outline and settings stay one model.
-- [ ] **E5 — cleanup + close:** keep dnd-kit only if the palette still needs it,
-      otherwise drop the dependency. Canvas smoke tests; changeset; reviewer.
+- [x] **E1 — design-mode rendering** ✅ commit `01b0f2d` (renderer-web, **changeset**
+      `renderer-design-mode.md`). Additive `nodeWrapper(rendered, { node, path })` +
+      `designMode` props on `FormRenderer`; leaf controls wrapped pointer-inert (NOT
+      `disabled`) only in design mode; Submit hidden. `path` threaded through
+      `renderNode`/`renderChildren`; tab/collapse panes carry their ORIGINAL index for
+      the path while keeping the filtered position as antd's pane key, so a hidden pane
+      never shifts a sibling's path and the runtime DOM is byte-for-byte unchanged.
+      Tests: `FormRenderer.designMode.test.tsx`.
+- [x] **E2 — drag engine core ("Dragon")** ✅ commit `969f5f0`. Pure
+      `engine/move-helper.ts` (`dropIntent`: leaf splits before/after at the parent-axis
+      midline; droppable container reads before/after in an edge band, INNER in the
+      middle) + `engine/dragon.ts` (`axisOf`, `canDrop` mirroring the tree-op guards,
+      `intentToMoveTarget`, `performDrop` committing ONE create/move op, multi-move order
+      preserved via an advancing anchor). Tests: move-helper (5) + dragon (10).
+- [x] **E3 — WYSIWYG canvas + aux widgets + the swap** ✅ commit `7de9f9e`. `useDragon.ts`
+      = DOM seam (pointerdown→track→`elementFromPoint`→`closest([data-designer-node-id])`
+      →MoveHelper→`canDrop`→`performDrop` on up; press<4px = click→select; Esc/
+      pointercancel/unmount tear down). `DesignCanvas.tsx` = DesignerContext + `NodeShell`
+      (hover outline+name tag, selection box + floating toolbar drag/copy/delete, insertion
+      line, empty-container "+", legend) + drag ghost; form element memoised so hover/
+      selection (via context) don't rebuild it; `buildPathIndex` maps path→uid. `Palette`
+      drives `beginCreate`; `App` dropped `DndContext`/`onDragEnd`; containers selectable;
+      `Canvas.tsx` deleted. Tests: `DesignCanvas.test.tsx`.
+- [x] **E4 — shortcuts, multi-select, clipboard + D8 fixes** ✅ commit `4c10d36`.
+      ctrl/⌘+click toggle, ctrl/⌘+A (top-level), ctrl/⌘+C/V via `engine/clipboard`
+      (fresh uids + unique names), Delete/Backspace — all through D5 state. Multi-select
+      drag moves the whole selection (filtered to top-most via new `tree.topMostUids`); a
+      non-drag click still selects the pressed node (`useDragon` `clickUid`). **D8 fixes:**
+      `transform.applyFieldEdit` patches a layout container's OWN props via `patchNode`
+      (descendant uids/selection survive) while leaves/array still `replaceField`;
+      PropertyPanel gained a Name editor for named containers (`group`). Tests:
+      applyFieldEdit + topMostUids.
+- [x] **E5 — cleanup + close** ✅. Dropped the unused `@dnd-kit/*` deps from
+      `apps/builder` (nothing imports them; WorkflowEditor uses `@xyflow/react`). Smoke
+      tests green; biome clean (27 baseline warnings); reviewer ran each step. Builder is
+      changeset-ignored, so E1's renderer-web changeset is the only published surface.
 
 ## Phase F — Workbench shell (panel parity with the Designable playground)
 Layout: CompositePanel (left) | Toolbar + Viewport (center) | SettingsPanel (right).
@@ -304,24 +319,30 @@ Ordered by value; each is a normal phase with the same Closing Loop.
 ---
 
 ## How to resume in a fresh session
-**Phase D is COMPLETE (D1–D8 committed).** Next up is **Phase E — WYSIWYG canvas +
-pointer DnD**. After `/clear`, resume with:
-> Read AGENTS.md and EXPANSION.md (Phase E section + the D8 review note above it). Phase D
-> is done — the designer tree engine (`apps/builder/src/engine/`), ComponentMeta registry
-> v2 (`field-registry.ts`) and the transformer are in place and the builder runs on them.
-> Enter plan mode and plan Phase E before implementing; follow the Closing Loop per step.
+**Phase E is COMPLETE (E1–E5 committed).** Next up is **Phase F — Workbench shell**
+(CompositePanel | Toolbar + Viewport | SettingsPanel). After `/clear`, resume with:
+> Read AGENTS.md and EXPANSION.md (Phase F section). Phase E is done — the builder canvas is
+> a WYSIWYG surface (`DesignCanvas.tsx`) driven by the pointer drag engine (`useDragon.ts` +
+> `engine/{move-helper,dragon}.ts`) on the designer tree; selection/hover/clipboard live in
+> `engine/`. Enter plan mode and plan Phase F before implementing; follow the Closing Loop.
 
 Context that saves re-discovery when resuming:
 - The designer engine is `apps/builder/src/engine/{tree,uid,names,selection,hover,
-  clipboard,history,transform,field-path}.ts` — read `tree.ts`'s header comment first;
-  ops return the SAME root reference on invalid input, guard type is `InsertGuard`
-  (`field-registry.metaGuard()` supplies it from the metas).
+  clipboard,history,transform,field-path,move-helper,dragon}.ts` — read `tree.ts`'s header
+  comment first; ops return the SAME root reference on invalid input, guard type is
+  `InsertGuard` (`field-registry.metaGuard()` supplies it from the metas).
 - `field-registry.ts` is the ComponentMeta registry: `behavior` (droppable/draggable/
   cloneable/deletable + allowAppend/allowParents), `canInsert`/`metaGuard`, `newField`,
-  `showInPalette` (all containers false — Phase E adds them to the palette), `named`.
-- `App.tsx` holds the whole tree in `useHistory<TreeNode>`; PropertyPanel edits go through
-  `treeToField → patchNodeAtPath → replaceField`. Phase E must switch container settings
-  to `patchNode` (replaceField regenerates descendant uids — see the Phase E note).
+  `named`. **Containers are still `showInPalette:false`** — they're authored by dragging
+  generic ones in / nesting; Phase F's CompositePanel decides how they appear in the
+  Components tab.
+- The canvas: `DesignCanvas.tsx` renders `<FormRenderer designMode nodeWrapper>` and wraps
+  each node in a `NodeShell`; `useDragon.ts` is the pointer engine; `App.tsx` holds the tree
+  in `useHistory<TreeNode>`, owns selection (`SelectionState`) + clipboard, and routes
+  PropertyPanel edits through `transform.applyFieldEdit` (containers patch, leaves replace).
+  The path→uid bridge is `DesignCanvas.buildPathIndex` (positional, migrate-proof).
+- `FormRenderer` (renderer-web) has additive `nodeWrapper`/`designMode` props (E1) —
+  reuse them for Phase F's live PREVIEW / JSONTREE view modes.
 - Shared container helpers live in `packages/form-schema/src/containers.ts`
   (`isLayoutContainer`/`childrenOf`/`childrenKeyOf`) — use them, never type-switch.
 - `pnpm biome check .` reports 27 pre-existing warnings (noExplicitAny in old
