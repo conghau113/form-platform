@@ -1,7 +1,7 @@
-import { migrate } from "@org/form-schema";
+import { type FormSchema, migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
 import { Button, Input, message, Segmented, Space, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { DesignerProvider, type DesignerValue } from "./DesignCanvas";
 import {
@@ -75,6 +75,12 @@ export function App() {
 
   // Drop selection highlights for nodes that no longer exist (after delete/undo/load).
   useEffect(() => setSelection((s) => pruneSelection(s, tree)), [tree]);
+
+  // A valid JSON-editor edit replaces the tree as one history step.
+  const applyJson = useCallback(
+    (next: FormSchema) => history.set(schemaToTree(next), "Edit JSON"),
+    [history.set],
+  );
 
   // The selected node, resolved to a schema field for the property panel. The form
   // root itself isn't editable here (its layoutProps land in Phase F's settings panel).
@@ -365,6 +371,7 @@ export function App() {
                   tree={tree}
                   antdTheme={antdTheme}
                   maxWidth={VIEWPORTS[device]}
+                  onApplyJson={applyJson}
                 />
               </section>
 

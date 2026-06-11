@@ -1,15 +1,17 @@
 import { FormRenderer } from "@org/form-renderer-web";
-import { Alert, ConfigProvider, Input, type ThemeConfig, theme } from "antd";
+import type { FormSchema } from "@org/form-schema";
+import { Alert, ConfigProvider, type ThemeConfig, theme } from "antd";
 import { Component, type ReactNode } from "react";
 import { DesignCanvas } from "../DesignCanvas";
 import type { TreeNode } from "../engine/tree";
+import { JsonEditor } from "./JsonEditor";
 import type { ViewMode } from "./ToolbarPanel";
 
 /* ----------------------------------------------------------------------------
  * ViewPanel — the center workspace body. It swaps between Designable's three
- * view modes: DESIGN (the WYSIWYG DesignCanvas), JSON (the contract text — made
- * two-way in F3) and PREVIEW (the real, interactive FormRenderer). Design and
- * Preview honor the toolbar device width; JSON is width-agnostic.
+ * view modes: DESIGN (the WYSIWYG DesignCanvas), JSON (the two-way JsonEditor)
+ * and PREVIEW (the real, interactive FormRenderer). Design and Preview honor
+ * the toolbar device width; JSON is width-agnostic.
  * ------------------------------------------------------------------------- */
 
 /** Catches a transiently-invalid model so the preview shows a message instead of
@@ -61,6 +63,7 @@ export function ViewPanel({
   tree,
   antdTheme,
   maxWidth,
+  onApplyJson,
 }: {
   mode: ViewMode;
   schema: unknown;
@@ -69,6 +72,8 @@ export function ViewPanel({
   antdTheme: ThemeConfig;
   /** Canvas/preview content width from the toolbar device simulator. */
   maxWidth: number;
+  /** Receives the validated schema when the JSON editor applies a valid edit. */
+  onApplyJson: (schema: FormSchema) => void;
 }) {
   if (mode === "design") {
     return (
@@ -90,20 +95,6 @@ export function ViewPanel({
     );
   }
 
-  // JSON — read-only for now; F3 upgrades this to a two-way editor.
-  return (
-    <Input.TextArea
-      value={json}
-      readOnly
-      spellCheck={false}
-      style={{
-        flex: 1,
-        fontFamily: "monospace",
-        fontSize: 13,
-        border: "none",
-        borderRadius: 0,
-        resize: "none",
-      }}
-    />
-  );
+  // JSON — two-way: valid edits update the tree, invalid ones show inline.
+  return <JsonEditor json={json} onApply={onApplyJson} />;
 }
