@@ -2,6 +2,7 @@ import {
   type ArrayField,
   childrenOf,
   type FieldNode,
+  type FormLayoutProps,
   isLayoutContainer,
   type LeafField,
   type ValidationRule,
@@ -21,13 +22,16 @@ import {
 } from "antd";
 import { useEffect, useState } from "react";
 import { type NodePath, nodeAtPath, patchNodeAtPath } from "./engine/field-path";
+import type { FormProps } from "./engine/tree";
 import {
   describeField,
   describeNode,
   type FieldType,
+  FORM_META,
   fieldTypeLabel,
   newField,
   PALETTE_TYPES,
+  type SettingDescriptor,
   type ValidationRuleType,
 } from "./field-registry";
 
@@ -110,14 +114,20 @@ function pathCrumbs(root: FieldNode, path: NodePath): string[] {
  *  patch on the top-level field via `patchNodeAtPath`, so App's onChange is unchanged. */
 export function PropertyPanel({
   selected,
+  form,
   siblingNames: topSiblingNames,
   onChange,
+  onChangeForm,
 }: {
   selected: SelectedNode | null;
+  /** The root Form node, set when IT is the selection (mutually exclusive with `selected`). */
+  form?: FormProps | null;
   /** Top-level field names, candidates for a visibleWhen condition. */
   siblingNames: string[];
   /** Emits the rebuilt top-level node (App swaps it into the tree via replaceField). */
   onChange: (uid: string, field: FieldNode) => void;
+  /** Patches the root Form node (id/title/layoutProps). */
+  onChangeForm?: (patch: Partial<FormProps>) => void;
 }) {
   const [drillPath, setDrillPath] = useState<NodePath>([]);
   // Leaving the current node resets the drill; a stale path (e.g. after undo) too.
@@ -125,6 +135,9 @@ export function PropertyPanel({
   useEffect(() => setDrillPath([]), [selected?.uid]);
 
   if (!selected) {
+    if (form && onChangeForm) {
+      return <FormSettingsEditor form={form} onChange={onChangeForm} />;
+    }
     return (
       <div style={{ padding: 24 }}>
         <Empty description="Select a field to edit its properties" />
@@ -416,15 +429,36 @@ function prop(field: FieldNode, key: string): unknown {
 function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) => void }) {
   const { settings } = describeField(field.type);
   return (
+    <SettingControls
+      settings={settings}
+      get={(key) => prop(field, key)}
+      set={(key, value) => set({ [key]: value } as Patch)}
+    />
+  );
+}
+
+/** Renders a list of {@link SettingDescriptor}s against arbitrary get/set accessors —
+ *  the same descriptors drive a field's own props (TypeSettings) and the root Form's
+ *  layoutProps (FormSettingsEditor). */
+function SettingControls({
+  settings,
+  get,
+  set,
+}: {
+  settings: SettingDescriptor[];
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  return (
     <>
       {settings.map((s) => {
-        const setKey = (value: unknown) => set({ [s.key]: value } as Patch);
+        const setKey = (value: unknown) => set(s.key, value);
         switch (s.control) {
           case "text":
             return (
               <Form.Item key={s.key} label={s.label}>
                 <Input
-                  value={(prop(field, s.key) as string) ?? ""}
+                  value={(get(s.key) as string) ?? ""}
                   onChange={(e) => setKey(e.target.value || undefined)}
                 />
               </Form.Item>
@@ -434,7 +468,7 @@ function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) =>
               <Form.Item key={s.key} label={s.label}>
                 <InputNumber
                   style={{ width: "100%" }}
-                  value={(prop(field, s.key) as number | null) ?? null}
+                  value={(get(s.key) as number | null) ?? null}
                   onChange={(v) => setKey(v ?? undefined)}
                 />
               </Form.Item>
@@ -443,7 +477,7 @@ function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) =>
             return (
               <Form.Item key={s.key}>
                 <Checkbox
-                  checked={!!prop(field, s.key)}
+                  checked={!!get(s.key)}
                   onChange={(e) => setKey(e.target.checked || undefined)}
                 >
                   {s.label}
@@ -456,7 +490,7 @@ function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) =>
                 <Select
                   style={{ width: "100%" }}
                   allowClear
-                  value={(prop(field, s.key) as string) ?? undefined}
+                  value={(get(s.key) as string) ?? undefined}
                   options={s.choices ?? []}
                   onChange={(v) => setKey(v ?? undefined)}
                 />
@@ -466,7 +500,7 @@ function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) =>
             return (
               <Form.Item key={s.key} label={s.label}>
                 <OptionsEditor
-                  options={(prop(field, s.key) as Option[]) ?? []}
+                  options={(get(s.key) as Option[]) ?? []}
                   onChange={(options) => setKey(options)}
                 />
               </Form.Item>
@@ -476,6 +510,72 @@ function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) =>
         }
       })}
     </>
+  );
+}
+
+/** The root Form's settings editor: identity (id/title) + the FORM_META layout
+ *  descriptors mapped onto `form.layoutProps`, plus labelCol/wrapperCol spans.
+ *  Entirely descriptor-driven — new form settings need only a FORM_SETTINGS entry. */
+function FormSettingsEditor({
+  form,
+  onChange,
+}: {
+  form: FormProps;
+  onChange: (patch: Partial<FormProps>) => void;
+}) {
+  const layout = form.layoutProps ?? {};
+  // An undefined value removes the key; an empty layoutProps is dropped entirely
+  // so untouched forms keep serializing without the optional block.
+  const setLayoutKey = (key: string, value: unknown) => {
+    const next = { ...layout, [key]: value } as Record<string, unknown>;
+    if (value === undefined) delete next[key];
+    onChange({ layoutProps: Object.keys(next).length ? (next as FormLayoutProps) : undefined });
+  };
+  const colSpan = (col: "labelCol" | "wrapperCol") => layout[col]?.span ?? null;
+  // Merge over the existing col object so an authored `offset` survives span edits.
+  const setColSpan = (col: "labelCol" | "wrapperCol", span: number | null) =>
+    setLayoutKey(col, span == null ? undefined : { ...layout[col], span });
+
+  return (
+    <div style={{ padding: 16, overflow: "auto", height: "100%" }}>
+      <Form layout="vertical" size="small">
+        <Form.Item label="Title">
+          <Input value={form.title} onChange={(e) => onChange({ title: e.target.value })} />
+        </Form.Item>
+        <Form.Item label="Form id">
+          <Input value={form.id} onChange={(e) => onChange({ id: e.target.value })} />
+        </Form.Item>
+
+        <Divider orientation="left" plain>
+          Layout
+        </Divider>
+        <SettingControls
+          settings={FORM_META.settings}
+          get={(key) => (layout as Record<string, unknown>)[key]}
+          set={setLayoutKey}
+        />
+        <Space>
+          <Form.Item label="Label col (span)">
+            <InputNumber
+              min={0}
+              max={24}
+              style={{ width: 100 }}
+              value={colSpan("labelCol")}
+              onChange={(v) => setColSpan("labelCol", v)}
+            />
+          </Form.Item>
+          <Form.Item label="Wrapper col (span)">
+            <InputNumber
+              min={0}
+              max={24}
+              style={{ width: 100 }}
+              value={colSpan("wrapperCol")}
+              onChange={(v) => setColSpan("wrapperCol", v)}
+            />
+          </Form.Item>
+        </Space>
+      </Form>
+    </div>
   );
 }
 

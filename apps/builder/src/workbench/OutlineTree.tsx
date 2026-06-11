@@ -23,7 +23,8 @@ const RED = "#ff4d4f";
  * does the same) — the commit keys off the resolved uid, not the origin surface.
  * ------------------------------------------------------------------------- */
 
-function nodeLabel(node: EngineProps): string {
+/** Display label for any designer node (shared with the SettingsPanel breadcrumb). */
+export function nodeLabel(node: EngineProps): string {
   if ("label" in node && node.label) return node.label;
   if ("title" in node && node.title) return node.title;
   if ("name" in node && node.name) return node.name;

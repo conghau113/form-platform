@@ -1,6 +1,6 @@
 import { type FormSchema, migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
-import { Button, Input, message, Segmented, Space, Typography } from "antd";
+import { Button, message, Segmented, Space, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { DesignerProvider, type DesignerValue } from "./DesignCanvas";
@@ -44,6 +44,7 @@ import { useDragon } from "./useDragon";
 import { WorkflowEditor } from "./WorkflowEditor";
 import { CompositePanel } from "./workbench/CompositePanel";
 import { HoverProvider } from "./workbench/hover";
+import { SettingsPanel } from "./workbench/SettingsPanel";
 import { type Device, ToolbarPanel, type ViewMode } from "./workbench/ToolbarPanel";
 import { ViewPanel } from "./workbench/ViewPanel";
 
@@ -82,11 +83,12 @@ export function App() {
     [history.set],
   );
 
-  // The selected node, resolved to a schema field for the property panel. The form
-  // root itself isn't editable here (its layoutProps land in Phase F's settings panel).
+  // The selected node, resolved to a schema field for the property panel. Selecting
+  // the form root opens its own settings editor (id/title/layoutProps) instead.
   const selectedNode = selectedUid ? findNode(tree, selectedUid) : null;
+  const formSelected = selectedNode?.node.type === "form";
   const selected: SelectedNode | null =
-    selectedNode && selectedNode.node.type !== "form"
+    selectedNode && !formSelected
       ? { uid: selectedNode.uid, field: treeToField(selectedNode) }
       : null;
   // visibleWhen condition candidates: the top-level named fields.
@@ -124,11 +126,13 @@ export function App() {
       } else if (mod && key === "v") {
         if (!hasContent(clipboard)) return;
         e.preventDefault();
-        // Paste after the last-selected node, or into the form root if nothing is selected.
+        // Paste after the last-selected node, or into the form root when nothing
+        // (or the root itself — it has no "after") is selected.
         const anchor = selection.selected[selection.selected.length - 1];
-        const next = anchor
-          ? pasteAfter(tree, anchor, clipboard, metaGuard())
-          : pasteInto(tree, tree.uid, clipboard, metaGuard());
+        const next =
+          anchor && anchor !== tree.uid
+            ? pasteAfter(tree, anchor, clipboard, metaGuard())
+            : pasteInto(tree, tree.uid, clipboard, metaGuard());
         if (next !== tree) history.set(next, "Paste");
       } else if (key === "delete" || key === "backspace") {
         if (selection.selected.length === 0) return;
@@ -200,7 +204,8 @@ export function App() {
     remove: onRemove,
     select: (uid, additive) =>
       setSelection((s) => (additive ? toggle(s, uid) : select(emptySelection, uid))),
-    clearSelection: () => setSelection(emptySelection),
+    // A press on empty canvas selects the Form root, surfacing its settings.
+    clearSelection: () => setSelection(select(emptySelection, tree.uid)),
   };
 
   async function onSave() {
@@ -289,30 +294,12 @@ export function App() {
             onChange={(v) => setMode(v as "form" | "workflow")}
           />
           {mode === "form" && (
-            <>
-              <Input
-                value={form.title}
-                onChange={(e) =>
-                  history.set(patchNode(tree, tree.uid, { title: e.target.value }), "Edit form")
-                }
-                placeholder="form title"
-                style={{ width: 200 }}
-              />
-              <Input
-                value={form.id}
-                onChange={(e) =>
-                  history.set(patchNode(tree, tree.uid, { id: e.target.value }), "Edit form")
-                }
-                placeholder="form id"
-                style={{ width: 160 }}
-              />
-              <Space style={{ marginLeft: "auto" }}>
-                <Button type="primary" onClick={onSave}>
-                  Save
-                </Button>
-                <Button onClick={() => onLoad()}>Load</Button>
-              </Space>
-            </>
+            <Space style={{ marginLeft: "auto" }}>
+              <Button type="primary" onClick={onSave}>
+                Save
+              </Button>
+              <Button onClick={() => onLoad()}>Load</Button>
+            </Space>
           )}
         </header>
 
@@ -375,21 +362,23 @@ export function App() {
                 />
               </section>
 
-              <aside
-                style={{
-                  width: 340,
-                  minHeight: 0,
-                  overflow: "auto",
-                }}
+              <SettingsPanel
+                tree={tree}
+                selectedUid={selectedUid}
+                onSelect={(uid) => setSelection(select(emptySelection, uid))}
               >
                 <PropertyPanel
                   selected={selected}
+                  form={formSelected ? form : null}
                   siblingNames={siblingNames}
                   onChange={(uid, field) =>
                     history.set(applyFieldEdit(tree, uid, field), "Edit field")
                   }
+                  onChangeForm={(patch) =>
+                    history.set(patchNode(tree, tree.uid, patch), "Edit form")
+                  }
                 />
-              </aside>
+              </SettingsPanel>
             </div>
           </HoverProvider>
         )}

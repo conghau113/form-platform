@@ -30,6 +30,7 @@ export interface DesignerValue {
   /** Select a single node (Outline tree / breadcrumb); `additive` toggles it in a
    *  multi-selection. */
   select: (uid: string, additive?: boolean) => void;
+  /** A press on empty canvas: the host decides (App selects the Form root). */
   clearSelection: () => void;
 }
 
@@ -328,7 +329,7 @@ export function DesignCanvas({
           background: "#f5f5f5",
           position: "relative",
         }}
-        // A press on empty canvas (shells stop propagation) clears the selection.
+        // A press on empty canvas (shells stop propagation) selects the Form root.
         onPointerDown={() => d.clearSelection()}
         onPointerLeave={() => setHovered(null)}
       >
