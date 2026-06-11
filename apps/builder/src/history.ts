@@ -30,6 +30,8 @@ export interface History<T> {
   canRedo: boolean;
   /** The full timeline oldest→newest, for the History panel. */
   entries: readonly HistoryEntry<T>[];
+  /** Index of the current present within {@link entries} (History panel highlight). */
+  index: number;
 }
 
 /** Undo/redo history over an immutable value, delegating to the pure
@@ -63,6 +65,7 @@ export function useHistory<T>(initial: T | (() => T)): History<T> {
       canUndo: canUndoOf(state),
       canRedo: canRedoOf(state),
       entries: state.entries,
+      index: state.cursor,
     }),
     [state, set, reset, undo, redo, jumpTo],
   );

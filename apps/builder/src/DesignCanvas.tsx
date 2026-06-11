@@ -2,18 +2,11 @@ import { CopyOutlined, DeleteOutlined, HolderOutlined } from "@ant-design/icons"
 import { FormRenderer } from "@org/form-renderer-web";
 import { childrenOf, type FieldNode } from "@org/form-schema";
 import type { ThemeConfig } from "antd";
-import {
-  Component,
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-} from "react";
+import { Component, createContext, type ReactNode, useCallback, useContext, useMemo } from "react";
 import type { TreeNode } from "./engine/tree";
 import { describeNode } from "./field-registry";
 import type { DragState } from "./useDragon";
+import { useHover } from "./workbench/hover";
 
 const BLUE = "#1677ff";
 const RED = "#ff4d4f";
@@ -34,6 +27,9 @@ export interface DesignerValue {
   beginCreate: (type: import("./field-registry").FieldType, e: React.PointerEvent) => void;
   copy: (uid: string) => void;
   remove: (uid: string) => void;
+  /** Select a single node (Outline tree / breadcrumb); `additive` toggles it in a
+   *  multi-selection. */
+  select: (uid: string, additive?: boolean) => void;
   clearSelection: () => void;
 }
 
@@ -44,13 +40,6 @@ export function useDesigner(): DesignerValue {
   if (!v) throw new Error("useDesigner must be used inside a DesignerProvider");
   return v;
 }
-
-// Hover lives here (not in App) so moving the pointer only re-renders NodeShells —
-// the memoised FormRenderer element below never rebuilds on hover.
-const HoverContext = createContext<{
-  hovered: string | null;
-  setHovered: (uid: string | null) => void;
-}>({ hovered: null, setHovered: () => {} });
 
 function nodeLabel(node: FieldNode): string {
   if ("label" in node && node.label) return node.label;
@@ -86,7 +75,7 @@ function InsertionLine({
 /** The selection/hover wrapper drawn around one rendered node. */
 function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; children: ReactNode }) {
   const d = useDesigner();
-  const { hovered, setHovered } = useContext(HoverContext);
+  const { hovered, setHovered } = useHover();
   const selected = d.selected.includes(uid);
   const isHovered = hovered === uid && !selected;
   const dropHere = d.drag?.intent && d.drag.intent.uid === uid ? d.drag : null;
@@ -284,15 +273,18 @@ export function DesignCanvas({
   json,
   tree,
   theme,
+  maxWidth = 820,
 }: {
   schema: unknown;
   /** Stable string key for the schema — resets the error boundary on a valid edit. */
   json: string;
   tree: TreeNode;
   theme?: ThemeConfig;
+  /** Canvas content width — driven by the toolbar device simulator (F2). */
+  maxWidth?: number;
 }) {
   const d = useDesigner();
-  const [hovered, setHovered] = useState<string | null>(null);
+  const { setHovered } = useHover();
   const uidByPath = useMemo(() => buildPathIndex(tree), [tree]);
   const isEmpty = tree.children.length === 0;
 
@@ -327,7 +319,7 @@ export function DesignCanvas({
   );
 
   return (
-    <HoverContext.Provider value={{ hovered, setHovered }}>
+    <>
       <div
         style={{
           flex: 1,
@@ -342,7 +334,7 @@ export function DesignCanvas({
       >
         <div
           style={{
-            maxWidth: 820,
+            maxWidth,
             margin: "0 auto",
             background: "#fff",
             borderRadius: 8,
@@ -378,6 +370,6 @@ export function DesignCanvas({
           {d.drag.label}
         </div>
       )}
-    </HoverContext.Provider>
+    </>
   );
 }

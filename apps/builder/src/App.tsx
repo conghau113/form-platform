@@ -51,11 +51,11 @@ import {
 } from "./engine/tree";
 import { describeNode, metaGuard, newField } from "./field-registry";
 import { useHistory } from "./history";
-import { Palette } from "./Palette";
 import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
-import { ThemeEditor } from "./ThemeEditor";
 import { useDragon } from "./useDragon";
 import { WorkflowEditor } from "./WorkflowEditor";
+import { CompositePanel } from "./workbench/CompositePanel";
+import { HoverProvider } from "./workbench/hover";
 
 const API = "http://localhost:3001";
 
@@ -176,7 +176,7 @@ export function App() {
         const next = anchor
           ? pasteAfter(tree, anchor, clipboard, metaGuard())
           : pasteInto(tree, tree.uid, clipboard, metaGuard());
-        if (next !== tree) history.set(next);
+        if (next !== tree) history.set(next, "Paste");
       } else if (key === "delete" || key === "backspace") {
         if (selection.selected.length === 0) return;
         e.preventDefault();
@@ -192,7 +192,7 @@ export function App() {
           }
         }
         if (next !== tree) {
-          history.set(next);
+          history.set(next, "Delete");
           setSelection(emptySelection);
         }
       }
@@ -208,7 +208,7 @@ export function App() {
     guard: metaGuard(),
     createNode: (type, taken) => fieldToTree(newField(type, taken)),
     commit: (next, dropped) => {
-      history.set(next);
+      history.set(next, "Drop field");
       setSelection(selectMany(emptySelection, dropped));
     },
     onClickSelect: (uids, additive) =>
@@ -220,7 +220,7 @@ export function App() {
     if (!node || node.node.type === "form" || !describeNode(node.node.type).behavior.deletable) {
       return;
     }
-    history.set(remove(tree, uid));
+    history.set(remove(tree, uid), "Delete");
     if (selectedUid === uid) setSelection(emptySelection);
   }
 
@@ -233,7 +233,7 @@ export function App() {
     const dup = clone(node, collectNames(tree));
     const next = insertAfter(tree, uid, dup, metaGuard());
     if (next !== tree) {
-      history.set(next);
+      history.set(next, "Duplicate");
       setSelection(select(emptySelection, dup.uid));
     }
   }
@@ -245,6 +245,8 @@ export function App() {
     beginCreate: dragon.beginCreate,
     copy: onCopy,
     remove: onRemove,
+    select: (uid, additive) =>
+      setSelection((s) => (additive ? toggle(s, uid) : select(emptySelection, uid))),
     clearSelection: () => setSelection(emptySelection),
   };
 
@@ -337,13 +339,17 @@ export function App() {
             <>
               <Input
                 value={form.title}
-                onChange={(e) => history.set(patchNode(tree, tree.uid, { title: e.target.value }))}
+                onChange={(e) =>
+                  history.set(patchNode(tree, tree.uid, { title: e.target.value }), "Edit form")
+                }
                 placeholder="form title"
                 style={{ width: 200 }}
               />
               <Input
                 value={form.id}
-                onChange={(e) => history.set(patchNode(tree, tree.uid, { id: e.target.value }))}
+                onChange={(e) =>
+                  history.set(patchNode(tree, tree.uid, { id: e.target.value }), "Edit form")
+                }
                 placeholder="form id"
                 style={{ width: 160 }}
               />
@@ -368,70 +374,84 @@ export function App() {
             <WorkflowEditor onEditForm={onEditForm} />
           </div>
         ) : (
-          <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-            <aside
-              style={{ width: 150, borderRight: "1px solid rgba(0,0,0,0.08)", overflow: "auto" }}
-            >
-              <Palette />
-            </aside>
-
-            <section
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                flex: 1,
-                minWidth: 0,
-                borderRight: "1px solid rgba(0,0,0,0.08)",
-                minHeight: 0,
-              }}
-            >
-              <DesignCanvas schema={schema} json={json} tree={tree} theme={antdTheme} />
-            </section>
-
-            <aside
-              style={{
-                width: 340,
-                borderRight: "1px solid rgba(0,0,0,0.08)",
-                minHeight: 0,
-                overflow: "auto",
-              }}
-            >
-              <PropertyPanel
-                selected={selected}
-                siblingNames={siblingNames}
-                onChange={(uid, field) => history.set(applyFieldEdit(tree, uid, field))}
-              />
-            </aside>
-
-            <section style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-              <div
+          <HoverProvider>
+            <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+              <aside
                 style={{
-                  display: "flex",
-                  gap: 12,
-                  justifyContent: "space-between",
-                  padding: "8px 12px",
-                  borderBottom: "1px solid rgba(0,0,0,0.08)",
+                  width: 260,
+                  borderRight: "1px solid rgba(0,0,0,0.08)",
+                  minHeight: 0,
+                  overflow: "hidden",
                 }}
               >
-                <Segmented
-                  options={["preview", "json"]}
-                  value={rightTab}
-                  onChange={(v) => setRightTab(v as "preview" | "json")}
+                <CompositePanel
+                  tree={tree}
+                  history={{
+                    entries: history.entries,
+                    index: history.index,
+                    jumpTo: history.jumpTo,
+                  }}
+                  tokens={tokens}
+                  onChangeTokens={setTokens}
+                  onExportTheme={onExportTheme}
                 />
-                {rightTab === "preview" && (
-                  <Segmented
-                    options={Object.keys(VIEWPORTS)}
-                    value={viewport}
-                    onChange={(v) => setViewport(v as Viewport)}
-                  />
-                )}
-              </div>
+              </aside>
 
-              {rightTab === "preview" ? (
-                <>
-                  <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
-                    <ThemeEditor tokens={tokens} onChange={setTokens} onExport={onExportTheme} />
-                  </div>
+              <section
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: 1,
+                  minWidth: 0,
+                  borderRight: "1px solid rgba(0,0,0,0.08)",
+                  minHeight: 0,
+                }}
+              >
+                <DesignCanvas schema={schema} json={json} tree={tree} theme={antdTheme} />
+              </section>
+
+              <aside
+                style={{
+                  width: 340,
+                  borderRight: "1px solid rgba(0,0,0,0.08)",
+                  minHeight: 0,
+                  overflow: "auto",
+                }}
+              >
+                <PropertyPanel
+                  selected={selected}
+                  siblingNames={siblingNames}
+                  onChange={(uid, field) =>
+                    history.set(applyFieldEdit(tree, uid, field), "Edit field")
+                  }
+                />
+              </aside>
+
+              <section style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    borderBottom: "1px solid rgba(0,0,0,0.08)",
+                  }}
+                >
+                  <Segmented
+                    options={["preview", "json"]}
+                    value={rightTab}
+                    onChange={(v) => setRightTab(v as "preview" | "json")}
+                  />
+                  {rightTab === "preview" && (
+                    <Segmented
+                      options={Object.keys(VIEWPORTS)}
+                      value={viewport}
+                      onChange={(v) => setViewport(v as Viewport)}
+                    />
+                  )}
+                </div>
+
+                {rightTab === "preview" ? (
                   <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#f5f5f5" }}>
                     <ConfigProvider theme={antdTheme}>
                       <PreviewSurface maxWidth={VIEWPORTS[viewport]}>
@@ -441,24 +461,24 @@ export function App() {
                       </PreviewSurface>
                     </ConfigProvider>
                   </div>
-                </>
-              ) : (
-                <Input.TextArea
-                  value={json}
-                  readOnly
-                  spellCheck={false}
-                  style={{
-                    flex: 1,
-                    fontFamily: "monospace",
-                    fontSize: 13,
-                    border: "none",
-                    borderRadius: 0,
-                    resize: "none",
-                  }}
-                />
-              )}
-            </section>
-          </div>
+                ) : (
+                  <Input.TextArea
+                    value={json}
+                    readOnly
+                    spellCheck={false}
+                    style={{
+                      flex: 1,
+                      fontFamily: "monospace",
+                      fontSize: 13,
+                      border: "none",
+                      borderRadius: 0,
+                      resize: "none",
+                    }}
+                  />
+                )}
+              </section>
+            </div>
+          </HoverProvider>
         )}
       </div>
     </DesignerProvider>

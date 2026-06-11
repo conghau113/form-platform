@@ -22,6 +22,7 @@ function setup(overrides: Partial<DesignerValue> = {}, tree?: TreeNode) {
     beginCreate: vi.fn(),
     copy: vi.fn(),
     remove: vi.fn(),
+    select: vi.fn(),
     clearSelection: vi.fn(),
     ...overrides,
   };
