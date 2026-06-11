@@ -15,9 +15,9 @@ import {
 import { useEffect, useState } from "react";
 import {
   describeField,
-  FIELD_TYPES,
   type FieldType,
   fieldTypeLabel,
+  PALETTE_TYPES,
   type ValidationRuleType,
 } from "./field-registry";
 import { type AuthoredField, type EditorField, newField } from "./model";
@@ -408,6 +408,18 @@ function TypeSettings({ field, set }: { field: AuthoredField; set: (patch: Patch
                 </Checkbox>
               </Form.Item>
             );
+          case "select":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <Select
+                  style={{ width: "100%" }}
+                  allowClear
+                  value={(prop(field, s.key) as string) ?? undefined}
+                  options={s.choices ?? []}
+                  onChange={(v) => setKey(v ?? undefined)}
+                />
+              </Form.Item>
+            );
           case "options":
             return (
               <Form.Item key={s.key} label={s.label}>
@@ -534,9 +546,9 @@ function ValidationEditor({ field, set }: { field: AuthoredField; set: (patch: P
   );
 }
 
-/** Item-field types offered inside an array row: every authorable leaf type (the
+/** Item-field types offered inside an array row: every palette-visible leaf type (the
  *  `array` container itself is excluded — no nested arrays in this minimal editor). */
-const ITEM_TYPES: FieldType[] = FIELD_TYPES.filter((t) => t !== "array");
+const ITEM_TYPES: FieldType[] = PALETTE_TYPES.filter((t) => t !== "array");
 
 /** A compact, non-DnD editor for an array node's repeated `itemFields`. Authors the
  *  row "columns" (type/label/name + reorder/remove) and picks the display variant.
@@ -574,11 +586,12 @@ function ItemFieldsEditor({
   // Change an item's type, keeping its name/label/required and reseeding the rest.
   const changeType = (i: number, type: FieldType) => {
     const it = items[i];
+    // ITEM_TYPES only offers named leaf types, so the seed always has a name/label.
     const seeded = newField(type, namesExcept(i));
     update(i, {
       ...seeded,
-      name: nodeName(it) ?? seeded.name,
-      label: nodeLabel(it) ?? seeded.label,
+      name: nodeName(it) ?? nodeName(seeded),
+      label: nodeLabel(it) ?? nodeLabel(seeded),
       required: (prop(it, "required") as boolean | undefined) || undefined,
     } as FieldNode);
   };

@@ -1,12 +1,13 @@
 import {
   type ArrayField,
   CURRENT_FORM_VERSION,
+  type FieldNode,
   type FormSchema,
   type LeafField,
   migrate,
 } from "@org/form-schema";
 import { makeUid } from "./engine/uid";
-import { describeField, type FieldType } from "./field-registry";
+import { describeNode, type FieldType } from "./field-registry";
 
 /** What the flat builder canvas can hold: any leaf field plus an `array` (Form List)
  *  container. `group` is still excluded from visual authoring (Phase D). */
@@ -48,14 +49,19 @@ function uniqueName(type: FieldType, taken: ReadonlySet<string>): string {
   return name;
 }
 
-/** Build a valid, minimal leaf field of the given type with a unique name.
- *  Seed props come from the registry descriptor, so adding a type needs no edit here.
- *  The `as LeafField` cast trusts the descriptor's `defaults`; field-registry.test.ts
- *  guards it by parsing every seeded field against the contract. */
-export function newField(type: FieldType, taken: ReadonlySet<string> = new Set()): AuthoredField {
-  const name = uniqueName(type, taken);
-  const { label, defaults } = describeField(type);
-  return { type, name, label, ...defaults } as AuthoredField;
+/** Build a valid, minimal node of the given type. Seed props come from the registry
+ *  meta, so adding a type needs no edit here. Named types (leaves + array + group) get a
+ *  unique `name` and the registry label; nameless containers seed `children: []` only.
+ *  The cast trusts the meta's `defaults`; field-registry.test.ts guards it by parsing
+ *  every seeded node against the contract. */
+export function newField(type: FieldType, taken: ReadonlySet<string> = new Set()): FieldNode {
+  const meta = describeNode(type);
+  const seed: Record<string, unknown> = { type, ...meta.defaults };
+  if (meta.named) {
+    seed.name = uniqueName(type, taken);
+    seed.label = meta.label;
+  }
+  return seed as FieldNode;
 }
 
 function takenNames(model: EditorModel, except?: string): Set<string> {
@@ -93,7 +99,9 @@ export function fromFormSchema(raw: unknown): EditorModel {
 
 /** Insert a new field of `type` at `index` (clamped; appends when out of range). */
 export function insertField(model: EditorModel, type: FieldType, index: number): EditorModel {
-  const field = newField(type, takenNames(model));
+  // The flat canvas only drags palette-visible (authorable leaf/array) types, so the
+  // seeded node is always an AuthoredField. The tree engine (D7b) drops this cast.
+  const field = newField(type, takenNames(model)) as AuthoredField;
   const at = Math.max(0, Math.min(index, model.fields.length));
   const fields = model.fields.slice();
   fields.splice(at, 0, { uid: makeUid(), field });

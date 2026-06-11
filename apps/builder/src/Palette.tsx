@@ -1,7 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Card, Typography } from "antd";
-import { type FieldType, fieldsByCategory, fieldTypeLabel } from "./field-registry";
-import { FIELD_TYPES } from "./model";
+import { type FieldType, fieldsByCategory, fieldTypeLabel, PALETTE_TYPES } from "./field-registry";
 
 export const PALETTE_PREFIX = "palette:";
 
@@ -9,7 +8,7 @@ export const PALETTE_PREFIX = "palette:";
 export function paletteType(activeId: string): FieldType | null {
   if (!activeId.startsWith(PALETTE_PREFIX)) return null;
   const type = activeId.slice(PALETTE_PREFIX.length) as FieldType;
-  return FIELD_TYPES.includes(type) ? type : null;
+  return PALETTE_TYPES.includes(type) ? type : null;
 }
 
 function PaletteItem({ type }: { type: FieldType }) {
@@ -41,7 +40,8 @@ export function Palette() {
             {category}
           </Typography.Text>
           {items.map((d) => (
-            <PaletteItem key={d.type} type={d.type} />
+            // fieldsByCategory only returns palette-visible FieldNode types (never `form`).
+            <PaletteItem key={d.type} type={d.type as FieldType} />
           ))}
         </div>
       ))}
