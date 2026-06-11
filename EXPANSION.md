@@ -87,7 +87,7 @@ from a nested edit, so App's editor↔schema boundary is unchanged. Changeset
 `.changeset/array-table-and-item-config.md`. Drag-based nested authoring on the canvas
 (outline tree) still belongs to Phase D.
 
-## Phase D — Designer engine & tree foundation  ← IN PROGRESS (D1–D4 done, NEXT: D5)
+## Phase D — Designer engine & tree foundation  ← IN PROGRESS (D1–D5 done, NEXT: D6)
 Rebuild the relevant parts of `@designable/core` as pure, tested TS (no UI yet), and
 teach the contract the container/layout vocabulary Designable has. Heaviest refactor;
 each step lands in its own commit with `pnpm typecheck` + `pnpm test` green.
@@ -134,16 +134,20 @@ integration) because the App swap needs D6 metas + D7 transformer.
       cycle guard. `uid.ts` (makeUid moved here; model.ts re-exports until D7b),
       `names.ts` (uniqueName: "text1"→"text2"). 11 tests in `engine/tree.test.ts`.
       NO UI changes yet — App/Canvas/PropertyPanel still run on the flat EditorModel.
-- [ ] **D5 — operation state** ← NEXT. Pure modules in `apps/builder/src/engine/`:
-      `selection.ts` (SelectionState {selected: string[]} + select/toggle/selectMany/
-      clearSelection/isSelected/pruneSelection(s, root)), `hover.ts` (trivial shape),
-      `clipboard.ts` (copyNodes = deep-copy top-most-only selection; pasteAfter/
-      pasteInto via engine `clone` ⇒ fresh uids+names), `engine/history.ts` (pure:
-      HistoryEntry{value,label?}, createHistory/pushHistory/resetHistory/undoHistory/
-      redoHistory/jumpTo/historyEntries). Then refactor `src/history.ts` `useHistory`
-      to DELEGATE to the pure module — public API preserved (App.tsx untouched,
-      existing `src/history.test.ts` must pass UNMODIFIED), additive `set(next,
-      label?)` + `entries`/`jumpTo`. Tests: engine/history|selection|clipboard.test.ts.
+- [x] **D5 — operation state** ✅ commit `bbe82d6`. Pure modules in
+      `apps/builder/src/engine/`: `selection.ts` (SelectionState {selected:
+      string[]} + select/toggle/selectMany/clearSelection/isSelected/
+      pruneSelection — same-reference no-ops), `hover.ts` (trivial HoverState
+      for the Phase E drag engine), `clipboard.ts` (copyNodes = top-most-only
+      deep snapshot preserving uids/names; pasteAfter/pasteInto via engine
+      `clone` ⇒ fresh uids + names unique to the destination), `engine/history.ts`
+      (pure value-generic timeline as entries+cursor: createHistory/present/
+      pushHistory/resetHistory/undoHistory/redoHistory/jumpTo/historyEntries +
+      canUndo/canRedo). `src/history.ts` `useHistory` now DELEGATES to the pure
+      module — public API preserved (App.tsx untouched, existing
+      `src/history.test.ts` passes UNMODIFIED), additive `set(next, label?)` +
+      `entries`/`jumpTo`. Tests: engine/history|selection|clipboard.test.ts (16).
+      App-only change → no changeset (builder is in the changeset ignore list).
 - [ ] **D6 — ComponentMeta registry v2:** extend `field-registry.ts` IN PLACE (keep
       every existing export). `FieldType = FieldNode["type"]` (widened), `NodeType =
       FieldType | "form"`; `ComponentBehavior { droppable, draggable, cloneable,
@@ -272,10 +276,10 @@ Ordered by value; each is a normal phase with the same Closing Loop.
 ---
 
 ## How to resume in a fresh session
-**Phase D is mid-flight (D1–D4 committed, D5 next).** After `/clear`, resume with:
+**Phase D is mid-flight (D1–D5 committed, D6 next).** After `/clear`, resume with:
 > Read AGENTS.md and EXPANSION.md (Phase D section), then read the approved plan at
-> `C:\Users\ASUS\.claude\plans\synthetic-wibbling-rabin.md`. D1–D4 are committed —
-> continue from D5 WITHOUT re-planning. Implement D5 → D6 → D7 → D7b → D8 in order,
+> `C:\Users\ASUS\.claude\plans\synthetic-wibbling-rabin.md`. D1–D5 are committed —
+> continue from D6 WITHOUT re-planning. Implement D6 → D7 → D7b → D8 in order,
 > one commit per step, `pnpm typecheck` + `pnpm test` + `pnpm biome check --write .`
 > green before each commit.
 
