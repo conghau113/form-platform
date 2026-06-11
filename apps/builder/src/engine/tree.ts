@@ -99,8 +99,9 @@ export function collectNames(root: TreeNode): Set<string> {
 // --- internals ---------------------------------------------------------------
 
 /** Path-copy the spine down to `uid` and apply `fn` to that node. Returns the
- *  same root reference when the uid is absent. */
-function replaceAt(root: TreeNode, uid: string, fn: (n: TreeNode) => TreeNode): TreeNode {
+ *  same root reference when the uid is absent. Exported so the transformer's
+ *  `replaceField` can swap a whole subtree through the same path-copy. */
+export function replaceAt(root: TreeNode, uid: string, fn: (n: TreeNode) => TreeNode): TreeNode {
   if (root.uid === uid) return fn(root);
   let changed = false;
   const children = root.children.map((c) => {
