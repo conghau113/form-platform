@@ -256,11 +256,13 @@ function FieldControl(props: {
   }
 }
 
-/** How `ArrayFieldSection` calls back into the renderer for a nested node. */
+/** How `ArrayFieldSection` calls back into the renderer for a nested node. Array rows are
+ *  not canonical authoring targets, so it never passes `path` — those renders stay
+ *  unwrapped by `nodeWrapper`. */
 type RenderNode = (
   node: FieldNode,
   namePrefix: string,
-  opts?: { hideLabel?: boolean; bare?: boolean },
+  opts?: { hideLabel?: boolean; bare?: boolean; span?: ColSpanProps; path?: number[] },
 ) => React.ReactNode;
 
 /** Per-row reorder/remove controls, shared by the card and table variants. */
@@ -380,6 +382,16 @@ function ArrayFieldSection(props: {
   );
 }
 
+/** Identity of a rendered node, handed to a `nodeWrapper`. `path` is the positional
+ *  route to the node — indices into `fields`, then each container's `children` — and is
+ *  stable across `migrate()` (which clones but never reorders), so the designer can map
+ *  it back to a tree uid. (Array `itemFields` are NOT walked: array rows aren't authored
+ *  on the canvas, so their per-row renders are left unwrapped.) */
+export interface NodeWrapperContext {
+  node: FieldNode;
+  path: number[];
+}
+
 export interface FormRendererProps {
   /** Raw JSON of any saved version. Migrated to the current shape internally. */
   schema: unknown;
@@ -391,6 +403,14 @@ export interface FormRendererProps {
   /** Receives a clean, typed values object — only visible/permitted fields. */
   onSubmit?: (values: Record<string, unknown>) => void;
   submitLabel?: string;
+  /** Designer hook (additive): wrap every authorable node's rendered output, e.g. in a
+   *  selection shell carrying `data-designer-node-id`. Absent in normal runtime use, so
+   *  runtime output is unchanged. */
+  nodeWrapper?: (rendered: React.ReactNode, ctx: NodeWrapperContext) => React.ReactNode;
+  /** Design canvas mode: makes leaf controls pointer-inert (so clicks select the node
+   *  instead of editing the input — visuals stay true to runtime, unlike `disabled`) and
+   *  hides the Submit button. */
+  designMode?: boolean;
 }
 
 type Values = Record<string, unknown>;
@@ -419,6 +439,8 @@ export function FormRenderer({
   initialValues,
   onSubmit,
   submitLabel = "Submit",
+  nodeWrapper,
+  designMode = false,
 }: FormRendererProps) {
   const form: FormSchema = useMemo(() => migrate(schema), [schema]);
 
@@ -457,31 +479,53 @@ export function FormRenderer({
   // `namePrefix` lets fields nested in an array bind to `name.{index}.{child}` while
   // top-level fields keep their bare name. `opts` lets a table cell render the control
   // label-less (the column header carries the label) and un-wrapped (full-width cell);
-  // `span` lets a grid assign the cell width (the field's own colSpan still wins).
+  // `span` lets a grid assign the cell width (the field's own colSpan still wins);
+  // `path` is the positional designer route (absent for array rows, which aren't authored).
   const renderNode = (
     node: FieldNode,
     namePrefix = "",
-    opts?: { hideLabel?: boolean; bare?: boolean; span?: ColSpanProps },
+    opts?: { hideLabel?: boolean; bare?: boolean; span?: ColSpanProps; path?: number[] },
   ): React.ReactNode => {
     if (!isVisible(node, values)) return null; // shared conditional logic
     if (!canView(node, access)) return null; // shared RBAC
 
+    const here = opts?.path;
+    // Wrap any node's rendered output in the designer shell (when a `nodeWrapper` and a
+    // canonical `path` are present). Used for the node itself and for child panes.
+    const wrap = (n: FieldNode, path: number[] | undefined, inner: React.ReactNode) =>
+      nodeWrapper && path ? nodeWrapper(inner, { node: n, path }) : inner;
+    const wrapNode = (inner: React.ReactNode) => wrap(node, here, inner);
+
     // Children of any container render through this same closure, so visibility,
-    // RBAC and array name-prefixes apply at every depth.
-    const renderChildren = (children: FieldNode[], childOpts?: { span?: ColSpanProps }) =>
+    // RBAC and array name-prefixes apply at every depth. `basePath` extends the
+    // positional path; index `i` is the child's true slot (null renders keep it).
+    const renderChildrenAt = (
+      children: FieldNode[],
+      basePath: number[] | undefined,
+      childOpts?: { span?: ColSpanProps },
+    ) =>
       children.map((c, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: schema children are static per render
-        <Fragment key={i}>{renderNode(c, namePrefix, childOpts)}</Fragment>
+        <Fragment key={i}>
+          {renderNode(c, namePrefix, {
+            ...childOpts,
+            path: basePath ? [...basePath, i] : undefined,
+          })}
+        </Fragment>
       ));
     const containerSpan = opts?.span ?? { span: 24 };
 
     if (node.type === "group") {
       return (
         <Col key={node.name} {...containerSpan}>
-          <fieldset style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, padding: 16 }}>
-            {node.label ? <legend style={{ padding: "0 8px" }}>{node.label}</legend> : null}
-            <Row gutter={16}>{renderChildren(node.children)}</Row>
-          </fieldset>
+          {wrapNode(
+            <fieldset
+              style={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, padding: 16 }}
+            >
+              {node.label ? <legend style={{ padding: "0 8px" }}>{node.label}</legend> : null}
+              <Row gutter={16}>{renderChildrenAt(node.children, here)}</Row>
+            </fieldset>,
+          )}
         </Col>
       );
     }
@@ -490,13 +534,15 @@ export function FormRenderer({
       const name = `${namePrefix}${node.name}`;
       return (
         <Col key={name} {...containerSpan}>
-          <ArrayFieldSection
-            node={node}
-            control={control as Control}
-            name={name}
-            seedRow={() => schemaDefaults(node.itemFields)}
-            renderNode={renderNode}
-          />
+          {wrapNode(
+            <ArrayFieldSection
+              node={node}
+              control={control as Control}
+              name={name}
+              seedRow={() => schemaDefaults(node.itemFields)}
+              renderNode={renderNode}
+            />,
+          )}
         </Col>
       );
     }
@@ -505,38 +551,67 @@ export function FormRenderer({
       // `forceRender` is load-bearing: antd lazy-mounts inactive panes, and an
       // unmounted pane never registers its RHF Controllers — defaults would be
       // dropped and required errors would point at fields the user can't see.
-      const panes = node.children.filter((p) => isVisible(p, values) && canView(p, access));
+      // Map with the ORIGINAL index first, then filter, so a hidden pane never
+      // shifts the positional paths of its siblings/children.
+      // Carry each pane's ORIGINAL index so a hidden pane never shifts a sibling's
+      // designer path; antd's tab `key` still uses the filtered position (`pos`), so the
+      // runtime DOM is unchanged.
+      const panes = node.children
+        .map((pane, i) => ({ pane, i }))
+        .filter(({ pane }) => isVisible(pane, values) && canView(pane, access));
       return (
         <Col key={`${namePrefix}tabs`} {...containerSpan}>
-          <Tabs
-            items={panes.map((pane, i) => ({
-              key: String(i),
-              label: pane.label,
-              forceRender: true,
-              children: <Row gutter={16}>{renderChildren(pane.children)}</Row>,
-            }))}
-          />
+          {wrapNode(
+            <Tabs
+              items={panes.map(({ pane, i }, pos) => {
+                const panePath = here ? [...here, i] : undefined;
+                return {
+                  key: String(pos),
+                  label: pane.label,
+                  forceRender: true,
+                  children: wrap(
+                    pane,
+                    panePath,
+                    <Row gutter={16}>{renderChildrenAt(pane.children, panePath)}</Row>,
+                  ),
+                };
+              })}
+            />,
+          )}
         </Col>
       );
     }
 
     if (node.type === "collapse") {
-      const panels = node.children.filter((p) => isVisible(p, values) && canView(p, access));
-      const keys = panels.map((_, i) => String(i));
+      // Original index drives the designer path; antd's panel `key` stays the filtered
+      // position (`pos`), so `defaultActiveKey` and the DOM match the old runtime exactly.
+      const panels = node.children
+        .map((panel, i) => ({ panel, i }))
+        .filter(({ panel }) => isVisible(panel, values) && canView(panel, access));
+      const keys = panels.map((_, pos) => String(pos));
       return (
         <Col key={`${namePrefix}collapse`} {...containerSpan}>
-          <Collapse
-            accordion={node.accordion}
-            // All panels start open (first only under accordion) so required
-            // fields are visible; forceRender keeps closed panels registered.
-            defaultActiveKey={node.accordion ? keys.slice(0, 1) : keys}
-            items={panels.map((panel, i) => ({
-              key: String(i),
-              label: panel.label,
-              forceRender: true,
-              children: <Row gutter={16}>{renderChildren(panel.children)}</Row>,
-            }))}
-          />
+          {wrapNode(
+            <Collapse
+              accordion={node.accordion}
+              // All panels start open (first only under accordion) so required
+              // fields are visible; forceRender keeps closed panels registered.
+              defaultActiveKey={node.accordion ? keys.slice(0, 1) : keys}
+              items={panels.map(({ panel, i }, pos) => {
+                const panelPath = here ? [...here, i] : undefined;
+                return {
+                  key: String(pos),
+                  label: panel.label,
+                  forceRender: true,
+                  children: wrap(
+                    panel,
+                    panelPath,
+                    <Row gutter={16}>{renderChildrenAt(panel.children, panelPath)}</Row>,
+                  ),
+                };
+              })}
+            />,
+          )}
         </Col>
       );
     }
@@ -544,9 +619,11 @@ export function FormRenderer({
     if (node.type === "card") {
       return (
         <Col key={`${namePrefix}card`} {...containerSpan}>
-          <Card title={node.title}>
-            <Row gutter={16}>{renderChildren(node.children)}</Row>
-          </Card>
+          {wrapNode(
+            <Card title={node.title}>
+              <Row gutter={16}>{renderChildrenAt(node.children, here)}</Row>
+            </Card>,
+          )}
         </Col>
       );
     }
@@ -555,9 +632,13 @@ export function FormRenderer({
       const cell = Math.max(1, Math.floor(24 / (node.cols ?? 2)));
       return (
         <Col key={`${namePrefix}grid`} {...containerSpan}>
-          <Row gutter={16}>
-            {renderChildren(node.children, { span: { xs: 24, sm: 24, md: cell, lg: cell } })}
-          </Row>
+          {wrapNode(
+            <Row gutter={16}>
+              {renderChildrenAt(node.children, here, {
+                span: { xs: 24, sm: 24, md: cell, lg: cell },
+              })}
+            </Row>,
+          )}
         </Col>
       );
     }
@@ -565,12 +646,19 @@ export function FormRenderer({
     if (node.type === "space") {
       return (
         <Col key={`${namePrefix}space`} {...containerSpan}>
-          <Space direction={node.direction ?? "horizontal"} wrap>
-            {node.children.map((c, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: schema children are static per render
-              <Fragment key={i}>{renderNode(c, namePrefix, { bare: true })}</Fragment>
-            ))}
-          </Space>
+          {wrapNode(
+            <Space direction={node.direction ?? "horizontal"} wrap>
+              {node.children.map((c, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: schema children are static per render
+                <Fragment key={i}>
+                  {renderNode(c, namePrefix, {
+                    bare: true,
+                    path: here ? [...here, i] : undefined,
+                  })}
+                </Fragment>
+              ))}
+            </Space>,
+          )}
         </Col>
       );
     }
@@ -580,7 +668,7 @@ export function FormRenderer({
       // in hand-written JSON): render their children as a plain transparent row.
       return (
         <Col key={`${namePrefix}${node.type}`} {...containerSpan}>
-          <Row gutter={16}>{renderChildren(node.children)}</Row>
+          {wrapNode(<Row gutter={16}>{renderChildrenAt(node.children, here)}</Row>)}
         </Col>
       );
     }
@@ -608,23 +696,39 @@ export function FormRenderer({
             help={fieldState.error?.message ?? (opts?.hideLabel ? undefined : node.helpText)}
             {...node.decoratorProps}
           >
-            <FieldControl
-              node={node}
-              value={field.value}
-              disabled={!editable}
-              onChange={field.onChange}
-              dependsOnValue={dependsOnValue}
-              id={fieldName}
-            />
+            {/* In design mode the control stays fully visible but pointer-inert (a click
+                selects the node instead of typing into the input). Runtime renders the
+                control directly so its DOM is byte-for-byte unchanged. */}
+            {designMode ? (
+              <div style={{ pointerEvents: "none" }}>
+                <FieldControl
+                  node={node}
+                  value={field.value}
+                  disabled={!editable}
+                  onChange={field.onChange}
+                  dependsOnValue={dependsOnValue}
+                  id={fieldName}
+                />
+              </div>
+            ) : (
+              <FieldControl
+                node={node}
+                value={field.value}
+                disabled={!editable}
+                onChange={field.onChange}
+                dependsOnValue={dependsOnValue}
+                id={fieldName}
+              />
+            )}
           </Form.Item>
         )}
       />
     );
     // A table cell renders the control bare (full width); otherwise wrap in a responsive Col.
-    if (opts?.bare) return control_;
+    if (opts?.bare) return wrapNode(control_);
     return (
       <Col key={fieldName} {...span}>
-        {control_}
+        {wrapNode(control_)}
       </Col>
     );
   };
@@ -647,12 +751,15 @@ export function FormRenderer({
             <Row gutter={16}>
               {form.fields.map((n, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: schema fields are static per render
-                <Fragment key={i}>{renderNode(n)}</Fragment>
+                <Fragment key={i}>{renderNode(n, "", { path: [i] })}</Fragment>
               ))}
             </Row>
-            <Button type="primary" htmlType="submit">
-              {submitLabel}
-            </Button>
+            {/* The Submit button is meaningless on the design canvas. */}
+            {!designMode && (
+              <Button type="primary" htmlType="submit">
+                {submitLabel}
+              </Button>
+            )}
           </form>
         </Form>
       </ConfigProvider>
