@@ -41,6 +41,8 @@ import { describeNode, metaGuard, newField } from "./field-registry";
 import { useHistory } from "./history";
 import { parseFormFile } from "./io";
 import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
+import { TemplateGallery } from "./TemplateGallery";
+import { useUserTemplates } from "./templates";
 import { useDragon } from "./useDragon";
 import { WorkflowEditor } from "./WorkflowEditor";
 import { CompositePanel } from "./workbench/CompositePanel";
@@ -91,6 +93,8 @@ export function App() {
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
   const [mode, setMode] = useState<"form" | "workflow">("form");
   const [clipboard, setClipboard] = useState<Clipboard>(emptyClipboard);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const userTemplates = useUserTemplates();
 
   // The neutral design tokens are mapped to an antd ThemeConfig that wraps the
   // preview, so editing a token re-themes the rendered form live.
@@ -355,6 +359,7 @@ export function App() {
           />
           {mode === "form" && (
             <Space style={{ marginLeft: "auto" }}>
+              <Button onClick={() => setGalleryOpen(true)}>Templates</Button>
               <Button onClick={onExportForm}>Export</Button>
               <Upload
                 accept=".json,application/json"
@@ -373,6 +378,15 @@ export function App() {
             </Space>
           )}
         </header>
+
+        <TemplateGallery
+          open={galleryOpen}
+          onClose={() => setGalleryOpen(false)}
+          onUse={loadSchema}
+          userTemplates={userTemplates.templates}
+          onSaveCurrent={(title) => userTemplates.save(title, schema)}
+          onDeleteUser={userTemplates.remove}
+        />
 
         {mode === "workflow" ? (
           <div style={{ flex: 1, minHeight: 0 }}>
