@@ -24,11 +24,13 @@ import {
   isLayoutContainer,
   type LeafField,
   migrate,
+  type TreeOption,
 } from "@org/form-schema";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   Button,
   Card,
+  Cascader,
   Checkbox,
   Col,
   Collapse,
@@ -49,6 +51,7 @@ import {
   Tabs,
   type ThemeConfig,
   TimePicker,
+  TreeSelect,
   Typography,
   Upload,
   type UploadFile,
@@ -78,12 +81,29 @@ type ColSpanProps = {
 
 type DateValue = React.ComponentProps<typeof DatePicker>["value"];
 type TimeValue = React.ComponentProps<typeof TimePicker>["value"];
+type DateRangeValue = React.ComponentProps<typeof DatePicker.RangePicker>["value"];
+type TimeRangeValue = React.ComponentProps<typeof TimePicker.RangePicker>["value"];
 type SelectValue = string | number | Array<string | number> | undefined;
 type SelectField = Extract<LeafField, { type: "select" }>;
 type CheckboxGroupField = Extract<LeafField, { type: "checkbox-group" }>;
+type CascaderField = Extract<LeafField, { type: "cascader" }>;
+type TreeSelectField = Extract<LeafField, { type: "tree-select" }>;
 /** A field that sources options from static `options` or a remote `dataSource`. */
-type OptionSourced = SelectField | CheckboxGroupField;
-type OptionList = ReactionOption[] | DataSourceOption[] | { label: string; value: string | number }[];
+type OptionSourced = SelectField | CheckboxGroupField | CascaderField | TreeSelectField;
+type OptionList =
+  | ReactionOption[]
+  | DataSourceOption[]
+  | TreeOption[]
+  | { label: string; value: string | number }[];
+
+function isOptionSourced(node: LeafField): node is OptionSourced {
+  return (
+    node.type === "select" ||
+    node.type === "checkbox-group" ||
+    node.type === "cascader" ||
+    node.type === "tree-select"
+  );
+}
 
 /** Resolve the option list for a select/checkbox-group, fetching a remote `dataSource`
  *  via react-query when present. Fetching + option mapping live in form-core so native
@@ -204,6 +224,84 @@ function CheckboxGroupControl(props: {
   );
 }
 
+/** Hierarchical path choice. `{label, value, children}` is antd Cascader's native option
+ *  shape, so static trees, remote trees (dataSource + childrenKey) and flat reaction
+ *  overrides all pass straight through. Mirrors `SelectControl`'s option resolution. */
+function CascaderControl(props: {
+  node: CascaderField;
+  value: Array<string | number> | undefined;
+  disabled?: boolean;
+  onChange: (v: unknown) => void;
+  depValues?: Record<string, unknown>;
+  optionsOverride?: ReactionOption[];
+  id?: string;
+}) {
+  const { node, value, disabled, onChange, depValues = {}, optionsOverride, id } = props;
+  const { options, isFetching, isError, error, ready, missing } = useRemoteOptions(
+    node,
+    depValues,
+    optionsOverride,
+  );
+
+  let notFoundContent: React.ReactNode;
+  if (!ready) notFoundContent = `Select ${missing.join(", ")} first`;
+  else if (isError) notFoundContent = (error as Error).message;
+  else if (isFetching) notFoundContent = "Loading…";
+
+  return (
+    <Cascader
+      id={id}
+      style={{ width: "100%" }}
+      value={value}
+      disabled={disabled}
+      options={options ?? []}
+      status={isError ? "error" : undefined}
+      notFoundContent={notFoundContent}
+      onChange={(v) => onChange(v)}
+    />
+  );
+}
+
+/** Tree dropdown choice; value is the chosen node's value (array when `multiple`).
+ *  The explicit `fieldNames` mapping is load-bearing: TreeSelect's default display
+ *  field is `title`, while the contract's tree options carry `label`. */
+function TreeSelectControl(props: {
+  node: TreeSelectField;
+  value: SelectValue;
+  disabled?: boolean;
+  onChange: (v: unknown) => void;
+  depValues?: Record<string, unknown>;
+  optionsOverride?: ReactionOption[];
+  id?: string;
+}) {
+  const { node, value, disabled, onChange, depValues = {}, optionsOverride, id } = props;
+  const { options, isFetching, isError, error, ready, missing } = useRemoteOptions(
+    node,
+    depValues,
+    optionsOverride,
+  );
+
+  let notFoundContent: React.ReactNode;
+  if (!ready) notFoundContent = `Select ${missing.join(", ")} first`;
+  else if (isError) notFoundContent = (error as Error).message;
+  else if (isFetching) notFoundContent = "Loading…";
+
+  return (
+    <TreeSelect
+      id={id}
+      style={{ width: "100%" }}
+      value={value}
+      disabled={disabled}
+      multiple={node.multiple}
+      treeData={options ?? []}
+      fieldNames={{ label: "label", value: "value", children: "children" }}
+      status={isError ? "error" : undefined}
+      notFoundContent={notFoundContent}
+      onChange={onChange}
+    />
+  );
+}
+
 function FieldControl(props: {
   node: LeafField;
   value: unknown;
@@ -310,6 +408,30 @@ function FieldControl(props: {
           optionsOverride={optionsOverride}
         />
       );
+    case "cascader":
+      return (
+        <CascaderControl
+          node={node}
+          value={value as Array<string | number> | undefined}
+          disabled={disabled}
+          onChange={onChange}
+          depValues={depValues}
+          optionsOverride={optionsOverride}
+          id={id}
+        />
+      );
+    case "tree-select":
+      return (
+        <TreeSelectControl
+          node={node}
+          value={value as SelectValue}
+          disabled={disabled}
+          onChange={onChange}
+          depValues={depValues}
+          optionsOverride={optionsOverride}
+          id={id}
+        />
+      );
     case "upload": {
       // Without a real upload endpoint, `beforeUpload → false` keeps each file local in the
       // fileList (the form value) — no auto-upload. With `settings.submitUrl`, antd uploads
@@ -371,6 +493,7 @@ function FieldControl(props: {
           style={{ width: "100%" }}
           value={(value as DateValue) ?? null}
           disabled={disabled}
+          picker={node.picker}
           onChange={onChange}
         />
       );
@@ -380,6 +503,28 @@ function FieldControl(props: {
           id={id}
           style={{ width: "100%" }}
           value={(value as TimeValue) ?? null}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
+    case "date-range":
+      // antd v5 types RangePicker's `id` as `{ start?, end? }`; omitting it keeps the
+      // label unassociated (same trade-off as ColorPicker). The dayjs [start, end]
+      // tuple stays raw in form state, like `date`.
+      return (
+        <DatePicker.RangePicker
+          style={{ width: "100%" }}
+          value={(value as DateRangeValue) ?? null}
+          disabled={disabled}
+          picker={node.picker}
+          onChange={onChange}
+        />
+      );
+    case "time-range":
+      return (
+        <TimePicker.RangePicker
+          style={{ width: "100%" }}
+          value={(value as TimeRangeValue) ?? null}
           disabled={disabled}
           onChange={onChange}
         />
@@ -403,6 +548,19 @@ function FieldControl(props: {
 /** Leaf types whose antd control honors a `readOnly` prop (non-interactive, not greyed).
  *  Other types have no readOnly mode and render through FieldPreview instead. */
 const READONLY_INPUT_TYPES = new Set<LeafField["type"]>(["text", "textarea", "password", "number"]);
+
+/** Depth-first label lookup in a tree of options. Flat lists (ReactionOption[],
+ *  remote DataSourceOption[]) are just childless trees, so they share it. */
+function findTreeLabel(opts: readonly TreeOption[], value: unknown): string | undefined {
+  for (const o of opts) {
+    if (o.value === value) return o.label;
+    if (o.children) {
+      const hit = findTreeLabel(o.children, value);
+      if (hit !== undefined) return hit;
+    }
+  }
+  return undefined;
+}
 
 /** Format a leaf's value as plain read text (Formily's PreviewText). Used by `readPretty`
  *  mode and as the readOnly fallback for controls antd can't render read-only. */
@@ -429,6 +587,24 @@ function previewText(
         opts.find((o) => o.value === v)?.label ?? String(v);
       return Array.isArray(value) ? value.map(label).join(", ") : label(value);
     }
+    case "cascader": {
+      // The value is a root→leaf path; resolve each segment's label one tree
+      // level at a time (remote-only options fall back to the raw segment).
+      const path = Array.isArray(value) ? value : [];
+      if (!path.length) return "—";
+      let level: readonly TreeOption[] = optionsOverride ?? node.options ?? [];
+      const labels = path.map((seg) => {
+        const hit = level.find((o) => o.value === seg);
+        level = hit?.children ?? [];
+        return hit?.label ?? String(seg);
+      });
+      return labels.join(" / ");
+    }
+    case "tree-select": {
+      const opts: readonly TreeOption[] = optionsOverride ?? node.options ?? [];
+      const label = (v: unknown) => findTreeLabel(opts, v) ?? String(v);
+      return Array.isArray(value) ? value.map(label).join(", ") : label(value);
+    }
     case "upload": {
       const files = (value as Array<{ name?: string }> | undefined) ?? [];
       return files.length ? files.map((f) => f.name ?? "file").join(", ") : "—";
@@ -438,6 +614,17 @@ function previewText(
       const fmt = node.type === "date" ? "YYYY-MM-DD" : "HH:mm:ss";
       const v = value as { format?: (f: string) => string } | null;
       return v && typeof v.format === "function" ? v.format(fmt) : String(value);
+    }
+    case "date-range":
+    case "time-range": {
+      const fmt = node.type === "date-range" ? "YYYY-MM-DD" : "HH:mm:ss";
+      const ends = Array.isArray(value) ? value : [];
+      const end = (v: unknown) => {
+        if (v == null) return "—";
+        const d = v as { format?: (f: string) => string };
+        return typeof d.format === "function" ? d.format(fmt) : String(v);
+      };
+      return `${end(ends[0])} ~ ${end(ends[1])}`;
     }
     default:
       return String(value);
@@ -688,7 +875,12 @@ function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
       into[node.name] = [];
     } else if (node.defaultValue !== undefined) {
       into[node.name] = node.defaultValue;
-    } else if (node.type === "checkbox-group" || node.type === "upload") {
+    } else if (
+      node.type === "checkbox-group" ||
+      node.type === "upload" ||
+      node.type === "cascader" ||
+      (node.type === "tree-select" && node.multiple)
+    ) {
       // Array-valued leaves seed [] so the control stays controlled and a `required`
       // rule surfaces its custom "is required" message (min(1) on an empty array,
       // rather than an "expected array" type error on undefined).
@@ -1006,9 +1198,9 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     // (the `dependsOn` parent + every `params[].from`), keyed by field name.
     // NOTE: deps resolve against the row scope's merged values; a top-level dep referenced
     // from inside a row reads the merged value (out of G4 scope to change — see plan risk #4).
-    // Both select and checkbox-group can source options from a dependent dataSource.
-    const optionDs =
-      node.type === "select" || node.type === "checkbox-group" ? node.dataSource : undefined;
+    // Every option-sourced control (select/checkbox-group/cascader/tree-select) can
+    // read options from a dependent dataSource.
+    const optionDs = isOptionSourced(node) ? node.dataSource : undefined;
     const depValues = optionDs
       ? Object.fromEntries(dataSourceDeps(optionDs).map((field) => [field, scopeValues[field]]))
       : undefined;

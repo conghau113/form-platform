@@ -132,6 +132,56 @@ describe("FormRenderer Phase L field types", () => {
     }
   });
 
+  it("blocks submit when a required date-range is empty", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <FormRenderer
+        onSubmit={onSubmit}
+        schema={form([{ type: "date-range", name: "stay", label: "Stay", required: true }])}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() => expect(screen.getByText("Stay is required")).toBeInTheDocument());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("renders date-range and time-range pickers with start/end inputs", () => {
+    render(
+      <FormRenderer
+        schema={form([
+          { type: "date-range", name: "stay", label: "Stay" },
+          { type: "time-range", name: "shift", label: "Shift" },
+        ])}
+      />,
+    );
+    expect(screen.getByPlaceholderText("Start date")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("End date")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Start time")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("End time")).toBeInTheDocument();
+  });
+
+  it("applies the picker variant to date fields", () => {
+    render(
+      <FormRenderer
+        schema={form([{ type: "date", name: "month", label: "Month", picker: "month" }])}
+      />,
+    );
+    expect(screen.getByPlaceholderText("Select month")).toBeInTheDocument();
+  });
+
+  it("readPretty previews a range as 'start ~ end'", () => {
+    // dayjs-like stubs: previewText only needs `.format` (dayjs itself is not a dep here).
+    const day = (text: string) => ({ format: () => text });
+    render(
+      <FormRenderer
+        readPretty
+        schema={form([{ type: "date-range", name: "stay", label: "Stay" }])}
+        initialValues={{ stay: [day("2026-01-01"), day("2026-01-15")] }}
+      />,
+    );
+    expect(screen.getByText("2026-01-01 ~ 2026-01-15")).toBeInTheDocument();
+  });
+
   it("readPretty previews a checkbox-group as option labels", () => {
     render(
       <FormRenderer
