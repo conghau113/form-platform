@@ -242,6 +242,10 @@ export interface ArrayField {
   /** How the renderer lays out the rows. Defaults to "card" (one card per row);
    *  "table" renders an antd-style table with one column per item field. */
   variant?: "card" | "table";
+  /** Table variant only: when true, each row's cells are read-only and an Edit
+   *  button opens the row's `itemFields` in a modal (via `openFormDialog`), writing
+   *  the result back on OK. Ignored for the card variant. */
+  editInDialog?: boolean;
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
@@ -359,6 +363,7 @@ export const arrayFieldSchema: z.ZodType<ArrayField> = z.lazy(() =>
     minItems: z.number().int().min(0).optional(),
     maxItems: z.number().int().min(0).optional(),
     variant: z.enum(["card", "table"]).optional(),
+    editInDialog: z.boolean().optional(),
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),

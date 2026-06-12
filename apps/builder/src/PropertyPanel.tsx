@@ -771,6 +771,16 @@ function ItemFieldsEditor({
           ]}
         />
       </Form.Item>
+      {field.variant === "table" ? (
+        <Form.Item>
+          <Checkbox
+            checked={field.editInDialog ?? false}
+            onChange={(e) => set({ editInDialog: e.target.checked || undefined } as Patch)}
+          >
+            Edit rows in a dialog
+          </Checkbox>
+        </Form.Item>
+      ) : null}
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         Columns repeated for each row. Use Configure for full settings (options, validation, default
         value…).

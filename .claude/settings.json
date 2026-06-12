@@ -72,7 +72,9 @@
       "Bash(git --no-pager diff apps/builder/src/App.tsx apps/builder/src/DesignCanvas.tsx apps/builder/src/PropertyPanel.tsx apps/builder/src/workbench/OutlineTree.tsx)",
       "Bash(cd /e/web/web-tool/form-platform-starter/form-platform/packages/form-schema && grep -rn \"Reaction\\\\|childrenOf\\\\|itemFields\\\\|reactions\" src/ | head -60)",
       "Read(//e/e/web/web-tool/form-platform-starter/form-platform/packages/form-schema/**)",
-      "Bash(grep -n \"</\\\\|<changeset\\\\|<example\" .changeset/reactions-engine-g2.md)"
+      "Bash(grep -n \"</\\\\|<changeset\\\\|<example\" .changeset/reactions-engine-g2.md)",
+      "Bash(grep -vE \"getComputedStyle|not-implemented|at module|at window|at measure|at getTarget|at commit|at E:\\\\\\\\\\\\\\\\|undefined$|^Error: Not impl|useScrollLocker|useLayoutEffect|rc-table|^\\\\s+at \")",
+      "Bash(grep -viE \"ng: command|^>|^$|Tasks:|Time:|Cached|cache hit|cache miss|turbo|^ *@org|^ *builder\")"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -89,7 +91,9 @@
       "Read(**/*.pem)",
       "Read(**/secrets/**)"
     ],
-    "additionalDirectories": ["C:\\Users\\ASUS\\.claude\\plans"]
+    "additionalDirectories": [
+      "C:\\Users\\ASUS\\.claude\\plans"
+    ]
   },
   "hooks": {
     "PostToolUse": [

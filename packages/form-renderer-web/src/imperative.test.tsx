@@ -83,3 +83,40 @@ describe("openFormDrawer", () => {
     await expect(promise).resolves.toEqual({ name: "Edsger" });
   });
 });
+
+const tableSchema = {
+  formVersion: 3,
+  id: "t",
+  title: "T",
+  fields: [
+    {
+      type: "array",
+      name: "rows",
+      label: "Rows",
+      variant: "table",
+      editInDialog: true,
+      itemFields: [{ type: "text", name: "v", label: "V" }],
+    },
+  ],
+};
+
+describe("array table editInDialog", () => {
+  it("edits a row in a dialog and writes the value back into the form", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<FormRenderer schema={tableSchema} onSubmit={onSubmit} />);
+
+    // Add an (empty) row, then open it in the dialog.
+    await user.click(screen.getByRole("button", { name: /Add Rows/i }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    await user.type(await screen.findByLabelText("V"), "hello");
+    await user.click(screen.getByRole("button", { name: "OK" }));
+
+    // The dialog closed and the read-only cell now shows the written value.
+    await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({ rows: [{ v: "hello" }] }));
+  });
+});

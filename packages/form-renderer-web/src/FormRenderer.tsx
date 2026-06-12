@@ -16,6 +16,7 @@ import {
 } from "@org/form-core";
 import {
   type ArrayField,
+  CURRENT_FORM_VERSION,
   type FieldNode,
   type FormSchema,
   isLayoutContainer,
@@ -48,8 +49,16 @@ import {
   TimePicker,
 } from "antd";
 import type React from "react";
-import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useState } from "react";
-import { type Control, Controller, type Resolver, useFieldArray, useForm } from "react-hook-form";
+import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import {
+  type Control,
+  Controller,
+  type Resolver,
+  useFieldArray,
+  useForm,
+  useWatch,
+} from "react-hook-form";
+import { openFormDialog } from "./imperative.js";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
 
@@ -320,6 +329,15 @@ function RowControls(props: {
   );
 }
 
+/** Read-only text for a table cell in `editInDialog` mode (the row is edited in a popup,
+ *  not inline). Only named leaf fields have a value to show; containers render blank. */
+function rowCellText(child: FieldNode, row: Record<string, unknown> | undefined): React.ReactNode {
+  if (!("name" in child) || !row) return null;
+  const v = row[child.name];
+  if (v == null || v === "") return null;
+  return String(v);
+}
+
 /** Renders an `array` (Form List) node: a repeatable set of rows authored from the
  *  node's `itemFields`. `useFieldArray` owns add/remove/reorder; each control binds to
  *  `name.{index}.{child}` via `renderNode`. `variant` picks the card or table layout. */
@@ -334,8 +352,25 @@ function ArrayFieldSection(props: {
   getRowScope: (index: number) => Scope;
 }) {
   const { node, control, name, seedRow, renderNode, getRowScope } = props;
-  const { fields, append, remove, move } = useFieldArray({ control, name });
+  const { fields, append, remove, move, update } = useFieldArray({ control, name });
   const addButton = <Button onClick={() => append(seedRow())}>Add {node.label || "item"}</Button>;
+
+  // Table + editInDialog: rows are read-only and edited in a popup. Watch the live row
+  // values to display the cells and seed the dialog; write the result back with `update`.
+  const editInDialog = node.variant === "table" && node.editInDialog === true;
+  const watched = useWatch({ control, name }) as Array<Record<string, unknown>> | undefined;
+  const openRowDialog = async (index: number) => {
+    const result = await openFormDialog(
+      {
+        formVersion: CURRENT_FORM_VERSION,
+        id: node.name,
+        title: node.label,
+        fields: node.itemFields,
+      },
+      { title: node.label, initialValues: watched?.[index] ?? {} },
+    );
+    if (result) update(index, result);
+  };
   const help = node.helpText ? (
     <div style={{ color: "rgba(0,0,0,0.45)", fontSize: 12, marginTop: 8 }}>{node.helpText}</div>
   ) : null;
@@ -356,18 +391,27 @@ function ArrayFieldSection(props: {
           child.type,
         key: "name" in child ? child.name : `${child.type}-${col}`,
         render: (_: unknown, rec: RowRec) =>
-          renderNode(child, `${name}.${rec.index}.`, {
-            hideLabel: true,
-            bare: true,
-            scope: getRowScope(rec.index),
-          }),
+          editInDialog
+            ? rowCellText(child, watched?.[rec.index])
+            : renderNode(child, `${name}.${rec.index}.`, {
+                hideLabel: true,
+                bare: true,
+                scope: getRowScope(rec.index),
+              }),
       })),
       {
         title: "",
         key: "_actions",
-        width: 130,
+        width: editInDialog ? 200 : 130,
         render: (_: unknown, rec: RowRec) => (
-          <RowControls index={rec.index} count={fields.length} move={move} remove={remove} />
+          <Space size={4}>
+            {editInDialog ? (
+              <Button size="small" onClick={() => openRowDialog(rec.index)}>
+                Edit
+              </Button>
+            ) : null}
+            <RowControls index={rec.index} count={fields.length} move={move} remove={remove} />
+          </Space>
         ),
       },
     ];

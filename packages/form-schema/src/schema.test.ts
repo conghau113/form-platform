@@ -104,6 +104,25 @@ describe("schema field types", () => {
     expect(out.fields[0]).toMatchObject({ type: "array", variant: "table" });
   });
 
+  it("accepts the optional editInDialog flag on a table array node", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "array-dialog",
+      title: "Array dialog",
+      fields: [
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          variant: "table",
+          editInDialog: true,
+          itemFields: [{ type: "text", name: "v", label: "V" }],
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ type: "array", variant: "table", editInDialog: true });
+  });
+
   it("rejects an array whose itemFields is not an array", () => {
     expect(() =>
       formSchema.parse({
