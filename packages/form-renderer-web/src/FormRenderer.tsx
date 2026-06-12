@@ -96,11 +96,13 @@ function SelectControl(props: {
   // A dependent select waits until its parent has a value before fetching.
   const waitingOnParent = !!ds?.dependsOn && (dependsOnValue == null || dependsOnValue === "");
 
+  // J3 widens this to a full multi-dep values record; J2 bridges the single parent.
+  const depValues = ds?.dependsOn ? { [ds.dependsOn]: dependsOnValue } : {};
   const query = useQuery<DataSourceOption[]>({
     queryKey: ["form-datasource", ds?.url, ds?.dependsOn ? dependsOnValue : null],
     enabled: !!ds && !waitingOnParent,
     // ds is defined whenever the query is enabled.
-    queryFn: () => fetchDataSourceOptions(ds as NonNullable<typeof ds>, dependsOnValue),
+    queryFn: () => fetchDataSourceOptions(ds as NonNullable<typeof ds>, depValues),
   });
 
   // A reaction `options` effect wins; otherwise static options pass straight

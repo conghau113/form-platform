@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildDataSourceUrl, fetchDataSourceOptions, type SelectDataSource } from "./datasource.js";
+import {
+  buildDataSourceUrl,
+  dataSourceDeps,
+  dataSourceReady,
+  fetchDataSourceOptions,
+  type SelectDataSource,
+} from "./datasource.js";
 
 const countries: SelectDataSource = {
   url: "https://api.test/countries",
@@ -12,24 +18,72 @@ const cities: SelectDataSource = {
   valueKey: "id",
   dependsOn: "country",
 };
+// Level 2: two params from other fields, with names decoupled from the field names.
+const districts: SelectDataSource = {
+  url: "https://api.test/districts",
+  labelKey: "name",
+  valueKey: "id",
+  params: [
+    { name: "country", from: "country" },
+    { name: "city", from: "cityField" },
+  ],
+};
 
-describe("buildDataSourceUrl", () => {
-  it("returns the url unchanged when there is no dependsOn", () => {
-    expect(buildDataSourceUrl(countries, "VN")).toBe("https://api.test/countries");
+describe("dataSourceDeps", () => {
+  it("is empty for a static dataSource", () => {
+    expect(dataSourceDeps(countries)).toEqual([]);
   });
 
-  it("appends the parent value as a query param named after dependsOn", () => {
-    expect(buildDataSourceUrl(cities, "VN")).toBe("https://api.test/cities?country=VN");
+  it("includes the dependsOn parent", () => {
+    expect(dataSourceDeps(cities)).toEqual(["country"]);
+  });
+
+  it("includes every params[].from, deduped, dependsOn first", () => {
+    const ds = { ...districts, dependsOn: "region" };
+    expect(dataSourceDeps(ds)).toEqual(["region", "country", "cityField"]);
+  });
+});
+
+describe("dataSourceReady", () => {
+  it("is ready when there are no deps", () => {
+    expect(dataSourceReady(countries, {})).toBe(true);
+  });
+
+  it("is not ready until every dep has a present value", () => {
+    expect(dataSourceReady(districts, { country: "VN" })).toBe(false);
+    expect(dataSourceReady(districts, { country: "VN", cityField: "" })).toBe(false);
+    expect(dataSourceReady(districts, { country: "VN", cityField: null })).toBe(false);
+    expect(dataSourceReady(districts, { country: "VN", cityField: 7 })).toBe(true);
+  });
+});
+
+describe("buildDataSourceUrl", () => {
+  it("returns the url unchanged when there are no deps", () => {
+    expect(buildDataSourceUrl(countries, {})).toBe("https://api.test/countries");
+  });
+
+  it("appends the dependsOn parent as a query param named after the field", () => {
+    expect(buildDataSourceUrl(cities, { country: "VN" })).toBe(
+      "https://api.test/cities?country=VN",
+    );
+  });
+
+  it("appends every params[] entry as name=<value of from>", () => {
+    expect(buildDataSourceUrl(districts, { country: "VN", cityField: 7 })).toBe(
+      "https://api.test/districts?country=VN&city=7",
+    );
   });
 
   it("preserves an existing query string on the url", () => {
     const ds = { ...cities, url: "https://api.test/cities?active=1" };
-    expect(buildDataSourceUrl(ds, "US")).toBe("https://api.test/cities?active=1&country=US");
+    expect(buildDataSourceUrl(ds, { country: "US" })).toBe(
+      "https://api.test/cities?active=1&country=US",
+    );
   });
 
   it("keeps relative urls relative", () => {
     const ds = { ...cities, url: "/api/cities" };
-    expect(buildDataSourceUrl(ds, "VN")).toBe("/api/cities?country=VN");
+    expect(buildDataSourceUrl(ds, { country: "VN" })).toBe("/api/cities?country=VN");
   });
 });
 
@@ -41,7 +95,7 @@ describe("fetchDataSourceOptions", () => {
       json: () => Promise.resolve([{ name: "Vietnam", code: "VN" }]),
     } as Response);
 
-    const options = await fetchDataSourceOptions(countries, undefined, fetchImpl);
+    const options = await fetchDataSourceOptions(countries, {}, fetchImpl);
 
     expect(fetchImpl).toHaveBeenCalledWith("https://api.test/countries");
     expect(options).toEqual([{ label: "Vietnam", value: "VN" }]);
@@ -54,7 +108,7 @@ describe("fetchDataSourceOptions", () => {
       json: () => Promise.resolve(null),
     } as Response);
 
-    await expect(fetchDataSourceOptions(countries, undefined, fetchImpl)).rejects.toThrow(
+    await expect(fetchDataSourceOptions(countries, {}, fetchImpl)).rejects.toThrow(
       "Request failed (500)",
     );
   });

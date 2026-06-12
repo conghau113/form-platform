@@ -9,17 +9,47 @@ export interface DataSourceOption {
   value: string | number;
 }
 
+/** A value is "present" for dependency purposes when it isn't nullish or empty. */
+function isPresent(value: unknown): boolean {
+  return value != null && value !== "";
+}
+
 /**
- * Build the request URL for a select's dataSource. When the field depends on a
- * parent field, the parent's current value is sent as a query param NAMED AFTER
- * `dependsOn` (e.g. dependsOn "country" -> `?country=VN`). Existing query strings
- * on the configured url are preserved. Platform-agnostic — shared by web + native.
+ * Every field name this dataSource reads, deduped: the level-1 `dependsOn` parent
+ * plus each level-2 `params[].from` source. The order is `dependsOn` first, then
+ * params in declaration order — renderers use it to build a stable query key.
  */
-export function buildDataSourceUrl(ds: SelectDataSource, dependsOnValue: unknown): string {
-  if (!ds.dependsOn) return ds.url;
+export function dataSourceDeps(ds: SelectDataSource): string[] {
+  const deps: string[] = [];
+  if (ds.dependsOn) deps.push(ds.dependsOn);
+  for (const p of ds.params ?? []) {
+    if (!deps.includes(p.from)) deps.push(p.from);
+  }
+  return deps;
+}
+
+/**
+ * True when every field this dataSource depends on has a present value, so the
+ * request can fire. A dataSource with no deps is always ready.
+ */
+export function dataSourceReady(ds: SelectDataSource, values: Record<string, unknown>): boolean {
+  return dataSourceDeps(ds).every((field) => isPresent(values[field]));
+}
+
+/**
+ * Build the request URL for a select's dataSource. The level-1 `dependsOn` parent
+ * is sent as a query param NAMED AFTER the field (dependsOn "country" -> `?country=VN`).
+ * Each level-2 `params[]` entry sends `name=<value of field `from`>`. Existing query
+ * strings on the configured url are preserved. Platform-agnostic — shared by web + native.
+ */
+export function buildDataSourceUrl(ds: SelectDataSource, values: Record<string, unknown>): string {
+  if (!ds.dependsOn && !ds.params?.length) return ds.url;
   const isAbsolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(ds.url);
   const url = new URL(ds.url, "http://_relative_base_");
-  url.searchParams.set(ds.dependsOn, String(dependsOnValue));
+  if (ds.dependsOn) url.searchParams.set(ds.dependsOn, String(values[ds.dependsOn]));
+  for (const p of ds.params ?? []) {
+    url.searchParams.set(p.name, String(values[p.from]));
+  }
   // Strip the synthetic base for relative urls; keep absolute urls intact.
   return isAbsolute ? url.toString() : `${url.pathname}${url.search}`;
 }
@@ -32,10 +62,10 @@ export function buildDataSourceUrl(ds: SelectDataSource, dependsOnValue: unknown
  */
 export async function fetchDataSourceOptions(
   ds: SelectDataSource,
-  dependsOnValue: unknown,
+  values: Record<string, unknown>,
   fetchImpl: typeof fetch = fetch,
 ): Promise<DataSourceOption[]> {
-  const res = await fetchImpl(buildDataSourceUrl(ds, dependsOnValue));
+  const res = await fetchImpl(buildDataSourceUrl(ds, values));
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   const rows = (await res.json()) as Array<Record<string, unknown>>;
   return rows.map((row) => ({
