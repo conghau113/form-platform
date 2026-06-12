@@ -285,9 +285,9 @@ Schema: optional `reactions[]` — `{ when: <JSONLogic>, then: { set?: visible|d
 value|options on a target field } }`. Pure engine in form-core; renderer subscribes via
 `watch`. Generalizes the current single `visibleWhen`. NEVER eval.
 
-- [ ] **G1 — schema:** `reactionSchema` = `{ when: JSONLogic, target: fieldName,
+- [x] **G1 — schema:** `reactionSchema` = `{ when: JSONLogic, target: fieldName,
       effect: "visible" | "disabled" | "value" | "options", value? }`, optional
-      `reactions[]` on `commonFields`. Additive → no version bump.
+      `reactions[]` on `commonFields`. Additive → no version bump. (`2d2f10c`)
 - [ ] **G2 — form-core engine:** pure `computeReactions(schema, values) → EffectMap`
       (reuses `conditions.ts`). Deterministic single pass + cycle/self-target guard;
       precedence: `reactions` > `visibleWhen` > static props. Exhaustive tests.

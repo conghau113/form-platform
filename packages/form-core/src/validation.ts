@@ -7,8 +7,8 @@ import {
   type ValidationRule,
 } from "@org/form-schema";
 import { z } from "zod";
-import { isVisible } from "./conditions.js";
 import { type AccessContext, canView } from "./rbac.js";
+import { computeReactions, type EffectMap, effectiveVisible } from "./reactions.js";
 
 /** A lenient phone matcher: optional leading +, then 7–15 digits, allowing spaces,
  *  dashes and parens as separators. Compiled from a string literal — never eval. */
@@ -171,16 +171,20 @@ function buildShape(
   nodes: FieldNode[],
   values: Record<string, unknown>,
   access?: AccessContext,
+  effects?: EffectMap,
 ): z.ZodRawShape {
   const shape: z.ZodRawShape = {};
   for (const node of nodes) {
-    if (!isVisible(node, values)) continue;
+    // Reaction `visible` effects override `visibleWhen`, so a reaction-hidden field
+    // drops out of validation (and a reaction-shown field opts back in) consistently
+    // with how the renderer paints it. `effects` is the scope's EffectMap.
+    if (!effectiveVisible(node, values, effects)) continue;
     if (access && !canView(node, access)) continue;
     if (isLayoutContainer(node)) {
       // Layout containers (group/tabs/card/...) are transparent for values:
       // their children hoist into this flat shape. A container hidden above
       // (visibleWhen / RBAC) was already skipped, hiding its whole subtree.
-      Object.assign(shape, buildShape(node.children, values, access));
+      Object.assign(shape, buildShape(node.children, values, access, effects));
       continue;
     }
     if (node.type === "array") {
@@ -204,5 +208,10 @@ export function buildZodSchema(
   form: FormSchema,
   opts: BuildZodOptions = {},
 ): z.ZodObject<z.ZodRawShape> {
-  return z.object(buildShape(form.fields, opts.values ?? {}, opts.access));
+  const values = opts.values ?? {};
+  // Reactions are computed internally so the signature is unchanged and validation
+  // stays automatically consistent with what the renderer shows. Top-level scope only;
+  // per-row array effects are applied inside arrayZod in G4.
+  const effects = computeReactions(form, values);
+  return z.object(buildShape(form.fields, values, opts.access, effects));
 }

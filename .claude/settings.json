@@ -69,7 +69,10 @@
       "Bash(git --no-pager diff --stat)",
       "Bash(git --no-pager diff --staged --stat)",
       "Bash(git --no-pager status)",
-      "Bash(git --no-pager diff apps/builder/src/App.tsx apps/builder/src/DesignCanvas.tsx apps/builder/src/PropertyPanel.tsx apps/builder/src/workbench/OutlineTree.tsx)"
+      "Bash(git --no-pager diff apps/builder/src/App.tsx apps/builder/src/DesignCanvas.tsx apps/builder/src/PropertyPanel.tsx apps/builder/src/workbench/OutlineTree.tsx)",
+      "Bash(cd /e/web/web-tool/form-platform-starter/form-platform/packages/form-schema && grep -rn \"Reaction\\\\|childrenOf\\\\|itemFields\\\\|reactions\" src/ | head -60)",
+      "Read(//e/e/web/web-tool/form-platform-starter/form-platform/packages/form-schema/**)",
+      "Bash(grep -n \"</\\\\|<changeset\\\\|<example\" .changeset/reactions-engine-g2.md)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -86,7 +89,9 @@
       "Read(**/*.pem)",
       "Read(**/secrets/**)"
     ],
-    "additionalDirectories": ["C:\\Users\\ASUS\\.claude\\plans"]
+    "additionalDirectories": [
+      "C:\\Users\\ASUS\\.claude\\plans"
+    ]
   },
   "hooks": {
     "PostToolUse": [

@@ -65,6 +65,61 @@ describe("buildZodSchema", () => {
     expect(schema.safeParse({ country: "OTHER", otherCountry: "NZ" }).success).toBe(true);
   });
 
+  it("excludes and strips a field hidden by a reaction visible:false", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "select",
+          name: "kind",
+          label: "Kind",
+          reactions: [
+            {
+              when: { rule: { "==": [{ var: "kind" }, "person"] } },
+              target: "vat",
+              effect: "visible",
+              value: false,
+            },
+          ],
+        },
+        { type: "text", name: "vat", label: "VAT", required: true },
+      ]),
+      { values: { kind: "person" } },
+    );
+    const result = schema.safeParse({ kind: "person" });
+    expect(result.success).toBe(true);
+    if (result.success) expect("vat" in result.data).toBe(false);
+  });
+
+  it("lets a reaction visible:true override visibleWhen:false (field validates)", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "select",
+          name: "kind",
+          label: "Kind",
+          reactions: [
+            {
+              when: { rule: { "==": [{ var: "kind" }, "company"] } },
+              target: "vat",
+              effect: "visible",
+            },
+          ],
+        },
+        {
+          type: "text",
+          name: "vat",
+          label: "VAT",
+          required: true,
+          visibleWhen: { rule: { "==": [1, 0] } },
+        },
+      ]),
+      { values: { kind: "company" } },
+    );
+    // visibleWhen would hide it, but the reaction shows it → required now blocks submit.
+    expect(schema.safeParse({ kind: "company" }).success).toBe(false);
+    expect(schema.safeParse({ kind: "company", vat: "VN123" }).success).toBe(true);
+  });
+
   it("enforces number min/max and text maxLength", () => {
     const schema = buildZodSchema(
       form([
