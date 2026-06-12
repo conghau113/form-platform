@@ -1,10 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   type AccessContext,
+  type AsyncValidationResult,
   buildZodSchema,
   canEdit,
   canView,
+  checkAsyncValidator,
+  collectAsyncFields,
   collectValueEffects,
+  collectWarnings,
   computeNodeReactions,
   computeReactions,
   type DataSourceOption,
@@ -18,6 +22,7 @@ import {
 } from "@org/form-core";
 import {
   type ArrayField,
+  type AsyncValidator,
   CURRENT_FORM_VERSION,
   type FieldNode,
   type FormSchema,
@@ -57,7 +62,15 @@ import {
   type UploadFile,
 } from "antd";
 import type React from "react";
-import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import {
+  Fragment,
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   type Control,
   Controller,
@@ -891,6 +904,61 @@ function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
   return into;
 }
 
+/** Read a dotted react-hook-form path (`members.0.email`) out of a values object. */
+function getAtPath(obj: unknown, path: string): unknown {
+  let cur: unknown = obj;
+  for (const seg of path.split(".")) {
+    if (cur == null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur;
+}
+
+/** Write a resolver error at a dotted path, creating intermediate objects — and
+ *  ARRAYS for numeric segments — so `members.0.email` lands where RHF expects it. */
+function setErrorAtPath(
+  errors: Record<string, unknown>,
+  path: string,
+  err: { type: string; message: string },
+): void {
+  const segs = path.split(".");
+  let cur: Record<string, unknown> = errors;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const seg = segs[i] as string;
+    let next = cur[seg];
+    if (next == null || typeof next !== "object") {
+      next = /^\d+$/.test(segs[i + 1] as string) ? [] : {};
+      cur[seg] = next;
+    }
+    cur = next as Record<string, unknown>;
+  }
+  cur[segs[segs.length - 1] as string] = err;
+}
+
+type AsyncCacheEntry = { value: unknown; promise: Promise<AsyncValidationResult> };
+type AsyncCache = Map<string, AsyncCacheEntry>;
+
+/** One debounced remote check. The entry is registered in the cache BEFORE the
+ *  debounce sleep, so a newer keystroke supersedes this one: when the sleep wakes
+ *  up under a different cached value, it reports valid without fetching — the
+ *  newest entry's own resolver run carries the real verdict. A network failure
+ *  fails OPEN (valid) so a flaky endpoint never blocks submit. */
+async function runAsyncCheck(
+  cache: AsyncCache,
+  path: string,
+  name: string,
+  value: unknown,
+  validator: AsyncValidator,
+): Promise<AsyncValidationResult> {
+  await new Promise((resolve) => setTimeout(resolve, validator.debounceMs ?? 400));
+  if (!Object.is(cache.get(path)?.value, value)) return { valid: true };
+  try {
+    return await checkAsyncValidator(validator, name, value);
+  } catch {
+    return { valid: true };
+  }
+}
+
 export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(function FormRenderer(
   {
     schema,
@@ -914,23 +982,69 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   );
 
+  // Per-path async-check memo: last value + its (possibly in-flight) check. Entries
+  // are registered synchronously in the resolver, so a newer keystroke supersedes an
+  // older debounce sleep (see runAsyncCheck). Lives for the component's lifetime.
+  const asyncCache = useRef<AsyncCache>(new Map());
+
   // Validation rebuilds per call so visibility (and RBAC) reflect current values:
-  // hidden fields are excluded from validation and stripped from the output.
-  const resolver: Resolver<Values> = (values, context, options) =>
-    (zodResolver(buildZodSchema(form, { values, access })) as Resolver<Values>)(
+  // hidden fields are excluded from validation and stripped from the output. The
+  // resolver is ASYNC: after the Zod pass it runs each visible asyncValidator
+  // (debounced + memoized per value) and merges `valid:false` results in as field
+  // errors — handleSubmit awaits the resolver, so an invalid remote check blocks
+  // submit. Fields with a Zod error skip the remote call (one error per field).
+  const resolver: Resolver<Values> = async (values, context, options) => {
+    const res = await (zodResolver(buildZodSchema(form, { values, access })) as Resolver<Values>)(
       values,
       context,
       options,
     );
+    const targets = collectAsyncFields(form, values, access);
+    if (targets.length === 0) return res;
+    const errors = { ...(res.errors as Record<string, unknown>) };
+    let added = false;
+    await Promise.all(
+      targets.map(async ({ path, name, validator }) => {
+        const value = getAtPath(values, path);
+        if (value == null || value === "") {
+          // Cleared value: drop the memo so re-entering the same value re-checks.
+          asyncCache.current.delete(path);
+          return;
+        }
+        if (getAtPath(errors, path)) return;
+        let entry = asyncCache.current.get(path);
+        if (!entry || !Object.is(entry.value, value)) {
+          entry = { value, promise: runAsyncCheck(asyncCache.current, path, name, value, validator) };
+          asyncCache.current.set(path, entry);
+        }
+        const result = await entry.promise;
+        if (!result.valid) {
+          setErrorAtPath(errors, path, {
+            type: "asyncValidator",
+            message: result.message ?? "Invalid value",
+          });
+          added = true;
+        }
+      }),
+    );
+    if (!added) return res;
+    return { values: {}, errors } as Awaited<ReturnType<Resolver<Values>>>;
+  };
 
   const defaultValues = useMemo<Values>(
     () => ({ ...schemaDefaults(form.fields), ...initialValues }),
     [form, initialValues],
   );
 
+  // `settings.validateTrigger` maps onto react-hook-form's validation mode. Absent ⇒
+  // RHF's defaults (validate on submit, re-validate on change) — old JSON behaves
+  // exactly as before.
+  const trigger = form.settings?.validateTrigger;
   const { control, handleSubmit, watch, setValue, getValues } = useForm<Values>({
     defaultValues,
     resolver,
+    mode: trigger === "onInput" ? "onChange" : trigger === "onBlur" ? "onBlur" : "onSubmit",
+    reValidateMode: trigger === "onBlur" ? "onBlur" : "onChange",
   });
   const values = watch();
 
@@ -938,6 +1052,12 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
   // Per-row array scopes compute their own maps in G4; here `effects` only applies
   // where `namePrefix === ""`.
   const effects = computeReactions(form, values);
+
+  // Non-blocking warning messages, recomputed from watched values (same cost class
+  // as reactions). Keys are dotted react-hook-form paths, so array rows look up by
+  // their full fieldName. Warnings show immediately — not gated on touched state —
+  // by design: a violated warning is visible before the first submit attempt.
+  const warnings = collectWarnings(form, values, access);
 
   // Reaction `value` effects: while a `when` holds, push its assigned value once.
   // Keyed on the serialized assignments so the effect only runs when they change;
@@ -1206,6 +1326,9 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
       ? Object.fromEntries(dataSourceDeps(optionDs).map((field) => [field, scopeValues[field]]))
       : undefined;
     const fieldName = `${namePrefix}${node.name}`;
+    // Non-blocking warning at this field's dotted path. An error always wins the
+    // status + help slot; a warning shows antd's yellow state but never blocks.
+    const warning = warnings[fieldName];
     const control_ = (
       <Controller
         name={fieldName}
@@ -1217,8 +1340,12 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
             tooltip={opts?.hideLabel ? undefined : node.tooltip}
             required={opts?.hideLabel ? undefined : requiredMark}
             style={opts?.bare ? { marginBottom: 0 } : undefined}
-            validateStatus={fieldState.error ? "error" : undefined}
-            help={fieldState.error?.message ?? (opts?.hideLabel ? undefined : node.helpText)}
+            validateStatus={fieldState.error ? "error" : warning ? "warning" : undefined}
+            help={
+              fieldState.error?.message ??
+              warning ??
+              (opts?.hideLabel ? undefined : node.helpText)
+            }
             {...node.decoratorProps}
           >
             {/* readPretty / readOnly-without-antd-support → a plain read view (PreviewText).
@@ -1229,6 +1356,24 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
               <FieldPreview node={node} value={field.value} optionsOverride={eff?.options} />
             ) : designMode ? (
               <div style={{ pointerEvents: "none" }}>
+                <FieldControl
+                  node={node}
+                  value={field.value}
+                  disabled={!editable && !readOnlyMode}
+                  readOnly={readOnlyMode}
+                  onChange={field.onChange}
+                  depValues={depValues}
+                  optionsOverride={eff?.options}
+                  id={fieldName}
+                  submitUrl={form.settings?.submitUrl}
+                />
+              </div>
+            ) : trigger === "onBlur" ? (
+              // RHF's onBlur mode needs `field.onBlur` to fire; the controls don't
+              // thread it, so a boxless (display:contents) wrapper catches the
+              // bubbling focusout. Only rendered under the onBlur trigger — every
+              // other form keeps its runtime DOM byte-for-byte unchanged.
+              <div style={{ display: "contents" }} onBlur={field.onBlur}>
                 <FieldControl
                   node={node}
                   value={field.value}

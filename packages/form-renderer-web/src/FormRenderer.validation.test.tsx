@@ -34,6 +34,73 @@ describe("FormRenderer validation", () => {
     expect(onSubmit).toHaveBeenCalledWith({ fullName: "Ada Lovelace" });
   });
 
+  it("validateTrigger onInput surfaces errors while typing, before any submit", async () => {
+    const user = userEvent.setup();
+    const schema = {
+      ...requiredOnly,
+      settings: { validateTrigger: "onInput" },
+      fields: [
+        {
+          type: "text",
+          name: "code",
+          label: "Code",
+          validations: [{ type: "min", value: 5, message: "Too short" }],
+        },
+      ],
+    };
+    render(<FormRenderer schema={schema} />);
+
+    await user.type(screen.getByRole("textbox"), "abc");
+
+    expect(await screen.findByText("Too short")).toBeInTheDocument();
+  });
+
+  it("validateTrigger onBlur surfaces errors after leaving the field", async () => {
+    const user = userEvent.setup();
+    const schema = {
+      ...requiredOnly,
+      settings: { validateTrigger: "onBlur" },
+      fields: [
+        {
+          type: "text",
+          name: "code",
+          label: "Code",
+          validations: [{ type: "min", value: 5, message: "Too short" }],
+        },
+      ],
+    };
+    render(<FormRenderer schema={schema} />);
+
+    await user.type(screen.getByRole("textbox"), "abc");
+    expect(screen.queryByText("Too short")).not.toBeInTheDocument();
+    await user.tab();
+
+    expect(await screen.findByText("Too short")).toBeInTheDocument();
+  });
+
+  it("without a validateTrigger, validation still runs only on submit (regression)", async () => {
+    const user = userEvent.setup();
+    const schema = {
+      ...requiredOnly,
+      fields: [
+        {
+          type: "text",
+          name: "code",
+          label: "Code",
+          validations: [{ type: "min", value: 5, message: "Too short" }],
+        },
+      ],
+    };
+    render(<FormRenderer schema={schema} />);
+
+    await user.type(screen.getByRole("textbox"), "abc");
+    await user.tab();
+    expect(screen.queryByText("Too short")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    expect(await screen.findByText("Too short")).toBeInTheDocument();
+  });
+
   it("does not validate a field hidden by visibleWhen", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
