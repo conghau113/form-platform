@@ -50,6 +50,8 @@ import {
   type ThemeConfig,
   TimePicker,
   Typography,
+  Upload,
+  type UploadFile,
 } from "antd";
 import type React from "react";
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
@@ -78,26 +80,29 @@ type DateValue = React.ComponentProps<typeof DatePicker>["value"];
 type TimeValue = React.ComponentProps<typeof TimePicker>["value"];
 type SelectValue = string | number | Array<string | number> | undefined;
 type SelectField = Extract<LeafField, { type: "select" }>;
+type CheckboxGroupField = Extract<LeafField, { type: "checkbox-group" }>;
+/** A field that sources options from static `options` or a remote `dataSource`. */
+type OptionSourced = SelectField | CheckboxGroupField;
+type OptionList = ReactionOption[] | DataSourceOption[] | { label: string; value: string | number }[];
 
-/** A select whose options may come from a remote dataSource via react-query.
- *  Fetching + option mapping live in form-core so native reuses them; only the
- *  antd control + react-query wiring + loading/error UI are web-specific. */
-function SelectControl(props: {
-  node: SelectField;
-  value: SelectValue;
-  disabled?: boolean;
-  onChange: (v: unknown) => void;
-  /** Current values of every field this select's dataSource depends on
-   *  (`dependsOn` + each `params[].from`), keyed by field name. */
-  depValues?: Record<string, unknown>;
-  /** Options injected by a reaction `effect: "options"` — overrides static/remote. */
-  optionsOverride?: ReactionOption[];
-  id?: string;
-}) {
-  const { node, value, disabled, onChange, depValues = {}, optionsOverride, id } = props;
+/** Resolve the option list for a select/checkbox-group, fetching a remote `dataSource`
+ *  via react-query when present. Fetching + option mapping live in form-core so native
+ *  reuses them; this hook only wires react-query + the dependency gating. Shared by
+ *  `SelectControl` and `CheckboxGroupControl`. */
+function useRemoteOptions(
+  node: OptionSourced,
+  depValues: Record<string, unknown>,
+  optionsOverride?: ReactionOption[],
+): {
+  options: OptionList | undefined;
+  isFetching: boolean;
+  isError: boolean;
+  error: unknown;
+  ready: boolean;
+  missing: string[];
+} {
   const ds = node.dataSource;
-
-  // A dependent select waits until EVERY field it depends on has a value before fetching.
+  // A dependent control waits until EVERY field it depends on has a value before fetching.
   const deps = ds ? dataSourceDeps(ds) : [];
   const ready = !ds || dataSourceReady(ds, depValues);
   const missing = deps.filter((field) => depValues[field] == null || depValues[field] === "");
@@ -114,11 +119,44 @@ function SelectControl(props: {
 
   // A reaction `options` effect wins; otherwise static options pass straight
   // through and remote options come from the query.
-  const options = optionsOverride ?? (ds ? (query.data ?? []) : node.options);
+  const options = optionsOverride ?? (ds ? query.data : node.options);
+  return {
+    options,
+    isFetching: !!ds && query.isFetching,
+    isError: query.isError,
+    error: query.error,
+    ready,
+    missing,
+  };
+}
+
+/** A select whose options may come from a remote dataSource. Only the antd control +
+ *  loading/error UI are web-specific; the fetch lives in `useRemoteOptions`. */
+function SelectControl(props: {
+  node: SelectField;
+  value: SelectValue;
+  disabled?: boolean;
+  onChange: (v: unknown) => void;
+  /** Current values of every field this select's dataSource depends on
+   *  (`dependsOn` + each `params[].from`), keyed by field name. */
+  depValues?: Record<string, unknown>;
+  /** Options injected by a reaction `effect: "options"` — overrides static/remote. */
+  optionsOverride?: ReactionOption[];
+  id?: string;
+}) {
+  const { node, value, disabled, onChange, depValues = {}, optionsOverride, id } = props;
+  const { options, isFetching, isError, error, ready, missing } = useRemoteOptions(
+    node,
+    depValues,
+    optionsOverride,
+  );
 
   let notFoundContent: React.ReactNode;
   if (!ready) notFoundContent = `Select ${missing.join(", ")} first`;
-  else if (query.isError) notFoundContent = (query.error as Error).message;
+  else if (isError) notFoundContent = (error as Error).message;
+
+  // `tags` mode (free typing) wins over `multiple`; both yield an array value.
+  const mode = node.tags ? "tags" : node.multiple ? "multiple" : undefined;
 
   return (
     <Select
@@ -126,13 +164,43 @@ function SelectControl(props: {
       style={{ width: "100%" }}
       value={value}
       disabled={disabled}
-      mode={node.multiple ? "multiple" : undefined}
-      options={options}
-      loading={!!ds && query.isFetching}
-      status={query.isError ? "error" : undefined}
+      mode={mode}
+      showSearch={node.showSearch}
+      allowClear={node.allowClear}
+      options={options ?? []}
+      loading={isFetching}
+      status={isError ? "error" : undefined}
       notFoundContent={notFoundContent}
       onChange={onChange}
     />
+  );
+}
+
+/** A group of checkboxes whose options may come from a remote dataSource. Value is an
+ *  array of the chosen option values. Mirrors `SelectControl`'s option resolution. */
+function CheckboxGroupControl(props: {
+  node: CheckboxGroupField;
+  value: Array<string | number> | undefined;
+  disabled?: boolean;
+  onChange: (v: unknown) => void;
+  depValues?: Record<string, unknown>;
+  optionsOverride?: ReactionOption[];
+}) {
+  const { node, value, disabled, onChange, depValues = {}, optionsOverride } = props;
+  const { options, isFetching, isError, error, ready, missing } = useRemoteOptions(
+    node,
+    depValues,
+    optionsOverride,
+  );
+
+  if (!ready)
+    return <Typography.Text type="secondary">Select {missing.join(", ")} first</Typography.Text>;
+  if (isError) return <Typography.Text type="danger">{(error as Error).message}</Typography.Text>;
+  if (isFetching) return <Typography.Text type="secondary">Loading…</Typography.Text>;
+
+  // antd's Checkbox.Group has no `id` prop, so the Form.Item label stays unassociated.
+  return (
+    <Checkbox.Group value={value} disabled={disabled} options={options ?? []} onChange={onChange} />
   );
 }
 
@@ -146,12 +214,16 @@ function FieldControl(props: {
   onChange: (v: unknown) => void;
   /** Current values of a select's dataSource dependency fields, keyed by name. */
   depValues?: Record<string, unknown>;
-  /** Options injected by a reaction `effect: "options"` (select/radio only). */
+  /** Options injected by a reaction `effect: "options"` (select/radio/checkbox-group). */
   optionsOverride?: ReactionOption[];
   /** DOM id linking the control to its Form.Item label (htmlFor). */
   id?: string;
+  /** The form's `settings.submitUrl`, used by `upload` to upload for real (otherwise files
+   *  stay local). */
+  submitUrl?: string;
 }) {
-  const { node, value, disabled, readOnly, onChange, depValues, optionsOverride, id } = props;
+  const { node, value, disabled, readOnly, onChange, depValues, optionsOverride, id, submitUrl } =
+    props;
   switch (node.type) {
     case "text":
       return (
@@ -188,6 +260,8 @@ function FieldControl(props: {
           readOnly={readOnly}
           min={node.min}
           max={node.max}
+          step={node.step}
+          precision={node.precision}
           onChange={onChange}
         />
       );
@@ -225,6 +299,39 @@ function FieldControl(props: {
           onChange={(e) => onChange(e.target.value)}
         />
       );
+    case "checkbox-group":
+      return (
+        <CheckboxGroupControl
+          node={node}
+          value={value as Array<string | number> | undefined}
+          disabled={disabled}
+          onChange={onChange}
+          depValues={depValues}
+          optionsOverride={optionsOverride}
+        />
+      );
+    case "upload": {
+      // Without a real upload endpoint, `beforeUpload → false` keeps each file local in the
+      // fileList (the form value) — no auto-upload. With `settings.submitUrl`, antd uploads
+      // for real to that action. The value IS the fileList.
+      const fileList = (value as UploadFile[] | undefined) ?? [];
+      return (
+        <Upload
+          fileList={fileList}
+          disabled={disabled}
+          accept={node.accept}
+          maxCount={node.maxCount}
+          listType={node.listType}
+          action={submitUrl}
+          beforeUpload={submitUrl ? undefined : () => false}
+          onChange={(info) => onChange(info.fileList)}
+        >
+          {(!node.maxCount || fileList.length < node.maxCount) && (
+            <Button>{node.listType === "picture-card" ? "+ Upload" : "Select file"}</Button>
+          )}
+        </Upload>
+      );
+    }
     case "slider":
       return (
         <Slider
@@ -315,11 +422,16 @@ function previewText(
     case "switch":
       return value ? "Yes" : "No";
     case "select":
-    case "radio": {
+    case "radio":
+    case "checkbox-group": {
       const opts = optionsOverride ?? ("options" in node ? (node.options ?? []) : []);
       const label = (v: unknown) =>
         opts.find((o) => o.value === v)?.label ?? String(v);
       return Array.isArray(value) ? value.map(label).join(", ") : label(value);
+    }
+    case "upload": {
+      const files = (value as Array<{ name?: string }> | undefined) ?? [];
+      return files.length ? files.map((f) => f.name ?? "file").join(", ") : "—";
     }
     case "date":
     case "time": {
@@ -576,6 +688,11 @@ function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
       into[node.name] = [];
     } else if (node.defaultValue !== undefined) {
       into[node.name] = node.defaultValue;
+    } else if (node.type === "checkbox-group" || node.type === "upload") {
+      // Array-valued leaves seed [] so the control stays controlled and a `required`
+      // rule surfaces its custom "is required" message (min(1) on an empty array,
+      // rather than an "expected array" type error on undefined).
+      into[node.name] = [];
     }
   }
   return into;
@@ -889,9 +1006,11 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     // (the `dependsOn` parent + every `params[].from`), keyed by field name.
     // NOTE: deps resolve against the row scope's merged values; a top-level dep referenced
     // from inside a row reads the merged value (out of G4 scope to change — see plan risk #4).
-    const selectDs = node.type === "select" ? node.dataSource : undefined;
-    const depValues = selectDs
-      ? Object.fromEntries(dataSourceDeps(selectDs).map((field) => [field, scopeValues[field]]))
+    // Both select and checkbox-group can source options from a dependent dataSource.
+    const optionDs =
+      node.type === "select" || node.type === "checkbox-group" ? node.dataSource : undefined;
+    const depValues = optionDs
+      ? Object.fromEntries(dataSourceDeps(optionDs).map((field) => [field, scopeValues[field]]))
       : undefined;
     const fieldName = `${namePrefix}${node.name}`;
     const control_ = (
@@ -926,6 +1045,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                   depValues={depValues}
                   optionsOverride={eff?.options}
                   id={fieldName}
+                  submitUrl={form.settings?.submitUrl}
                 />
               </div>
             ) : (
@@ -938,6 +1058,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                 depValues={depValues}
                 optionsOverride={eff?.options}
                 id={fieldName}
+                submitUrl={form.settings?.submitUrl}
               />
             )}
           </Form.Item>
