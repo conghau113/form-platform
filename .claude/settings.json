@@ -74,7 +74,10 @@
       "Read(//e/e/web/web-tool/form-platform-starter/form-platform/packages/form-schema/**)",
       "Bash(grep -n \"</\\\\|<changeset\\\\|<example\" .changeset/reactions-engine-g2.md)",
       "Bash(grep -vE \"getComputedStyle|not-implemented|at module|at window|at measure|at getTarget|at commit|at E:\\\\\\\\\\\\\\\\|undefined$|^Error: Not impl|useScrollLocker|useLayoutEffect|rc-table|^\\\\s+at \")",
-      "Bash(grep -viE \"ng: command|^>|^$|Tasks:|Time:|Cached|cache hit|cache miss|turbo|^ *@org|^ *builder\")"
+      "Bash(grep -viE \"ng: command|^>|^$|Tasks:|Time:|Cached|cache hit|cache miss|turbo|^ *@org|^ *builder\")",
+      "Bash(git --no-pager diff feat/phase-g-reactions...HEAD)",
+      "Bash(git --no-pager diff)",
+      "Bash(git --no-pager diff feat/phase-g-reactions...HEAD --stat)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

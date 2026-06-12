@@ -314,13 +314,24 @@ eval. Changesets: form-schema (G1), form-core (G2, G4), form-renderer-web (G3, G
       `fieldNames`; the Visibility section is now offered for array item fields too. New
       `ReactionsEditor.tsx` + tests. Builder is changeset-ignored.
 
-## Phase H — Modal / Drawer (FormDialog / FormDrawer)
-- [ ] **H1 —** `openFormDialog(schema, opts)` / `openFormDrawer(schema, opts)` →
-      `Promise<values | undefined>` — imperative renderer-web helpers wrapping
-      `FormRenderer`; antd stays a peerDependency.
-- [ ] **H2 —** array `variant: "table"` gains optional row-editing-in-dialog
-      (additive prop).
-- [ ] **H3 —** jsdom portal tests + changeset.
+## Phase H — Modal / Drawer (FormDialog / FormDrawer) ✅ DONE (2026-06-12)
+Imperative popup forms shipped on branch `feat/phase-h-dialog` (off
+`feat/phase-g-reactions`). The decided OK trigger is a `forwardRef` handle + additive
+`hideSubmit` prop, so the popup footer's OK drives validation and the popup stays open on
+error (Formily-like UX). Plan: `C:\Users\ASUS\.claude\plans\rippling-percolating-graham.md`.
+- [x] **H1 —** `openFormDialog(schema, opts)` / `openFormDrawer(schema, opts)` →
+      `Promise<values | undefined>` — `imperative.tsx` mounts a `FormRenderer` in an antd
+      Modal/Drawer on a detached `createRoot` (deferred unmount via `afterClose`/
+      `afterOpenChange`), resolves once. `FormRenderer` wrapped in `forwardRef`
+      (`FormRendererHandle.submit()`) + additive `hideSubmit`; runtime output unchanged
+      without the new props. antd stays a peerDependency.
+- [x] **H2 —** additive `array.editInDialog` (table variant only): rows render read-only +
+      an Edit button opens that row's `itemFields` via `openFormDialog`, writing back with
+      `useFieldArray.update`. Builder `ItemFieldsEditor` gained an "Edit rows in a dialog"
+      checkbox. Additive schema prop → no version bump.
+- [x] **H3 —** jsdom portal tests (`imperative.test.tsx`: dialog OK/cancel/validation-blocks,
+      drawer OK, table row-edit write-back, ref.submit/hideSubmit) + changesets
+      (form-renderer-web minor, form-schema minor; builder changeset-ignored).
 
 ---
 
