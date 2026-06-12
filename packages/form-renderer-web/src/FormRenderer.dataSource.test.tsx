@@ -109,6 +109,130 @@ describe("FormRenderer dataSource (web)", () => {
     });
   });
 
+  describe("params (level 2 — multiple parents)", () => {
+    const schema = {
+      ...base,
+      fields: [
+        {
+          type: "select",
+          name: "country",
+          label: "Country",
+          options: [
+            { label: "Vietnam", value: "VN" },
+            { label: "United States", value: "US" },
+          ],
+        },
+        {
+          type: "select",
+          name: "city",
+          label: "City",
+          options: [
+            { label: "Hanoi", value: "hanoi" },
+            { label: "Hue", value: "hue" },
+          ],
+        },
+        {
+          type: "select",
+          name: "district",
+          label: "District",
+          dataSource: {
+            url: "https://api.test/districts",
+            labelKey: "name",
+            valueKey: "id",
+            params: [
+              { name: "country", from: "country" },
+              { name: "city", from: "city" },
+            ],
+          },
+        },
+      ],
+    };
+
+    it("does not fetch until every dependency field has a value", async () => {
+      fetchMock.mockReturnValue(jsonResponse([{ name: "Ba Dinh", id: 1 }]));
+      render(<FormRenderer schema={schema} initialValues={{ country: "VN" }} />);
+      // Only one parent set → still waiting.
+      await waitFor(() => expect(fetchMock).not.toHaveBeenCalled());
+    });
+
+    it("fetches with both parents as query params once all are set", async () => {
+      fetchMock.mockReturnValue(jsonResponse([{ name: "Ba Dinh", id: 1 }]));
+      render(<FormRenderer schema={schema} initialValues={{ country: "VN", city: "hanoi" }} />);
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith("https://api.test/districts?country=VN&city=hanoi"),
+      );
+    });
+
+    it("refetches when a second dependency changes", async () => {
+      fetchMock.mockReturnValue(jsonResponse([{ name: "Ba Dinh", id: 1 }]));
+      render(<FormRenderer schema={schema} initialValues={{ country: "VN", city: "hanoi" }} />);
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith("https://api.test/districts?country=VN&city=hanoi"),
+      );
+
+      const [, citySelect] = screen.getAllByRole("combobox");
+      await userEvent.click(citySelect);
+      await userEvent.click(await screen.findByText("Hue"));
+
+      await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith("https://api.test/districts?country=VN&city=hue"),
+      );
+    });
+  });
+
+  it("caches fetched options for ttlMs (no refetch for a repeated param combo)", async () => {
+    fetchMock.mockReturnValue(jsonResponse([{ name: "Hanoi", id: 1 }]));
+    const schema = {
+      ...base,
+      fields: [
+        {
+          type: "select",
+          name: "country",
+          label: "Country",
+          options: [
+            { label: "Vietnam", value: "VN" },
+            { label: "United States", value: "US" },
+          ],
+        },
+        {
+          type: "select",
+          name: "city",
+          label: "City",
+          dataSource: {
+            url: "https://api.test/cities",
+            labelKey: "name",
+            valueKey: "id",
+            dependsOn: "country",
+            ttlMs: 60000,
+          },
+        },
+      ],
+    };
+
+    render(<FormRenderer schema={schema} initialValues={{ country: "VN" }} />);
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("https://api.test/cities?country=VN"),
+    );
+
+    const [countrySelect] = screen.getAllByRole("combobox");
+    // VN -> US (fetches US), then US -> VN again (VN cached & fresh, no new fetch).
+    await userEvent.click(countrySelect);
+    await userEvent.click(await screen.findByText("United States"));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("https://api.test/cities?country=US"),
+    );
+
+    await userEvent.click(countrySelect);
+    await userEvent.click(await screen.findByText("Vietnam"));
+
+    const vnCalls = fetchMock.mock.calls.filter(
+      ([url]) => url === "https://api.test/cities?country=VN",
+    );
+    expect(vnCalls).toHaveLength(1);
+  });
+
   it("surfaces an error state when the request fails", async () => {
     fetchMock.mockReturnValue(jsonResponse(null, false, 500));
     const schema = {

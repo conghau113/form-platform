@@ -8,6 +8,8 @@ import {
   computeNodeReactions,
   computeReactions,
   type DataSourceOption,
+  dataSourceDeps,
+  dataSourceReady,
   type EffectMap,
   effectiveVisible,
   fetchDataSourceOptions,
@@ -84,25 +86,29 @@ function SelectControl(props: {
   value: SelectValue;
   disabled?: boolean;
   onChange: (v: unknown) => void;
-  /** Current value of the `dataSource.dependsOn` parent field, if any. */
-  dependsOnValue?: unknown;
+  /** Current values of every field this select's dataSource depends on
+   *  (`dependsOn` + each `params[].from`), keyed by field name. */
+  depValues?: Record<string, unknown>;
   /** Options injected by a reaction `effect: "options"` — overrides static/remote. */
   optionsOverride?: ReactionOption[];
   id?: string;
 }) {
-  const { node, value, disabled, onChange, dependsOnValue, optionsOverride, id } = props;
+  const { node, value, disabled, onChange, depValues = {}, optionsOverride, id } = props;
   const ds = node.dataSource;
 
-  // A dependent select waits until its parent has a value before fetching.
-  const waitingOnParent = !!ds?.dependsOn && (dependsOnValue == null || dependsOnValue === "");
+  // A dependent select waits until EVERY field it depends on has a value before fetching.
+  const deps = ds ? dataSourceDeps(ds) : [];
+  const ready = !ds || dataSourceReady(ds, depValues);
+  const missing = deps.filter((field) => depValues[field] == null || depValues[field] === "");
 
-  // J3 widens this to a full multi-dep values record; J2 bridges the single parent.
-  const depValues = ds?.dependsOn ? { [ds.dependsOn]: dependsOnValue } : {};
   const query = useQuery<DataSourceOption[]>({
-    queryKey: ["form-datasource", ds?.url, ds?.dependsOn ? dependsOnValue : null],
-    enabled: !!ds && !waitingOnParent,
+    // Keyed on the url + every dep value, so changing any parent refetches.
+    queryKey: ["form-datasource", ds?.url, ...deps.map((field) => depValues[field] ?? null)],
+    enabled: !!ds && ready,
     // ds is defined whenever the query is enabled.
     queryFn: () => fetchDataSourceOptions(ds as NonNullable<typeof ds>, depValues),
+    // Cache fetched options for ttlMs (default 0 = always fresh).
+    staleTime: ds?.ttlMs ?? 0,
   });
 
   // A reaction `options` effect wins; otherwise static options pass straight
@@ -110,7 +116,7 @@ function SelectControl(props: {
   const options = optionsOverride ?? (ds ? (query.data ?? []) : node.options);
 
   let notFoundContent: React.ReactNode;
-  if (waitingOnParent) notFoundContent = `Select ${ds?.dependsOn} first`;
+  if (!ready) notFoundContent = `Select ${missing.join(", ")} first`;
   else if (query.isError) notFoundContent = (query.error as Error).message;
 
   return (
@@ -134,14 +140,14 @@ function FieldControl(props: {
   value: unknown;
   disabled?: boolean;
   onChange: (v: unknown) => void;
-  /** Current value of a select's `dataSource.dependsOn` parent field, if any. */
-  dependsOnValue?: unknown;
+  /** Current values of a select's dataSource dependency fields, keyed by name. */
+  depValues?: Record<string, unknown>;
   /** Options injected by a reaction `effect: "options"` (select/radio only). */
   optionsOverride?: ReactionOption[];
   /** DOM id linking the control to its Form.Item label (htmlFor). */
   id?: string;
 }) {
-  const { node, value, disabled, onChange, dependsOnValue, optionsOverride, id } = props;
+  const { node, value, disabled, onChange, depValues, optionsOverride, id } = props;
   switch (node.type) {
     case "text":
       return (
@@ -196,7 +202,7 @@ function FieldControl(props: {
           value={value as SelectValue}
           disabled={disabled}
           onChange={onChange}
-          dependsOnValue={dependsOnValue}
+          depValues={depValues}
           optionsOverride={optionsOverride}
           id={id}
         />
@@ -813,12 +819,14 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     // disabled field; an `options` effect overrides select/radio.
     const eff = scopeEffects?.[node.name];
     const editable = canEdit(node, access) && !(eff?.disabled ?? node.disabled === true);
-    // A select with a dependent dataSource reads its parent field's current value.
-    // NOTE: dependsOn still resolves against the row scope's merged values; a top-level
-    // dependsOn referenced from inside a row reads the merged value (out of G4 scope to
-    // change further — see plan risk #4).
-    const dependsOn = node.type === "select" ? node.dataSource?.dependsOn : undefined;
-    const dependsOnValue = dependsOn ? scopeValues[dependsOn] : undefined;
+    // A select with a dependent dataSource reads each dependency field's current value
+    // (the `dependsOn` parent + every `params[].from`), keyed by field name.
+    // NOTE: deps resolve against the row scope's merged values; a top-level dep referenced
+    // from inside a row reads the merged value (out of G4 scope to change — see plan risk #4).
+    const selectDs = node.type === "select" ? node.dataSource : undefined;
+    const depValues = selectDs
+      ? Object.fromEntries(dataSourceDeps(selectDs).map((field) => [field, scopeValues[field]]))
+      : undefined;
     const fieldName = `${namePrefix}${node.name}`;
     const control_ = (
       <Controller
@@ -845,7 +853,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                   value={field.value}
                   disabled={!editable}
                   onChange={field.onChange}
-                  dependsOnValue={dependsOnValue}
+                  depValues={depValues}
                   optionsOverride={eff?.options}
                   id={fieldName}
                 />
@@ -856,7 +864,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                 value={field.value}
                 disabled={!editable}
                 onChange={field.onChange}
-                dependsOnValue={dependsOnValue}
+                depValues={depValues}
                 optionsOverride={eff?.options}
                 id={fieldName}
               />
