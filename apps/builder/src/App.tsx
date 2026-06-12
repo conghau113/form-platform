@@ -1,6 +1,6 @@
 import { childrenOf, type FieldNode, type FormSchema, migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
-import { Button, message, Segmented, Space, Typography } from "antd";
+import { Button, message, Segmented, Space, Typography, Upload } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { DesignerProvider, type DesignerValue } from "./DesignCanvas";
@@ -39,6 +39,7 @@ import {
 } from "./engine/tree";
 import { describeNode, metaGuard, newField } from "./field-registry";
 import { useHistory } from "./history";
+import { parseFormFile } from "./io";
 import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
 import { useDragon } from "./useDragon";
 import { WorkflowEditor } from "./WorkflowEditor";
@@ -107,6 +108,16 @@ export function App() {
   const applyJson = useCallback(
     (next: FormSchema) => history.set(schemaToTree(next), "Edit JSON"),
     [history.set],
+  );
+
+  // Replace the whole form (file import, template, backend load): reset history to
+  // the new tree and drop any selection that referred to the old one.
+  const loadSchema = useCallback(
+    (next: FormSchema) => {
+      history.reset(schemaToTree(next));
+      setSelection(emptySelection);
+    },
+    [history.reset],
   );
 
   // The selected node, resolved to a schema field for the property panel. Selecting
@@ -274,8 +285,7 @@ export function App() {
         message.error(`Load failed: ${data.message ?? res.statusText}`);
         return;
       }
-      history.reset(schemaToTree(migrate(data)));
-      setSelection(emptySelection);
+      loadSchema(migrate(data));
       // Reapply the saved theme if one exists; a missing theme is not an error.
       const themeRes = await fetch(`${API}/themes/${encodeURIComponent(data.id)}`);
       setTokens(themeRes.ok ? migrateTheme(await themeRes.json()) : DEFAULT_TOKENS);
@@ -302,6 +312,27 @@ export function App() {
     URL.revokeObjectURL(url);
   }
 
+  // Portable, backend-free download of the current form schema (Phase I).
+  function onExportForm() {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${form.id || "form"}.form.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Load a form from an uploaded .json file (untrusted → migrate validates).
+  async function onImportForm(file: File) {
+    try {
+      loadSchema(parseFormFile(await file.text()));
+      message.success(`Imported "${file.name}"`);
+    } catch (e) {
+      message.error(`Import failed: ${(e as Error).message}`);
+    }
+  }
+
   return (
     <DesignerProvider value={designer}>
       <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -324,6 +355,17 @@ export function App() {
           />
           {mode === "form" && (
             <Space style={{ marginLeft: "auto" }}>
+              <Button onClick={onExportForm}>Export</Button>
+              <Upload
+                accept=".json,application/json"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  void onImportForm(file);
+                  return false; // handle locally; never POST
+                }}
+              >
+                <Button>Import</Button>
+              </Upload>
               <Button type="primary" onClick={onSave}>
                 Save
               </Button>
