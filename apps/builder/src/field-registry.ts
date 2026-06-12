@@ -214,7 +214,9 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     label: "Select",
     category: "Choice",
     defaults: { options: [] },
-    settings: [{ key: "multiple", label: "Allow multiple", control: "checkbox" }, optionsSetting],
+    // Options/dataSource are authored by the bespoke DataSourceEditor (static vs remote),
+    // not the generic `options` descriptor — only `multiple` is descriptor-driven here.
+    settings: [{ key: "multiple", label: "Allow multiple", control: "checkbox" }],
     defaultValueKind: "text",
     behavior: LEAF,
     showInPalette: true,

@@ -35,6 +35,7 @@ import {
   type SettingDescriptor,
   type ValidationRuleType,
 } from "./field-registry";
+import { DataSourceEditor } from "./DataSourceEditor";
 import { ReactionsEditor } from "./ReactionsEditor";
 
 /** The leaf/array nodes the full field editor handles. Layout containers render a
@@ -316,6 +317,10 @@ function FieldForm({
 
       {/* Type-specific properties, driven by the registry descriptor */}
       <TypeSettings field={field} set={set} />
+      {/* A select's options come from the bespoke static-vs-remote editor (params + cache). */}
+      {field.type === "select" && (
+        <DataSourceEditor field={field} sourceNames={condFields} set={set} />
+      )}
       {field.type === "array" && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}
       <DefaultValueEditor field={field} set={set} />
 
