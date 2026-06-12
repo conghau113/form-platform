@@ -156,6 +156,10 @@ export const numberFieldSchema = z.object({
   ...commonFields,
   min: z.number().optional(),
   max: z.number().optional(),
+  /** Increment applied by the stepper buttons / arrow keys. */
+  step: z.number().optional(),
+  /** Number of decimal places the input formats to. */
+  precision: z.number().int().optional(),
 });
 
 export const optionSchema = z.object({
@@ -188,8 +192,49 @@ export const selectFieldSchema = z.object({
   type: z.literal("select"),
   ...commonFields,
   multiple: z.boolean().optional(),
+  /** Free-tagging mode: the user can type values not in `options`. Implies a multi
+   *  (array) value; in the renderer `tags` wins over `multiple`. */
+  tags: z.boolean().optional(),
+  /** Filterable dropdown (antd `showSearch`). */
+  showSearch: z.boolean().optional(),
+  /** Show a clear (×) button. */
+  allowClear: z.boolean().optional(),
   options: z.array(optionSchema).optional(),
   dataSource: selectDataSourceSchema.optional(),
+});
+
+/** Multi-select rendered as a group of checkboxes. Shares the option/dataSource shape
+ *  with select (static `options` or a remote `dataSource`); value is an array of the
+ *  chosen option values. */
+export const checkboxGroupFieldSchema = z.object({
+  type: z.literal("checkbox-group"),
+  ...commonFields,
+  options: z.array(optionSchema).optional(),
+  dataSource: selectDataSourceSchema.optional(),
+});
+
+/** One uploaded file's serializable metadata (a subset of antd's `UploadFile`). A live
+ *  local file also carries a non-serializable `originFileObj`, which is NOT validated —
+ *  the value is checked as a plain array so the runtime fileList never fails. */
+export const uploadFileSchema = z.object({
+  uid: z.string(),
+  name: z.string(),
+  url: z.string().optional(),
+  status: z.string().optional(),
+});
+
+/** File attachment input. Value is an array of {@link uploadFileSchema} metadata. By
+ *  default files stay local (the renderer prevents auto-upload); a real upload happens
+ *  only when the form's `settings.submitUrl` is set. */
+export const uploadFieldSchema = z.object({
+  type: z.literal("upload"),
+  ...commonFields,
+  /** Accepted file types (the HTML `accept` attribute, e.g. "image/*,.pdf"). */
+  accept: z.string().optional(),
+  /** Max number of files allowed. */
+  maxCount: z.number().int().optional(),
+  /** antd list layout. */
+  listType: z.enum(["text", "picture", "picture-card"]).optional(),
 });
 
 export const dateFieldSchema = z.object({ type: z.literal("date"), ...commonFields });
@@ -235,6 +280,8 @@ export type LeafField =
   | z.infer<typeof textareaFieldSchema>
   | z.infer<typeof numberFieldSchema>
   | z.infer<typeof selectFieldSchema>
+  | z.infer<typeof checkboxGroupFieldSchema>
+  | z.infer<typeof uploadFieldSchema>
   | z.infer<typeof radioFieldSchema>
   | z.infer<typeof dateFieldSchema>
   | z.infer<typeof timeFieldSchema>
@@ -480,6 +527,8 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     textareaFieldSchema,
     numberFieldSchema,
     selectFieldSchema,
+    checkboxGroupFieldSchema,
+    uploadFieldSchema,
     radioFieldSchema,
     dateFieldSchema,
     timeFieldSchema,

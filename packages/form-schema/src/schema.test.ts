@@ -76,6 +76,54 @@ describe("schema field types", () => {
     ]);
   });
 
+  it("accepts the Phase L field types and rich props (additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "phase-l",
+      title: "Phase L",
+      fields: [
+        {
+          type: "upload",
+          name: "docs",
+          label: "Documents",
+          accept: "image/*,.pdf",
+          maxCount: 3,
+          listType: "picture",
+          required: true,
+        },
+        {
+          type: "checkbox-group",
+          name: "perks",
+          label: "Perks",
+          options: [
+            { label: "Lunch", value: "lunch" },
+            { label: "Gym", value: "gym" },
+          ],
+        },
+        {
+          type: "checkbox-group",
+          name: "cities",
+          label: "Cities",
+          dataSource: { url: "/api/cities", labelKey: "name", valueKey: "id" },
+        },
+        { type: "number", name: "qty", label: "Qty", step: 0.5, precision: 2 },
+        {
+          type: "select",
+          name: "tagsel",
+          label: "Tags",
+          tags: true,
+          showSearch: true,
+          allowClear: true,
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ type: "upload", maxCount: 3, listType: "picture" });
+    expect(out.fields[1]).toMatchObject({ type: "checkbox-group" });
+    expect(out.fields[2]).toMatchObject({ type: "checkbox-group", dataSource: { url: "/api/cities" } });
+    expect(out.fields[3]).toMatchObject({ type: "number", step: 0.5, precision: 2 });
+    expect(out.fields[4]).toMatchObject({ type: "select", tags: true, showSearch: true });
+  });
+
   it("accepts the additive common props on existing types", () => {
     const out = formSchema.parse({
       formVersion: 3,
