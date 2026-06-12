@@ -361,9 +361,37 @@ Plan: `C:\Users\ASUS\.claude\plans\radiant-sauteeing-reef.md`.
       schema raw on Use — correct today since every saved schema is current-version, but if
       `CURRENT_FORM_VERSION` ever bumps, add a `migrate()` on rehydrate. No changeset.
 
-- [ ] **J — Data sources, level 2:** build on `form-core/datasource.ts` — dependent
-      selects (params from other fields via reactions), caching, loading/error states
-      in renderer-web, builder UI to configure a datasource per select field.
+## Phase J — Data sources, level 2 ✅ DONE (2026-06-12)
+Shipped on branch `feat/phase-j-datasources` (off `feat/phase-i-templates`). A select's remote
+`dataSource` went from a single `dependsOn` parent to **multi-field params + caching**, with a
+real builder UI. Additive → no `formVersion` bump. Plan:
+`C:\Users\ASUS\.claude\plans\magical-skipping-wreath.md`. Decisions: flexible `params: {name, from}[]`
+mapping (query-param name decoupled from source field), `ttlMs` in schema → react-query
+`staleTime`, scope stays `select`-only (radio keeps static options).
+- [x] **J1 — schema** (`f684da8`): extracted `selectDataSourceSchema`; added optional
+      `params: { name, from }[]` (multi-field) + `ttlMs` (cache). `dependsOn` kept as back-compat
+      shorthand. Parse test. Changeset form-schema minor.
+- [x] **J2 — form-core** (`eb72813`): `buildDataSourceUrl`/`fetchDataSourceOptions` now take a
+      **values record** instead of a single value; new `dataSourceDeps(ds)` (all dep field names)
+      + `dataSourceReady(ds, values)` (every dep present). `buildDataSourceUrl` applies `dependsOn`
+      + each `params[]`. Renderer call sites bridged mechanically to stay green. `datasource.test.ts`
+      rewritten + multi-param cases. Changeset form-core minor.
+- [x] **J3 — renderer-web** (`56a56b8`): `SelectControl` reads a `depValues` record over
+      `dataSourceDeps`, gates the fetch until ALL deps present (`dataSourceReady`), keys react-query
+      on every dep value, sets `staleTime` from `ttlMs`, and the empty-state lists each missing
+      field. `renderNode` builds `depValues` from `scopeValues` (per-row scope, G4 caveat preserved).
+      New multi-param + ttl-cache tests. Changeset form-renderer-web minor.
+- [x] **J4 — builder** (`3b53c28`): new `DataSourceEditor.tsx` — Static↔Remote `Segmented` toggle;
+      remote authors url/labelKey/valueKey/ttlMs + a params editor (param name + source-field
+      picker reusing `condFields`). Writing one source clears the other; a legacy `dependsOn`
+      surfaces as one param row and normalizes to `params` on edit. Wired into `FieldForm` for
+      select; `optionsSetting` removed from select's registry settings (radio keeps it).
+      `DataSourceEditor.test.tsx` (5). Builder changeset-ignored.
+- [x] **J5 — close:** typecheck 15/15, full suite green (one container test is a known parallel-load
+      flake — passes in isolation), biome clean on new files (CRLF baseline ignored), reviewer PASS
+      each sub-phase. Builder now 120 tests.
+
+- [ ] **K — i18n:** optional `locale` map for labels/placeholders/validation messages
 - [ ] **K — i18n:** optional `locale` map for labels/placeholders/validation messages
       (additive). Renderer picks a locale; builder edits per-locale strings.
 - [ ] **L — Workflow ↔ form integration:** workflow nodes reference forms by id
