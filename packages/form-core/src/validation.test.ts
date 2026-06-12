@@ -722,4 +722,42 @@ describe("buildZodSchema with layout containers", () => {
     expect(schema.safeParse({ rows: [] }).success).toBe(false);
     expect(schema.safeParse({ rows: [{ v: "x" }] }).success).toBe(true);
   });
+
+  it("validates a checkbox-group as an array (required ⇒ ≥1)", () => {
+    const required = buildZodSchema(
+      form([
+        {
+          type: "checkbox-group",
+          name: "perks",
+          label: "Perks",
+          required: true,
+          options: [{ label: "Gym", value: "gym" }],
+        },
+      ]),
+    );
+    expect(required.safeParse({ perks: [] }).success).toBe(false);
+    expect(required.safeParse({ perks: ["gym"] }).success).toBe(true);
+
+    const optional = buildZodSchema(
+      form([{ type: "checkbox-group", name: "perks", label: "Perks" }]),
+    );
+    expect(optional.safeParse({}).success).toBe(true);
+    expect(optional.safeParse({ perks: ["gym", "lunch"] }).success).toBe(true);
+  });
+
+  it("validates an upload as an array (required ⇒ ≥1, maxCount bounds it)", () => {
+    const file = { uid: "1", name: "a.pdf" };
+    const required = buildZodSchema(
+      form([{ type: "upload", name: "docs", label: "Docs", required: true, maxCount: 2 }]),
+    );
+    expect(required.safeParse({ docs: [] }).success).toBe(false);
+    expect(required.safeParse({ docs: [file] }).success).toBe(true);
+    expect(
+      required.safeParse({ docs: [file, { uid: "2", name: "b" }, { uid: "3", name: "c" }] })
+        .success,
+    ).toBe(false);
+
+    const optional = buildZodSchema(form([{ type: "upload", name: "docs", label: "Docs" }]));
+    expect(optional.safeParse({}).success).toBe(true);
+  });
 });

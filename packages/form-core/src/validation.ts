@@ -137,6 +137,20 @@ function leafZod(node: LeafField, requiredOverride?: boolean): z.ZodTypeAny {
       const b = z.boolean();
       return required ? b.refine((v) => v === true, requiredMsg) : b.optional();
     }
+    case "checkbox-group": {
+      // A group of checkboxes; the value is an array of the chosen option values.
+      const arr = z.array(z.union([z.string(), z.number()]));
+      return required ? arr.min(1, requiredMsg) : arr.optional();
+    }
+    case "upload": {
+      // The value is the antd fileList (array of file metadata + live local files), so
+      // it is validated as a plain array. Presence (required) means ≥1 file; maxCount
+      // bounds the upper end. Element shape is left to the renderer/persistence layer.
+      let arr = z.array(z.any());
+      if (node.maxCount != null)
+        arr = arr.max(node.maxCount, `${labelOf(node)} allows at most ${node.maxCount} file(s)`);
+      return required ? arr.min(1, requiredMsg) : arr.optional();
+    }
     case "color": {
       // A color is a string (hex/rgb); presence is asserted when required, plus any
       // string rules (e.g. a pattern enforcing a hex shape).
