@@ -58,6 +58,7 @@ describe("SettingsPanel", () => {
           selected={null}
           form={tree.node as FormProps}
           siblingNames={[]}
+          fieldNames={[]}
           onChange={vi.fn()}
           onChangeForm={onChangeForm}
         />

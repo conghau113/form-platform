@@ -5,6 +5,7 @@ import {
   type FormLayoutProps,
   isLayoutContainer,
   type LeafField,
+  type Reaction,
   type ValidationRule,
 } from "@org/form-schema";
 import {
@@ -34,6 +35,7 @@ import {
   type SettingDescriptor,
   type ValidationRuleType,
 } from "./field-registry";
+import { ReactionsEditor } from "./ReactionsEditor";
 
 /** The leaf/array nodes the full field editor handles. Layout containers render a
  *  minimal settings-only editor instead (they are nameless / value-transparent). */
@@ -65,14 +67,20 @@ const COL_KEYS: ColKey[] = ["xs", "sm", "md", "lg"];
 
 type Patch = Partial<AuthoredField>;
 
-/** Read the field name referenced by a simple `{ "==": [{var}, value] }` rule, if any. */
-function readEquals(field: AuthoredField): { field: string; value: string } | null {
-  const rule = field.visibleWhen?.rule as { "=="?: unknown } | undefined;
-  const eq = rule?.["=="];
+/** Read the `{ field, value }` of a simple `{ "==": [{var}, value] }` JSONLogic rule,
+ *  if it has that exact shape. Anything more complex returns null so the UI can fall
+ *  back to a "edit via JSON" hint. Shared by the Visibility editor and ReactionsEditor. */
+export function readEqualsRule(rule: unknown): { field: string; value: string } | null {
+  const eq = (rule as { "=="?: unknown } | undefined)?.["=="];
   if (!Array.isArray(eq) || eq.length !== 2) return null;
   const left = eq[0] as { var?: string } | undefined;
   if (!left || typeof left.var !== "string") return null;
   return { field: left.var, value: String(eq[1] ?? "") };
+}
+
+/** Read the simple-equals shape of a field's `visibleWhen`, if any. */
+function readEquals(field: AuthoredField): { field: string; value: string } | null {
+  return readEqualsRule(field.visibleWhen?.rule);
 }
 
 /** Identity accessors tolerant of nameless layout containers (tabs/card/...)
@@ -116,6 +124,7 @@ export function PropertyPanel({
   selected,
   form,
   siblingNames: topSiblingNames,
+  fieldNames,
   onChange,
   onChangeForm,
 }: {
@@ -124,6 +133,9 @@ export function PropertyPanel({
   form?: FormProps | null;
   /** Top-level field names, candidates for a visibleWhen condition. */
   siblingNames: string[];
+  /** Every named field reachable in the top-level value scope (containers descended,
+   *  array subtrees skipped) — reaction TARGET candidates for a top-level field. */
+  fieldNames: string[];
   /** Emits the rebuilt top-level node (App swaps it into the tree via replaceField). */
   onChange: (uid: string, field: FieldNode) => void;
   /** Patches the root Form node (id/title/layoutProps). */
@@ -218,6 +230,9 @@ export function PropertyPanel({
       <FieldForm
         field={node as AuthoredField}
         siblingNames={siblingNames}
+        // Reaction targets: all top-level-scope names for a top-level field; the row's
+        // sibling names when editing an array item field (path.length > 0).
+        targetNames={path.length ? siblingNames : fieldNames}
         set={set}
         onDrill={(index) => setDrillPath([...path, index])}
       />
@@ -230,11 +245,14 @@ export function PropertyPanel({
 function FieldForm({
   field,
   siblingNames,
+  targetNames,
   set,
   onDrill,
 }: {
   field: AuthoredField;
   siblingNames: string[];
+  /** Candidate reaction target names (top-level scope names, or row siblings when nested). */
+  targetNames: string[];
   set: (patch: Patch) => void;
   onDrill: (index: number) => void;
 }) {
@@ -377,6 +395,14 @@ function FieldForm({
           </Form.Item>
         </Space>
       )}
+
+      <ReactionsEditor
+        reactions={(prop(field, "reactions") as Reaction[] | undefined) ?? []}
+        fieldName={field.name}
+        targetNames={targetNames}
+        sourceNames={condFields}
+        onChange={(next) => set({ reactions: next.length ? next : undefined } as Patch)}
+      />
 
       <Divider orientation="left" plain>
         Permissions
@@ -810,9 +836,9 @@ function mergePermissions(
   return Object.keys(next).length ? next : undefined;
 }
 
-type Option = { label: string; value: string | number };
+export type Option = { label: string; value: string | number };
 
-function OptionsEditor({
+export function OptionsEditor({
   options,
   onChange,
 }: {

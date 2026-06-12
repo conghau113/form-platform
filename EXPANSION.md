@@ -280,10 +280,22 @@ Layout: CompositePanel (left) | Toolbar + Viewport (center) | SettingsPanel (rig
       SettingsPanel / persist; reviewer ran each sub-phase; no changeset (builder
       is private + changeset-ignored).
 
-## Phase G — Reactions / Linkage (Formily core idea)
+## Phase G — Reactions / Linkage (Formily core idea) ✅ DONE (2026-06-12)
 Schema: optional `reactions[]` — `{ when: <JSONLogic>, then: { set?: visible|disabled|
 value|options on a target field } }`. Pure engine in form-core; renderer subscribes via
 `watch`. Generalizes the current single `visibleWhen`. NEVER eval.
+
+**Summary:** Formily-style reactions/linkage shipped end to end. A field carries an optional
+`reactions[]` (`{ when, target, effect: visible|disabled|value|options, value? }`); a pure
+form-core engine (`computeReactions`/`computeNodeReactions`/`effectiveVisible`/
+`collectValueEffects`) resolves them with `reactions > visibleWhen > static` precedence,
+single-pass evaluation, and self-target + value-cycle guards. `buildZodSchema` computes
+effects internally so validation stays consistent with rendering. The web renderer applies
+the EffectMap via `watch` (visibility/disabled/options/value) and arrays are fully reactive
+per row (merged row scope), lifting the Phase C always-visible limitation. The builder gained
+a "Reactions" editor in the property panel (When/target/effect/value, simple-equals with a
+JSON-panel fallback) and now offers Visibility for array item fields. JSONLogic only — never
+eval. Changesets: form-schema (G1), form-core (G2, G4), form-renderer-web (G3, G4).
 
 - [x] **G1 — schema:** `reactionSchema` = `{ when: JSONLogic, target: fieldName,
       effect: "visible" | "disabled" | "value" | "options", value? }`, optional
@@ -291,12 +303,16 @@ value|options on a target field } }`. Pure engine in form-core; renderer subscri
 - [x] **G2 — form-core engine:** pure `computeReactions(schema, values) → EffectMap`
       (reuses `conditions.ts`). Deterministic single pass + cycle/self-target guard;
       precedence: `reactions` > `visibleWhen` > static props. Exhaustive tests. (`bf663f5`)
-- [ ] **G3 — renderer-web:** subscribe via RHF `watch`, apply EffectMap; fields
-      hidden by reaction drop out of validation exactly like `visibleWhen` today.
-- [ ] **G4 — per-row linkage:** lift the Phase C limitation — `visibleWhen`/
-      `reactions` inside `array.itemFields` evaluate against the ROW's values.
-- [ ] **G5 — builder UI:** "Reactions" section in the settings panel (target picker
-      from the outline tree, condition builder, effect selector) + close.
+- [x] **G3 — renderer-web:** subscribe via RHF `watch`, apply EffectMap; fields
+      hidden by reaction drop out of validation exactly like `visibleWhen` today. (`07c59d6`)
+- [x] **G4 — per-row linkage:** lift the Phase C limitation — `visibleWhen`/
+      `reactions` inside `array.itemFields` evaluate against the ROW's values. (`e8ae644`)
+- [x] **G5 — builder UI:** ✅ "Reactions" section in the property panel — When (source
+      field + equals, with a JSON-panel fallback for non-simple rules), target picker
+      (self excluded), effect selector (resets value on change), per-effect value control
+      (Show/Hide, Enable/Disable, Input, OptionsEditor). `App` computes top-level-scope
+      `fieldNames`; the Visibility section is now offered for array item fields too. New
+      `ReactionsEditor.tsx` + tests. Builder is changeset-ignored.
 
 ## Phase H — Modal / Drawer (FormDialog / FormDrawer)
 - [ ] **H1 —** `openFormDialog(schema, opts)` / `openFormDrawer(schema, opts)` →

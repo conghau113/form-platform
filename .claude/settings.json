@@ -89,9 +89,7 @@
       "Read(**/*.pem)",
       "Read(**/secrets/**)"
     ],
-    "additionalDirectories": [
-      "C:\\Users\\ASUS\\.claude\\plans"
-    ]
+    "additionalDirectories": ["C:\\Users\\ASUS\\.claude\\plans"]
   },
   "hooks": {
     "PostToolUse": [

@@ -1,4 +1,4 @@
-import { type FormSchema, migrate } from "@org/form-schema";
+import { childrenOf, type FieldNode, type FormSchema, migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
 import { Button, message, Segmented, Space, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -54,6 +54,23 @@ const API = "http://localhost:3001";
 /** Canvas/preview content width per simulated device. */
 const VIEWPORTS = { Desktop: 1280, Tablet: 768, Mobile: 375 } as const;
 
+/** Every named field reachable in the top-level value scope: layout containers are
+ *  descended (their children hoist into the same values object), but `array.itemFields`
+ *  are skipped — a row is its own value namespace. Drives reaction target candidates. */
+function collectFieldNames(nodes: FieldNode[]): string[] {
+  const out: string[] = [];
+  const walk = (list: FieldNode[]): void => {
+    for (const node of list) {
+      if ("name" in node && node.name) out.push(node.name);
+      if (node.type === "array") continue; // row-scoped subtree
+      const kids = childrenOf(node);
+      if (kids) walk(kids);
+    }
+  };
+  walk(nodes);
+  return out;
+}
+
 export function App() {
   const history = useHistory<TreeNode>(() => schemaToTree(migrate(example)));
   const tree = history.present;
@@ -104,6 +121,9 @@ export function App() {
   const siblingNames = tree.children
     .map((c) => ("name" in c.node ? c.node.name : undefined))
     .filter((n): n is string => Boolean(n));
+  // Reaction TARGET candidates: every named field reachable in the top-level value scope
+  // (layout containers descended, array subtrees skipped — rows are a separate scope).
+  const fieldNames = useMemo(() => collectFieldNames(schema.fields), [schema]);
 
   // Canvas shortcuts, suppressed while typing in a real control (header/panel inputs).
   // undo/redo · select-all · copy/paste (fresh uids + unique names) · delete.
@@ -380,6 +400,7 @@ export function App() {
                   selected={selected}
                   form={formSelected ? form : null}
                   siblingNames={siblingNames}
+                  fieldNames={fieldNames}
                   onChange={(uid, field) =>
                     history.set(applyFieldEdit(tree, uid, field), "Edit field")
                   }
