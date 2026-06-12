@@ -104,6 +104,18 @@ const placeholder: SettingDescriptor = {
 };
 const maxLength: SettingDescriptor = { key: "maxLength", label: "Max length", control: "number" };
 const optionsSetting: SettingDescriptor = { key: "options", label: "Options", control: "options" };
+const pickerSetting: SettingDescriptor = {
+  key: "picker",
+  label: "Picker",
+  control: "select",
+  choices: [
+    { label: "Date", value: "date" },
+    { label: "Week", value: "week" },
+    { label: "Month", value: "month" },
+    { label: "Quarter", value: "quarter" },
+    { label: "Year", value: "year" },
+  ],
+};
 
 /** A value-bearing leaf input: draggable, not droppable. */
 const LEAF: ComponentBehavior = {
@@ -254,6 +266,30 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     named: true,
   },
   {
+    type: "cascader",
+    label: "Cascader",
+    category: "Choice",
+    // Tree options/dataSource are authored by the shared DataSourceEditor (which
+    // renders the recursive TreeOptionsEditor in static mode); value is a path array.
+    defaults: { options: [] },
+    settings: [],
+    defaultValueKind: "none",
+    behavior: LEAF,
+    showInPalette: true,
+    named: true,
+  },
+  {
+    type: "tree-select",
+    label: "Tree select",
+    category: "Choice",
+    defaults: { options: [] },
+    settings: [{ key: "multiple", label: "Allow multiple", control: "checkbox" }],
+    defaultValueKind: "none",
+    behavior: LEAF,
+    showInPalette: true,
+    named: true,
+  },
+  {
     type: "checkbox",
     label: "Checkbox",
     category: "Boolean",
@@ -310,7 +346,18 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     label: "Date",
     category: "Date & time",
     defaults: {},
-    settings: [],
+    settings: [pickerSetting],
+    defaultValueKind: "none",
+    behavior: LEAF,
+    showInPalette: true,
+    named: true,
+  },
+  {
+    type: "date-range",
+    label: "Date range",
+    category: "Date & time",
+    defaults: {},
+    settings: [pickerSetting],
     defaultValueKind: "none",
     behavior: LEAF,
     showInPalette: true,
@@ -319,6 +366,17 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "time",
     label: "Time",
+    category: "Date & time",
+    defaults: {},
+    settings: [],
+    defaultValueKind: "none",
+    behavior: LEAF,
+    showInPalette: true,
+    named: true,
+  },
+  {
+    type: "time-range",
+    label: "Time range",
     category: "Date & time",
     defaults: {},
     settings: [],

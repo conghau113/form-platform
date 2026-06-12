@@ -35,7 +35,7 @@ import {
   type SettingDescriptor,
   type ValidationRuleType,
 } from "./field-registry";
-import { DataSourceEditor } from "./DataSourceEditor";
+import { DataSourceEditor, isOptionSourced } from "./DataSourceEditor";
 import { ReactionsEditor } from "./ReactionsEditor";
 
 /** The leaf/array nodes the full field editor handles. Layout containers render a
@@ -338,9 +338,9 @@ function FieldForm({
 
       {/* Type-specific properties, driven by the registry descriptor */}
       <TypeSettings field={field} set={set} />
-      {/* A select / checkbox-group's options come from the shared static-vs-remote editor
-          (params + cache). */}
-      {(field.type === "select" || field.type === "checkbox-group") && (
+      {/* An option-sourced leaf's options (select / checkbox-group / cascader /
+          tree-select) come from the shared static-vs-remote editor (params + cache). */}
+      {isOptionSourced(field) && (
         <DataSourceEditor field={field} sourceNames={condFields} set={set} />
       )}
       {field.type === "array" && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}

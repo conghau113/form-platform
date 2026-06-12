@@ -85,6 +85,43 @@ describe("DataSourceEditor", () => {
     });
   });
 
+  it("renders the recursive tree editor in Static mode for a cascader", () => {
+    const set = vi.fn();
+    const field: Extract<LeafField, { type: "cascader" }> = {
+      type: "cascader",
+      name: "region",
+      label: "Region",
+      options: [{ label: "Vietnam", value: "vn", children: [{ label: "Hanoi", value: "hn" }] }],
+    };
+    render(<DataSourceEditor field={field} sourceNames={[]} set={set} />);
+
+    // The tree editor exposes a "+ child" per row — the flat OptionsEditor never does.
+    expect(screen.getAllByRole("button", { name: "+ child" })).toHaveLength(2);
+    const labels = screen.getAllByPlaceholderText("label") as HTMLInputElement[];
+    expect(labels.map((i) => i.value)).toEqual(["Vietnam", "Hanoi"]);
+  });
+
+  it("offers a children-key input in Remote mode for a tree-select", async () => {
+    const user = userEvent.setup();
+    const set = vi.fn();
+    const ds = { url: "u", labelKey: "name", valueKey: "id" };
+    const field: Extract<LeafField, { type: "tree-select" }> = {
+      type: "tree-select",
+      name: "dept",
+      label: "Dept",
+      dataSource: ds,
+    };
+    render(<DataSourceEditor field={field} sourceNames={[]} set={set} />);
+
+    expect(screen.getByText("Children key (tree)")).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("e.g. children"), "s");
+
+    expect(set).toHaveBeenLastCalledWith({
+      options: undefined,
+      dataSource: { ...ds, childrenKey: "s" },
+    });
+  });
+
   it("surfaces a legacy dependsOn as a param row and normalizes it on edit", async () => {
     const user = userEvent.setup();
     const ds = { url: "u", labelKey: "name", valueKey: "id", dependsOn: "country" };
