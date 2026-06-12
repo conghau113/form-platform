@@ -181,6 +181,24 @@ describe("collectValueEffects", () => {
     ]);
     expect(collectValueEffects(f, { a: 1 })).toEqual({ b: "x" });
   });
+
+  it("emits dotted per-row paths for value effects inside a visible array (G4)", () => {
+    const f = form([
+      {
+        type: "array",
+        name: "rows",
+        itemFields: [
+          source("kind", [
+            { when: eq("kind", "co"), target: "tier", effect: "value", value: "gold" },
+          ]),
+          { type: "text", name: "tier", label: "Tier" },
+        ],
+      } as FieldNode,
+    ]);
+    const out = collectValueEffects(f, { rows: [{ kind: "co" }, { kind: "person" }] });
+    // only row 0 matches -> dotted path with its index
+    expect(out).toEqual({ "rows.0.tier": "gold" });
+  });
 });
 
 describe("computeNodeReactions", () => {

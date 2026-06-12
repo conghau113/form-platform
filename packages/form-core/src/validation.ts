@@ -8,7 +8,12 @@ import {
 } from "@org/form-schema";
 import { z } from "zod";
 import { type AccessContext, canView } from "./rbac.js";
-import { computeReactions, type EffectMap, effectiveVisible } from "./reactions.js";
+import {
+  computeNodeReactions,
+  computeReactions,
+  type EffectMap,
+  effectiveVisible,
+} from "./reactions.js";
 
 /** A lenient phone matcher: optional leading +, then 7–15 digits, allowing spaces,
  *  dashes and parens as separators. Compiled from a string literal — never eval. */
@@ -147,21 +152,64 @@ function leafZod(node: LeafField): z.ZodTypeAny {
   }
 }
 
-/** Compile an `array` (Form List) node to a Zod array of row objects. The item
- *  schema is built from `itemFields` treating them as always-visible: a single static
- *  schema can't model per-row `visibleWhen` (the row's own values aren't known here).
- *  KNOWN LIMITATION — candidate for Phase F reactions. `required` implies minItems 1. */
-function arrayZod(node: ArrayField, access?: AccessContext): z.ZodTypeAny {
-  const item = z.object(buildShape(node.itemFields, {}, access));
-  let arr = z.array(item);
+/** Build the per-row Zod object for an array, scoped to that row. Each row sees a
+ *  MERGED value object (`{ ...outer, ...row }`, row keys win) so its `visibleWhen` and
+ *  reactions can reference both sibling row fields and outer form fields. Reactions are
+ *  recomputed per row, so per-row linkage is honored (this lifts the old Phase C
+ *  always-visible limitation). */
+function rowShape(
+  node: ArrayField,
+  row: Record<string, unknown>,
+  outer: Record<string, unknown>,
+  access?: AccessContext,
+): z.ZodObject<z.ZodRawShape> {
+  const merged = { ...outer, ...row };
+  const rowEffects = computeNodeReactions(node.itemFields, merged);
+  return z.object(buildShape(node.itemFields, merged, access, rowEffects));
+}
+
+/** Compile an `array` (Form List) node to a Zod array of row objects. Length bounds
+ *  (`required`/min/max) are asserted on the raw array FIRST; then `superRefine`
+ *  validates each row against its own reactive shape (emitting issues at `[i, ...path]`)
+ *  and `transform` re-parses each row to strip its hidden/non-viewable keys.
+ *  `required` implies minItems 1. */
+function arrayZod(
+  node: ArrayField,
+  values: Record<string, unknown>,
+  access?: AccessContext,
+): z.ZodTypeAny {
   // `required` means ≥1; when both are set the stricter bound wins, so an explicit
   // `minItems: 0` never silently cancels `required: true`.
   const min = node.required ? Math.max(node.minItems ?? 0, 1) : node.minItems;
+  let arr = z.array(z.unknown());
   if (min != null && min > 0)
     arr = arr.min(min, `${labelOf(node)} requires at least ${min} item(s)`);
   if (node.maxItems != null)
     arr = arr.max(node.maxItems, `${labelOf(node)} allows at most ${node.maxItems} item(s)`);
-  return min ? arr : arr.optional();
+
+  const checked = arr.superRefine((rows, ctx) => {
+    rows.forEach((row, i) => {
+      const rowObj = (row ?? {}) as Record<string, unknown>;
+      const res = rowShape(node, rowObj, values, access).safeParse(rowObj);
+      if (!res.success) {
+        for (const issue of res.error.issues) {
+          ctx.addIssue({ ...issue, path: [i, ...issue.path] });
+        }
+      }
+    });
+  });
+
+  // Re-parse each row so reaction/visibility-hidden keys are stripped from the clean
+  // output, mirroring how top-level hidden fields are stripped.
+  const stripped = checked.transform((rows) =>
+    (rows as unknown[]).map((row) => {
+      const rowObj = (row ?? {}) as Record<string, unknown>;
+      const res = rowShape(node, rowObj, values, access).safeParse(rowObj);
+      return res.success ? res.data : rowObj;
+    }),
+  );
+
+  return min ? stripped : stripped.optional();
 }
 
 /** Build the Zod shape for a list of nodes against `values` (drives visibility) and
@@ -188,7 +236,7 @@ function buildShape(
       continue;
     }
     if (node.type === "array") {
-      shape[node.name] = arrayZod(node, access);
+      shape[node.name] = arrayZod(node, values, access);
       continue;
     }
     shape[node.name] = leafZod(node);

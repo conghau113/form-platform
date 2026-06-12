@@ -1,4 +1,10 @@
-import { childrenOf, type FieldNode, type FormSchema, type Reaction } from "@org/form-schema";
+import {
+  childrenOf,
+  type FieldNode,
+  type FormSchema,
+  isLayoutContainer,
+  type Reaction,
+} from "@org/form-schema";
 import { evalRule, isVisible } from "./conditions.js";
 
 /** Option payload for an `effect: "options"` reaction (same shape as a select/radio
@@ -179,18 +185,40 @@ export function effectiveVisible(
 }
 
 /**
- * Collect the value-effect assignments at the top level: target field name -> the
- * value to set. Used by the renderer to push reaction-driven values via `setValue`.
- * G2 covers top-level paths only; per-row array paths are added in G4.
+ * Collect the value-effect assignments across the whole form: RHF field path -> the
+ * value to set. Top-level paths are bare names; per-row array paths are dotted
+ * (`array.{i}.{field}`), evaluated against the merged row scope. Used by the renderer
+ * to push reaction-driven values via `setValue`. Only VISIBLE arrays are descended.
  */
 export function collectValueEffects(
   form: FormSchema,
   values: Record<string, unknown>,
 ): Record<string, unknown> {
-  const effects = computeReactions(form, values);
   const out: Record<string, unknown> = {};
-  for (const [name, eff] of Object.entries(effects)) {
-    if (eff.value) out[name] = eff.value.set;
-  }
+  const walk = (nodes: FieldNode[], scope: Record<string, unknown>, prefix: string): void => {
+    const effects = computeNodeReactions(nodes, scope);
+    for (const [name, eff] of Object.entries(effects)) {
+      if (eff.value) out[`${prefix}${name}`] = eff.value.set;
+    }
+    // Descend into visible arrays for per-row value effects (computeNodeReactions
+    // deliberately doesn't walk itemFields). Recurse through containers to find them.
+    const visitArrays = (list: FieldNode[]): void => {
+      for (const node of list) {
+        if (node.type === "array") {
+          if (!effectiveVisible(node, scope, effects)) continue;
+          const rows = scope[node.name];
+          if (!Array.isArray(rows)) continue;
+          rows.forEach((row, i) => {
+            const rowObj = (row ?? {}) as Record<string, unknown>;
+            walk(node.itemFields, { ...scope, ...rowObj }, `${prefix}${node.name}.${i}.`);
+          });
+        } else if (isLayoutContainer(node)) {
+          visitArrays(node.children);
+        }
+      }
+    };
+    visitArrays(nodes);
+  };
+  walk(form.fields, values, "");
   return out;
 }

@@ -220,7 +220,6 @@ export function PropertyPanel({
         siblingNames={siblingNames}
         set={set}
         onDrill={(index) => setDrillPath([...path, index])}
-        nested={path.length > 0}
       />
     </div>
   );
@@ -233,16 +232,11 @@ function FieldForm({
   siblingNames,
   set,
   onDrill,
-  nested,
 }: {
   field: AuthoredField;
   siblingNames: string[];
   set: (patch: Patch) => void;
   onDrill: (index: number) => void;
-  /** True when editing an array item field. Per-row `visibleWhen` isn't supported by
-   *  the engine yet (item schema is built against empty values), so the Visibility
-   *  section is hidden for nested items to avoid authoring a misleading condition. */
-  nested?: boolean;
 }) {
   const colSpan = field.layout?.colSpan ?? {};
   const setColSpan = (key: ColKey, value: number | null) => {
@@ -336,54 +330,52 @@ function FieldForm({
         </Checkbox>
       </Form.Item>
 
-      {/* Per-row visibility isn't supported by the engine yet, so this is hidden for
-          array item fields (see the `nested` prop note). */}
-      {!nested && (
-        <>
-          <Divider orientation="left" plain>
-            Visibility
-          </Divider>
-          <Form.Item label="Show this field">
+      {/* Visibility is editable for top-level AND array item fields: per-row visibleWhen
+          is evaluated against the row's merged scope (G4). For an item field, `condFields`
+          offers the row's sibling names; referencing a top-level field still works via the
+          JSON panel since the row scope merges outer values. */}
+      <Divider orientation="left" plain>
+        Visibility
+      </Divider>
+      <Form.Item label="Show this field">
+        <Select
+          value={equals ? "when" : "always"}
+          onChange={(mode) => {
+            if (mode === "always") set({ visibleWhen: undefined });
+            else {
+              const first = condFields[0] ?? "";
+              set({ visibleWhen: { rule: { "==": [{ var: first }, ""] } } });
+            }
+          }}
+          options={[
+            { label: "Always", value: "always" },
+            { label: "When a field equals a value", value: "when" },
+          ]}
+        />
+      </Form.Item>
+      {equals && (
+        <Space>
+          <Form.Item label="Field">
             <Select
-              value={equals ? "when" : "always"}
-              onChange={(mode) => {
-                if (mode === "always") set({ visibleWhen: undefined });
-                else {
-                  const first = condFields[0] ?? "";
-                  set({ visibleWhen: { rule: { "==": [{ var: first }, ""] } } });
-                }
-              }}
-              options={[
-                { label: "Always", value: "always" },
-                { label: "When a field equals a value", value: "when" },
-              ]}
+              style={{ width: 130 }}
+              value={equals.field}
+              onChange={(name) =>
+                set({ visibleWhen: { rule: { "==": [{ var: name }, equals.value] } } })
+              }
+              options={condFields.map((n) => ({ label: n, value: n }))}
             />
           </Form.Item>
-          {equals && (
-            <Space>
-              <Form.Item label="Field">
-                <Select
-                  style={{ width: 130 }}
-                  value={equals.field}
-                  onChange={(name) =>
-                    set({ visibleWhen: { rule: { "==": [{ var: name }, equals.value] } } })
-                  }
-                  options={condFields.map((n) => ({ label: n, value: n }))}
-                />
-              </Form.Item>
-              <Form.Item label="Equals">
-                <Input
-                  value={equals.value}
-                  onChange={(e) =>
-                    set({
-                      visibleWhen: { rule: { "==": [{ var: equals.field }, e.target.value] } },
-                    })
-                  }
-                />
-              </Form.Item>
-            </Space>
-          )}
-        </>
+          <Form.Item label="Equals">
+            <Input
+              value={equals.value}
+              onChange={(e) =>
+                set({
+                  visibleWhen: { rule: { "==": [{ var: equals.field }, e.target.value] } },
+                })
+              }
+            />
+          </Form.Item>
+        </Space>
       )}
 
       <Divider orientation="left" plain>

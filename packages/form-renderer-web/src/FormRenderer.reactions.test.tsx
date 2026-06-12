@@ -160,4 +160,66 @@ describe("FormRenderer reactions (web)", () => {
     expect(await screen.findByText("Beta")).toBeInTheDocument();
     expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
   });
+
+  it("shows/hides a field per array row against the row's own values (G4)", async () => {
+    const user = userEvent.setup();
+    const schema = {
+      ...base,
+      fields: [
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          itemFields: [
+            { type: "text", name: "kind", label: "Kind" },
+            {
+              type: "text",
+              name: "extra",
+              label: "Extra",
+              visibleWhen: { rule: { "==": [{ var: "kind" }, "show"] } },
+            },
+          ],
+        },
+      ],
+    };
+    render(<FormRenderer schema={schema} initialValues={{ rows: [{}] }} />);
+
+    // the single row's `extra` is hidden until that row's `kind` === "show"
+    expect(screen.queryByLabelText("Extra")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Kind"), "show");
+    expect(await screen.findByLabelText("Extra")).toBeInTheDocument();
+  });
+
+  it("applies a per-row value reaction to that row's field only (G4)", async () => {
+    const user = userEvent.setup();
+    const schema = {
+      ...base,
+      fields: [
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          itemFields: [
+            {
+              type: "text",
+              name: "kind",
+              label: "Kind",
+              reactions: [
+                { when: eq("kind", "co"), target: "tier", effect: "value", value: "gold" },
+              ],
+            },
+            { type: "text", name: "tier", label: "Tier" },
+          ],
+        },
+      ],
+    };
+    render(<FormRenderer schema={schema} initialValues={{ rows: [{}] }} />);
+
+    const tier = screen.getByLabelText("Tier") as HTMLInputElement;
+    expect(tier.value).toBe("");
+    await user.type(screen.getByLabelText("Kind"), "co");
+    await waitFor(() =>
+      expect((screen.getByLabelText("Tier") as HTMLInputElement).value).toBe("gold"),
+    );
+  });
 });

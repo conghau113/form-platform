@@ -415,6 +415,131 @@ describe("buildZodSchema", () => {
     expect(schema.safeParse({ rows: [] }).success).toBe(false);
     expect(schema.safeParse({ rows: [{ v: "a" }] }).success).toBe(true);
   });
+
+  it("evaluates per-row visibleWhen against the row's own values (G4)", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          itemFields: [
+            { type: "select", name: "kind", label: "Kind" },
+            {
+              type: "text",
+              name: "detail",
+              label: "Detail",
+              required: true,
+              visibleWhen: { rule: { "==": [{ var: "kind" }, "other"] } },
+            },
+          ],
+        },
+      ]),
+      { values: { rows: [{ kind: "vn" }, { kind: "other" }] } },
+    );
+    // row 0: detail hidden -> passes; row 1: detail visible + required + missing -> fails
+    const result = schema.safeParse({ rows: [{ kind: "vn" }, { kind: "other" }] });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(["rows", 1, "detail"]);
+    }
+    // filling row 1's detail clears it
+    expect(
+      schema.safeParse({ rows: [{ kind: "vn" }, { kind: "other", detail: "x" }] }).success,
+    ).toBe(true);
+  });
+
+  it("merges outer form values into the row scope for per-row visibility (G4)", () => {
+    const make = (mode: string) =>
+      buildZodSchema(
+        form([
+          { type: "select", name: "mode", label: "Mode" },
+          {
+            type: "array",
+            name: "rows",
+            label: "Rows",
+            itemFields: [
+              {
+                type: "text",
+                name: "extra",
+                label: "Extra",
+                required: true,
+                visibleWhen: { rule: { "==": [{ var: "mode" }, "full"] } },
+              },
+            ],
+          },
+        ]),
+        { values: { mode, rows: [{}] } },
+      );
+    // mode=full -> row's `extra` is visible+required+missing -> fails
+    expect(make("full").safeParse({ mode: "full", rows: [{}] }).success).toBe(false);
+    // mode=lite -> `extra` hidden in the row -> passes
+    expect(make("lite").safeParse({ mode: "lite", rows: [{}] }).success).toBe(true);
+  });
+
+  it("strips a row's reaction/visibility-hidden keys from the clean output (G4)", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          itemFields: [
+            { type: "select", name: "kind", label: "Kind" },
+            {
+              type: "text",
+              name: "detail",
+              label: "Detail",
+              visibleWhen: { rule: { "==": [{ var: "kind" }, "other"] } },
+            },
+          ],
+        },
+      ]),
+      { values: { rows: [{ kind: "vn", detail: "leftover" }] } },
+    );
+    const result = schema.safeParse({ rows: [{ kind: "vn", detail: "leftover" }] });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const rows = result.data.rows as Record<string, unknown>[];
+      expect("detail" in rows[0]).toBe(false);
+      expect(rows[0]).toEqual({ kind: "vn" });
+    }
+  });
+
+  it("applies a per-row reaction visible:false to drop a row field (G4)", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          itemFields: [
+            {
+              type: "select",
+              name: "kind",
+              label: "Kind",
+              reactions: [
+                {
+                  when: { rule: { "==": [{ var: "kind" }, "person"] } },
+                  target: "vat",
+                  effect: "visible",
+                  value: false,
+                },
+              ],
+            },
+            { type: "text", name: "vat", label: "VAT", required: true },
+          ],
+        },
+      ]),
+      { values: { rows: [{ kind: "person" }] } },
+    );
+    // the reaction hides `vat` in that row, so its required rule doesn't block submit
+    const result = schema.safeParse({ rows: [{ kind: "person" }] });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect("vat" in (result.data.rows as Record<string, unknown>[])[0]).toBe(false);
+    }
+  });
 });
 
 describe("buildZodSchema with layout containers", () => {

@@ -5,8 +5,10 @@ import {
   canEdit,
   canView,
   collectValueEffects,
+  computeNodeReactions,
   computeReactions,
   type DataSourceOption,
+  type EffectMap,
   effectiveVisible,
   fetchDataSourceOptions,
   isVisible,
@@ -266,14 +268,24 @@ function FieldControl(props: {
   }
 }
 
+/** The reactive scope a node renders in: the MERGED values it sees (outer form values
+ *  plus, inside an array row, that row's own values) and the EffectMap computed against
+ *  them. Top-level renders carry no scope and fall back to the form's own values/effects. */
+type Scope = { values: Record<string, unknown>; effects: EffectMap };
+
+type RenderNodeOpts = {
+  hideLabel?: boolean;
+  bare?: boolean;
+  span?: ColSpanProps;
+  path?: number[];
+  /** Row scope for fields rendered inside an array row (per-row linkage). */
+  scope?: Scope;
+};
+
 /** How `ArrayFieldSection` calls back into the renderer for a nested node. Array rows are
  *  not canonical authoring targets, so it never passes `path` — those renders stay
  *  unwrapped by `nodeWrapper`. */
-type RenderNode = (
-  node: FieldNode,
-  namePrefix: string,
-  opts?: { hideLabel?: boolean; bare?: boolean; span?: ColSpanProps; path?: number[] },
-) => React.ReactNode;
+type RenderNode = (node: FieldNode, namePrefix: string, opts?: RenderNodeOpts) => React.ReactNode;
 
 /** Per-row reorder/remove controls, shared by the card and table variants. */
 function RowControls(props: {
@@ -318,8 +330,10 @@ function ArrayFieldSection(props: {
   /** Seed object for a freshly appended row (item-field defaultValues). */
   seedRow: () => Record<string, unknown>;
   renderNode: RenderNode;
+  /** Reactive scope for row `i` (merged row values + per-row EffectMap). */
+  getRowScope: (index: number) => Scope;
 }) {
-  const { node, control, name, seedRow, renderNode } = props;
+  const { node, control, name, seedRow, renderNode, getRowScope } = props;
   const { fields, append, remove, move } = useFieldArray({ control, name });
   const addButton = <Button onClick={() => append(seedRow())}>Add {node.label || "item"}</Button>;
   const help = node.helpText ? (
@@ -342,7 +356,11 @@ function ArrayFieldSection(props: {
           child.type,
         key: "name" in child ? child.name : `${child.type}-${col}`,
         render: (_: unknown, rec: RowRec) =>
-          renderNode(child, `${name}.${rec.index}.`, { hideLabel: true, bare: true }),
+          renderNode(child, `${name}.${rec.index}.`, {
+            hideLabel: true,
+            bare: true,
+            scope: getRowScope(rec.index),
+          }),
       })),
       {
         title: "",
@@ -373,7 +391,9 @@ function ArrayFieldSection(props: {
             <Row gutter={16}>
               {node.itemFields.map((c, j) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: item fields are static per render
-                <Fragment key={j}>{renderNode(c, `${name}.${i}.`)}</Fragment>
+                <Fragment key={j}>
+                  {renderNode(c, `${name}.${i}.`, { scope: getRowScope(i) })}
+                </Fragment>
               ))}
             </Row>
           </Card>
@@ -488,7 +508,8 @@ export function FormRenderer({
   // Reaction `value` effects: while a `when` holds, push its assigned value once.
   // Keyed on the serialized assignments so the effect only runs when they change;
   // the per-field JSON diff makes re-assignment idempotent (loop-safe together with
-  // the engine's value-cycle guard). Top-level paths only in G3.
+  // the engine's value-cycle guard). Paths are bare names at the top level and dotted
+  // `array.{i}.{field}` inside array rows — `setValue` handles both.
   const valueAssignments = collectValueEffects(form, values);
   const assignmentsKey = JSON.stringify(valueAssignments);
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the serialized assignments
@@ -511,13 +532,15 @@ export function FormRenderer({
   // label-less (the column header carries the label) and un-wrapped (full-width cell);
   // `span` lets a grid assign the cell width (the field's own colSpan still wins);
   // `path` is the positional designer route (absent for array rows, which aren't authored).
-  const renderNode = (
-    node: FieldNode,
-    namePrefix = "",
-    opts?: { hideLabel?: boolean; bare?: boolean; span?: ColSpanProps; path?: number[] },
-  ): React.ReactNode => {
-    // Reaction `visible` effects (top-level scope only) override `visibleWhen`.
-    if (!effectiveVisible(node, values, namePrefix === "" ? effects : undefined)) return null;
+  const renderNode = (node: FieldNode, namePrefix = "", opts?: RenderNodeOpts): React.ReactNode => {
+    // Inside an array row `opts.scope` carries the merged row values + per-row effects;
+    // at the top level we fall back to the form's own values and (only there) `effects`.
+    const scope = opts?.scope;
+    const scopeValues = scope?.values ?? values;
+    const scopeEffects = scope ? scope.effects : namePrefix === "" ? effects : undefined;
+
+    // Reaction `visible` effects override `visibleWhen` at this node's scope.
+    if (!effectiveVisible(node, scopeValues, scopeEffects)) return null;
     if (!canView(node, access)) return null; // shared RBAC
 
     const here = opts?.path;
@@ -541,6 +564,7 @@ export function FormRenderer({
           {renderNode(c, namePrefix, {
             ...childOpts,
             path: basePath ? [...basePath, i] : undefined,
+            scope,
           })}
         </Fragment>
       ));
@@ -563,6 +587,15 @@ export function FormRenderer({
 
     if (node.type === "array") {
       const name = `${namePrefix}${node.name}`;
+      // Each row sees a MERGED scope (outer values + that row's own values, row wins) so
+      // its fields' visibleWhen/reactions can reference both. Reactions recompute per row.
+      const arrayNode = node;
+      const getRowScope = (index: number): Scope => {
+        const rows = scopeValues[arrayNode.name];
+        const row = (Array.isArray(rows) ? (rows[index] ?? {}) : {}) as Record<string, unknown>;
+        const merged = { ...scopeValues, ...row };
+        return { values: merged, effects: computeNodeReactions(arrayNode.itemFields, merged) };
+      };
       return (
         <Col key={name} {...containerSpan}>
           {wrapNode(
@@ -572,6 +605,7 @@ export function FormRenderer({
               name={name}
               seedRow={() => schemaDefaults(node.itemFields)}
               renderNode={renderNode}
+              getRowScope={getRowScope}
             />,
           )}
         </Col>
@@ -589,7 +623,7 @@ export function FormRenderer({
       // runtime DOM is unchanged.
       const panes = node.children
         .map((pane, i) => ({ pane, i }))
-        .filter(({ pane }) => isVisible(pane, values) && canView(pane, access));
+        .filter(({ pane }) => isVisible(pane, scopeValues) && canView(pane, access));
       return (
         <Col key={`${namePrefix}tabs`} {...containerSpan}>
           {wrapNode(
@@ -618,7 +652,7 @@ export function FormRenderer({
       // position (`pos`), so `defaultActiveKey` and the DOM match the old runtime exactly.
       const panels = node.children
         .map((panel, i) => ({ panel, i }))
-        .filter(({ panel }) => isVisible(panel, values) && canView(panel, access));
+        .filter(({ panel }) => isVisible(panel, scopeValues) && canView(panel, access));
       const keys = panels.map((_, pos) => String(pos));
       return (
         <Col key={`${namePrefix}collapse`} {...containerSpan}>
@@ -685,6 +719,7 @@ export function FormRenderer({
                   {renderNode(c, namePrefix, {
                     bare: true,
                     path: here ? [...here, i] : undefined,
+                    scope,
                   })}
                 </Fragment>
               ))}
@@ -707,13 +742,17 @@ export function FormRenderer({
     // Responsive: a grid-assigned span (if any) replaces the default; the field's
     // own per-breakpoint colSpan always wins. antd collapses to xs on small screens.
     const span = { ...(opts?.span ?? DEFAULT_SPAN), ...(node.layout?.colSpan ?? {}) };
-    // Reaction effects for this leaf (top-level scope only). A `disabled` effect can
-    // re-enable a statically disabled field; an `options` effect overrides select/radio.
-    const eff = namePrefix === "" ? effects[node.name] : undefined;
+    // Reaction effects for this leaf, at its own scope (a row's EffectMap inside an
+    // array, the top-level map otherwise). A `disabled` effect can re-enable a statically
+    // disabled field; an `options` effect overrides select/radio.
+    const eff = scopeEffects?.[node.name];
     const editable = canEdit(node, access) && !(eff?.disabled ?? node.disabled === true);
     // A select with a dependent dataSource reads its parent field's current value.
+    // NOTE: dependsOn still resolves against the row scope's merged values; a top-level
+    // dependsOn referenced from inside a row reads the merged value (out of G4 scope to
+    // change further — see plan risk #4).
     const dependsOn = node.type === "select" ? node.dataSource?.dependsOn : undefined;
-    const dependsOnValue = dependsOn ? values[dependsOn] : undefined;
+    const dependsOnValue = dependsOn ? scopeValues[dependsOn] : undefined;
     const fieldName = `${namePrefix}${node.name}`;
     const control_ = (
       <Controller
