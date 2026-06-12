@@ -1,5 +1,6 @@
 import {
   type ArrayField,
+  type AsyncValidator,
   type FieldNode,
   type FormSchema,
   isLayoutContainer,
@@ -7,6 +8,7 @@ import {
   type ValidationRule,
 } from "@org/form-schema";
 import { z } from "zod";
+import { evalRule } from "./conditions.js";
 import { type AccessContext, canView } from "./rbac.js";
 import {
   computeNodeReactions,
@@ -85,11 +87,32 @@ function labelOf(node: { label?: string; name: string }): string {
   return node.label?.trim() ? node.label : node.name;
 }
 
+/** Severity defaults to "error" when a rule doesn't declare one. */
+function ruleSeverity(r: ValidationRule): "error" | "warning" {
+  return r.severity ?? "error";
+}
+
 /** Map one leaf field to a Zod type, honoring required + per-type constraints.
  *  `requiredOverride` (from a reaction `required` effect) wins over the static
- *  `required` flag/rule when present — true forces required, false un-requires. */
+ *  `required` flag/rule when present — true forces required, false un-requires.
+ *  THE single severity filter point: the blocking schema sees only error-severity,
+ *  non-cross rules — warnings surface via `collectWarnings` and cross assertions
+ *  via `withCrossChecks`, both built on the same `leafZodWith` core so the two
+ *  paths cannot drift. */
 function leafZod(node: LeafField, requiredOverride?: boolean): z.ZodTypeAny {
-  const rules = node.validations ?? [];
+  const rules = (node.validations ?? []).filter(
+    (r) => r.type !== "cross" && ruleSeverity(r) === "error",
+  );
+  return leafZodWith(node, rules, requiredOverride);
+}
+
+/** The per-type rule compiler shared by the blocking (error) and warning paths;
+ *  `rules` is pre-filtered by the caller. */
+function leafZodWith(
+  node: LeafField,
+  rules: ValidationRule[],
+  requiredOverride?: boolean,
+): z.ZodTypeAny {
   const requiredRule = rules.find((r) => r.type === "required");
   // The `required` flag and a `required` validation rule are equivalent; either
   // one makes the field mandatory. A rule's `message` customizes the text. A reaction
@@ -289,9 +312,37 @@ function buildShape(
     }
     // A reaction `required` effect for this field overrides its static required-ness,
     // staying consistent with what the renderer shows (per-row arrays pass rowEffects).
-    shape[node.name] = leafZod(node, effects?.[node.name]?.required);
+    shape[node.name] = withCrossChecks(leafZod(node, effects?.[node.name]?.required), node, values);
   }
   return shape;
+}
+
+/** Wrap a leaf schema with its error-severity `cross` assertions, evaluated via SAFE
+ *  JSONLogic against the SCOPE values this shape was built for (the merged
+ *  `{...outer, ...row}` object inside an array row, the form values at the top level).
+ *  Field-level on purpose: the issue lands on this field's path for free, and per-row
+ *  scope costs nothing since `rowShape` already rebuilds the shape per row. Cross
+ *  issues only surface once the field's own base schema parses (one error per field).
+ *  Warning-severity cross rules are handled by `collectWarnings` instead. */
+function withCrossChecks(
+  schema: z.ZodTypeAny,
+  node: LeafField,
+  values: Record<string, unknown>,
+): z.ZodTypeAny {
+  const cross = (node.validations ?? []).filter(
+    (r) => r.type === "cross" && r.rule && ruleSeverity(r) === "error",
+  );
+  if (cross.length === 0) return schema;
+  return schema.superRefine((_v, ctx) => {
+    for (const r of cross) {
+      if (!evalRule(r.rule as Record<string, unknown>, values)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: r.message ?? `${labelOf(node)} is invalid`,
+        });
+      }
+    }
+  });
 }
 
 /**
@@ -312,4 +363,100 @@ export function buildZodSchema(
   // per-row array effects are applied inside arrayZod in G4.
   const effects = computeReactions(form, values);
   return z.object(buildShape(form.fields, values, opts.access, effects));
+}
+
+/** Walk every VISIBLE leaf, mirroring `buildShape`'s skip logic exactly (visibility,
+ *  RBAC, transparent containers, per-row merged scope + per-row reactions for arrays).
+ *  LOCKSTEP: any change to buildShape's traversal must be repeated here, or warnings/
+ *  async checks will disagree with the blocking schema about which fields exist.
+ *  `path` is the dotted react-hook-form path (`arr.0.field` inside rows). */
+function walkLeaves(
+  nodes: FieldNode[],
+  values: Record<string, unknown>,
+  access: AccessContext | undefined,
+  effects: EffectMap | undefined,
+  prefix: string,
+  visit: (node: LeafField, path: string, scope: Record<string, unknown>) => void,
+): void {
+  for (const node of nodes) {
+    if (!effectiveVisible(node, values, effects)) continue;
+    if (access && !canView(node, access)) continue;
+    if (isLayoutContainer(node)) {
+      walkLeaves(node.children, values, access, effects, prefix, visit);
+      continue;
+    }
+    if (node.type === "array") {
+      const rows = values[node.name];
+      if (!Array.isArray(rows)) continue;
+      rows.forEach((row, i) => {
+        const rowObj = (row ?? {}) as Record<string, unknown>;
+        const merged = { ...values, ...rowObj };
+        const rowEffects = computeNodeReactions(node.itemFields, merged);
+        walkLeaves(node.itemFields, merged, access, rowEffects, `${prefix}${node.name}.${i}.`, visit);
+      });
+      continue;
+    }
+    visit(node, `${prefix}${node.name}`, values);
+  }
+}
+
+/**
+ * Collect NON-BLOCKING validation warnings: every visible leaf's warning-severity
+ * rules, evaluated against current values. Returns dotted react-hook-form paths
+ * (`arr.0.field` inside array rows) → the first violated warning's message.
+ * Plain rules run through the SAME `leafZodWith` compiler as the blocking path
+ * (no drift); `cross` warnings evaluate their JSONLogic assertion against the
+ * leaf's scope. The static `required` flag stays on the blocking path — only a
+ * warning-severity `required` RULE warns about emptiness.
+ */
+export function collectWarnings(
+  form: FormSchema,
+  values: Record<string, unknown> = {},
+  access?: AccessContext,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const effects = computeReactions(form, values);
+  walkLeaves(form.fields, values, access, effects, "", (node, path, scope) => {
+    const warn = (node.validations ?? []).filter((r) => ruleSeverity(r) === "warning");
+    if (warn.length === 0) return;
+    const plain = warn.filter((r) => r.type !== "cross");
+    if (plain.length > 0) {
+      const schema = leafZodWith(node, plain, plain.some((r) => r.type === "required"));
+      const res = schema.safeParse(scope[node.name]);
+      if (!res.success) {
+        const msg = res.error.issues[0]?.message;
+        if (msg) out[path] ??= msg;
+      }
+    }
+    for (const r of warn) {
+      if (r.type !== "cross" || !r.rule) continue;
+      if (!evalRule(r.rule as Record<string, unknown>, scope)) {
+        out[path] ??= r.message ?? `${labelOf(node)} is invalid`;
+      }
+    }
+  });
+  return out;
+}
+
+/** One visible leaf carrying an `asyncValidator`: its dotted react-hook-form `path`
+ *  (rows included) and its bare schema `name` (sent as the `name` query param). */
+export interface AsyncFieldTarget {
+  path: string;
+  name: string;
+  validator: AsyncValidator;
+}
+
+/** Every visible leaf with an `asyncValidator`, honoring the same visibility/RBAC
+ *  walk as the blocking schema, so hidden fields never fire remote checks. */
+export function collectAsyncFields(
+  form: FormSchema,
+  values: Record<string, unknown> = {},
+  access?: AccessContext,
+): AsyncFieldTarget[] {
+  const out: AsyncFieldTarget[] = [];
+  const effects = computeReactions(form, values);
+  walkLeaves(form.fields, values, access, effects, "", (node, path) => {
+    if (node.asyncValidator) out.push({ path, name: node.name, validator: node.asyncValidator });
+  });
+  return out;
 }

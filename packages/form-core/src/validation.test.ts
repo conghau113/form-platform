@@ -1,6 +1,6 @@
 import type { FormSchema } from "@org/form-schema";
 import { describe, expect, it } from "vitest";
-import { buildZodSchema } from "./validation.js";
+import { buildZodSchema, collectAsyncFields, collectWarnings } from "./validation.js";
 
 function form(fields: FormSchema["fields"]): FormSchema {
   return { formVersion: 3, id: "t", title: "Test", fields };
@@ -806,5 +806,239 @@ describe("buildZodSchema with layout containers", () => {
     const optional = buildZodSchema(form([{ type: "time-range", name: "shift", label: "Shift" }]));
     expect(optional.safeParse({}).success).toBe(true);
     expect(optional.safeParse({ shift: null }).success).toBe(true);
+  });
+});
+
+describe("validation severity + cross rules (Phase N)", () => {
+  it("warning rules never reach the blocking schema", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "bio",
+          label: "Bio",
+          validations: [{ type: "min", value: 10, severity: "warning" }],
+        },
+      ]),
+    );
+    expect(schema.safeParse({ bio: "short" }).success).toBe(true);
+  });
+
+  it("a warning-severity required rule does not block submit", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "nick",
+          label: "Nick",
+          validations: [{ type: "required", severity: "warning" }],
+        },
+      ]),
+    );
+    expect(schema.safeParse({}).success).toBe(true);
+  });
+
+  it("an error cross rule fails the field with its message and passes when satisfied", () => {
+    const fields: FormSchema["fields"] = [
+      { type: "number", name: "start", label: "Start" },
+      {
+        type: "number",
+        name: "end",
+        label: "End",
+        validations: [
+          {
+            type: "cross",
+            rule: { "<=": [{ var: "start" }, { var: "end" }] },
+            message: "End must be after start",
+          },
+        ],
+      },
+    ];
+    const bad = { start: 5, end: 3 };
+    const res = buildZodSchema(form(fields), { values: bad }).safeParse(bad);
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0]?.path).toEqual(["end"]);
+      expect(res.error.issues[0]?.message).toBe("End must be after start");
+    }
+    const good = { start: 3, end: 5 };
+    expect(buildZodSchema(form(fields), { values: good }).safeParse(good).success).toBe(true);
+  });
+
+  it("a warning-severity cross rule does not block", () => {
+    const values = { start: 5, end: 3 };
+    const schema = buildZodSchema(
+      form([
+        { type: "number", name: "start", label: "Start" },
+        {
+          type: "number",
+          name: "end",
+          label: "End",
+          validations: [
+            {
+              type: "cross",
+              rule: { "<=": [{ var: "start" }, { var: "end" }] },
+              severity: "warning",
+            },
+          ],
+        },
+      ]),
+      { values },
+    );
+    expect(schema.safeParse(values).success).toBe(true);
+  });
+
+  it("a cross rule inside an array row evaluates against the merged row scope", () => {
+    const fields: FormSchema["fields"] = [
+      {
+        type: "array",
+        name: "ranges",
+        label: "Ranges",
+        itemFields: [
+          { type: "number", name: "lo", label: "Lo" },
+          {
+            type: "number",
+            name: "hi",
+            label: "Hi",
+            validations: [
+              { type: "cross", rule: { "<": [{ var: "lo" }, { var: "hi" }] }, message: "lo < hi" },
+            ],
+          },
+        ],
+      },
+    ];
+    const values = {
+      ranges: [
+        { lo: 1, hi: 2 },
+        { lo: 9, hi: 4 },
+      ],
+    };
+    const res = buildZodSchema(form(fields), { values }).safeParse(values);
+    expect(res.success).toBe(false);
+    if (!res.success) {
+      expect(res.error.issues[0]?.path).toEqual(["ranges", 1, "hi"]);
+      expect(res.error.issues[0]?.message).toBe("lo < hi");
+    }
+  });
+});
+
+describe("collectWarnings", () => {
+  it("returns the warning message for a violated rule and nothing when satisfied", () => {
+    const f = form([
+      {
+        type: "text",
+        name: "bio",
+        label: "Bio",
+        validations: [{ type: "min", value: 10, severity: "warning", message: "Quite short" }],
+      },
+    ]);
+    expect(collectWarnings(f, { bio: "tiny" })).toEqual({ bio: "Quite short" });
+    expect(collectWarnings(f, { bio: "long enough text" })).toEqual({});
+  });
+
+  it("only a warning-severity required rule warns about emptiness (the flag stays blocking)", () => {
+    const f = form([
+      {
+        type: "text",
+        name: "nick",
+        label: "Nick",
+        required: true,
+        validations: [{ type: "required", severity: "warning", message: "Please fill" }],
+      },
+      {
+        type: "text",
+        name: "alias",
+        label: "Alias",
+        required: true,
+        validations: [{ type: "min", value: 2, severity: "warning" }],
+      },
+    ]);
+    const out = collectWarnings(f, {});
+    expect(out.nick).toBe("Please fill");
+    // The static required flag belongs to the blocking path, not the warning channel.
+    expect(out.alias).toBeUndefined();
+  });
+
+  it("uses dotted paths for array rows and skips hidden fields", () => {
+    const f = form([
+      { type: "select", name: "mode", label: "Mode" },
+      {
+        type: "text",
+        name: "hiddenField",
+        label: "Hidden",
+        visibleWhen: { rule: { "==": [{ var: "mode" }, "on"] } },
+        validations: [{ type: "min", value: 5, severity: "warning", message: "W" }],
+      },
+      {
+        type: "array",
+        name: "rows",
+        label: "Rows",
+        itemFields: [
+          {
+            type: "text",
+            name: "code",
+            label: "Code",
+            validations: [{ type: "len", value: 3, severity: "warning", message: "3 chars" }],
+          },
+        ],
+      },
+    ]);
+    const out = collectWarnings(f, { mode: "off", hiddenField: "x", rows: [{ code: "abcd" }] });
+    expect(out).toEqual({ "rows.0.code": "3 chars" });
+  });
+
+  it("includes warning cross rules", () => {
+    const f = form([
+      { type: "number", name: "start", label: "Start" },
+      {
+        type: "number",
+        name: "end",
+        label: "End",
+        validations: [
+          {
+            type: "cross",
+            rule: { "<=": [{ var: "start" }, { var: "end" }] },
+            severity: "warning",
+            message: "Ends before it starts",
+          },
+        ],
+      },
+    ]);
+    expect(collectWarnings(f, { start: 5, end: 3 })).toEqual({ end: "Ends before it starts" });
+    expect(collectWarnings(f, { start: 1, end: 3 })).toEqual({});
+  });
+});
+
+describe("collectAsyncFields", () => {
+  it("lists visible leaves with an asyncValidator, top-level and per row", () => {
+    const f = form([
+      {
+        type: "text",
+        name: "username",
+        label: "Username",
+        asyncValidator: { url: "/check" },
+      },
+      {
+        type: "text",
+        name: "hiddenField",
+        label: "Hidden",
+        visibleWhen: { rule: { "==": [1, 0] } },
+        asyncValidator: { url: "/never" },
+      },
+      {
+        type: "array",
+        name: "members",
+        label: "Members",
+        itemFields: [
+          { type: "text", name: "email", label: "Email", asyncValidator: { url: "/check-email" } },
+        ],
+      },
+    ]);
+    const out = collectAsyncFields(f, { members: [{ email: "a" }, { email: "b" }] });
+    expect(out).toEqual([
+      { path: "username", name: "username", validator: { url: "/check" } },
+      { path: "members.0.email", name: "email", validator: { url: "/check-email" } },
+      { path: "members.1.email", name: "email", validator: { url: "/check-email" } },
+    ]);
   });
 });
