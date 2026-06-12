@@ -33,7 +33,7 @@ describe("transform — round-trip identity", () => {
       title: "Layout",
       layoutProps: { layout: "horizontal", labelCol: { span: 6 }, size: "small", colon: false },
       fields: [{ type: "text", name: "a", label: "A" }],
-      settings: { submitUrl: "/x" },
+      settings: { submitUrl: "/x", validateTrigger: "onBlur" },
     });
   });
 

@@ -50,9 +50,10 @@ export const STRING_RULES: ValidationRuleType[] = [
   "max",
   "pattern",
   "format",
+  "cross",
 ];
 /** Rule kinds offered for numeric inputs. */
-export const NUMBER_RULES: ValidationRuleType[] = ["required", "min", "max"];
+export const NUMBER_RULES: ValidationRuleType[] = ["required", "min", "max", "cross"];
 
 /** Designer interaction rules for a node type (mirrors Designable's behavior flags). */
 export interface ComponentBehavior {

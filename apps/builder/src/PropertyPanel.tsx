@@ -1,5 +1,6 @@
 import {
   type ArrayField,
+  type AsyncValidator,
   childrenOf,
   type FieldNode,
   type FormLayoutProps,
@@ -55,7 +56,12 @@ const RULE_LABELS: Record<ValidationRuleType, string> = {
   max: "Max",
   pattern: "Pattern (regex)",
   format: "Format",
+  cross: "Cross-field (logic)",
 };
+const SEVERITY_OPTIONS = [
+  { label: "Error", value: "error" },
+  { label: "Warning", value: "warning" },
+];
 const FORMAT_OPTIONS = [
   { label: "Email", value: "email" },
   { label: "URL", value: "url" },
@@ -82,6 +88,39 @@ export function readEqualsRule(rule: unknown): { field: string; value: string } 
 /** Read the simple-equals shape of a field's `visibleWhen`, if any. */
 function readEquals(field: AuthoredField): { field: string; value: string } | null {
   return readEqualsRule(field.visibleWhen?.rule);
+}
+
+/** Comparators the simple cross-rule builder offers (json-logic operators). */
+export const CROSS_OPS = ["==", "!=", ">", ">=", "<", "<="] as const;
+export type CrossOp = (typeof CROSS_OPS)[number];
+export type CrossRight = { kind: "field"; name: string } | { kind: "value"; value: string };
+
+/** Read a simple `{op: [{var: left}, {var: right} | literal]}` JSONLogic rule, the
+ *  shape the cross-rule builder writes. Anything more complex returns null so the UI
+ *  falls back to a "edit via JSON" hint (same contract as readEqualsRule). */
+export function readSimpleRule(rule: unknown): { op: CrossOp; left: string; right: CrossRight } | null {
+  if (rule == null || typeof rule !== "object") return null;
+  const keys = Object.keys(rule);
+  if (keys.length !== 1) return null;
+  const op = keys[0] as CrossOp;
+  if (!CROSS_OPS.includes(op)) return null;
+  const args = (rule as Record<string, unknown>)[op];
+  if (!Array.isArray(args) || args.length !== 2) return null;
+  const left = args[0] as { var?: unknown } | null;
+  if (left == null || typeof left !== "object" || typeof left.var !== "string") return null;
+  const rightRaw = args[1];
+  if (rightRaw != null && typeof rightRaw === "object") {
+    const rv = (rightRaw as { var?: unknown }).var;
+    if (typeof rv !== "string") return null;
+    return { op, left: left.var, right: { kind: "field", name: rv } };
+  }
+  return { op, left: left.var, right: { kind: "value", value: String(rightRaw ?? "") } };
+}
+
+/** Store numeric-looking literals as numbers so json-logic's ordering operators
+ *  compare numerically. */
+function coerceLiteral(text: string): string | number {
+  return text !== "" && !Number.isNaN(Number(text)) ? Number(text) : text;
 }
 
 /** Identity accessors tolerant of nameless layout containers (tabs/card/...)
@@ -346,7 +385,7 @@ function FieldForm({
       {field.type === "array" && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}
       <DefaultValueEditor field={field} set={set} />
 
-      <ValidationEditor field={field} set={set} />
+      <ValidationEditor field={field} siblingNames={condFields} set={set} />
 
       <Divider orientation="left" plain>
         Layout
@@ -576,6 +615,16 @@ function FormSettingsEditor({
     if (value === undefined) delete next[key];
     onChange({ layoutProps: Object.keys(next).length ? (next as FormLayoutProps) : undefined });
   };
+  // `settings` (submitUrl, validateTrigger) is a separate optional block from
+  // layoutProps; same drop-when-empty merge so untouched forms serialize clean.
+  const settings = (form.settings ?? {}) as Record<string, unknown>;
+  const setSettingKey = (key: string, value: unknown) => {
+    const next = { ...settings, [key]: value };
+    if (value === undefined) delete next[key];
+    onChange({
+      settings: Object.keys(next).length ? (next as FormProps["settings"]) : undefined,
+    });
+  };
   const colSpan = (col: "labelCol" | "wrapperCol") => layout[col]?.span ?? null;
   // Merge over the existing col object so an authored `offset` survives span edits.
   const setColSpan = (col: "labelCol" | "wrapperCol", span: number | null) =>
@@ -619,6 +668,27 @@ function FormSettingsEditor({
             />
           </Form.Item>
         </Space>
+
+        <Divider orientation="left" plain>
+          Validation
+        </Divider>
+        <Form.Item
+          label="Validate when"
+          tooltip="When the renderer runs validation. Default: on submit."
+        >
+          <Select
+            allowClear
+            placeholder="On submit (default)"
+            style={{ width: 200 }}
+            value={(settings.validateTrigger as string | undefined) ?? undefined}
+            options={[
+              { label: "While typing", value: "onInput" },
+              { label: "On blur", value: "onBlur" },
+              { label: "On submit", value: "onSubmit" },
+            ]}
+            onChange={(v) => setSettingKey("validateTrigger", v)}
+          />
+        </Form.Item>
       </Form>
     </div>
   );
@@ -652,84 +722,241 @@ function DefaultValueEditor({ field, set }: { field: AuthoredField; set: (patch:
 }
 
 /** A "Validation" section whose available rule kinds come from the registry
- *  descriptor. Each rule edits a `{ type, value?, format?, message? }` entry that
- *  form-core compiles to Zod. Hidden when the type declares no validation kinds. */
-function ValidationEditor({ field, set }: { field: AuthoredField; set: (patch: Patch) => void }) {
-  const { validations: allowed } = describeField(field.type);
-  if (!allowed || allowed.length === 0) return null;
-  // `validations` lives on leaf fields only; read it dynamically so the array node
-  // (which has no validations and is filtered out above) doesn't widen the type.
+ *  descriptor. Each rule edits a `{ type, value?, format?, message?, severity?, rule? }`
+ *  entry that form-core compiles to Zod (or evaluates as a warning / cross assertion).
+ *  Every leaf additionally gets the "Remote check" (asyncValidator) block, even when
+ *  it declares no rule kinds. */
+function ValidationEditor({
+  field,
+  siblingNames,
+  set,
+}: {
+  field: AuthoredField;
+  /** Other field names a cross rule can reference. */
+  siblingNames: string[];
+  set: (patch: Patch) => void;
+}) {
+  if (field.type === "array") return null;
+  const allowed = describeField(field.type).validations ?? [];
+  // `validations`/`asyncValidator` live on leaf fields only; read them dynamically so
+  // the array node (filtered out above) doesn't widen the type.
   const rules = (prop(field, "validations") as ValidationRule[] | undefined) ?? [];
+  const av = prop(field, "asyncValidator") as AsyncValidator | undefined;
   const commit = (next: ValidationRule[]) =>
     set({ validations: next.length ? next : undefined } as Patch);
+  // An undefined patch value DELETES the key (e.g. severity back to its "error"
+  // default, or value/format/rule resets on a type change) so it never serializes.
   const update = (i: number, patch: Partial<ValidationRule>) =>
-    commit(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+    commit(
+      rules.map((r, idx) => {
+        if (idx !== i) return r;
+        const next = { ...r, ...patch } as Record<string, unknown>;
+        for (const key of Object.keys(next)) if (next[key] === undefined) delete next[key];
+        return next as ValidationRule;
+      }),
+    );
   const remove = (i: number) => commit(rules.filter((_, idx) => idx !== i));
-  const add = () => commit([...rules, { type: allowed[0] }]);
+  const add = () => commit([...rules, { type: allowed[0] ?? "required" }]);
+  const setAv = (patch: Partial<AsyncValidator>) => {
+    const next = { url: "", ...av, ...patch };
+    set({ asyncValidator: next.url ? next : undefined } as Patch);
+  };
 
   const ruleOptions = allowed.map((t) => ({ label: RULE_LABELS[t], value: t }));
+  const crossFields = [field.name, ...siblingNames];
+  const fieldOptions = crossFields.map((n) => ({ label: n, value: n }));
 
   return (
     <>
       <Divider orientation="left" plain>
         Validation
       </Divider>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rules.map((rule, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: rules have no stable id; index is fine for this small editor
-          <Space key={i} wrap align="start">
-            <Select
-              style={{ width: 130 }}
-              value={rule.type}
-              options={ruleOptions}
-              onChange={(type: ValidationRuleType) =>
-                update(i, {
-                  type,
-                  value: undefined,
-                  format: type === "format" ? "email" : undefined,
-                })
-              }
-            />
-            {(rule.type === "len" || rule.type === "min" || rule.type === "max") && (
-              <InputNumber
-                style={{ width: 90 }}
-                placeholder="value"
-                value={(rule.value as number | null) ?? null}
-                onChange={(v) => update(i, { value: v ?? undefined })}
-              />
-            )}
-            {rule.type === "pattern" && (
-              <Input
+      {allowed.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rules.map((rule, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: rules have no stable id; index is fine for this small editor
+            <Space key={i} wrap align="start">
+              <Select
                 style={{ width: 130 }}
-                placeholder="regex source"
-                value={(rule.value as string) ?? ""}
-                onChange={(e) => update(i, { value: e.target.value })}
+                value={rule.type}
+                options={ruleOptions}
+                onChange={(type: ValidationRuleType) =>
+                  update(i, {
+                    type,
+                    value: undefined,
+                    format: type === "format" ? "email" : undefined,
+                    // A fresh cross rule compares this field to its first sibling.
+                    rule:
+                      type === "cross"
+                        ? { "==": [{ var: field.name }, { var: siblingNames[0] ?? field.name }] }
+                        : undefined,
+                  })
+                }
               />
-            )}
-            {rule.type === "format" && (
+              {(rule.type === "len" || rule.type === "min" || rule.type === "max") && (
+                <InputNumber
+                  style={{ width: 90 }}
+                  placeholder="value"
+                  value={(rule.value as number | null) ?? null}
+                  onChange={(v) => update(i, { value: v ?? undefined })}
+                />
+              )}
+              {rule.type === "pattern" && (
+                <Input
+                  style={{ width: 130 }}
+                  placeholder="regex source"
+                  value={(rule.value as string) ?? ""}
+                  onChange={(e) => update(i, { value: e.target.value })}
+                />
+              )}
+              {rule.type === "format" && (
+                <Select
+                  style={{ width: 100 }}
+                  value={rule.format ?? "email"}
+                  options={FORMAT_OPTIONS}
+                  onChange={(format: ValidationRule["format"]) => update(i, { format })}
+                />
+              )}
+              {rule.type === "cross" && (
+                <CrossRuleControls
+                  rule={rule.rule}
+                  fieldOptions={fieldOptions}
+                  onChange={(next) => update(i, { rule: next })}
+                />
+              )}
+              <Input
+                style={{ width: 140 }}
+                placeholder="message (optional)"
+                value={rule.message ?? ""}
+                onChange={(e) => update(i, { message: e.target.value || undefined })}
+              />
               <Select
                 style={{ width: 100 }}
-                value={rule.format ?? "email"}
-                options={FORMAT_OPTIONS}
-                onChange={(format: ValidationRule["format"]) => update(i, { format })}
+                value={rule.severity ?? "error"}
+                options={SEVERITY_OPTIONS}
+                onChange={(severity: "error" | "warning") =>
+                  // "error" is the default — serialize it away.
+                  update(i, { severity: severity === "error" ? undefined : severity })
+                }
               />
-            )}
+              <Button type="text" size="small" danger onClick={() => remove(i)}>
+                ✕
+              </Button>
+            </Space>
+          ))}
+          <Button size="small" onClick={add}>
+            Add rule
+          </Button>
+        </div>
+      )}
+
+      <Form.Item
+        label="Remote check (URL)"
+        tooltip="GET url?value=<value>&name=<field> → { valid, message? }. valid:false blocks submit; network failure never blocks."
+        style={{ marginTop: 12 }}
+      >
+        <Input
+          placeholder="/api/check-username"
+          value={av?.url ?? ""}
+          onChange={(e) => setAv({ url: e.target.value })}
+        />
+      </Form.Item>
+      {av && (
+        <Space>
+          <Form.Item label="Message">
             <Input
-              style={{ width: 140 }}
-              placeholder="message (optional)"
-              value={rule.message ?? ""}
-              onChange={(e) => update(i, { message: e.target.value || undefined })}
+              style={{ width: 160 }}
+              placeholder="server message wins"
+              value={av.message ?? ""}
+              onChange={(e) => setAv({ message: e.target.value || undefined })}
             />
-            <Button type="text" size="small" danger onClick={() => remove(i)}>
-              ✕
-            </Button>
-          </Space>
-        ))}
-        <Button size="small" onClick={add}>
-          Add rule
-        </Button>
-      </div>
+          </Form.Item>
+          <Form.Item label="Debounce (ms)">
+            <InputNumber
+              style={{ width: 110 }}
+              min={0}
+              placeholder="400"
+              value={av.debounceMs ?? null}
+              onChange={(v) => setAv({ debounceMs: v ?? undefined })}
+            />
+          </Form.Item>
+        </Space>
+      )}
     </>
+  );
+}
+
+/** The simple comparator builder for a `cross` rule: left field, operator, and a
+ *  right side that toggles between another field and a literal value. A rule too
+ *  complex for this shape shows the JSON-panel hint instead (readSimpleRule contract). */
+function CrossRuleControls({
+  rule,
+  fieldOptions,
+  onChange,
+}: {
+  rule: ValidationRule["rule"];
+  fieldOptions: Array<{ label: string; value: string }>;
+  onChange: (rule: Record<string, unknown>) => void;
+}) {
+  const simple = readSimpleRule(rule);
+  if (!simple) {
+    return (
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        Complex rule — edit via the JSON panel
+      </Typography.Text>
+    );
+  }
+  const write = (op: CrossOp, left: string, right: CrossRight) =>
+    onChange({
+      [op]: [{ var: left }, right.kind === "field" ? { var: right.name } : coerceLiteral(right.value)],
+    });
+  return (
+    <Space wrap align="start">
+      <Select
+        style={{ width: 110 }}
+        value={simple.left}
+        options={fieldOptions}
+        onChange={(left) => write(simple.op, left, simple.right)}
+      />
+      <Select
+        style={{ width: 70 }}
+        value={simple.op}
+        options={CROSS_OPS.map((o) => ({ label: o, value: o }))}
+        onChange={(op: CrossOp) => write(op, simple.left, simple.right)}
+      />
+      <Segmented
+        size="small"
+        value={simple.right.kind}
+        options={[
+          { label: "Field", value: "field" },
+          { label: "Value", value: "value" },
+        ]}
+        onChange={(kind) =>
+          write(
+            simple.op,
+            simple.left,
+            kind === "field"
+              ? { kind: "field", name: fieldOptions[0]?.value ?? simple.left }
+              : { kind: "value", value: "" },
+          )
+        }
+      />
+      {simple.right.kind === "field" ? (
+        <Select
+          style={{ width: 110 }}
+          value={simple.right.name}
+          options={fieldOptions}
+          onChange={(name) => write(simple.op, simple.left, { kind: "field", name })}
+        />
+      ) : (
+        <Input
+          style={{ width: 90 }}
+          placeholder="value"
+          value={simple.right.value}
+          onChange={(e) => write(simple.op, simple.left, { kind: "value", value: e.target.value })}
+        />
+      )}
+    </Space>
   );
 }
 
