@@ -760,4 +760,53 @@ describe("buildZodSchema with layout containers", () => {
     const optional = buildZodSchema(form([{ type: "upload", name: "docs", label: "Docs" }]));
     expect(optional.safeParse({}).success).toBe(true);
   });
+
+  it("validates a cascader as a path array (required ⇒ non-empty)", () => {
+    const required = buildZodSchema(
+      form([{ type: "cascader", name: "region", label: "Region", required: true }]),
+    );
+    expect(required.safeParse({ region: [] }).success).toBe(false);
+    expect(required.safeParse({}).success).toBe(false);
+    expect(required.safeParse({ region: ["vn", "hcm"] }).success).toBe(true);
+
+    const optional = buildZodSchema(form([{ type: "cascader", name: "region", label: "Region" }]));
+    expect(optional.safeParse({}).success).toBe(true);
+    expect(optional.safeParse({ region: ["vn"] }).success).toBe(true);
+  });
+
+  it("validates a tree-select as scalar, or array when multiple", () => {
+    const scalar = buildZodSchema(
+      form([{ type: "tree-select", name: "dept", label: "Dept", required: true }]),
+    );
+    expect(scalar.safeParse({}).success).toBe(false);
+    expect(scalar.safeParse({ dept: "" }).success).toBe(false);
+    expect(scalar.safeParse({ dept: "eng" }).success).toBe(true);
+
+    const multi = buildZodSchema(
+      form([{ type: "tree-select", name: "dept", label: "Dept", required: true, multiple: true }]),
+    );
+    expect(multi.safeParse({ dept: [] }).success).toBe(false);
+    expect(multi.safeParse({ dept: ["eng", "qa"] }).success).toBe(true);
+
+    const optional = buildZodSchema(form([{ type: "tree-select", name: "dept", label: "Dept" }]));
+    expect(optional.safeParse({}).success).toBe(true);
+  });
+
+  it("validates date-range/time-range presence as a full [start, end] tuple", () => {
+    const stub = { format: () => "x" }; // dayjs-like; the shape is renderer-owned
+    const required = buildZodSchema(
+      form([{ type: "date-range", name: "stay", label: "Stay", required: true }]),
+    );
+    expect(required.safeParse({}).success).toBe(false);
+    expect(required.safeParse({ stay: null }).success).toBe(false);
+    expect(required.safeParse({ stay: [stub, null] }).success).toBe(false);
+    expect(required.safeParse({ stay: [stub, stub] }).success).toBe(true);
+
+    // antd's clear emits null; an optional range accepts it.
+    const optional = buildZodSchema(
+      form([{ type: "time-range", name: "shift", label: "Shift" }]),
+    );
+    expect(optional.safeParse({}).success).toBe(true);
+    expect(optional.safeParse({ shift: null }).success).toBe(true);
+  });
 });

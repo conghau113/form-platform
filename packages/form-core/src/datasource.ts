@@ -3,10 +3,13 @@ import type { LeafField } from "@org/form-schema";
 /** The `dataSource` config of a select field (the contract owns the shape). */
 export type SelectDataSource = NonNullable<Extract<LeafField, { type: "select" }>["dataSource"]>;
 
-/** A normalized option ready for any renderer's select control. */
+/** A normalized option ready for any renderer's select control. `children` is
+ *  present only when the dataSource declares a `childrenKey` (tree-shaped
+ *  sources for cascader / tree-select); flat consumers never see it. */
 export interface DataSourceOption {
   label: string;
   value: string | number;
+  children?: DataSourceOption[];
 }
 
 /** A value is "present" for dependency purposes when it isn't nullish or empty. */
@@ -54,11 +57,28 @@ export function buildDataSourceUrl(ds: SelectDataSource, values: Record<string, 
   return isAbsolute ? url.toString() : `${url.pathname}${url.search}`;
 }
 
+/** Map one response row to an option; with `childrenKey` set, child rows map
+ *  recursively through the same labelKey/valueKey to build a tree. */
+function mapRow(row: Record<string, unknown>, ds: SelectDataSource): DataSourceOption {
+  const option: DataSourceOption = {
+    label: String(row[ds.labelKey]),
+    value: row[ds.valueKey] as string | number,
+  };
+  if (ds.childrenKey) {
+    const kids = row[ds.childrenKey];
+    if (Array.isArray(kids)) {
+      option.children = kids.map((kid) => mapRow(kid as Record<string, unknown>, ds));
+    }
+  }
+  return option;
+}
+
 /**
  * Fetch and normalize remote select options. Maps each row via the dataSource's
- * `labelKey`/`valueKey`. Throws on a non-ok response so callers (react-query on
- * web, etc.) can surface an error state. The fetch impl is injectable for tests
- * and non-DOM environments.
+ * `labelKey`/`valueKey`; a `childrenKey` maps rows recursively into a tree (for
+ * cascader / tree-select). Throws on a non-ok response so callers (react-query
+ * on web, etc.) can surface an error state. The fetch impl is injectable for
+ * tests and non-DOM environments.
  */
 export async function fetchDataSourceOptions(
   ds: SelectDataSource,
@@ -68,8 +88,5 @@ export async function fetchDataSourceOptions(
   const res = await fetchImpl(buildDataSourceUrl(ds, values));
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   const rows = (await res.json()) as Array<Record<string, unknown>>;
-  return rows.map((row) => ({
-    label: String(row[ds.labelKey]),
-    value: row[ds.valueKey] as string | number,
-  }));
+  return rows.map((row) => mapRow(row, ds));
 }

@@ -101,6 +101,51 @@ describe("fetchDataSourceOptions", () => {
     expect(options).toEqual([{ label: "Vietnam", value: "VN" }]);
   });
 
+  it("maps nested rows recursively when childrenKey is set", async () => {
+    const ds: SelectDataSource = { ...countries, childrenKey: "regions" };
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve([
+          {
+            name: "Vietnam",
+            code: "VN",
+            regions: [
+              { name: "Ho Chi Minh", code: "HCM", regions: [{ name: "D1", code: "D1" }] },
+              { name: "Hanoi", code: "HN" },
+            ],
+          },
+        ]),
+    } as Response);
+
+    const options = await fetchDataSourceOptions(ds, {}, fetchImpl);
+
+    expect(options).toEqual([
+      {
+        label: "Vietnam",
+        value: "VN",
+        children: [
+          { label: "Ho Chi Minh", value: "HCM", children: [{ label: "D1", value: "D1" }] },
+          { label: "Hanoi", value: "HN" },
+        ],
+      },
+    ]);
+  });
+
+  it("emits no children key on flat sources, even if rows carry extra arrays", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([{ name: "Vietnam", code: "VN", regions: [{ name: "X" }] }]),
+    } as Response);
+
+    const options = await fetchDataSourceOptions(countries, {}, fetchImpl);
+
+    expect(options).toEqual([{ label: "Vietnam", value: "VN" }]);
+    expect("children" in (options[0] as object)).toBe(false);
+  });
+
   it("throws on a non-ok response", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,

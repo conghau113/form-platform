@@ -142,6 +142,20 @@ function leafZod(node: LeafField, requiredOverride?: boolean): z.ZodTypeAny {
       const arr = z.array(z.union([z.string(), z.number()]));
       return required ? arr.min(1, requiredMsg) : arr.optional();
     }
+    case "cascader": {
+      // The value is the PATH of option values root→leaf, so it is an array even
+      // for a single selection; required means a non-empty path.
+      const arr = z.array(z.union([z.string(), z.number()]));
+      return required ? arr.min(1, requiredMsg) : arr.optional();
+    }
+    case "tree-select": {
+      const value = z.union([z.string(), z.number()]);
+      if (node.multiple) {
+        const arr = z.array(value);
+        return required ? arr.min(1, requiredMsg) : arr.optional();
+      }
+      return required ? value.refine((v) => v !== "" && v != null, requiredMsg) : value.optional();
+    }
     case "upload": {
       // The value is the antd fileList (array of file metadata + live local files), so
       // it is validated as a plain array. Presence (required) means ≥1 file; maxCount
@@ -165,6 +179,20 @@ function leafZod(node: LeafField, requiredOverride?: boolean): z.ZodTypeAny {
       // we only assert presence when required and leave the shape to the renderer.
       return required
         ? z.any().refine((v) => v != null && v !== "", requiredMsg)
+        : z.any().optional();
+    }
+    case "date-range":
+    case "time-range": {
+      // A [start, end] tuple of platform-specific values (dayjs on web). Like
+      // date/time we assert only presence — both ends — when required; antd's
+      // clear emits null, which the optional branch accepts.
+      return required
+        ? z
+            .any()
+            .refine(
+              (v) => Array.isArray(v) && v.length === 2 && v[0] != null && v[1] != null,
+              requiredMsg,
+            )
         : z.any().optional();
     }
   }
