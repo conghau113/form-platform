@@ -29,6 +29,24 @@ export const conditionSchema = z.object({
   rule: z.record(z.string(), z.any()),
 });
 
+/** A reaction (a.k.a. linkage) makes one field react to others' values. While
+ *  `when` (SAFE JSONLogic, same shape/evaluator as `visibleWhen`) is true, the
+ *  named `target` gets `effect` applied:
+ *  - `visible`  → show/hide (payload boolean, defaults true; false = hide-when-matched)
+ *  - `disabled` → toggle interactivity (payload boolean)
+ *  - `value`    → set the target's value to `value` (target becomes controlled while matched)
+ *  - `options`  → replace a select/radio's options with `value` (array of {label,value})
+ *  Evaluated by form-core's reactions engine. NEVER eval() these rules. */
+export const reactionEffectSchema = z.enum(["visible", "disabled", "value", "options"]);
+export const reactionSchema = z.object({
+  when: conditionSchema,
+  target: z.string().min(1),
+  effect: reactionEffectSchema,
+  value: z.any().optional(),
+});
+export type Reaction = z.infer<typeof reactionSchema>;
+export type ReactionEffect = z.infer<typeof reactionEffectSchema>;
+
 export const permissionSchema = z.object({
   viewRoles: z.array(z.string()).optional(),
   editRoles: z.array(z.string()).optional(),
@@ -97,6 +115,9 @@ const commonFields = {
   /** Per-field Form.Item overrides of the root `layoutProps` (labelCol etc.). */
   decoratorProps: decoratorPropsSchema.optional(),
   visibleWhen: conditionSchema.optional(),
+  /** Linkage rules driven by other fields' values. Additive: old JSON without
+   *  this key keeps parsing, so no formVersion bump is required. */
+  reactions: z.array(reactionSchema).optional(),
   permissions: permissionSchema.optional(),
 };
 

@@ -6,6 +6,7 @@ import {
   formSchema,
   isLayoutContainer,
   LAYOUT_CONTAINER_TYPES,
+  migrate,
 } from "./index.js";
 
 describe("schema field types", () => {
@@ -112,6 +113,105 @@ describe("schema field types", () => {
         fields: [{ type: "array", name: "rows", label: "Rows", itemFields: "nope" }],
       }),
     ).toThrow();
+  });
+
+  it("accepts reactions[] with all four effects (± value)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "with-reactions",
+      title: "With reactions",
+      fields: [
+        {
+          type: "select",
+          name: "kind",
+          label: "Kind",
+          options: [{ label: "Company", value: "company" }],
+          reactions: [
+            {
+              when: { rule: { "==": [{ var: "kind" }, "company"] } },
+              target: "vat",
+              effect: "visible",
+            },
+            {
+              when: { rule: { "==": [{ var: "kind" }, "company"] } },
+              target: "note",
+              effect: "disabled",
+              value: true,
+            },
+            {
+              when: { rule: { "==": [{ var: "kind" }, "company"] } },
+              target: "tier",
+              effect: "value",
+              value: "gold",
+            },
+            {
+              when: { rule: { "==": [{ var: "kind" }, "company"] } },
+              target: "city",
+              effect: "options",
+              value: [{ label: "HN", value: "hn" }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(out.fields[0]).toHaveProperty("reactions");
+    const r = (out.fields[0] as { reactions: unknown[] }).reactions;
+    expect(r).toHaveLength(4);
+  });
+
+  it("rejects a reaction with a bad effect or missing target", () => {
+    const base = { when: { rule: { "==": [1, 1] } } };
+    expect(() =>
+      formSchema.parse({
+        formVersion: 3,
+        id: "bad-effect",
+        title: "Bad effect",
+        fields: [
+          {
+            type: "text",
+            name: "n",
+            label: "N",
+            reactions: [{ ...base, target: "x", effect: "glow" }],
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      formSchema.parse({
+        formVersion: 3,
+        id: "no-target",
+        title: "No target",
+        fields: [
+          { type: "text", name: "n", label: "N", reactions: [{ ...base, effect: "visible" }] },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it("parses legacy v3 JSON without reactions and migrate keeps reactions intact", () => {
+    const legacy = {
+      formVersion: 3,
+      id: "legacy",
+      title: "Legacy",
+      fields: [{ type: "text", name: "n", label: "N" }],
+    };
+    expect(formSchema.parse(legacy).fields[0]).not.toHaveProperty("reactions");
+
+    const withReactions = {
+      formVersion: 3,
+      id: "keep",
+      title: "Keep",
+      fields: [
+        {
+          type: "text",
+          name: "n",
+          label: "N",
+          reactions: [{ when: { rule: { "==": [1, 1] } }, target: "m", effect: "visible" }],
+        },
+      ],
+    };
+    const migrated = migrate(withReactions);
+    expect((migrated.fields[0] as { reactions: unknown[] }).reactions).toHaveLength(1);
   });
 
   it("rejects an unknown field type", () => {
