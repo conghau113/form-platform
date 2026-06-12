@@ -178,6 +178,41 @@ describe("schema field types", () => {
     expect(r).toHaveLength(4);
   });
 
+  it("accepts a select dataSource with params[] and ttlMs", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "with-datasource",
+      title: "With dataSource",
+      fields: [
+        {
+          type: "select",
+          name: "city",
+          label: "City",
+          dataSource: {
+            url: "https://api.test/cities",
+            labelKey: "name",
+            valueKey: "id",
+            params: [
+              { name: "country", from: "country" },
+              { name: "region", from: "regionField" },
+            ],
+            ttlMs: 60000,
+          },
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({
+      type: "select",
+      dataSource: {
+        ttlMs: 60000,
+        params: [
+          { name: "country", from: "country" },
+          { name: "region", from: "regionField" },
+        ],
+      },
+    });
+  });
+
   it("rejects a reaction with a bad effect or missing target", () => {
     const base = { when: { rule: { "==": [1, 1] } } };
     expect(() =>

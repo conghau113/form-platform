@@ -148,19 +148,33 @@ export const optionSchema = z.object({
   value: z.union([z.string(), z.number()]),
 });
 
+/** Remote option source for a select. `dependsOn` (single parent) is the level-1
+ *  shorthand; `params` maps any number of query params to other fields' current
+ *  values (level 2). `ttlMs` caches results for that long (renderer staleTime). */
+export const selectDataSourceSchema = z.object({
+  url: z.string(),
+  labelKey: z.string(),
+  valueKey: z.string(),
+  dependsOn: z.string().optional(),
+  params: z
+    .array(
+      z.object({
+        /** Query-param name to send. */
+        name: z.string(),
+        /** Source field whose current value fills the param. */
+        from: z.string(),
+      }),
+    )
+    .optional(),
+  ttlMs: z.number().optional(),
+});
+
 export const selectFieldSchema = z.object({
   type: z.literal("select"),
   ...commonFields,
   multiple: z.boolean().optional(),
   options: z.array(optionSchema).optional(),
-  dataSource: z
-    .object({
-      url: z.string(),
-      labelKey: z.string(),
-      valueKey: z.string(),
-      dependsOn: z.string().optional(),
-    })
-    .optional(),
+  dataSource: selectDataSourceSchema.optional(),
 });
 
 export const dateFieldSchema = z.object({ type: z.literal("date"), ...commonFields });
