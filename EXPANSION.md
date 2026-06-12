@@ -457,12 +457,44 @@ changes. Each phase keeps the Closing Loop (typecheck + test → reviewer → ch
       - **L5 — close:** typecheck 15/15, full suite green (the one `FormRenderer.containers` array
         test is the known parallel-load timeout flake — passes in isolation), biome clean on new
         files (CRLF baseline ignored), reviewer PASS (no required fixes). NEXT: Phase M.
-- [ ] **M — Hierarchical & range inputs.** Schema: `cascader` + `tree-select` (tree
-      `options: {label,value,children[]}` + dataSource that can return a tree), `date-range`
-      + `time-range`, and a date `picker` variant (`date|week|month|quarter|year`). form-core:
-      range value = `[start,end]` tuple; tree-select value = scalar/array. renderer-web: antd
-      `Cascader`/`TreeSelect`/`RangePicker`/`TimePicker.RangePicker`, `DatePicker picker=`.
-      Builder authoring for tree options (reuse the recursive item editor pattern from arrays).
+- [x] **M — Hierarchical & range inputs ✅ DONE (2026-06-13).** Shipped on branch
+      `feat/phase-m-hierarchical` (off `feat/phase-l-fields`). Additive → old JSON parses →
+      no `CURRENT_FORM_VERSION` bump. Plan: `C:\Users\ASUS\.claude\plans\imperative-skipping-brook.md`.
+      Decisions (asked in Vietnamese): remote tree dataSource IS in scope (`childrenKey`),
+      tree options edited by an INLINE RECURSIVE editor (not drill-path / JSON).
+      - **M1 — schema:** recursive `treeOptionSchema` (`TreeOption {label,value,children?[]}`,
+        explicit `z.ZodType` + `z.lazy`); `selectDataSourceSchema.childrenKey?` (rows map
+        recursively into a tree); new leaves `cascader` (tree options + dataSource, value =
+        path array), `tree-select` (`multiple?`), `date-range`/`time-range` ([start,end]
+        tuple); `datePickerVariantSchema` (`date|week|month|quarter|year`) as `picker?` on
+        `date` + `date-range`. Changeset form-schema minor.
+      - **M2 — form-core:** `leafZod` cases — cascader = path array (required ⇒ min 1),
+        tree-select mirrors select (scalar refine / array min 1 per `multiple`), ranges
+        assert a full 2-tuple when required (shape stays renderer-owned, antd clear's null
+        accepted when optional). `fetchDataSourceOptions` maps rows recursively via
+        `mapRow` when `childrenKey` is set; `DataSourceOption` gains `children?` (flat
+        sources byte-identical). Changeset form-core minor.
+      - **M3 — renderer-web:** `OptionSourced` widened to the 4 option-sourced types +
+        `isOptionSourced` guard (depValues gating); `CascaderControl` (native
+        `{label,value,children}` shape) + `TreeSelectControl` (explicit `fieldNames` —
+        TreeSelect's default display field is `title`); `DatePicker.RangePicker`/`TimePicker.
+        RangePicker` cases (raw dayjs tuple in RHF, no serialization, like `date`); `picker`
+        pass-through; previewText — cascader path joined " / " (`findTreeLabel` helper),
+        tree-select labels resolved anywhere in the tree, ranges "start ~ end";
+        `schemaDefaults` seeds `[]` for cascader + multiple tree-select. New
+        `FormRenderer.tree.test.tsx` (7) + range/picker tests in fields suite. Changeset
+        form-renderer-web minor.
+      - **M4 — builder:** registry metas (cascader/tree-select in Choice, date-range/
+        time-range in Date & time, shared `pickerSetting` select on date + date-range,
+        `multiple` checkbox on tree-select); new `TreeOptionsEditor.tsx` (inline recursive,
+        indent per depth, + child / ✕ per row, pure path-based `updateAt`); DataSourceEditor
+        widened to the 4 types (static mode renders TreeOptionsEditor for the tree types,
+        remote mode gains a "Children key (tree)" input); PropertyPanel uses the exported
+        `isOptionSourced` guard. Palette freeze test updated by design. Builder
+        changeset-ignored; builder now 129 tests.
+      - **M5 — close:** typecheck 15/15, full suite green (the known
+        `FormRenderer.containers` parallel-load timeout flake passes in isolation), biome
+        clean on Phase M files, reviewer PASS (no required fixes). NEXT: Phase N.
 - [ ] **N — Validation depth.** Schema: optional `validateTrigger?: "onInput"|"onBlur"|
     "onSubmit"` (maps to RHF `mode`/`reValidateMode`), rule severity `warning` (non-blocking,
       surfaces antd `validateStatus="warning"`, never blocks submit), `asyncValidator?: { url }`

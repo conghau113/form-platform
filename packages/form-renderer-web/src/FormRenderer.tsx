@@ -564,11 +564,7 @@ function findTreeLabel(opts: readonly TreeOption[], value: unknown): string | un
 
 /** Format a leaf's value as plain read text (Formily's PreviewText). Used by `readPretty`
  *  mode and as the readOnly fallback for controls antd can't render read-only. */
-function previewText(
-  node: LeafField,
-  value: unknown,
-  optionsOverride?: ReactionOption[],
-): string {
+function previewText(node: LeafField, value: unknown, optionsOverride?: ReactionOption[]): string {
   if (value == null || value === "") {
     // A boolean false is a real value (Yes/No), not "empty".
     if (typeof value !== "boolean") return "—";
@@ -583,8 +579,7 @@ function previewText(
     case "radio":
     case "checkbox-group": {
       const opts = optionsOverride ?? ("options" in node ? (node.options ?? []) : []);
-      const label = (v: unknown) =>
-        opts.find((o) => o.value === v)?.label ?? String(v);
+      const label = (v: unknown) => opts.find((o) => o.value === v)?.label ?? String(v);
       return Array.isArray(value) ? value.map(label).join(", ") : label(value);
     }
     case "cascader": {
@@ -632,8 +627,14 @@ function previewText(
 }
 
 /** Plain-text read view of a leaf's value (review / readPretty mode). */
-function FieldPreview(props: { node: LeafField; value: unknown; optionsOverride?: ReactionOption[] }) {
-  return <Typography.Text>{previewText(props.node, props.value, props.optionsOverride)}</Typography.Text>;
+function FieldPreview(props: {
+  node: LeafField;
+  value: unknown;
+  optionsOverride?: ReactionOption[];
+}) {
+  return (
+    <Typography.Text>{previewText(props.node, props.value, props.optionsOverride)}</Typography.Text>
+  );
 }
 
 /** The reactive scope a node renders in: the MERGED values it sees (outer form values

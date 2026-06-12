@@ -39,13 +39,7 @@ export const conditionSchema = z.object({
  *  - `required` → toggle the target's required-ness (payload boolean, defaults true;
  *                 false un-requires a statically-required field while matched)
  *  Evaluated by form-core's reactions engine. NEVER eval() these rules. */
-export const reactionEffectSchema = z.enum([
-  "visible",
-  "disabled",
-  "value",
-  "options",
-  "required",
-]);
+export const reactionEffectSchema = z.enum(["visible", "disabled", "value", "options", "required"]);
 export const reactionSchema = z.object({
   when: conditionSchema,
   target: z.string().min(1),

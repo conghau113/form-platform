@@ -113,7 +113,7 @@ describe("DataSourceEditor", () => {
     };
     render(<DataSourceEditor field={field} sourceNames={[]} set={set} />);
 
-    expect(screen.getByText("Children key (tree)")).toBeInTheDocument();
+    expect(screen.getByText("Children key (tree)")).toBeTruthy();
     await user.type(screen.getByPlaceholderText("e.g. children"), "s");
 
     expect(set).toHaveBeenLastCalledWith({

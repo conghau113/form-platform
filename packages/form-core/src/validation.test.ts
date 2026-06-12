@@ -803,9 +803,7 @@ describe("buildZodSchema with layout containers", () => {
     expect(required.safeParse({ stay: [stub, stub] }).success).toBe(true);
 
     // antd's clear emits null; an optional range accepts it.
-    const optional = buildZodSchema(
-      form([{ type: "time-range", name: "shift", label: "Shift" }]),
-    );
+    const optional = buildZodSchema(form([{ type: "time-range", name: "shift", label: "Shift" }]));
     expect(optional.safeParse({}).success).toBe(true);
     expect(optional.safeParse({ shift: null }).success).toBe(true);
   });

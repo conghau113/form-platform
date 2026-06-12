@@ -37,7 +37,11 @@ describe("schema field types", () => {
           name: "kind",
           label: "Kind",
           reactions: [
-            { when: { rule: { "==": [{ var: "kind" }, "company"] } }, target: "vat", effect: "required" },
+            {
+              when: { rule: { "==": [{ var: "kind" }, "company"] } },
+              target: "vat",
+              effect: "required",
+            },
           ],
         },
         { type: "text", name: "vat", label: "VAT" },
@@ -119,7 +123,10 @@ describe("schema field types", () => {
     });
     expect(out.fields[0]).toMatchObject({ type: "upload", maxCount: 3, listType: "picture" });
     expect(out.fields[1]).toMatchObject({ type: "checkbox-group" });
-    expect(out.fields[2]).toMatchObject({ type: "checkbox-group", dataSource: { url: "/api/cities" } });
+    expect(out.fields[2]).toMatchObject({
+      type: "checkbox-group",
+      dataSource: { url: "/api/cities" },
+    });
     expect(out.fields[3]).toMatchObject({ type: "number", step: 0.5, precision: 2 });
     expect(out.fields[4]).toMatchObject({ type: "select", tags: true, showSearch: true });
   });

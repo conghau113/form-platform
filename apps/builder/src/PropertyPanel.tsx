@@ -22,6 +22,7 @@ import {
   Typography,
 } from "antd";
 import { useEffect, useState } from "react";
+import { DataSourceEditor, isOptionSourced } from "./DataSourceEditor";
 import { type NodePath, nodeAtPath, patchNodeAtPath } from "./engine/field-path";
 import type { FormProps } from "./engine/tree";
 import {
@@ -35,7 +36,6 @@ import {
   type SettingDescriptor,
   type ValidationRuleType,
 } from "./field-registry";
-import { DataSourceEditor, isOptionSourced } from "./DataSourceEditor";
 import { ReactionsEditor } from "./ReactionsEditor";
 
 /** The leaf/array nodes the full field editor handles. Layout containers render a

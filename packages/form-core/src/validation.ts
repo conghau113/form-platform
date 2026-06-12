@@ -95,7 +95,9 @@ function leafZod(node: LeafField, requiredOverride?: boolean): z.ZodTypeAny {
   // one makes the field mandatory. A rule's `message` customizes the text. A reaction
   // `required` effect (requiredOverride) takes precedence over both.
   const required =
-    requiredOverride !== undefined ? requiredOverride : node.required === true || requiredRule != null;
+    requiredOverride !== undefined
+      ? requiredOverride
+      : node.required === true || requiredRule != null;
   const requiredMsg = requiredRule?.message ?? `${labelOf(node)} is required`;
 
   switch (node.type) {

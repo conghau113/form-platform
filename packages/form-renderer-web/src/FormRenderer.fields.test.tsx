@@ -116,9 +116,7 @@ describe("FormRenderer Phase L field types", () => {
     vi.stubGlobal("fetch", fetchMock);
     try {
       render(
-        <FormRenderer
-          schema={form([{ type: "upload", name: "docs", label: "Documents" }])}
-        />,
+        <FormRenderer schema={form([{ type: "upload", name: "docs", label: "Documents" }])} />,
       );
       const file = new File(["x"], "report.pdf", { type: "application/pdf" });
       // antd Upload renders a hidden file input.

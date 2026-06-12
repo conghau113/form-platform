@@ -46,7 +46,13 @@ describe("FormRenderer cascader", () => {
       <FormRenderer
         onSubmit={onSubmit}
         schema={form([
-          { type: "cascader", name: "region", label: "Region", required: true, options: regionTree },
+          {
+            type: "cascader",
+            name: "region",
+            label: "Region",
+            required: true,
+            options: regionTree,
+          },
         ])}
       />,
     );
@@ -56,9 +62,11 @@ describe("FormRenderer cascader", () => {
   });
 
   it("loads a remote tree via dataSource childrenKey", async () => {
-    const fetchMock = vi.fn().mockReturnValue(
-      jsonResponse([{ name: "Vietnam", id: "vn", subs: [{ name: "Hanoi", id: "hn" }] }]),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockReturnValue(
+        jsonResponse([{ name: "Vietnam", id: "vn", subs: [{ name: "Hanoi", id: "hn" }] }]),
+      );
     vi.stubGlobal("fetch", fetchMock);
     try {
       render(
