@@ -338,8 +338,29 @@ error (Formily-like UX). Plan: `C:\Users\ASUS\.claude\plans\rippling-percolating
 ## Long-term (post-H) — beyond Formily parity
 Ordered by value; each is a normal phase with the same Closing Loop.
 
-- [ ] **I — Templates & presets:** save/load form templates (JSON export/import is
-      free once F3 exists); a starter gallery in the builder.
+## Phase I — Templates & presets ✅ DONE (2026-06-12)
+First long-term phase, shipped on branch `feat/phase-i-templates` (off `main` after the
+E→H merge). Builder-only → changeset-ignored, no changeset. Additive, no `formVersion` bump.
+Plan: `C:\Users\ASUS\.claude\plans\radiant-sauteeing-reef.md`.
+- [x] **I1 — Export / Import form JSON** (`5e1b583`): new pure `apps/builder/src/io.ts`
+      (`serializeForm` / `parseFormFile`, reusing `@org/form-schema` `migrate` for the
+      untrusted-JSON pipeline). `App` gained `onExportForm` (Blob download, mirroring
+      `onExportTheme`) + `onImportForm` (antd `Upload` `beforeUpload→false`, handled
+      locally) and a shared `loadSchema` helper that now also backs backend `onLoad`.
+      Header: Export + Import buttons. Tests `io.test.ts` (5).
+- [x] **I2 — Template gallery** (`2860e75`): `apps/builder/src/templates.ts`
+      (`BUILTIN_TEMPLATES` — Blank/Contact/Employee onboarding/Feedback survey/Event
+      registration; two seeded from `examples/form.v{1,3}.json`, all validated via
+      `migrate`) + `useUserTemplates()` (guarded localStorage via `usePersistentState`).
+      `TemplateGallery.tsx` antd Modal (Starters + Your templates cards, Use/Save current/
+      Delete) launched from a header **Templates** button; `onUse` reuses `loadSchema`.
+      Tests `TemplateGallery.test.tsx` (4). Builder now 115 tests.
+- [x] **I3 — close:** typecheck 15/15, full suite green, biome clean on Phase I files
+      (repo-wide CRLF format artifact pre-existing, ignored), reviewer PASS (no required
+      fixes). **Deferred hardening (reviewer note):** user templates replay their stored
+      schema raw on Use — correct today since every saved schema is current-version, but if
+      `CURRENT_FORM_VERSION` ever bumps, add a `migrate()` on rehydrate. No changeset.
+
 - [ ] **J — Data sources, level 2:** build on `form-core/datasource.ts` — dependent
       selects (params from other fields via reactions), caching, loading/error states
       in renderer-web, builder UI to configure a datasource per select field.
