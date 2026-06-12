@@ -36,8 +36,16 @@ export const conditionSchema = z.object({
  *  - `disabled` → toggle interactivity (payload boolean)
  *  - `value`    → set the target's value to `value` (target becomes controlled while matched)
  *  - `options`  → replace a select/radio's options with `value` (array of {label,value})
+ *  - `required` → toggle the target's required-ness (payload boolean, defaults true;
+ *                 false un-requires a statically-required field while matched)
  *  Evaluated by form-core's reactions engine. NEVER eval() these rules. */
-export const reactionEffectSchema = z.enum(["visible", "disabled", "value", "options"]);
+export const reactionEffectSchema = z.enum([
+  "visible",
+  "disabled",
+  "value",
+  "options",
+  "required",
+]);
 export const reactionSchema = z.object({
   when: conditionSchema,
   target: z.string().min(1),
@@ -104,8 +112,15 @@ const commonFields = {
   /** Short hint rendered as an info tooltip next to the label. */
   tooltip: z.string().optional(),
   required: z.boolean().optional(),
-  /** Render the control read-only / non-interactive. */
+  /** Interaction pattern flags, layered on each other (Formily's `pattern`, expressed
+   *  additively). Precedence in the renderer is `readPretty > readOnly > disabled >
+   *  editable`: `readPretty` shows the value as plain text (review mode), `readOnly`
+   *  shows a non-interactive control, `disabled` greys it out. */
   disabled: z.boolean().optional(),
+  /** Non-interactive but not greyed — the user can read the value, not edit it. */
+  readOnly: z.boolean().optional(),
+  /** Render the value as plain text (PreviewText), no control. */
+  readPretty: z.boolean().optional(),
   /** Seed value applied when a fresh form is rendered with no initialValues. */
   defaultValue: z.any().optional(),
   /** Field-level validation rules, compiled to Zod by form-core. Additive: old

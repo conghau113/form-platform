@@ -49,6 +49,7 @@ import {
   Tabs,
   type ThemeConfig,
   TimePicker,
+  Typography,
 } from "antd";
 import type React from "react";
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
@@ -139,6 +140,9 @@ function FieldControl(props: {
   node: LeafField;
   value: unknown;
   disabled?: boolean;
+  /** Non-interactive but not greyed (antd `readOnly`). Only the text/number inputs
+   *  honor it; other controls are rendered via FieldPreview at the call site instead. */
+  readOnly?: boolean;
   onChange: (v: unknown) => void;
   /** Current values of a select's dataSource dependency fields, keyed by name. */
   depValues?: Record<string, unknown>;
@@ -147,7 +151,7 @@ function FieldControl(props: {
   /** DOM id linking the control to its Form.Item label (htmlFor). */
   id?: string;
 }) {
-  const { node, value, disabled, onChange, depValues, optionsOverride, id } = props;
+  const { node, value, disabled, readOnly, onChange, depValues, optionsOverride, id } = props;
   switch (node.type) {
     case "text":
       return (
@@ -155,6 +159,7 @@ function FieldControl(props: {
           id={id}
           value={(value as string) ?? ""}
           disabled={disabled}
+          readOnly={readOnly}
           maxLength={node.maxLength}
           placeholder={node.placeholder}
           onChange={(e) => onChange(e.target.value)}
@@ -166,6 +171,7 @@ function FieldControl(props: {
           id={id}
           value={(value as string) ?? ""}
           disabled={disabled}
+          readOnly={readOnly}
           maxLength={node.maxLength}
           rows={node.rows}
           placeholder={node.placeholder}
@@ -179,6 +185,7 @@ function FieldControl(props: {
           style={{ width: "100%" }}
           value={(value as number | null) ?? null}
           disabled={disabled}
+          readOnly={readOnly}
           min={node.min}
           max={node.max}
           onChange={onChange}
@@ -190,6 +197,7 @@ function FieldControl(props: {
           id={id}
           value={(value as string) ?? ""}
           disabled={disabled}
+          readOnly={readOnly}
           maxLength={node.maxLength}
           placeholder={node.placeholder}
           onChange={(e) => onChange(e.target.value)}
@@ -283,6 +291,50 @@ function FieldControl(props: {
     default:
       return null;
   }
+}
+
+/** Leaf types whose antd control honors a `readOnly` prop (non-interactive, not greyed).
+ *  Other types have no readOnly mode and render through FieldPreview instead. */
+const READONLY_INPUT_TYPES = new Set<LeafField["type"]>(["text", "textarea", "password", "number"]);
+
+/** Format a leaf's value as plain read text (Formily's PreviewText). Used by `readPretty`
+ *  mode and as the readOnly fallback for controls antd can't render read-only. */
+function previewText(
+  node: LeafField,
+  value: unknown,
+  optionsOverride?: ReactionOption[],
+): string {
+  if (value == null || value === "") {
+    // A boolean false is a real value (Yes/No), not "empty".
+    if (typeof value !== "boolean") return "—";
+  }
+  switch (node.type) {
+    case "password":
+      return "••••••";
+    case "checkbox":
+    case "switch":
+      return value ? "Yes" : "No";
+    case "select":
+    case "radio": {
+      const opts = optionsOverride ?? ("options" in node ? (node.options ?? []) : []);
+      const label = (v: unknown) =>
+        opts.find((o) => o.value === v)?.label ?? String(v);
+      return Array.isArray(value) ? value.map(label).join(", ") : label(value);
+    }
+    case "date":
+    case "time": {
+      const fmt = node.type === "date" ? "YYYY-MM-DD" : "HH:mm:ss";
+      const v = value as { format?: (f: string) => string } | null;
+      return v && typeof v.format === "function" ? v.format(fmt) : String(value);
+    }
+    default:
+      return String(value);
+  }
+}
+
+/** Plain-text read view of a leaf's value (review / readPretty mode). */
+function FieldPreview(props: { node: LeafField; value: unknown; optionsOverride?: ReactionOption[] }) {
+  return <Typography.Text>{previewText(props.node, props.value, props.optionsOverride)}</Typography.Text>;
 }
 
 /** The reactive scope a node renders in: the MERGED values it sees (outer form values
@@ -497,6 +549,10 @@ export interface FormRendererProps {
    *  `openFormDialog`/`openFormDrawer` wrappers, which drive submission from the popup's own
    *  OK button via the `FormRendererHandle.submit()` imperative handle. */
   hideSubmit?: boolean;
+  /** Form-wide review mode: render every leaf as plain read text (PreviewText) and hide the
+   *  Submit button. Per-field `readPretty`/`readOnly` flags in the schema still apply when this
+   *  is false. */
+  readPretty?: boolean;
 }
 
 /** Imperative handle exposed via `ref`. `submit()` programmatically triggers validation +
@@ -536,6 +592,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     nodeWrapper,
     designMode = false,
     hideSubmit = false,
+    readPretty = false,
   },
   ref,
 ) {
@@ -819,6 +876,15 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     // disabled field; an `options` effect overrides select/radio.
     const eff = scopeEffects?.[node.name];
     const editable = canEdit(node, access) && !(eff?.disabled ?? node.disabled === true);
+    // Interaction pattern (precedence readPretty > readOnly > disabled). A form-wide
+    // `readPretty` review mode forces every leaf to the read view.
+    const readPrettyMode = readPretty || node.readPretty === true;
+    const readOnlyMode = !readPrettyMode && node.readOnly === true;
+    // readPretty always previews; readOnly previews too for controls antd can't render
+    // read-only (everything except the text/number inputs).
+    const usePreview = readPrettyMode || (readOnlyMode && !READONLY_INPUT_TYPES.has(node.type));
+    // The asterisk reflects a reaction `required` effect when present, else the static flag.
+    const requiredMark = eff?.required ?? node.required;
     // A select with a dependent dataSource reads each dependency field's current value
     // (the `dependsOn` parent + every `params[].from`), keyed by field name.
     // NOTE: deps resolve against the row scope's merged values; a top-level dep referenced
@@ -837,21 +903,25 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
             label={opts?.hideLabel ? undefined : node.label}
             htmlFor={opts?.hideLabel ? undefined : fieldName}
             tooltip={opts?.hideLabel ? undefined : node.tooltip}
-            required={opts?.hideLabel ? undefined : node.required}
+            required={opts?.hideLabel ? undefined : requiredMark}
             style={opts?.bare ? { marginBottom: 0 } : undefined}
             validateStatus={fieldState.error ? "error" : undefined}
             help={fieldState.error?.message ?? (opts?.hideLabel ? undefined : node.helpText)}
             {...node.decoratorProps}
           >
-            {/* In design mode the control stays fully visible but pointer-inert (a click
+            {/* readPretty / readOnly-without-antd-support → a plain read view (PreviewText).
+                In design mode the control stays fully visible but pointer-inert (a click
                 selects the node instead of typing into the input). Runtime renders the
                 control directly so its DOM is byte-for-byte unchanged. */}
-            {designMode ? (
+            {usePreview ? (
+              <FieldPreview node={node} value={field.value} optionsOverride={eff?.options} />
+            ) : designMode ? (
               <div style={{ pointerEvents: "none" }}>
                 <FieldControl
                   node={node}
                   value={field.value}
-                  disabled={!editable}
+                  disabled={!editable && !readOnlyMode}
+                  readOnly={readOnlyMode}
                   onChange={field.onChange}
                   depValues={depValues}
                   optionsOverride={eff?.options}
@@ -862,7 +932,8 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
               <FieldControl
                 node={node}
                 value={field.value}
-                disabled={!editable}
+                disabled={!editable && !readOnlyMode}
+                readOnly={readOnlyMode}
                 onChange={field.onChange}
                 depValues={depValues}
                 optionsOverride={eff?.options}
@@ -903,9 +974,9 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                 <Fragment key={i}>{renderNode(n, "", { path: [i] })}</Fragment>
               ))}
             </Row>
-            {/* The Submit button is meaningless on the design canvas, and a popup wrapper
-                drives submission from its own footer (hideSubmit). */}
-            {!designMode && !hideSubmit && (
+            {/* The Submit button is meaningless on the design canvas, in form-wide review
+                (readPretty) mode, and when a popup wrapper drives submission (hideSubmit). */}
+            {!designMode && !hideSubmit && !readPretty && (
               <Button type="primary" htmlType="submit">
                 {submitLabel}
               </Button>

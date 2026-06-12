@@ -85,13 +85,17 @@ function labelOf(node: { label?: string; name: string }): string {
   return node.label?.trim() ? node.label : node.name;
 }
 
-/** Map one leaf field to a Zod type, honoring required + per-type constraints. */
-function leafZod(node: LeafField): z.ZodTypeAny {
+/** Map one leaf field to a Zod type, honoring required + per-type constraints.
+ *  `requiredOverride` (from a reaction `required` effect) wins over the static
+ *  `required` flag/rule when present — true forces required, false un-requires. */
+function leafZod(node: LeafField, requiredOverride?: boolean): z.ZodTypeAny {
   const rules = node.validations ?? [];
   const requiredRule = rules.find((r) => r.type === "required");
   // The `required` flag and a `required` validation rule are equivalent; either
-  // one makes the field mandatory. A rule's `message` customizes the text.
-  const required = node.required === true || requiredRule != null;
+  // one makes the field mandatory. A rule's `message` customizes the text. A reaction
+  // `required` effect (requiredOverride) takes precedence over both.
+  const required =
+    requiredOverride !== undefined ? requiredOverride : node.required === true || requiredRule != null;
   const requiredMsg = requiredRule?.message ?? `${labelOf(node)} is required`;
 
   switch (node.type) {
@@ -239,7 +243,9 @@ function buildShape(
       shape[node.name] = arrayZod(node, values, access);
       continue;
     }
-    shape[node.name] = leafZod(node);
+    // A reaction `required` effect for this field overrides its static required-ness,
+    // staying consistent with what the renderer shows (per-row arrays pass rowEffects).
+    shape[node.name] = leafZod(node, effects?.[node.name]?.required);
   }
   return shape;
 }

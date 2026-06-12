@@ -48,6 +48,20 @@ describe("computeReactions", () => {
     });
   });
 
+  it("maps the `required` effect (defaults true, honors explicit false)", () => {
+    const f = form([
+      source("kind", [
+        { when: eq("kind", "company"), target: "vat", effect: "required" },
+        { when: eq("kind", "company"), target: "note", effect: "required", value: false },
+      ]),
+    ]);
+    expect(computeReactions(f, { kind: "person" })).toEqual({});
+    expect(computeReactions(f, { kind: "company" })).toEqual({
+      vat: { required: true },
+      note: { required: false },
+    });
+  });
+
   it("defaults the visible payload to true and honors an explicit false (hide-when-matched)", () => {
     const f = form([
       source("a", [

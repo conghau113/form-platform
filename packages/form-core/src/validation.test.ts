@@ -90,6 +90,55 @@ describe("buildZodSchema", () => {
     if (result.success) expect("vat" in result.data).toBe(false);
   });
 
+  it("makes an optional field required via a reaction required effect", () => {
+    const build = (kind: string) =>
+      buildZodSchema(
+        form([
+          {
+            type: "select",
+            name: "kind",
+            label: "Kind",
+            reactions: [
+              {
+                when: { rule: { "==": [{ var: "kind" }, "company"] } },
+                target: "vat",
+                effect: "required",
+              },
+            ],
+          },
+          { type: "text", name: "vat", label: "VAT" },
+        ]),
+        { values: { kind } },
+      );
+    // person → vat stays optional; company → reaction requires it.
+    expect(build("person").safeParse({ kind: "person" }).success).toBe(true);
+    expect(build("company").safeParse({ kind: "company" }).success).toBe(false);
+    expect(build("company").safeParse({ kind: "company", vat: "X1" }).success).toBe(true);
+  });
+
+  it("un-requires a statically-required field via a reaction required:false", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "select",
+          name: "kind",
+          label: "Kind",
+          reactions: [
+            {
+              when: { rule: { "==": [{ var: "kind" }, "person"] } },
+              target: "vat",
+              effect: "required",
+              value: false,
+            },
+          ],
+        },
+        { type: "text", name: "vat", label: "VAT", required: true },
+      ]),
+      { values: { kind: "person" } },
+    );
+    expect(schema.safeParse({ kind: "person" }).success).toBe(true);
+  });
+
   it("lets a reaction visible:true override visibleWhen:false (field validates)", () => {
     const schema = buildZodSchema(
       form([

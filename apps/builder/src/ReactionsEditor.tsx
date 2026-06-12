@@ -2,10 +2,11 @@ import type { Reaction, ReactionEffect } from "@org/form-schema";
 import { Button, Divider, Input, Select, Space, Typography } from "antd";
 import { type Option, OptionsEditor, readEqualsRule } from "./PropertyPanel";
 
-/** The four effects an authored reaction can apply, with friendly labels. */
+/** The effects an authored reaction can apply, with friendly labels. */
 const EFFECT_OPTIONS: { label: string; value: ReactionEffect }[] = [
   { label: "Show / hide", value: "visible" },
   { label: "Enable / disable", value: "disabled" },
+  { label: "Require / optional", value: "required" },
   { label: "Set value", value: "value" },
   { label: "Set options", value: "options" },
 ];
@@ -18,6 +19,8 @@ function defaultValueForEffect(effect: ReactionEffect): unknown {
       return true; // "Show" while matched
     case "disabled":
       return true; // "Disable" while matched
+    case "required":
+      return true; // "Require" while matched
     case "value":
       return "";
     case "options":
@@ -57,6 +60,18 @@ function ReactionValueControl({
             { label: "Enable", value: "enable" },
           ]}
           onChange={(v) => onChange(v !== "enable")}
+        />
+      );
+    case "required":
+      return (
+        <Select
+          style={{ width: 120 }}
+          value={reaction.value === false ? "optional" : "require"}
+          options={[
+            { label: "Require", value: "require" },
+            { label: "Optional", value: "optional" },
+          ]}
+          onChange={(v) => onChange(v !== "optional")}
         />
       );
     case "value":

@@ -69,6 +69,20 @@ describe("ReactionsEditor", () => {
     expect(onChange).toHaveBeenCalledWith([]);
   });
 
+  it("switches to the required effect with a Require/Optional value control", async () => {
+    const user = userEvent.setup();
+    const onChange = setup([{ when: eq("x", "co"), target: "a", effect: "visible", value: true }]);
+
+    // [0]=source field, [1]=target, [2]=effect
+    const effectSelect = screen.getAllByRole("combobox")[2];
+    await user.click(effectSelect);
+    await user.click(await screen.findByText("Require / optional"));
+
+    expect(onChange).toHaveBeenCalledWith([
+      { when: eq("x", "co"), target: "a", effect: "required", value: true },
+    ]);
+  });
+
   it("shows a read-only hint for a non-simple condition", () => {
     setup([{ when: { rule: { ">": [{ var: "x" }, 5] } }, target: "a", effect: "visible" }]);
 

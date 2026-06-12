@@ -20,6 +20,8 @@ export interface ReactionOption {
 export interface FieldEffects {
   visible?: boolean;
   disabled?: boolean;
+  /** Override the target's required-ness while matched (true = require, false = un-require). */
+  required?: boolean;
   value?: { set: unknown };
   options?: ReactionOption[];
 }
@@ -130,6 +132,9 @@ function applyEffect(eff: FieldEffects, reaction: Reaction): void {
       break;
     case "disabled":
       eff.disabled = reaction.value === undefined ? true : Boolean(reaction.value);
+      break;
+    case "required":
+      eff.required = reaction.value === undefined ? true : Boolean(reaction.value);
       break;
     case "value":
       eff.value = { set: reaction.value };

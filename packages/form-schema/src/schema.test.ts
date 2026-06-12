@@ -24,6 +24,31 @@ describe("schema field types", () => {
     expect(out.fields[0]).toMatchObject({ type: "textarea", rows: 5 });
   });
 
+  it("accepts the readOnly/readPretty pattern flags and a required reaction effect (additive)", () => {
+    const doc = {
+      formVersion: 3,
+      id: "patterns",
+      title: "Patterns",
+      fields: [
+        { type: "text", name: "ref", label: "Ref", readOnly: true },
+        { type: "text", name: "summary", label: "Summary", readPretty: true },
+        {
+          type: "select",
+          name: "kind",
+          label: "Kind",
+          reactions: [
+            { when: { rule: { "==": [{ var: "kind" }, "company"] } }, target: "vat", effect: "required" },
+          ],
+        },
+        { type: "text", name: "vat", label: "VAT" },
+      ],
+    };
+    const out = formSchema.parse(doc);
+    expect(out.fields[0]).toMatchObject({ readOnly: true });
+    expect(out.fields[1]).toMatchObject({ readPretty: true });
+    expect(out.fields[2]).toMatchObject({ reactions: [{ effect: "required" }] });
+  });
+
   it("accepts the new control field types (additive)", () => {
     const doc = {
       formVersion: 3,

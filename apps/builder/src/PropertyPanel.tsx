@@ -294,7 +294,7 @@ function FieldForm({
           onChange={(e) => set({ tooltip: e.target.value || undefined })}
         />
       </Form.Item>
-      <Space>
+      <Space wrap>
         <Form.Item>
           <Checkbox
             checked={!!field.required}
@@ -303,14 +303,35 @@ function FieldForm({
             Required
           </Checkbox>
         </Form.Item>
+        {/* Universal interaction pattern (Formily-style), layered on the additive
+            disabled/readOnly/readPretty flags — mutually exclusive in the UI. */}
         {field.type !== "array" && (
-          <Form.Item>
-            <Checkbox
-              checked={!!field.disabled}
-              onChange={(e) => set({ disabled: e.target.checked || undefined } as Patch)}
-            >
-              Disabled
-            </Checkbox>
+          <Form.Item label="Pattern">
+            <Select
+              style={{ width: 140 }}
+              value={
+                field.readPretty
+                  ? "readPretty"
+                  : field.readOnly
+                    ? "readOnly"
+                    : field.disabled
+                      ? "disabled"
+                      : "editable"
+              }
+              options={[
+                { label: "Editable", value: "editable" },
+                { label: "Disabled", value: "disabled" },
+                { label: "Read-only", value: "readOnly" },
+                { label: "Read-pretty", value: "readPretty" },
+              ]}
+              onChange={(p) =>
+                set({
+                  disabled: p === "disabled" ? true : undefined,
+                  readOnly: p === "readOnly" ? true : undefined,
+                  readPretty: p === "readPretty" ? true : undefined,
+                } as Patch)
+              }
+            />
           </Form.Item>
         )}
       </Space>

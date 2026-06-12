@@ -10,8 +10,9 @@ Conventions live in [AGENTS.md](AGENTS.md) — never restate them in a prompt. R
 `pnpm test` until green → `reviewer` subagent → `pnpm changeset` → commit → `/clear`.
 
 ## Direction (decided 2026-06-10)
+
 - Order: **A → G** (safe, additive, value-increasing).
-- Depth: **Full Formily-style** — adopt Formily's *patterns* (component registry,
+- Depth: **Full Formily-style** — adopt Formily's _patterns_ (component registry,
   reactions/effects, meta-driven setting panel, outline tree) **on top of the existing
   Zod contract**. Do NOT replace the contract with Formily's JSON-Schema (`x-component`
   etc.) — the Zod discriminated union in `packages/form-schema` stays the source of truth.
@@ -27,6 +28,7 @@ Conventions live in [AGENTS.md](AGENTS.md) — never restate them in a prompt. R
   the playground workbench (CompositePanel | Toolbar + ViewPanel×4 | SettingsForm).
 
 ## Non-negotiables (same as AGENTS.md, restated for this track)
+
 - Schema IS the contract. Renderers consume it. Adding **optional** types/props is
   additive → old JSON still parses → **no `CURRENT_FORM_VERSION` bump** (precedent: how
   `textarea` and Phase A's 7 types were added). Bump + migration N→N+1 + a fixture test
@@ -37,6 +39,7 @@ Conventions live in [AGENTS.md](AGENTS.md) — never restate them in a prompt. R
 ---
 
 ## Phase A — Expand basic field types ✅ DONE (2026-06-10)
+
 Added 7 leaf types (`radio`, `switch`, `slider`, `rate`, `password`, `time`, `color`) and
 3 optional common props (`tooltip`, `disabled`, `defaultValue`) across schema → core →
 renderer-web → builder. Introduced the **meta-driven field registry**
@@ -47,6 +50,7 @@ generated from it instead of hard-coded switches. Guard test:
 Changeset: `.changeset/expanded-field-types.md`.
 
 ## Phase B — Full validation rules ✅ DONE (2026-06-10)
+
 Scope: `packages/form-schema` + `packages/form-core` + `apps/builder`.
 Added an optional `validations[]` to every leaf field (via `commonFields`) — `{ type:
 "required" | "len" | "min" | "max" | "pattern" | "format", value?, format?:
@@ -62,6 +66,7 @@ every rule kind, custom messages, url/phone, the malformed-pattern guard and hid
 skipping. Changeset: `.changeset/field-validation-rules.md`.
 
 ## Phase C — Array fields / Form List ✅ DONE (2026-06-10)
+
 Added the `array` node — recursive like `group`, holding `itemFields: FieldNode[]` +
 optional `required`/`minItems`/`maxItems` — as `arrayFieldSchema` in `form-schema`
 (additive → no `CURRENT_FORM_VERSION` bump; `migrate`'s walk now recurses `itemFields`).
@@ -87,7 +92,8 @@ from a nested edit, so App's editor↔schema boundary is unchanged. Changeset
 `.changeset/array-table-and-item-config.md`. Drag-based nested authoring on the canvas
 (outline tree) still belongs to Phase D.
 
-## Phase D — Designer engine & tree foundation  ✅ DONE (2026-06-11)
+## Phase D — Designer engine & tree foundation ✅ DONE (2026-06-11)
+
 Rebuild the relevant parts of `@designable/core` as pure, tested TS (no UI yet), and
 teach the contract the container/layout vocabulary Designable has. Heaviest refactor;
 each step lands in its own commit with `pnpm typecheck` + `pnpm test` green.
@@ -125,8 +131,8 @@ integration) because the App swap needs D6 metas + D7 transformer.
       `FormRenderer.containers.test.tsx` (8) + 6 container tests in form-core.
 - [x] **D4 — designer tree model** ✅ commit `299865c` (`apps/builder/src/engine/`): `tree.ts` —
       `TreeNode { uid, node: EngineProps, children }` where `EngineProps = FormProps
-      (type:"form", id/title/layoutProps/settings) | FieldProps (FieldNode minus
-      children/itemFields)`. Pure path-copying ops: `append`, `insertBefore/After`,
+    (type:"form", id/title/layoutProps/settings) | FieldProps (FieldNode minus
+    children/itemFields)`. Pure path-copying ops: `append`, `insertBefore/After`,
       `remove`, `move(before|after|append)`, `patchNode`, `clone` (fresh uids +
       `uniqueName`); queries `findNode/findParent/ancestorsOf/contains/collectNames`.
       Invalid op ⇒ SAME root reference; caller-injected `InsertGuard` (D6 will pass
@@ -150,19 +156,18 @@ integration) because the App swap needs D6 metas + D7 transformer.
       App-only change → no changeset (builder is in the changeset ignore list).
 - [x] **D6 — ComponentMeta registry v2** ✅ commit `2aba7a5`. Extended
       `field-registry.ts` in place (every existing export kept). `FieldType =
-      FieldNode["type"]` (widened), `NodeType = FieldType | "form"`. `ComponentBehavior
-      { droppable, draggable, cloneable, deletable, allowAppend?, allowParents? }` +
+    FieldNode["type"]` (widened), `NodeType = FieldType | "form"`. `ComponentBehavior
+    { droppable, draggable, cloneable, deletable, allowAppend?, allowParents? }` +
       `ComponentMeta { behavior, icon?, showInPalette, named }` on every entry. New
       nameless container metas (group/tabs/tab-pane/collapse/collapse-panel/card/grid/
       space) + separate `FORM_META` root (droppable-only, `FORM_SETTINGS` = D2
       layoutProps select/checkbox descriptors for F4). ALL containers
       `showInPalette:false` → palette frozen; `PALETTE_TYPES` is the exact authorable
       list, `fieldsByCategory`/`ITEM_TYPES`/`paletteType` filter on it. `canInsert(parent,
-      child)` central guard (form never inserted; parent droppable; tabs⇒tab-pane &
+    child)` central guard (form never inserted; parent droppable; tabs⇒tab-pane &
       collapse⇒collapse-panel via `allowAppend`; panes pinned via `allowParents`) +
       `metaGuard(): InsertGuard` for engine ops. `describeNode(NodeType)` covers form;
-      `describeField(FieldType)` unchanged. `SettingDescriptor` gained `control:"select"`
-      + `choices`; PropertyPanel `TypeSettings` renders it. `model.ts` `newField` is now
+      `describeField(FieldType)` unchanged. `SettingDescriptor` gained `control:"select"` + `choices`; PropertyPanel `TypeSettings` renders it. `model.ts` `newField` is now
       named-aware (skips `name` for nameless containers, seeds `children:[]`) and returns
       `FieldNode`. NOTE: form lives in `FORM_META` (not the FIELD_REGISTRY array) so
       FIELD_TYPES/PALETTE_TYPES stay FieldType[]. Tests: canInsert matrix, metaGuard,
@@ -185,7 +190,7 @@ integration) because the App swap needs D6 metas + D7 transformer.
       panel selection = `findNode` + `treeToField`, onChange → `replaceField`, title/id →
       `patchNode` on root. Canvas renders root's `TreeNode[]` (title fallback
       label??title??name??type). PropertyPanel `selected` widened to `{ uid, field:
-      FieldNode }`; layout containers get a minimal settings-only editor, leaves/array keep
+    FieldNode }`; layout containers get a minimal settings-only editor, leaves/array keep
       the full editor; `siblings` → `siblingNames: string[]`. `node-path.ts` →
       `engine/field-path.ts` walking `childrenOf` (fixes the latent no-op patch bug for a
       leaf nested under a container inside `itemFields`). DELETED `model.ts` +
@@ -200,9 +205,10 @@ integration) because the App swap needs D6 metas + D7 transformer.
       form-renderer-web — covers D1–D3; builder is in the changeset ignore list), Phase D
       marked ✅, memory updated.
 
-## Phase E — WYSIWYG canvas + Designable-grade drag & drop  ✅ DONE (2026-06-11)
+## Phase E — WYSIWYG canvas + Designable-grade drag & drop ✅ DONE (2026-06-11)
+
 The canvas stopped being a row list and now renders **real antd components**, with
-Designable's pointer-driven drag engine and aux widgets — this is what makes it *feel*
+Designable's pointer-driven drag engine and aux widgets — this is what makes it _feel_
 like designable-antd.formilyjs.org.
 
 **Approved plan (2026-06-11):** `C:\Users\ASUS\.claude\plans\curious-dazzling-diffie.md`.
@@ -250,6 +256,7 @@ in E4.
       changeset-ignored, so E1's renderer-web changeset is the only published surface.
 
 ## Phase F — Workbench shell (panel parity with the Designable playground)
+
 Layout: CompositePanel (left) | Toolbar + Viewport (center) | SettingsPanel (right).
 **COMPLETE (F1–F5 committed on `feat/phase-f-workbench`).** All new chrome lives in
 `apps/builder/src/workbench/`; builder is changeset-ignored, so no changeset.
@@ -281,6 +288,7 @@ Layout: CompositePanel (left) | Toolbar + Viewport (center) | SettingsPanel (rig
       is private + changeset-ignored).
 
 ## Phase G — Reactions / Linkage (Formily core idea) ✅ DONE (2026-06-12)
+
 Schema: optional `reactions[]` — `{ when: <JSONLogic>, then: { set?: visible|disabled|
 value|options on a target field } }`. Pure engine in form-core; renderer subscribes via
 `watch`. Generalizes the current single `visibleWhen`. NEVER eval.
@@ -298,7 +306,7 @@ JSON-panel fallback) and now offers Visibility for array item fields. JSONLogic 
 eval. Changesets: form-schema (G1), form-core (G2, G4), form-renderer-web (G3, G4).
 
 - [x] **G1 — schema:** `reactionSchema` = `{ when: JSONLogic, target: fieldName,
-      effect: "visible" | "disabled" | "value" | "options", value? }`, optional
+    effect: "visible" | "disabled" | "value" | "options", value? }`, optional
       `reactions[]` on `commonFields`. Additive → no version bump. (`2d2f10c`)
 - [x] **G2 — form-core engine:** pure `computeReactions(schema, values) → EffectMap`
       (reuses `conditions.ts`). Deterministic single pass + cycle/self-target guard;
@@ -315,10 +323,12 @@ eval. Changesets: form-schema (G1), form-core (G2, G4), form-renderer-web (G3, G
       `ReactionsEditor.tsx` + tests. Builder is changeset-ignored.
 
 ## Phase H — Modal / Drawer (FormDialog / FormDrawer) ✅ DONE (2026-06-12)
+
 Imperative popup forms shipped on branch `feat/phase-h-dialog` (off
 `feat/phase-g-reactions`). The decided OK trigger is a `forwardRef` handle + additive
 `hideSubmit` prop, so the popup footer's OK drives validation and the popup stays open on
 error (Formily-like UX). Plan: `C:\Users\ASUS\.claude\plans\rippling-percolating-graham.md`.
+
 - [x] **H1 —** `openFormDialog(schema, opts)` / `openFormDrawer(schema, opts)` →
       `Promise<values | undefined>` — `imperative.tsx` mounts a `FormRenderer` in an antd
       Modal/Drawer on a detached `createRoot` (deferred unmount via `afterClose`/
@@ -336,12 +346,15 @@ error (Formily-like UX). Plan: `C:\Users\ASUS\.claude\plans\rippling-percolating
 ---
 
 ## Long-term (post-H) — beyond Formily parity
+
 Ordered by value; each is a normal phase with the same Closing Loop.
 
 ## Phase I — Templates & presets ✅ DONE (2026-06-12)
+
 First long-term phase, shipped on branch `feat/phase-i-templates` (off `main` after the
 E→H merge). Builder-only → changeset-ignored, no changeset. Additive, no `formVersion` bump.
 Plan: `C:\Users\ASUS\.claude\plans\radiant-sauteeing-reef.md`.
+
 - [x] **I1 — Export / Import form JSON** (`5e1b583`): new pure `apps/builder/src/io.ts`
       (`serializeForm` / `parseFormFile`, reusing `@org/form-schema` `migrate` for the
       untrusted-JSON pipeline). `App` gained `onExportForm` (Blob download, mirroring
@@ -362,19 +375,19 @@ Plan: `C:\Users\ASUS\.claude\plans\radiant-sauteeing-reef.md`.
       `CURRENT_FORM_VERSION` ever bumps, add a `migrate()` on rehydrate. No changeset.
 
 ## Phase J — Data sources, level 2 ✅ DONE (2026-06-12)
+
 Shipped on branch `feat/phase-j-datasources` (off `feat/phase-i-templates`). A select's remote
 `dataSource` went from a single `dependsOn` parent to **multi-field params + caching**, with a
 real builder UI. Additive → no `formVersion` bump. Plan:
 `C:\Users\ASUS\.claude\plans\magical-skipping-wreath.md`. Decisions: flexible `params: {name, from}[]`
 mapping (query-param name decoupled from source field), `ttlMs` in schema → react-query
 `staleTime`, scope stays `select`-only (radio keeps static options).
+
 - [x] **J1 — schema** (`f684da8`): extracted `selectDataSourceSchema`; added optional
       `params: { name, from }[]` (multi-field) + `ttlMs` (cache). `dependsOn` kept as back-compat
       shorthand. Parse test. Changeset form-schema minor.
 - [x] **J2 — form-core** (`eb72813`): `buildDataSourceUrl`/`fetchDataSourceOptions` now take a
-      **values record** instead of a single value; new `dataSourceDeps(ds)` (all dep field names)
-      + `dataSourceReady(ds, values)` (every dep present). `buildDataSourceUrl` applies `dependsOn`
-      + each `params[]`. Renderer call sites bridged mechanically to stay green. `datasource.test.ts`
+      **values record** instead of a single value; new `dataSourceDeps(ds)` (all dep field names) + `dataSourceReady(ds, values)` (every dep present). `buildDataSourceUrl` applies `dependsOn` + each `params[]`. Renderer call sites bridged mechanically to stay green. `datasource.test.ts`
       rewritten + multi-param cases. Changeset form-core minor.
 - [x] **J3 — renderer-web** (`56a56b8`): `SelectControl` reads a `depValues` record over
       `dataSourceDeps`, gates the fetch until ALL deps present (`dataSourceReady`), keys react-query
@@ -391,22 +404,84 @@ mapping (query-param name decoupled from source field), `ttlMs` in schema → re
       flake — passes in isolation), biome clean on new files (CRLF baseline ignored), reviewer PASS
       each sub-phase. Builder now 120 tests.
 
-- [ ] **K — i18n:** optional `locale` map for labels/placeholders/validation messages
-- [ ] **K — i18n:** optional `locale` map for labels/placeholders/validation messages
+## Form-parity completion — K→O (decided 2026-06-12)
+
+Cross-checked the form builder against an external Formily/Designable feature analysis
+(`~/Downloads/formily-analysis.md`). The **form runtime** gaps below are MUST-HAVE and run
+sequentially K→O (user decision 2026-06-12); the previously-planned i18n/workflow/native/docs
+shift down to **P–S**. Backend (NestJS/PG/Redis, analysis Layer 8) stays a long-term track —
+NOT in this scope. Architecture stays Zod-contract + RHF + JSONLogic; we do NOT clone
+Formily's reactive engine, `x-*` JSON-Schema, or `{{}}` expression language. Every step is
+additive → old JSON parses → **no `CURRENT_FORM_VERSION` bump** unless an existing shape
+changes. Each phase keeps the Closing Loop (typecheck + test → reviewer → changeset → commit).
+
+- [x] **K — Display patterns & conditional required ✅ DONE (2026-06-12).** Added optional
+      `readOnly?`/`readPretty?` to `commonFields` (two additive booleans, NOT a `pattern` enum;
+      precedence `readPretty > readOnly > disabled > editable`) and widened
+      `reactionEffectSchema` with `"required"`. form-core: `FieldEffects.required` +
+      `applyEffect` case; `leafZod(node, requiredOverride?)` lets a reaction `required` effect
+      win over the static flag/rule (both directions — true requires, false un-requires), at the
+      top level and per array row (`rowEffects`), so validation matches rendering. renderer-web:
+      `FieldPreview`/`previewText` (PreviewText read view), `readOnly` on text/number inputs
+      (other controls fall back to preview), required asterisk = `eff?.required ?? node.required`,
+      and a form-wide `readPretty` review prop (hides Submit). Builder: universal Pattern select in
+      PropertyPanel + a "Require / optional" reaction effect in ReactionsEditor. Tests across
+      schema/core/renderer/builder. Changeset `.changeset/interaction-patterns-k.md` (minor:
+      form-schema/form-core/form-renderer-web; builder changeset-ignored). reviewer PASS.
+      KNOWN/ACCEPTED: a per-field readPretty/readOnly field that is `required`+empty still blocks
+      submit (same as the existing `disabled` behavior); form-wide readPretty is safe (Submit
+      hidden). Plan: `C:\Users\ASUS\.claude\plans\unified-doodling-metcalfe.md`.
+- [ ] **L — Essential field types (Upload, Checkbox.Group, rich props).** Schema: new
+      `upload` (`accept?`, `maxCount?`, `listType?`, value = array of `{uid,name,url,status}`
+      metadata) and `checkbox-group` (`options`/`dataSource` reusing the select shapes, value
+      = array). Widen number with `step?`/`precision?` and select with
+      `showSearch?`/`allowClear?`/`tags?` (mode). form-core validation: upload = array (min =
+      required/maxCount), checkbox-group = array of option values. renderer-web: antd `Upload`
+      (controlled, `beforeUpload→false` unless a real `submitUrl`), `Checkbox.Group`. Builder:
+      palette + registry metas + settings descriptors + DataSourceEditor reuse for
+      checkbox-group.
+- [ ] **M — Hierarchical & range inputs.** Schema: `cascader` + `tree-select` (tree
+      `options: {label,value,children[]}` + dataSource that can return a tree), `date-range`
+      + `time-range`, and a date `picker` variant (`date|week|month|quarter|year`). form-core:
+      range value = `[start,end]` tuple; tree-select value = scalar/array. renderer-web: antd
+      `Cascader`/`TreeSelect`/`RangePicker`/`TimePicker.RangePicker`, `DatePicker picker=`.
+      Builder authoring for tree options (reuse the recursive item editor pattern from arrays).
+- [ ] **N — Validation depth.** Schema: optional `validateTrigger?: "onInput"|"onBlur"|
+    "onSubmit"` (maps to RHF `mode`/`reValidateMode`), rule severity `warning` (non-blocking,
+      surfaces antd `validateStatus="warning"`, never blocks submit), `asyncValidator?: { url }`
+      (debounced remote check via react-query, e.g. username-exists), and cross-field rules
+      expressed as JSONLogic comparing two field names. form-core: split issues into
+      errors vs warnings; renderer applies trigger mode + warning status; async runs through a
+      custom RHF resolver path. Builder: trigger + severity controls in the Validation section.
+- [ ] **O — Multi-step wizard (FormStep).** Schema: `steps` container + `step` pane
+      (pane-as-node like `tabs`/`tab-pane`, structurally restricted). renderer-web: a Steps
+      header + next/prev nav that validates the current step before advancing (per-step Zod
+      subset), progress indicator, Submit only on the last step. Builder: drag panes, step
+      reorder, settings for titles/descriptions. The drag engine + pane handling reuse the
+      tabs/collapse machinery from Phase D/E.
+
+## Long-term (post-O) — P→S + backend
+
+- [ ] **P — i18n:** optional `locale` map for labels/placeholders/validation messages
       (additive). Renderer picks a locale; builder edits per-locale strings.
-- [ ] **L — Workflow ↔ form integration:** workflow nodes reference forms by id
+- [ ] **Q — Workflow ↔ form integration:** workflow nodes reference forms by id
       (contract already in `workflow-schema`); builder UX to bind a form to a node;
       form submission advances the engine.
-- [ ] **M — React Native renderer:** un-defer `form-renderer-native` once the web
+- [ ] **R — React Native renderer:** un-defer `form-renderer-native` once the web
       feature set stabilizes — same contract, single-column layout.
-- [ ] **N — Docs & release:** a playground/docs site (Vite) with live examples per
+- [ ] **S — Docs & release:** a playground/docs site (Vite) with live examples per
       feature; first versioned npm release train via Changesets.
+- [ ] **Backend track (long-term, separate):** NestJS + PostgreSQL (JSONB schema) +
+      Redis cache + Submissions/FormVersions entities + REST API per analysis Layer 8.
+      Deferred until the form feature set above stabilizes.
 
 ---
 
 ## How to resume in a fresh session
+
 **Phase F is COMPLETE (F1–F5 committed on `feat/phase-f-workbench`).** Next up is
 **Phase G — Reactions / Linkage**. After `/clear`, resume with:
+
 > Read AGENTS.md and EXPANSION.md (Phase G section). Phases A–F are done — the builder is a
 > 3-column workbench (`apps/builder/src/workbench/`): CompositePanel (Components/Outline/
 > History/Theme) | Toolbar + ViewPanel (Design / two-way JSON / Preview) | SettingsPanel
@@ -416,8 +491,9 @@ mapping (query-param name decoupled from source field), `ttlMs` in schema → re
 > UI. Enter plan mode and plan Phase G before implementing; follow the Closing Loop.
 
 Context that saves re-discovery when resuming:
+
 - The designer engine is `apps/builder/src/engine/{tree,uid,names,selection,hover,
-  clipboard,history,transform,field-path,move-helper,dragon}.ts` — read `tree.ts`'s header
+clipboard,history,transform,field-path,move-helper,dragon}.ts` — read `tree.ts`'s header
   comment first; ops return the SAME root reference on invalid input, guard type is
   `InsertGuard` (`field-registry.metaGuard()` supplies it from the metas).
 - `field-registry.ts` is the ComponentMeta registry: `behavior` (droppable/draggable/
