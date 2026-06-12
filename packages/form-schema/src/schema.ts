@@ -54,20 +54,52 @@ export const permissionSchema = z.object({
   editRoles: z.array(z.string()).optional(),
 });
 
+/** Rule severity: `error` (default) blocks submit; `warning` never blocks — it only
+ *  surfaces as a non-blocking hint (antd `validateStatus="warning"`). */
+export const validationSeveritySchema = z.enum(["error", "warning"]);
+
 /** A single field validation rule. Translated to Zod by form-core's buildZodSchema.
  *  - `len`/`min`/`max`: numeric `value` (string length or numeric bound by field type).
  *  - `pattern`: `value` is a regex SOURCE string — compiled via `new RegExp`, NEVER eval.
  *  - `format`: a named check selected by `format` (email | url | phone).
  *  - `required`: presence; equivalent to the `required` flag, kept here for a custom message.
+ *  - `cross`: a cross-field assertion — `rule` is a SAFE JSONLogic record (same shape as
+ *    `conditionSchema.rule`, evaluated via json-logic, NEVER eval) that must evaluate
+ *    TRUE against the field's value scope (merged row scope inside arrays) for the
+ *    field to be valid.
  *  `message` overrides the default error text when the rule fails. */
 export const validationRuleSchema = z.object({
-  type: z.enum(["required", "len", "min", "max", "pattern", "format"]),
+  type: z.enum(["required", "len", "min", "max", "pattern", "format", "cross"]),
   value: z.union([z.string(), z.number()]).optional(),
   format: z.enum(["email", "url", "phone"]).optional(),
   message: z.string().optional(),
+  /** Defaults to "error" when absent. */
+  severity: validationSeveritySchema.optional(),
+  /** `type: "cross"` only — the JSONLogic assertion. */
+  rule: z.record(z.string(), z.any()).optional(),
 });
 
 export type ValidationRule = z.infer<typeof validationRuleSchema>;
+
+/** Debounced remote value check (e.g. username-exists). Protocol: GET
+ *  `url?value=<value>&name=<fieldName>` → JSON `{ valid: boolean, message?: string }`.
+ *  An explicit `valid: false` BLOCKS submit (the renderer routes it through the form
+ *  resolver); a network failure fails OPEN (never blocks). `message` is the fallback
+ *  error text when the response carries none. */
+export const asyncValidatorSchema = z.object({
+  url: z.string(),
+  message: z.string().optional(),
+  /** Debounce window in ms before the request fires (renderer default 400). */
+  debounceMs: z.number().optional(),
+});
+
+export type AsyncValidator = z.infer<typeof asyncValidatorSchema>;
+
+/** When a renderer runs validation. Maps onto react-hook-form's `mode`:
+ *  onInput→"onChange", onBlur→"onBlur", onSubmit (default) → "onSubmit". */
+export const validateTriggerSchema = z.enum(["onInput", "onBlur", "onSubmit"]);
+
+export type ValidateTrigger = z.infer<typeof validateTriggerSchema>;
 
 /** antd-style column geometry for label/control alignment (horizontal layouts). */
 const formColSchema = z.object({
@@ -120,6 +152,8 @@ const commonFields = {
   /** Field-level validation rules, compiled to Zod by form-core. Additive: old
    *  JSON without this key keeps parsing, so no formVersion bump is required. */
   validations: z.array(validationRuleSchema).optional(),
+  /** Debounced remote value check; see {@link asyncValidatorSchema}. */
+  asyncValidator: asyncValidatorSchema.optional(),
   layout: layoutSchema.optional(),
   /** Per-field Form.Item overrides of the root `layoutProps` (labelCol etc.). */
   decoratorProps: decoratorPropsSchema.optional(),
@@ -623,7 +657,14 @@ export const formSchema = z.object({
    *  → additive; renderers fall back to their historical defaults when absent. */
   layoutProps: formLayoutPropsSchema.optional(),
   fields: z.array(fieldNodeSchema),
-  settings: z.object({ submitUrl: z.string().optional() }).optional(),
+  settings: z
+    .object({
+      submitUrl: z.string().optional(),
+      /** When the renderer validates: while typing, on blur, or only on submit
+       *  (the default when absent — matches react-hook-form's default mode). */
+      validateTrigger: validateTriggerSchema.optional(),
+    })
+    .optional(),
 });
 
 export type FormSchema = z.infer<typeof formSchema>;

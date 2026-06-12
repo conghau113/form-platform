@@ -194,6 +194,71 @@ describe("schema field types", () => {
     ).toBe(false);
   });
 
+  it("accepts the Phase N validation-depth props (additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "phase-n",
+      title: "Phase N",
+      settings: { validateTrigger: "onBlur" },
+      fields: [
+        {
+          type: "text",
+          name: "username",
+          label: "Username",
+          validations: [{ type: "min", value: 3, severity: "warning", message: "Quite short" }],
+          asyncValidator: { url: "/api/check-username", message: "Taken", debounceMs: 200 },
+        },
+        { type: "date", name: "start", label: "Start" },
+        {
+          type: "date",
+          name: "end",
+          label: "End",
+          validations: [
+            {
+              type: "cross",
+              rule: { "<=": [{ var: "start" }, { var: "end" }] },
+              message: "End must be after start",
+            },
+          ],
+        },
+      ],
+    });
+    expect(out.settings).toMatchObject({ validateTrigger: "onBlur" });
+    expect(out.fields[0]).toMatchObject({
+      validations: [{ severity: "warning" }],
+      asyncValidator: { url: "/api/check-username", debounceMs: 200 },
+    });
+    expect(out.fields[2]).toMatchObject({
+      validations: [{ type: "cross", rule: { "<=": [{ var: "start" }, { var: "end" }] } }],
+    });
+  });
+
+  it("rejects bad severity / trigger / asyncValidator shapes", () => {
+    const base = { formVersion: 3, id: "bad", title: "Bad" };
+    const text = (extra: Record<string, unknown>) => ({
+      type: "text",
+      name: "t",
+      label: "T",
+      ...extra,
+    });
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [text({ validations: [{ type: "min", value: 1, severity: "info" }] })],
+      }).success,
+    ).toBe(false);
+    expect(
+      formSchema.safeParse({
+        ...base,
+        settings: { validateTrigger: "onHover" },
+        fields: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      formSchema.safeParse({ ...base, fields: [text({ asyncValidator: {} })] }).success,
+    ).toBe(false);
+  });
+
   it("accepts the additive common props on existing types", () => {
     const out = formSchema.parse({
       formVersion: 3,
