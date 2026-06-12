@@ -4,9 +4,13 @@ import {
   buildZodSchema,
   canEdit,
   canView,
+  collectValueEffects,
+  computeReactions,
   type DataSourceOption,
+  effectiveVisible,
   fetchDataSourceOptions,
   isVisible,
+  type ReactionOption,
 } from "@org/form-core";
 import {
   type ArrayField,
@@ -42,7 +46,7 @@ import {
   TimePicker,
 } from "antd";
 import type React from "react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { type Control, Controller, type Resolver, useFieldArray, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
@@ -71,9 +75,11 @@ function SelectControl(props: {
   onChange: (v: unknown) => void;
   /** Current value of the `dataSource.dependsOn` parent field, if any. */
   dependsOnValue?: unknown;
+  /** Options injected by a reaction `effect: "options"` — overrides static/remote. */
+  optionsOverride?: ReactionOption[];
   id?: string;
 }) {
-  const { node, value, disabled, onChange, dependsOnValue, id } = props;
+  const { node, value, disabled, onChange, dependsOnValue, optionsOverride, id } = props;
   const ds = node.dataSource;
 
   // A dependent select waits until its parent has a value before fetching.
@@ -86,8 +92,9 @@ function SelectControl(props: {
     queryFn: () => fetchDataSourceOptions(ds as NonNullable<typeof ds>, dependsOnValue),
   });
 
-  // Static options pass straight through; remote options come from the query.
-  const options = ds ? (query.data ?? []) : node.options;
+  // A reaction `options` effect wins; otherwise static options pass straight
+  // through and remote options come from the query.
+  const options = optionsOverride ?? (ds ? (query.data ?? []) : node.options);
 
   let notFoundContent: React.ReactNode;
   if (waitingOnParent) notFoundContent = `Select ${ds?.dependsOn} first`;
@@ -116,10 +123,12 @@ function FieldControl(props: {
   onChange: (v: unknown) => void;
   /** Current value of a select's `dataSource.dependsOn` parent field, if any. */
   dependsOnValue?: unknown;
+  /** Options injected by a reaction `effect: "options"` (select/radio only). */
+  optionsOverride?: ReactionOption[];
   /** DOM id linking the control to its Form.Item label (htmlFor). */
   id?: string;
 }) {
-  const { node, value, disabled, onChange, dependsOnValue, id } = props;
+  const { node, value, disabled, onChange, dependsOnValue, optionsOverride, id } = props;
   switch (node.type) {
     case "text":
       return (
@@ -175,6 +184,7 @@ function FieldControl(props: {
           disabled={disabled}
           onChange={onChange}
           dependsOnValue={dependsOnValue}
+          optionsOverride={optionsOverride}
           id={id}
         />
       );
@@ -184,7 +194,7 @@ function FieldControl(props: {
           id={id}
           value={value}
           disabled={disabled}
-          options={node.options ?? []}
+          options={optionsOverride ?? node.options ?? []}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -464,11 +474,31 @@ export function FormRenderer({
     [form, initialValues],
   );
 
-  const { control, handleSubmit, watch } = useForm<Values>({
+  const { control, handleSubmit, watch, setValue, getValues } = useForm<Values>({
     defaultValues,
     resolver,
   });
   const values = watch();
+
+  // Reaction effect map for the TOP-LEVEL scope, recomputed from current values.
+  // Per-row array scopes compute their own maps in G4; here `effects` only applies
+  // where `namePrefix === ""`.
+  const effects = computeReactions(form, values);
+
+  // Reaction `value` effects: while a `when` holds, push its assigned value once.
+  // Keyed on the serialized assignments so the effect only runs when they change;
+  // the per-field JSON diff makes re-assignment idempotent (loop-safe together with
+  // the engine's value-cycle guard). Top-level paths only in G3.
+  const valueAssignments = collectValueEffects(form, values);
+  const assignmentsKey = JSON.stringify(valueAssignments);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the serialized assignments
+  useEffect(() => {
+    for (const [name, val] of Object.entries(valueAssignments)) {
+      if (JSON.stringify(getValues(name)) !== JSON.stringify(val)) {
+        setValue(name, val, { shouldDirty: false });
+      }
+    }
+  }, [assignmentsKey]);
 
   const submit = handleSubmit((data) => {
     // Parse once more to strip hidden/non-viewable keys -> a clean typed payload.
@@ -486,7 +516,8 @@ export function FormRenderer({
     namePrefix = "",
     opts?: { hideLabel?: boolean; bare?: boolean; span?: ColSpanProps; path?: number[] },
   ): React.ReactNode => {
-    if (!isVisible(node, values)) return null; // shared conditional logic
+    // Reaction `visible` effects (top-level scope only) override `visibleWhen`.
+    if (!effectiveVisible(node, values, namePrefix === "" ? effects : undefined)) return null;
     if (!canView(node, access)) return null; // shared RBAC
 
     const here = opts?.path;
@@ -676,7 +707,10 @@ export function FormRenderer({
     // Responsive: a grid-assigned span (if any) replaces the default; the field's
     // own per-breakpoint colSpan always wins. antd collapses to xs on small screens.
     const span = { ...(opts?.span ?? DEFAULT_SPAN), ...(node.layout?.colSpan ?? {}) };
-    const editable = canEdit(node, access) && node.disabled !== true;
+    // Reaction effects for this leaf (top-level scope only). A `disabled` effect can
+    // re-enable a statically disabled field; an `options` effect overrides select/radio.
+    const eff = namePrefix === "" ? effects[node.name] : undefined;
+    const editable = canEdit(node, access) && !(eff?.disabled ?? node.disabled === true);
     // A select with a dependent dataSource reads its parent field's current value.
     const dependsOn = node.type === "select" ? node.dataSource?.dependsOn : undefined;
     const dependsOnValue = dependsOn ? values[dependsOn] : undefined;
@@ -707,6 +741,7 @@ export function FormRenderer({
                   disabled={!editable}
                   onChange={field.onChange}
                   dependsOnValue={dependsOnValue}
+                  optionsOverride={eff?.options}
                   id={fieldName}
                 />
               </div>
@@ -717,6 +752,7 @@ export function FormRenderer({
                 disabled={!editable}
                 onChange={field.onChange}
                 dependsOnValue={dependsOnValue}
+                optionsOverride={eff?.options}
                 id={fieldName}
               />
             )}

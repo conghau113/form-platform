@@ -288,9 +288,9 @@ value|options on a target field } }`. Pure engine in form-core; renderer subscri
 - [x] **G1 — schema:** `reactionSchema` = `{ when: JSONLogic, target: fieldName,
       effect: "visible" | "disabled" | "value" | "options", value? }`, optional
       `reactions[]` on `commonFields`. Additive → no version bump. (`2d2f10c`)
-- [ ] **G2 — form-core engine:** pure `computeReactions(schema, values) → EffectMap`
+- [x] **G2 — form-core engine:** pure `computeReactions(schema, values) → EffectMap`
       (reuses `conditions.ts`). Deterministic single pass + cycle/self-target guard;
-      precedence: `reactions` > `visibleWhen` > static props. Exhaustive tests.
+      precedence: `reactions` > `visibleWhen` > static props. Exhaustive tests. (`bf663f5`)
 - [ ] **G3 — renderer-web:** subscribe via RHF `watch`, apply EffectMap; fields
       hidden by reaction drop out of validation exactly like `visibleWhen` today.
 - [ ] **G4 — per-row linkage:** lift the Phase C limitation — `visibleWhen`/
