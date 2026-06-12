@@ -12,24 +12,25 @@ import {
 } from "antd";
 import { OptionsEditor } from "./PropertyPanel";
 
-type SelectField = Extract<LeafField, { type: "select" }>;
-type DataSource = NonNullable<SelectField["dataSource"]>;
+/** The two leaf types that share the static-options / remote-dataSource shape. */
+type OptionSourcedField = Extract<LeafField, { type: "select" | "checkbox-group" }>;
+type DataSource = NonNullable<OptionSourcedField["dataSource"]>;
 type Param = NonNullable<DataSource["params"]>[number];
 
-/** Options source editor for a `select`: a toggle between **static** options (the shared
- *  OptionsEditor) and a **remote** `dataSource`. Remote authoring covers url + label/value
- *  keys, a cache TTL, and a params editor that maps query params to other fields' values
- *  (level 2). A legacy single `dependsOn` is shown as one param row and normalized to
- *  `params` on the first edit. Writing one source clears the other. */
+/** Options source editor for a `select` or `checkbox-group`: a toggle between **static**
+ *  options (the shared OptionsEditor) and a **remote** `dataSource`. Remote authoring covers
+ *  url + label/value keys, a cache TTL, and a params editor that maps query params to other
+ *  fields' values (level 2). A legacy single `dependsOn` is shown as one param row and
+ *  normalized to `params` on the first edit. Writing one source clears the other. */
 export function DataSourceEditor({
   field,
   sourceNames,
   set,
 }: {
-  field: SelectField;
+  field: OptionSourcedField;
   /** Other field names a param can read its value from. */
   sourceNames: string[];
-  set: (patch: Partial<SelectField>) => void;
+  set: (patch: Partial<OptionSourcedField>) => void;
 }) {
   const ds = field.dataSource;
   const mode = ds ? "remote" : "static";

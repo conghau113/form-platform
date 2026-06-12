@@ -42,6 +42,7 @@ describe("palette freeze", () => {
       "password",
       "number",
       "select",
+      "checkbox-group",
       "radio",
       "checkbox",
       "switch",
@@ -50,6 +51,7 @@ describe("palette freeze", () => {
       "date",
       "time",
       "color",
+      "upload",
       "array",
     ]);
   });

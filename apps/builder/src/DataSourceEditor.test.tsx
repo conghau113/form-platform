@@ -67,6 +67,24 @@ describe("DataSourceEditor", () => {
     });
   });
 
+  it("works for a checkbox-group field (shared options/dataSource shape)", async () => {
+    const user = userEvent.setup();
+    const set = vi.fn();
+    const field: Extract<LeafField, { type: "checkbox-group" }> = {
+      type: "checkbox-group",
+      name: "perks",
+      label: "Perks",
+      options: [{ label: "Gym", value: "gym" }],
+    };
+    render(<DataSourceEditor field={field} sourceNames={["plan"]} set={set} />);
+
+    await user.click(screen.getByText("Remote (data source)"));
+    expect(set).toHaveBeenCalledWith({
+      options: undefined,
+      dataSource: { url: "", labelKey: "", valueKey: "" },
+    });
+  });
+
   it("surfaces a legacy dependsOn as a param row and normalizes it on edit", async () => {
     const user = userEvent.setup();
     const ds = { url: "u", labelKey: "name", valueKey: "id", dependsOn: "country" };

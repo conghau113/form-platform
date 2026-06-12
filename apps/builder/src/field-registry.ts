@@ -202,6 +202,8 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     settings: [
       { key: "min", label: "Min", control: "number" },
       { key: "max", label: "Max", control: "number" },
+      { key: "step", label: "Step", control: "number" },
+      { key: "precision", label: "Precision (decimals)", control: "number" },
     ],
     defaultValueKind: "number",
     validations: NUMBER_RULES,
@@ -215,9 +217,27 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     category: "Choice",
     defaults: { options: [] },
     // Options/dataSource are authored by the bespoke DataSourceEditor (static vs remote),
-    // not the generic `options` descriptor — only `multiple` is descriptor-driven here.
-    settings: [{ key: "multiple", label: "Allow multiple", control: "checkbox" }],
+    // not the generic `options` descriptor — only the behavior flags are descriptor-driven.
+    settings: [
+      { key: "multiple", label: "Allow multiple", control: "checkbox" },
+      { key: "tags", label: "Tags (free typing)", control: "checkbox" },
+      { key: "showSearch", label: "Searchable", control: "checkbox" },
+      { key: "allowClear", label: "Allow clear", control: "checkbox" },
+    ],
     defaultValueKind: "text",
+    behavior: LEAF,
+    showInPalette: true,
+    named: true,
+  },
+  {
+    type: "checkbox-group",
+    label: "Checkbox group",
+    category: "Choice",
+    // Options/dataSource are authored by the shared DataSourceEditor (static vs remote);
+    // value is an array, so no simple default-value editor.
+    defaults: { options: [] },
+    settings: [],
+    defaultValueKind: "none",
     behavior: LEAF,
     showInPalette: true,
     named: true,
@@ -315,6 +335,31 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     settings: [],
     defaultValueKind: "text",
     validations: STRING_RULES,
+    behavior: LEAF,
+    showInPalette: true,
+    named: true,
+  },
+  {
+    type: "upload",
+    label: "Upload",
+    category: "Advanced",
+    defaults: {},
+    settings: [
+      { key: "accept", label: "Accept (e.g. image/*,.pdf)", control: "text" },
+      { key: "maxCount", label: "Max files", control: "number" },
+      {
+        key: "listType",
+        label: "List type",
+        control: "select",
+        choices: [
+          { label: "Text", value: "text" },
+          { label: "Picture", value: "picture" },
+          { label: "Picture card", value: "picture-card" },
+        ],
+      },
+    ],
+    // Value is an array of file metadata — no simple default-value editor.
+    defaultValueKind: "none",
     behavior: LEAF,
     showInPalette: true,
     named: true,

@@ -338,8 +338,9 @@ function FieldForm({
 
       {/* Type-specific properties, driven by the registry descriptor */}
       <TypeSettings field={field} set={set} />
-      {/* A select's options come from the bespoke static-vs-remote editor (params + cache). */}
-      {field.type === "select" && (
+      {/* A select / checkbox-group's options come from the shared static-vs-remote editor
+          (params + cache). */}
+      {(field.type === "select" || field.type === "checkbox-group") && (
         <DataSourceEditor field={field} sourceNames={condFields} set={set} />
       )}
       {field.type === "array" && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}

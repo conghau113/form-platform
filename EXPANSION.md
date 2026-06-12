@@ -431,15 +431,32 @@ changes. Each phase keeps the Closing Loop (typecheck + test → reviewer → ch
       KNOWN/ACCEPTED: a per-field readPretty/readOnly field that is `required`+empty still blocks
       submit (same as the existing `disabled` behavior); form-wide readPretty is safe (Submit
       hidden). Plan: `C:\Users\ASUS\.claude\plans\unified-doodling-metcalfe.md`.
-- [ ] **L — Essential field types (Upload, Checkbox.Group, rich props).** Schema: new
-      `upload` (`accept?`, `maxCount?`, `listType?`, value = array of `{uid,name,url,status}`
-      metadata) and `checkbox-group` (`options`/`dataSource` reusing the select shapes, value
-      = array). Widen number with `step?`/`precision?` and select with
-      `showSearch?`/`allowClear?`/`tags?` (mode). form-core validation: upload = array (min =
-      required/maxCount), checkbox-group = array of option values. renderer-web: antd `Upload`
-      (controlled, `beforeUpload→false` unless a real `submitUrl`), `Checkbox.Group`. Builder:
-      palette + registry metas + settings descriptors + DataSourceEditor reuse for
-      checkbox-group.
+- [x] **L — Essential field types (Upload, Checkbox.Group, rich props) ✅ DONE (2026-06-12).**
+      Shipped on branch `feat/phase-l-fields` (off `feat/phase-k-patterns`). Additive → old JSON
+      parses → no `CURRENT_FORM_VERSION` bump. Plan:
+      `C:\Users\ASUS\.claude\plans\shiny-juggling-yao.md`.
+      - **L1 — schema:** new `upload` (`accept?`/`maxCount?`/`listType?`, value = array of
+        `uploadFileSchema` = the serializable `UploadFile` subset `{uid,name,url?,status?}`) and
+        `checkbox-group` (reuses `optionSchema`/`selectDataSourceSchema`, value = array of option
+        values). Widened `number` with `step?`/`precision?` and `select` with
+        `tags?`/`showSearch?`/`allowClear?`. Both leaves join `LeafField` + `fieldNodeSchema`.
+        Changeset form-schema minor.
+      - **L2 — form-core:** `leafZod` cases — `checkbox-group` = array (required ⇒ min 1),
+        `upload` = `z.array(z.any())` (required ⇒ min 1, `maxCount` ⇒ max). Both flow through the
+        existing reaction-`required` override + array-row paths. Changeset form-core minor.
+      - **L3 — renderer-web:** extracted a shared `useRemoteOptions` hook from `SelectControl`;
+        new `CheckboxGroupControl`; `FieldControl` cases for `checkbox-group` + `upload` (antd
+        `Upload`, local-only `beforeUpload→false` unless `settings.submitUrl` → `action`);
+        `number` step/precision; `select` tags (wins over multiple)/showSearch/allowClear;
+        `previewText` for both new types; `schemaDefaults` seeds the array-valued leaves `[]` so a
+        `required` rule surfaces its custom message. Changeset form-renderer-web minor.
+      - **L4 — builder:** registry metas for `upload` (Advanced) + `checkbox-group` (Choice),
+        number step/precision + select tags/showSearch/allowClear descriptors; `DataSourceEditor`
+        widened to `SelectField | CheckboxGroupField`, wired into PropertyPanel for both. Builder
+        changeset-ignored.
+      - **L5 — close:** typecheck 15/15, full suite green (the one `FormRenderer.containers` array
+        test is the known parallel-load timeout flake — passes in isolation), biome clean on new
+        files (CRLF baseline ignored), reviewer PASS (no required fixes). NEXT: Phase M.
 - [ ] **M — Hierarchical & range inputs.** Schema: `cascader` + `tree-select` (tree
       `options: {label,value,children[]}` + dataSource that can return a tree), `date-range`
       + `time-range`, and a date `picker` variant (`date|week|month|quarter|year`). form-core:
