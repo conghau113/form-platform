@@ -1014,7 +1014,10 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
         if (getAtPath(errors, path)) return;
         let entry = asyncCache.current.get(path);
         if (!entry || !Object.is(entry.value, value)) {
-          entry = { value, promise: runAsyncCheck(asyncCache.current, path, name, value, validator) };
+          entry = {
+            value,
+            promise: runAsyncCheck(asyncCache.current, path, name, value, validator),
+          };
           asyncCache.current.set(path, entry);
         }
         const result = await entry.promise;
@@ -1342,9 +1345,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
             style={opts?.bare ? { marginBottom: 0 } : undefined}
             validateStatus={fieldState.error ? "error" : warning ? "warning" : undefined}
             help={
-              fieldState.error?.message ??
-              warning ??
-              (opts?.hideLabel ? undefined : node.helpText)
+              fieldState.error?.message ?? warning ?? (opts?.hideLabel ? undefined : node.helpText)
             }
             {...node.decoratorProps}
           >
@@ -1373,6 +1374,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
               // thread it, so a boxless (display:contents) wrapper catches the
               // bubbling focusout. Only rendered under the onBlur trigger — every
               // other form keeps its runtime DOM byte-for-byte unchanged.
+              // biome-ignore lint/a11y/noStaticElementInteractions: invisible display:contents wrapper only threads RHF's onBlur, no semantic role
               <div style={{ display: "contents" }} onBlur={field.onBlur}>
                 <FieldControl
                   node={node}

@@ -495,13 +495,43 @@ changes. Each phase keeps the Closing Loop (typecheck + test → reviewer → ch
       - **M5 — close:** typecheck 15/15, full suite green (the known
         `FormRenderer.containers` parallel-load timeout flake passes in isolation), biome
         clean on Phase M files, reviewer PASS (no required fixes). NEXT: Phase N.
-- [ ] **N — Validation depth.** Schema: optional `validateTrigger?: "onInput"|"onBlur"|
-    "onSubmit"` (maps to RHF `mode`/`reValidateMode`), rule severity `warning` (non-blocking,
-      surfaces antd `validateStatus="warning"`, never blocks submit), `asyncValidator?: { url }`
-      (debounced remote check via react-query, e.g. username-exists), and cross-field rules
-      expressed as JSONLogic comparing two field names. form-core: split issues into
-      errors vs warnings; renderer applies trigger mode + warning status; async runs through a
-      custom RHF resolver path. Builder: trigger + severity controls in the Validation section.
+- [x] **N — Validation depth ✅ DONE (2026-06-13).** Shipped on branch
+      `feat/phase-n-validation` (off `feat/phase-m-hierarchical`). Additive → old JSON parses →
+      no `CURRENT_FORM_VERSION` bump. Plan: `C:\Users\ASUS\.claude\plans\imperative-skipping-brook.md`.
+      Decisions (asked in Vietnamese): `validateTrigger` is FORM-LEVEL only
+      (`settings.validateTrigger`, RHF `mode` is global); async protocol = GET
+      `url?value=<v>&name=<field>` → JSON `{ valid, message? }`.
+      - **N1 — schema:** `validationRuleSchema` gains `severity?: "error"|"warning"`
+        (`validationSeveritySchema`) + a `cross` type with a SAFE JSONLogic `rule` record;
+        `asyncValidatorSchema {url, message?, debounceMs?}` joins `commonFields`;
+        `settings.validateTrigger` (`validateTriggerSchema`). Changeset form-schema minor.
+      - **N2 — form-core:** `leafZod` refactored over a shared `leafZodWith(node, rules,
+        requiredOverride?)` core — THE single severity filter (blocking schema sees only
+        error-severity non-cross rules; a warning-severity `required` rule no longer derives
+        requiredness). `withCrossChecks` field-level superRefine evaluates error cross rules
+        via `evalRule` against the build scope (merged row scope in arrays, issues land on
+        the field's path). `walkLeaves` (lockstep with buildShape) powers `collectWarnings`
+        (dotted-path warning map) + `collectAsyncFields`. New `async-validator.ts`
+        (`buildAsyncValidatorUrl`/`checkAsyncValidator`, injectable fetch, only explicit
+        `valid:false` is invalid, throws on !ok). Changeset form-core minor.
+      - **N3 — renderer-web:** `settings.validateTrigger` → RHF `mode`/`reValidateMode`
+        (onBlur needs a boxless display:contents wrapper threading `field.onBlur`, rendered
+        ONLY under that trigger); async resolver layer after the Zod pass (per-path/value
+        memo in a ref, debounce-sleep + supersede check, zod-error/empty-value skip,
+        fail-OPEN on network failure, `setErrorAtPath` builds arrays for row paths);
+        warnings via `collectWarnings` → `validateStatus="warning"` + help (error wins;
+        not touched-gated by design). Tests: validation (trigger ×3), warnings (5),
+        async (7). Changeset form-renderer-web minor.
+      - **N4 — builder:** severity Select per rule (default error serializes away — `update`
+        now deletes undefined keys); `cross` rule type in STRING_RULES/NUMBER_RULES with a
+        simple comparator builder (`readSimpleRule` ==/!=/>/>=/</<=, left field, right
+        Field|Value toggle, numeric literals coerced; complex → JSON-panel hint); "Remote
+        check" block (URL/message/debounce) on every leaf; FormSettingsEditor gains a
+        bespoke `setSettingKey` merge (settings ≠ layoutProps) + "Validate when" select.
+        `PropertyPanel.validation.test.tsx` (14); builder now 143 tests. Changeset-ignored.
+      - **N5 — close:** typecheck 15/15, suites green (known parallel-load timeout flakes
+        pass in isolation), biome on Phase N files (+ a11y ignore on the onBlur wrapper),
+        reviewer PASS (no required fixes). NEXT: Phase O.
 - [ ] **O — Multi-step wizard (FormStep).** Schema: `steps` container + `step` pane
       (pane-as-node like `tabs`/`tab-pane`, structurally restricted). renderer-web: a Steps
       header + next/prev nav that validates the current step before advancing (per-step Zod

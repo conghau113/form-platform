@@ -254,9 +254,9 @@ describe("schema field types", () => {
         fields: [],
       }).success,
     ).toBe(false);
-    expect(
-      formSchema.safeParse({ ...base, fields: [text({ asyncValidator: {} })] }).success,
-    ).toBe(false);
+    expect(formSchema.safeParse({ ...base, fields: [text({ asyncValidator: {} })] }).success).toBe(
+      false,
+    );
   });
 
   it("accepts the additive common props on existing types", () => {

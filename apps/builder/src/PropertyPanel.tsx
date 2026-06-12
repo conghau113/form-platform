@@ -98,7 +98,9 @@ export type CrossRight = { kind: "field"; name: string } | { kind: "value"; valu
 /** Read a simple `{op: [{var: left}, {var: right} | literal]}` JSONLogic rule, the
  *  shape the cross-rule builder writes. Anything more complex returns null so the UI
  *  falls back to a "edit via JSON" hint (same contract as readEqualsRule). */
-export function readSimpleRule(rule: unknown): { op: CrossOp; left: string; right: CrossRight } | null {
+export function readSimpleRule(
+  rule: unknown,
+): { op: CrossOp; left: string; right: CrossRight } | null {
   if (rule == null || typeof rule !== "object") return null;
   const keys = Object.keys(rule);
   if (keys.length !== 1) return null;
@@ -908,7 +910,10 @@ function CrossRuleControls({
   }
   const write = (op: CrossOp, left: string, right: CrossRight) =>
     onChange({
-      [op]: [{ var: left }, right.kind === "field" ? { var: right.name } : coerceLiteral(right.value)],
+      [op]: [
+        { var: left },
+        right.kind === "field" ? { var: right.name } : coerceLiteral(right.value),
+      ],
     });
   return (
     <Space wrap align="start">

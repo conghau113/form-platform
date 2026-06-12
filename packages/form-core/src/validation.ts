@@ -392,7 +392,14 @@ function walkLeaves(
         const rowObj = (row ?? {}) as Record<string, unknown>;
         const merged = { ...values, ...rowObj };
         const rowEffects = computeNodeReactions(node.itemFields, merged);
-        walkLeaves(node.itemFields, merged, access, rowEffects, `${prefix}${node.name}.${i}.`, visit);
+        walkLeaves(
+          node.itemFields,
+          merged,
+          access,
+          rowEffects,
+          `${prefix}${node.name}.${i}.`,
+          visit,
+        );
       });
       continue;
     }
@@ -421,7 +428,11 @@ export function collectWarnings(
     if (warn.length === 0) return;
     const plain = warn.filter((r) => r.type !== "cross");
     if (plain.length > 0) {
-      const schema = leafZodWith(node, plain, plain.some((r) => r.type === "required"));
+      const schema = leafZodWith(
+        node,
+        plain,
+        plain.some((r) => r.type === "required"),
+      );
       const res = schema.safeParse(scope[node.name]);
       if (!res.success) {
         const msg = res.error.issues[0]?.message;

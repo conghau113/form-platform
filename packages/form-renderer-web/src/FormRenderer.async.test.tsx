@@ -23,7 +23,9 @@ function jsonResponse(data: unknown, ok = true, status = 200): Promise<Response>
   return Promise.resolve({ ok, status, json: () => Promise.resolve(data) } as Response);
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("FormRenderer asyncValidator", () => {
   it("valid:false blocks submit and shows the server message", async () => {

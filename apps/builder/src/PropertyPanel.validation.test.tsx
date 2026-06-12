@@ -203,7 +203,12 @@ describe("ValidationEditor remote check", () => {
 describe("FormSettingsEditor validateTrigger", () => {
   function setupForm(settings?: FormProps["settings"]) {
     const onChangeForm = vi.fn();
-    const form: FormProps = { type: "form", id: "f", title: "F", ...(settings ? { settings } : {}) };
+    const form: FormProps = {
+      type: "form",
+      id: "f",
+      title: "F",
+      ...(settings ? { settings } : {}),
+    };
     render(
       <PropertyPanel
         selected={null}
