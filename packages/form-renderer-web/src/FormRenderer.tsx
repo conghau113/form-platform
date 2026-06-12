@@ -48,7 +48,7 @@ import {
   TimePicker,
 } from "antd";
 import type React from "react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { forwardRef, Fragment, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { type Control, Controller, type Resolver, useFieldArray, useForm } from "react-hook-form";
 
 const DEFAULT_SPAN = { xs: 24, sm: 24, md: 12, lg: 12 };
@@ -441,6 +441,17 @@ export interface FormRendererProps {
    *  instead of editing the input — visuals stay true to runtime, unlike `disabled`) and
    *  hides the Submit button. */
   designMode?: boolean;
+  /** Hide the built-in Submit button without entering design mode. Used by the imperative
+   *  `openFormDialog`/`openFormDrawer` wrappers, which drive submission from the popup's own
+   *  OK button via the `FormRendererHandle.submit()` imperative handle. */
+  hideSubmit?: boolean;
+}
+
+/** Imperative handle exposed via `ref`. `submit()` programmatically triggers validation +
+ *  `onSubmit` exactly as clicking the built-in button would — the popup wrappers call it
+ *  from their footer OK button (the popup stays open if validation fails). */
+export interface FormRendererHandle {
+  submit: () => void;
 }
 
 type Values = Record<string, unknown>;
@@ -462,16 +473,20 @@ function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
   return into;
 }
 
-export function FormRenderer({
-  schema,
-  theme,
-  access = { roles: [] },
-  initialValues,
-  onSubmit,
-  submitLabel = "Submit",
-  nodeWrapper,
-  designMode = false,
-}: FormRendererProps) {
+export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(function FormRenderer(
+  {
+    schema,
+    theme,
+    access = { roles: [] },
+    initialValues,
+    onSubmit,
+    submitLabel = "Submit",
+    nodeWrapper,
+    designMode = false,
+    hideSubmit = false,
+  },
+  ref,
+) {
   const form: FormSchema = useMemo(() => migrate(schema), [schema]);
 
   // Self-contained QueryClient so consumers don't have to provide one. Retries
@@ -526,6 +541,11 @@ export function FormRenderer({
     const clean = buildZodSchema(form, { values: data, access }).parse(data);
     onSubmit?.(clean);
   });
+
+  // Let a popup wrapper trigger submission from its own OK button. `submit` already
+  // runs validation and only invokes `onSubmit` on success, so the popup stays open
+  // when validation fails.
+  useImperativeHandle(ref, () => ({ submit: () => void submit() }), [submit]);
 
   // `namePrefix` lets fields nested in an array bind to `name.{index}.{child}` while
   // top-level fields keep their bare name. `opts` lets a table cell render the control
@@ -829,8 +849,9 @@ export function FormRenderer({
                 <Fragment key={i}>{renderNode(n, "", { path: [i] })}</Fragment>
               ))}
             </Row>
-            {/* The Submit button is meaningless on the design canvas. */}
-            {!designMode && (
+            {/* The Submit button is meaningless on the design canvas, and a popup wrapper
+                drives submission from its own footer (hideSubmit). */}
+            {!designMode && !hideSubmit && (
               <Button type="primary" htmlType="submit">
                 {submitLabel}
               </Button>
@@ -840,4 +861,4 @@ export function FormRenderer({
       </ConfigProvider>
     </QueryClientProvider>
   );
-}
+});
