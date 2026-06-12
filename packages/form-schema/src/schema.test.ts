@@ -124,6 +124,69 @@ describe("schema field types", () => {
     expect(out.fields[4]).toMatchObject({ type: "select", tags: true, showSearch: true });
   });
 
+  it("accepts the Phase M hierarchical and range field types (additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "phase-m",
+      title: "Phase M",
+      fields: [
+        {
+          type: "cascader",
+          name: "region",
+          label: "Region",
+          required: true,
+          options: [
+            {
+              label: "Vietnam",
+              value: "vn",
+              children: [
+                { label: "Ho Chi Minh", value: "hcm", children: [{ label: "D1", value: "d1" }] },
+              ],
+            },
+          ],
+        },
+        {
+          type: "tree-select",
+          name: "dept",
+          label: "Department",
+          multiple: true,
+          dataSource: { url: "/api/depts", labelKey: "name", valueKey: "id", childrenKey: "subs" },
+        },
+        { type: "date-range", name: "stay", label: "Stay", picker: "month" },
+        { type: "time-range", name: "shift", label: "Shift" },
+        { type: "date", name: "week", label: "Week", picker: "week" },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({
+      type: "cascader",
+      options: [{ value: "vn", children: [{ value: "hcm", children: [{ value: "d1" }] }] }],
+    });
+    expect(out.fields[1]).toMatchObject({
+      type: "tree-select",
+      multiple: true,
+      dataSource: { childrenKey: "subs" },
+    });
+    expect(out.fields[2]).toMatchObject({ type: "date-range", picker: "month" });
+    expect(out.fields[3]).toMatchObject({ type: "time-range" });
+    expect(out.fields[4]).toMatchObject({ type: "date", picker: "week" });
+  });
+
+  it("rejects an unknown picker variant and a tree option missing its label", () => {
+    const base = { formVersion: 3, id: "bad", title: "Bad" };
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "date", name: "d", label: "D", picker: "decade" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "cascader", name: "c", label: "C", options: [{ value: "lonely" }] }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts the additive common props on existing types", () => {
     const out = formSchema.parse({
       formVersion: 3,

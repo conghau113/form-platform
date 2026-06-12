@@ -167,6 +167,23 @@ export const optionSchema = z.object({
   value: z.union([z.string(), z.number()]),
 });
 
+/** A hierarchical option for cascader / tree-select: an option that may carry
+ *  child options. The explicit `z.ZodType` annotation keeps the recursive
+ *  `z.lazy` inference sound (same pattern as the container schemas below). */
+export interface TreeOption {
+  label: string;
+  value: string | number;
+  children?: TreeOption[];
+}
+
+export const treeOptionSchema: z.ZodType<TreeOption> = z.lazy(() =>
+  z.object({
+    label: z.string(),
+    value: z.union([z.string(), z.number()]),
+    children: z.array(treeOptionSchema).optional(),
+  }),
+);
+
 /** Remote option source for a select. `dependsOn` (single parent) is the level-1
  *  shorthand; `params` maps any number of query params to other fields' current
  *  values (level 2). `ttlMs` caches results for that long (renderer staleTime). */
@@ -186,6 +203,10 @@ export const selectDataSourceSchema = z.object({
     )
     .optional(),
   ttlMs: z.number().optional(),
+  /** When set, response rows are mapped RECURSIVELY: each row's `childrenKey`
+   *  array maps through the same labelKey/valueKey, producing a tree of options
+   *  (for cascader / tree-select). Flat consumers simply ignore it. */
+  childrenKey: z.string().optional(),
 });
 
 export const selectFieldSchema = z.object({
@@ -237,8 +258,50 @@ export const uploadFieldSchema = z.object({
   listType: z.enum(["text", "picture", "picture-card"]).optional(),
 });
 
-export const dateFieldSchema = z.object({ type: z.literal("date"), ...commonFields });
+/** Hierarchical single-path choice (antd Cascader). The value is the PATH of
+ *  chosen option values from root to leaf, so it is always an array even for a
+ *  single selection. Options are a {@link treeOptionSchema} tree, static or
+ *  remote (a `dataSource` with `childrenKey` returns a tree). */
+export const cascaderFieldSchema = z.object({
+  type: z.literal("cascader"),
+  ...commonFields,
+  options: z.array(treeOptionSchema).optional(),
+  dataSource: selectDataSourceSchema.optional(),
+});
+
+/** Tree-shaped dropdown choice (antd TreeSelect). Unlike cascader the value is
+ *  the chosen node's value itself — a scalar, or an array when `multiple`. */
+export const treeSelectFieldSchema = z.object({
+  type: z.literal("tree-select"),
+  ...commonFields,
+  multiple: z.boolean().optional(),
+  options: z.array(treeOptionSchema).optional(),
+  dataSource: selectDataSourceSchema.optional(),
+});
+
+/** Calendar granularity variant for date pickers (antd `picker` prop). */
+export const datePickerVariantSchema = z.enum(["date", "week", "month", "quarter", "year"]);
+
+export const dateFieldSchema = z.object({
+  type: z.literal("date"),
+  ...commonFields,
+  picker: datePickerVariantSchema.optional(),
+});
 export const timeFieldSchema = z.object({ type: z.literal("time"), ...commonFields });
+
+/** Date interval input (antd RangePicker). The value is a `[start, end]` tuple;
+ *  like `date`, the element shape is platform-specific (dayjs on web). */
+export const dateRangeFieldSchema = z.object({
+  type: z.literal("date-range"),
+  ...commonFields,
+  picker: datePickerVariantSchema.optional(),
+});
+
+/** Time interval input (antd TimePicker.RangePicker). Value is `[start, end]`. */
+export const timeRangeFieldSchema = z.object({
+  type: z.literal("time-range"),
+  ...commonFields,
+});
 export const checkboxFieldSchema = z.object({ type: z.literal("checkbox"), ...commonFields });
 export const switchFieldSchema = z.object({ type: z.literal("switch"), ...commonFields });
 
@@ -281,10 +344,14 @@ export type LeafField =
   | z.infer<typeof numberFieldSchema>
   | z.infer<typeof selectFieldSchema>
   | z.infer<typeof checkboxGroupFieldSchema>
+  | z.infer<typeof cascaderFieldSchema>
+  | z.infer<typeof treeSelectFieldSchema>
   | z.infer<typeof uploadFieldSchema>
   | z.infer<typeof radioFieldSchema>
   | z.infer<typeof dateFieldSchema>
   | z.infer<typeof timeFieldSchema>
+  | z.infer<typeof dateRangeFieldSchema>
+  | z.infer<typeof timeRangeFieldSchema>
   | z.infer<typeof checkboxFieldSchema>
   | z.infer<typeof switchFieldSchema>
   | z.infer<typeof passwordFieldSchema>
@@ -528,10 +595,14 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     numberFieldSchema,
     selectFieldSchema,
     checkboxGroupFieldSchema,
+    cascaderFieldSchema,
+    treeSelectFieldSchema,
     uploadFieldSchema,
     radioFieldSchema,
     dateFieldSchema,
     timeFieldSchema,
+    dateRangeFieldSchema,
+    timeRangeFieldSchema,
     checkboxFieldSchema,
     switchFieldSchema,
     passwordFieldSchema,
