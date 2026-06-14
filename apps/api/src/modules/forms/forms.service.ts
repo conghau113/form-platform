@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { type FormSchema, migrate } from "@org/form-schema";
+import { dataFile, ensureDataDir } from "../../common/file-store.js";
 
 /**
  * File-backed store. The server is the source of truth: every saved body is run
@@ -10,17 +10,13 @@ import { type FormSchema, migrate } from "@org/form-schema";
  */
 @Injectable()
 export class FormsService {
-  private readonly dataDir = resolve(process.cwd(), ".data");
-
   private fileFor(id: string): string {
-    // Guard against path traversal; ids are simple form identifiers.
-    if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new NotFoundException(`Invalid form id: ${id}`);
-    return resolve(this.dataDir, `${id}.json`);
+    return dataFile(id, ".json", "form");
   }
 
   save(body: unknown): FormSchema {
     const form = migrate(body); // validates + normalizes to CURRENT_FORM_VERSION
-    if (!existsSync(this.dataDir)) mkdirSync(this.dataDir, { recursive: true });
+    ensureDataDir();
     writeFileSync(this.fileFor(form.id), JSON.stringify(form, null, 2), "utf8");
     return form;
   }

@@ -1,11 +1,11 @@
 import { Module } from "@nestjs/common";
-import { FormsController } from "./forms.controller.js";
-import { FormsService } from "./forms.service.js";
-import { ThemesController } from "./themes.controller.js";
-import { ThemesService } from "./themes.service.js";
+import { FormsModule } from "./modules/forms/forms.module.js";
+import { ThemesModule } from "./modules/themes/themes.module.js";
 
+/** Root module — composes the feature modules. New features (e.g. workflow) are added
+ *  here as their own `src/modules/<feature>` module rather than registering controllers
+ *  and providers flat. */
 @Module({
-  controllers: [FormsController, ThemesController],
-  providers: [FormsService, ThemesService],
+  imports: [FormsModule, ThemesModule],
 })
 export class AppModule {}

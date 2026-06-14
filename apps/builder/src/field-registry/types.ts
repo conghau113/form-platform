@@ -1,0 +1,85 @@
+import type { FieldNode, ValidationRule } from "@org/form-schema";
+
+/**
+ * Meta-driven component registry (v2) — the single source of truth the builder uses
+ * to author every node. Each entry declares how a type appears in the palette, how a
+ * fresh node is seeded, which type-specific settings the property panel shows, how its
+ * default value is edited, AND its designer BEHAVIOR (drag/drop/clone/delete + which
+ * children it accepts). Palette, model factories, the property panel and the tree-engine
+ * insert guard all derive from this list instead of hard-coding per-type branches — the
+ * same idea as Formily/Designable's component registry (`createBehavior`/`createResource`),
+ * kept on top of our Zod contract rather than replacing it.
+ */
+
+/** Every FieldNode type the contract knows (leaves + array + containers). */
+export type FieldType = FieldNode["type"];
+/** A node type the designer tree can hold, including the root `form` node. */
+export type NodeType = FieldType | "form";
+
+/** A control kind the property panel knows how to render for a setting. */
+export type SettingControl = "text" | "number" | "checkbox" | "options" | "select";
+
+/** One choice for a `select` setting control. */
+export interface SettingChoice {
+  label: string;
+  value: string;
+}
+
+/** One type-specific setting, e.g. a select's `options` or a grid's `cols`. */
+export interface SettingDescriptor {
+  /** Property key on the node this setting reads/writes. */
+  key: string;
+  label: string;
+  control: SettingControl;
+  /** Choices for `control: "select"`. */
+  choices?: SettingChoice[];
+}
+
+/** How the shared "Default value" editor renders for this type. */
+export type DefaultValueKind = "text" | "number" | "boolean" | "none";
+
+/** A validation rule kind, mirrored from the schema contract. */
+export type ValidationRuleType = ValidationRule["type"];
+
+/** Designer interaction rules for a node type (mirrors Designable's behavior flags). */
+export interface ComponentBehavior {
+  /** Can other nodes be dropped INTO this node (it has a children slot)? */
+  droppable: boolean;
+  /** Can this node itself be dragged on the canvas? */
+  draggable: boolean;
+  /** Can this node be copy/pasted? */
+  cloneable: boolean;
+  /** Can this node be deleted? (the root `form` cannot). */
+  deletable: boolean;
+  /** When set, restricts which child types this node accepts (e.g. tabs ⇒ tab-pane). */
+  allowAppend?: (parentType: NodeType, childType: NodeType) => boolean;
+  /** When set, this node may only be inserted under one of these parent types
+   *  (e.g. tab-pane ⇒ ["tabs"]). */
+  allowParents?: NodeType[];
+}
+
+export interface FieldDescriptor {
+  type: NodeType;
+  label: string;
+  /** Palette grouping header. */
+  category: string;
+  /** Extra props (beyond type/name/label) a freshly dropped node starts with. */
+  defaults: Record<string, unknown>;
+  /** Type-specific settings rendered in the property panel. */
+  settings: SettingDescriptor[];
+  defaultValueKind: DefaultValueKind;
+  /** Validation rule kinds the panel offers for this type. Omitted/empty hides the
+   *  Validation section (the type has no meaningful field-level rules to add). */
+  validations?: ValidationRuleType[];
+}
+
+/** A full component meta: a {@link FieldDescriptor} plus designer behavior. */
+export interface ComponentMeta extends FieldDescriptor {
+  behavior: ComponentBehavior;
+  /** Optional palette/outline icon (emoji or glyph). */
+  icon?: string;
+  /** Whether the palette offers this type. Containers stay false until Phase E. */
+  showInPalette: boolean;
+  /** Whether the node carries a schema `name` (value-bearing). Containers are nameless. */
+  named: boolean;
+}

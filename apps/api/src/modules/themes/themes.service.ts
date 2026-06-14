@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { type DesignTokens, migrateTheme } from "@org/form-theme";
+import { dataFile, ensureDataDir } from "../../common/file-store.js";
 
 /**
  * File-backed theme store, sibling to FormsService. A theme is persisted
@@ -11,17 +11,13 @@ import { type DesignTokens, migrateTheme } from "@org/form-theme";
  */
 @Injectable()
 export class ThemesService {
-  private readonly dataDir = resolve(process.cwd(), ".data");
-
   private fileFor(id: string): string {
-    // Guard against path traversal; ids are simple form identifiers.
-    if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new NotFoundException(`Invalid theme id: ${id}`);
-    return resolve(this.dataDir, `${id}.theme.json`);
+    return dataFile(id, ".theme.json", "theme");
   }
 
   save(id: string, body: unknown): DesignTokens {
     const theme = migrateTheme(body); // validates + normalizes to CURRENT_THEME_VERSION
-    if (!existsSync(this.dataDir)) mkdirSync(this.dataDir, { recursive: true });
+    ensureDataDir();
     writeFileSync(this.fileFor(id), JSON.stringify(theme, null, 2), "utf8");
     return theme;
   }
