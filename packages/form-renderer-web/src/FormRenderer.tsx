@@ -24,11 +24,14 @@ import {
   type ArrayField,
   type AsyncValidator,
   CURRENT_FORM_VERSION,
+  childrenOf,
   type FieldNode,
   type FormSchema,
   isLayoutContainer,
   type LeafField,
   migrate,
+  type StepField,
+  type StepsField,
   type TreeOption,
 } from "@org/form-schema";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -51,6 +54,7 @@ import {
   Select,
   Slider,
   Space,
+  Steps,
   Switch,
   Table,
   Tabs,
@@ -829,6 +833,101 @@ function ArrayFieldSection(props: {
   );
 }
 
+/** Renders a `steps` wizard: one `step` pane visible at a time with a Prev/Next footer.
+ *  Like tabs, EVERY pane stays mounted (inactive ones hidden with `display:none`) so its
+ *  react-hook-form Controllers register — defaults and required errors stay correct.
+ *  `Next` validates ONLY the current step's fields; `Submit` (which posts the whole form)
+ *  shows only on the last step. Header clicks may jump backward at runtime, freely in
+ *  design mode. `renderNode` is a closure (no hooks), so this is a real component owning
+ *  the current-step state — same reason `array` uses `ArrayFieldSection`. */
+function StepsSection(props: {
+  panes: Array<{ pane: StepField; i: number }>;
+  here: number[] | undefined;
+  renderPaneBody: (pane: StepField, panePath: number[] | undefined) => React.ReactNode;
+  stepNames: (pane: StepField) => string[];
+  trigger: (names?: string[]) => Promise<boolean>;
+  /** react-hook-form's error map (keys are field names) — drives the submit-fail jump. */
+  errors: Record<string, unknown>;
+  /** Increments on every submit attempt; the signal to jump to the first errored step. */
+  submitCount: number;
+  designMode: boolean;
+  hideSubmit: boolean;
+  readPretty: boolean;
+  submitLabel: string;
+}) {
+  const {
+    panes,
+    here,
+    renderPaneBody,
+    stepNames,
+    trigger,
+    errors,
+    submitCount,
+    designMode,
+    hideSubmit,
+    readPretty,
+    submitLabel,
+  } = props;
+  const [cur, setCur] = useState(0);
+  const count = panes.length;
+  const clamped = Math.min(cur, Math.max(0, count - 1));
+
+  // After a submit attempt (valid or not), land on the first step owning an errored field.
+  // A clean submit has no errors, so this no-ops. Keyed on submitCount: errors update with it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: jump only when a submit is attempted
+  useEffect(() => {
+    if (submitCount === 0) return;
+    const bad = panes.findIndex(({ pane }) => stepNames(pane).some((n) => n in errors));
+    if (bad >= 0) setCur(bad);
+  }, [submitCount]);
+
+  if (count === 0) return null;
+  const isLast = clamped === count - 1;
+  const showSubmit = isLast && !designMode && !hideSubmit && !readPretty;
+
+  const next = async () => {
+    if (await trigger(stepNames(panes[clamped].pane))) setCur(clamped + 1);
+  };
+
+  return (
+    <>
+      <Steps
+        current={clamped}
+        // Runtime: header navigates BACKWARD only (forward must clear Next's validation).
+        // Design mode: free navigation so the author can inspect any step.
+        onChange={(to) => {
+          if (designMode || to < clamped) setCur(to);
+        }}
+        items={panes.map(({ pane }) => ({ title: pane.label, description: pane.description }))}
+        style={{ marginBottom: 16 }}
+      />
+      {panes.map(({ pane, i }, pos) => {
+        const panePath = here ? [...here, i] : undefined;
+        return (
+          <div key={i} style={{ display: pos === clamped ? undefined : "none" }}>
+            {renderPaneBody(pane, panePath)}
+          </div>
+        );
+      })}
+      {!designMode && (
+        <Space style={{ marginTop: 16 }}>
+          {clamped > 0 && <Button onClick={() => setCur(clamped - 1)}>Previous</Button>}
+          {!isLast && (
+            <Button type="primary" onClick={next}>
+              Next
+            </Button>
+          )}
+          {showSubmit && (
+            <Button type="primary" htmlType="submit">
+              {submitLabel}
+            </Button>
+          )}
+        </Space>
+      )}
+    </>
+  );
+}
+
 /** Identity of a rendered node, handed to a `nodeWrapper`. `path` is the positional
  *  route to the node — indices into `fields`, then each container's `children` — and is
  *  stable across `migrate()` (which clones but never reorders), so the designer can map
@@ -900,6 +999,29 @@ function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
       // rather than an "expected array" type error on undefined).
       into[node.name] = [];
     }
+  }
+  return into;
+}
+
+/** True when any node in the tree (at any depth) is of `type`. Used to hide the global
+ *  Submit row when a `steps` wizard owns submission. */
+function containsType(nodes: FieldNode[], type: FieldNode["type"]): boolean {
+  for (const node of nodes) {
+    if (node.type === type) return true;
+    const kids = childrenOf(node);
+    if (kids && containsType(kids, type)) return true;
+  }
+  return false;
+}
+
+/** Top-level value-scope field names reachable inside a step pane — the names a per-step
+ *  `trigger()` validates. Value-transparent containers (group/tabs/…) are descended; an
+ *  array contributes its own name (triggering it validates the whole list) and its row
+ *  fields are not walked (they live under dotted `array.{i}.{child}` paths). */
+function collectStepNames(nodes: FieldNode[], into: string[] = []): string[] {
+  for (const node of nodes) {
+    if (isLayoutContainer(node)) collectStepNames(node.children, into);
+    else if ("name" in node && node.name) into.push(node.name);
   }
   return into;
 }
@@ -1043,7 +1165,15 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
   // RHF's defaults (validate on submit, re-validate on change) — old JSON behaves
   // exactly as before.
   const trigger = form.settings?.validateTrigger;
-  const { control, handleSubmit, watch, setValue, getValues } = useForm<Values>({
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    getValues,
+    trigger: triggerFields,
+    formState,
+  } = useForm<Values>({
     defaultValues,
     resolver,
     mode: trigger === "onInput" ? "onChange" : trigger === "onBlur" ? "onBlur" : "onSubmit",
@@ -1291,6 +1421,39 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
       );
     }
 
+    if (node.type === "steps") {
+      // Visible panes carry their ORIGINAL index `i` (so a hidden step never shifts a
+      // sibling's designer path), filtered exactly like the tabs case.
+      const panes = node.children
+        .map((pane, i) => ({ pane, i }))
+        .filter(({ pane }) => isVisible(pane, scopeValues) && canView(pane, access));
+      return (
+        <Col key={`${namePrefix}steps`} {...containerSpan}>
+          {wrapNode(
+            <StepsSection
+              panes={panes}
+              here={here}
+              renderPaneBody={(pane, panePath) =>
+                wrap(
+                  pane,
+                  panePath,
+                  <Row gutter={16}>{renderChildrenAt(pane.children, panePath)}</Row>,
+                )
+              }
+              stepNames={(pane) => collectStepNames(pane.children)}
+              trigger={triggerFields}
+              errors={formState.errors as Record<string, unknown>}
+              submitCount={formState.submitCount}
+              designMode={designMode}
+              hideSubmit={hideSubmit}
+              readPretty={readPretty}
+              submitLabel={submitLabel}
+            />,
+          )}
+        </Col>
+      );
+    }
+
     if (isLayoutContainer(node)) {
       // Orphaned tab-pane / collapse-panel placed outside their parent (possible
       // in hand-written JSON): render their children as a plain transparent row.
@@ -1415,6 +1578,8 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
   };
 
   const lp = form.layoutProps;
+  // A `steps` wizard owns its own Submit (on the last step), so hide the global one.
+  const hasSteps = useMemo(() => containsType(form.fields, "steps"), [form]);
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider theme={theme}>
@@ -1437,7 +1602,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
             </Row>
             {/* The Submit button is meaningless on the design canvas, in form-wide review
                 (readPretty) mode, and when a popup wrapper drives submission (hideSubmit). */}
-            {!designMode && !hideSubmit && !readPretty && (
+            {!designMode && !hideSubmit && !readPretty && !hasSteps && (
               <Button type="primary" htmlType="submit">
                 {submitLabel}
               </Button>
