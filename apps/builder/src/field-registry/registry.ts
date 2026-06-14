@@ -252,7 +252,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
       {
         key: "listType",
         label: "List type",
-        control: "select",
+        control: "segmented",
         choices: [
           { label: "Text", value: "text" },
           { label: "Picture", value: "picture" },
@@ -358,7 +358,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     label: "Grid",
     category: "Layout",
     defaults: { cols: 2, children: [] },
-    settings: [{ key: "cols", label: "Columns", control: "number" }],
+    settings: [{ key: "cols", label: "Columns", control: "slider", min: 1, max: 12, step: 1 }],
     defaultValueKind: "none",
     behavior: CONTAINER,
     showInPalette: false,
@@ -373,7 +373,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
       {
         key: "direction",
         label: "Direction",
-        control: "select",
+        control: "segmented",
         choices: [
           { label: "Horizontal", value: "horizontal" },
           { label: "Vertical", value: "vertical" },

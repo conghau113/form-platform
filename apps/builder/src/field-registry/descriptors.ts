@@ -61,7 +61,7 @@ export const FORM_SETTINGS: SettingDescriptor[] = [
   {
     key: "layout",
     label: "Layout",
-    control: "select",
+    control: "segmented",
     choices: [
       { label: "Vertical", value: "vertical" },
       { label: "Horizontal", value: "horizontal" },
@@ -71,7 +71,7 @@ export const FORM_SETTINGS: SettingDescriptor[] = [
   {
     key: "size",
     label: "Size",
-    control: "select",
+    control: "segmented",
     choices: [
       { label: "Small", value: "small" },
       { label: "Middle", value: "middle" },
@@ -81,7 +81,7 @@ export const FORM_SETTINGS: SettingDescriptor[] = [
   {
     key: "labelAlign",
     label: "Label align",
-    control: "select",
+    control: "segmented",
     choices: [
       { label: "Right", value: "right" },
       { label: "Left", value: "left" },

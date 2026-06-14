@@ -34,6 +34,24 @@ describe("field registry", () => {
   });
 });
 
+describe("setting descriptors", () => {
+  it("choice controls carry choices; sliders carry a valid numeric range", () => {
+    const all = [...FIELD_REGISTRY, describeNode("form")];
+    for (const meta of all) {
+      for (const s of meta.settings) {
+        if (s.control === "select" || s.control === "segmented") {
+          expect(s.choices?.length, `${meta.type}.${s.key}`).toBeGreaterThan(0);
+        }
+        if (s.control === "slider") {
+          expect(typeof s.min, `${meta.type}.${s.key} min`).toBe("number");
+          expect(typeof s.max, `${meta.type}.${s.key} max`).toBe("number");
+          expect((s.max as number) > (s.min as number), `${meta.type}.${s.key} range`).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 describe("palette freeze", () => {
   it("offers exactly today's authorable types, in order (containers stay hidden)", () => {
     expect(PALETTE_TYPES).toEqual([

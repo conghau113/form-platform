@@ -16,10 +16,24 @@ export type FieldType = FieldNode["type"];
 /** A node type the designer tree can hold, including the root `form` node. */
 export type NodeType = FieldType | "form";
 
-/** A control kind the property panel knows how to render for a setting. */
-export type SettingControl = "text" | "number" | "checkbox" | "options" | "select";
+/** A control kind the property panel knows how to render for a setting. This is our
+ *  analogue of Designable's setter vocabulary (`@designable/react-settings-form`), kept
+ *  to a typed, form-relevant subset:
+ *  - `text`/`number`/`checkbox`  : the primitive inputs
+ *  - `select`/`segmented`        : a single choice from `choices` (segmented = inline
+ *                                  buttons, best for 2–4 short enums like size/variant)
+ *  - `slider`                    : a bounded numeric (`min`/`max`/`step`)
+ *  - `options`                   : the static option-list editor (select/radio choices) */
+export type SettingControl =
+  | "text"
+  | "number"
+  | "checkbox"
+  | "options"
+  | "select"
+  | "segmented"
+  | "slider";
 
-/** One choice for a `select` setting control. */
+/** One choice for a `select` / `segmented` setting control. */
 export interface SettingChoice {
   label: string;
   value: string;
@@ -31,8 +45,12 @@ export interface SettingDescriptor {
   key: string;
   label: string;
   control: SettingControl;
-  /** Choices for `control: "select"`. */
+  /** Choices for `control: "select"` / `"segmented"`. */
   choices?: SettingChoice[];
+  /** Numeric bounds for `control: "slider"` (also honored by `"number"`). */
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 /** How the shared "Default value" editor renders for this type. */

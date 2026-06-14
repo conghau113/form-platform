@@ -1,5 +1,5 @@
 import type { FieldNode } from "@org/form-schema";
-import { Checkbox, Form, Input, InputNumber, Select } from "antd";
+import { Checkbox, Form, Input, InputNumber, Segmented, Select, Slider } from "antd";
 import { describeField, type SettingDescriptor } from "../field-registry";
 import { prop } from "./helpers";
 import { type Option, OptionsEditor } from "./OptionsEditor";
@@ -49,6 +49,9 @@ export function SettingControls({
               <Form.Item key={s.key} label={s.label}>
                 <InputNumber
                   style={{ width: "100%" }}
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
                   value={(get(s.key) as number | null) ?? null}
                   onChange={(v) => setKey(v ?? undefined)}
                 />
@@ -74,6 +77,31 @@ export function SettingControls({
                   value={(get(s.key) as string) ?? undefined}
                   options={s.choices ?? []}
                   onChange={(v) => setKey(v ?? undefined)}
+                />
+              </Form.Item>
+            );
+          case "segmented":
+            // Inline single-choice. Unlike `select` there is no clear affordance: an
+            // unset value simply highlights no segment (the renderer falls back to its
+            // default), and picking a segment always writes a concrete value.
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <Segmented
+                  value={(get(s.key) as string) ?? ""}
+                  options={s.choices ?? []}
+                  onChange={(v) => setKey((v as string) || undefined)}
+                />
+              </Form.Item>
+            );
+          case "slider":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <Slider
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
+                  value={(get(s.key) as number | undefined) ?? s.min ?? 0}
+                  onChange={(v) => setKey(v)}
                 />
               </Form.Item>
             );
