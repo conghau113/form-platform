@@ -499,6 +499,24 @@ export interface SpaceField {
   children: FieldNode[];
 }
 
+export interface StepField {
+  type: "step";
+  label: string;
+  /** Sub-title shown under the step's title in the antd Steps header. */
+  description?: string;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: FieldNode[];
+}
+
+export interface StepsField {
+  type: "steps";
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: StepField[];
+}
+
 export type FieldNode =
   | LeafField
   | GroupField
@@ -509,7 +527,9 @@ export type FieldNode =
   | CollapsePanelField
   | CardField
   | GridField
-  | SpaceField;
+  | SpaceField
+  | StepsField
+  | StepField;
 
 export const groupFieldSchema: z.ZodType<GroupField> = z.lazy(() =>
   z.object({
@@ -616,6 +636,27 @@ export const spaceFieldSchema: z.ZodType<SpaceField> = z.lazy(() =>
   }),
 );
 
+export const stepFieldSchema: z.ZodType<StepField> = z.lazy(() =>
+  z.object({
+    type: z.literal("step"),
+    label: z.string(),
+    description: z.string().optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(fieldNodeSchema),
+  }),
+);
+
+export const stepsFieldSchema: z.ZodType<StepsField> = z.lazy(() =>
+  z.object({
+    type: z.literal("steps"),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(stepFieldSchema),
+  }),
+);
+
 export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
   z.union([
     textFieldSchema,
@@ -646,6 +687,8 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     cardFieldSchema,
     gridFieldSchema,
     spaceFieldSchema,
+    stepsFieldSchema,
+    stepFieldSchema,
   ]),
 );
 

@@ -6,6 +6,8 @@ import type {
   GridField,
   GroupField,
   SpaceField,
+  StepField,
+  StepsField,
   TabPaneField,
   TabsField,
 } from "./schema.js";
@@ -20,7 +22,9 @@ export type LayoutContainerField =
   | CollapsePanelField
   | CardField
   | GridField
-  | SpaceField;
+  | SpaceField
+  | StepsField
+  | StepField;
 
 export const LAYOUT_CONTAINER_TYPES = [
   "group",
@@ -31,6 +35,8 @@ export const LAYOUT_CONTAINER_TYPES = [
   "card",
   "grid",
   "space",
+  "steps",
+  "step",
 ] as const;
 
 const containerTypes: ReadonlySet<string> = new Set(LAYOUT_CONTAINER_TYPES);

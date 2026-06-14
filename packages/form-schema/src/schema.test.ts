@@ -590,6 +590,47 @@ describe("layout containers (additive)", () => {
     ).toThrow();
   });
 
+  it("accepts a steps wizard with step panes carrying a description", () => {
+    const out = formSchema.parse(
+      wrap([
+        {
+          type: "steps",
+          children: [
+            {
+              type: "step",
+              label: "Account",
+              description: "Your login details",
+              children: [{ type: "text", name: "email", label: "Email" }],
+            },
+            { type: "step", label: "Profile", children: [] },
+          ],
+        },
+      ]),
+    );
+    const steps = out.fields[0];
+    expect(steps.type).toBe("steps");
+    expect(steps).toMatchObject({
+      children: [
+        { type: "step", label: "Account", description: "Your login details" },
+        { type: "step", label: "Profile" },
+      ],
+    });
+  });
+
+  it("rejects a non-step child directly inside steps", () => {
+    expect(() =>
+      formSchema.parse(
+        wrap([{ type: "steps", children: [{ type: "text", name: "x", label: "X" }] }]),
+      ),
+    ).toThrow();
+  });
+
+  it("requires a label on step", () => {
+    expect(() =>
+      formSchema.parse(wrap([{ type: "steps", children: [{ type: "step", children: [] }] }])),
+    ).toThrow();
+  });
+
   it("rejects grid cols outside 1..24", () => {
     expect(() => formSchema.parse(wrap([{ type: "grid", cols: 0, children: [] }]))).toThrow();
     expect(() => formSchema.parse(wrap([{ type: "grid", cols: 25, children: [] }]))).toThrow();
