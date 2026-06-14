@@ -542,6 +542,35 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     showInPalette: false,
     named: false,
   },
+  {
+    // The wizard container — the first palette-visible container. Dragging it seeds two
+    // `step` panes; the StepsEditor in the property panel adds/removes/reorders them.
+    type: "steps",
+    label: "Steps",
+    category: "Layout",
+    defaults: {
+      children: [
+        { type: "step", label: "Step 1", children: [] },
+        { type: "step", label: "Step 2", children: [] },
+      ],
+    },
+    settings: [],
+    defaultValueKind: "none",
+    behavior: { ...CONTAINER, allowAppend: (_p, c) => c === "step" },
+    showInPalette: true,
+    named: false,
+  },
+  {
+    type: "step",
+    label: "Step",
+    category: "Layout",
+    defaults: { label: "Step", children: [] },
+    settings: [{ key: "label", label: "Step label", control: "text" }],
+    defaultValueKind: "none",
+    behavior: { ...CONTAINER, allowParents: ["steps"] },
+    showInPalette: false,
+    named: false,
+  },
 ];
 
 /** The root Form node's meta. It is never in the palette and never seeded by `newField`

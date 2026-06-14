@@ -20,6 +20,7 @@ import {
   selectMany,
   toggle,
 } from "./engine/selection";
+import { applyStepsOp } from "./engine/steps-ops";
 import {
   applyFieldEdit,
   fieldToTree,
@@ -459,6 +460,9 @@ export function App() {
                   fieldNames={fieldNames}
                   onChange={(uid, field) =>
                     history.set(applyFieldEdit(tree, uid, field), "Edit field")
+                  }
+                  onStepsEdit={(uid, op) =>
+                    history.set(applyStepsOp(tree, uid, op, metaGuard()), "Edit steps")
                   }
                   onChangeForm={(patch) =>
                     history.set(patchNode(tree, tree.uid, patch), "Edit form")

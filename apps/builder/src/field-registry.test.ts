@@ -57,10 +57,11 @@ describe("palette freeze", () => {
       "color",
       "upload",
       "array",
+      "steps",
     ]);
   });
 
-  it("keeps all layout containers out of the palette", () => {
+  it("keeps all layout containers except steps out of the palette", () => {
     for (const type of [
       "group",
       "tabs",
@@ -70,6 +71,7 @@ describe("palette freeze", () => {
       "card",
       "grid",
       "space",
+      "step",
     ] as const) {
       expect(describeNode(type).showInPalette, type).toBe(false);
       expect(PALETTE_TYPES).not.toContain(type);

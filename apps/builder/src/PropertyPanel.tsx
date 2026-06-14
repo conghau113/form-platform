@@ -25,6 +25,7 @@ import {
 import { useEffect, useState } from "react";
 import { DataSourceEditor, isOptionSourced } from "./DataSourceEditor";
 import { type NodePath, nodeAtPath, patchNodeAtPath } from "./engine/field-path";
+import type { StepsOp } from "./engine/steps-ops";
 import type { FormProps } from "./engine/tree";
 import {
   describeField,
@@ -169,6 +170,7 @@ export function PropertyPanel({
   fieldNames,
   onChange,
   onChangeForm,
+  onStepsEdit,
 }: {
   selected: SelectedNode | null;
   /** The root Form node, set when IT is the selection (mutually exclusive with `selected`). */
@@ -182,6 +184,9 @@ export function PropertyPanel({
   onChange: (uid: string, field: FieldNode) => void;
   /** Patches the root Form node (id/title/layoutProps). */
   onChangeForm?: (patch: Partial<FormProps>) => void;
+  /** Applies a StepsEditor op to the selected `steps` node. The step list is edited through
+   *  the tree (not the normal `set` path, which drops a container's children). */
+  onStepsEdit?: (stepsUid: string, op: StepsOp) => void;
 }) {
   const [drillPath, setDrillPath] = useState<NodePath>([]);
   // Leaving the current node resets the drill; a stale path (e.g. after undo) too.
@@ -244,6 +249,11 @@ export function PropertyPanel({
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
           {fieldTypeLabel(node.type)} container — its fields are edited on the canvas.
         </Typography.Paragraph>
+        {/* The wizard's step list is authored here (add/remove/reorder + per-step label and
+            description); the fields INSIDE each step are still edited on the canvas. */}
+        {node.type === "steps" && onStepsEdit && (
+          <StepsEditor stepsUid={uid} node={node} onStepsEdit={onStepsEdit} />
+        )}
         <Form layout="vertical" size="small">
           {/* A named container (today only `group`) carries a schema key once it is
               authorable/selectable on the canvas. */}
@@ -1088,6 +1098,83 @@ function ItemFieldsEditor({
         ))}
         <Button size="small" onClick={add}>
           Add item field
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** The wizard's step-list editor, shown in a `steps` node's property panel. Adds / removes /
+ *  reorders step panes and edits each pane's label + description. Writes go through the tree
+ *  (`onStepsEdit` → `applyStepsOp`), NOT the panel's `set`: a layout container's `children`
+ *  are intentionally dropped by the normal edit path (to keep selectable descendant uids). */
+function StepsEditor({
+  stepsUid,
+  node,
+  onStepsEdit,
+}: {
+  stepsUid: string;
+  node: FieldNode;
+  onStepsEdit: (stepsUid: string, op: StepsOp) => void;
+}) {
+  const steps = (childrenOf(node) ?? []) as Array<{ label?: string; description?: string }>;
+  const emit = (op: StepsOp) => onStepsEdit(stepsUid, op);
+  return (
+    <>
+      <Divider orientation="left" plain>
+        Steps
+      </Divider>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {steps.map((step, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: step panes have no stable id; index is fine for this small editor
+          <Space key={i} wrap align="start">
+            <Input
+              style={{ width: 130 }}
+              placeholder="label"
+              value={step.label ?? ""}
+              onChange={(e) => emit({ kind: "patch", index: i, patch: { label: e.target.value } })}
+            />
+            <Input
+              style={{ width: 160 }}
+              placeholder="description (optional)"
+              value={step.description ?? ""}
+              onChange={(e) =>
+                emit({
+                  kind: "patch",
+                  index: i,
+                  patch: { description: e.target.value || undefined },
+                })
+              }
+            />
+            <Button
+              type="text"
+              size="small"
+              disabled={i === 0}
+              onClick={() => emit({ kind: "move", index: i, dir: -1 })}
+            >
+              ↑
+            </Button>
+            <Button
+              type="text"
+              size="small"
+              disabled={i === steps.length - 1}
+              onClick={() => emit({ kind: "move", index: i, dir: 1 })}
+            >
+              ↓
+            </Button>
+            <Button
+              type="text"
+              size="small"
+              danger
+              disabled={steps.length <= 1}
+              onClick={() => emit({ kind: "remove", index: i })}
+            >
+              ✕
+            </Button>
+          </Space>
+        ))}
+        <Button size="small" onClick={() => emit({ kind: "add", step: newField("step") })}>
+          Add step
         </Button>
       </div>
     </>
