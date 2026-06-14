@@ -532,12 +532,31 @@ changes. Each phase keeps the Closing Loop (typecheck + test → reviewer → ch
       - **N5 — close:** typecheck 15/15, suites green (known parallel-load timeout flakes
         pass in isolation), biome on Phase N files (+ a11y ignore on the onBlur wrapper),
         reviewer PASS (no required fixes). NEXT: Phase O.
-- [ ] **O — Multi-step wizard (FormStep).** Schema: `steps` container + `step` pane
-      (pane-as-node like `tabs`/`tab-pane`, structurally restricted). renderer-web: a Steps
-      header + next/prev nav that validates the current step before advancing (per-step Zod
-      subset), progress indicator, Submit only on the last step. Builder: drag panes, step
-      reorder, settings for titles/descriptions. The drag engine + pane handling reuse the
-      tabs/collapse machinery from Phase D/E.
+- [x] **O — Multi-step wizard (FormStep) ✅ DONE (2026-06-14).** `steps` container + `step`
+      pane (pane-as-node like `tabs`/`tab-pane`, Zod enforces step-only children; `step` has
+      required `label` + optional `description`). No `CURRENT_FORM_VERSION` bump (additive new
+      node types). On `feat/phase-o-wizard` off `feat/phase-n-validation`.
+      - **O1 — schema:** `StepsField`/`StepField` interfaces + lazy schemas + `fieldNodeSchema`
+        union; `"steps"`/`"step"` added to `LAYOUT_CONTAINER_TYPES` + `LayoutContainerField`
+        (so `childrenOf`/`isLayoutContainer`/`childrenKeyOf` and the whole form-core/transformer
+        chain stay generic — form-core unchanged). Changeset form-schema minor.
+      - **O2 — renderer-web:** new `StepsSection` component (owns the current-step `useState`,
+        like `ArrayFieldSection`) over an antd `Steps` header; ALL panes mounted, inactive ones
+        `display:none` (mirrors tabs `forceRender` so RHF Controllers register). `Next` runs
+        `trigger(collectStepNames(step))` — validates ONLY the current step (async resolver +
+        warnings honored automatically); `Submit` on the last step only; global Submit row
+        hidden whenever a `steps` node exists (`hasSteps`); failed submit jumps to the first
+        errored step (via `formState.submitCount`). 5 tests. Changeset form-renderer-web minor.
+      - **O3 — builder:** `steps` meta is the FIRST palette-visible container (`allowAppend`
+        step-only, seeds 2 step panes); `step` hidden (`allowParents:["steps"]`). New pure
+        `engine/steps-ops.ts` `applyStepsOp` (add/remove/move/patch composing the tree ops,
+        resolving child uids by index) — required because `applyFieldEdit` drops a container's
+        `children`; `StepsEditor` in `PropertyPanel` (add/reorder/remove + per-step label +
+        description) wired through App's `onStepsEdit`. steps-ops (6) + palette-freeze tests.
+        Changeset-ignored.
+      - **O4 — close:** typecheck green all packages, suites green (known parallel-load timeout
+        flakes pass in isolation), biome clean. NEXT: merge the whole K→L→M→N→O chain to `main`
+        (user gates the merge).
 
 ## Long-term (post-O) — P→S + backend
 
