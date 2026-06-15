@@ -24,6 +24,7 @@ function setup(overrides: Partial<DesignerValue> = {}, tree?: TreeNode) {
     remove: vi.fn(),
     select: vi.fn(),
     clearSelection: vi.fn(),
+    resizeColSpan: vi.fn(),
     ...overrides,
   };
   const result = render(
@@ -61,9 +62,57 @@ describe("DesignCanvas", () => {
     expect(screen.getByTitle("Copy")).toBeTruthy();
   });
 
+  it("shows a grid-resize handle for a selected leaf field", () => {
+    const tree = schemaToTree(migrate(src));
+    const uid = tree.children[0].uid;
+    setup({ selected: [uid] }, tree);
+    expect(screen.getByTitle("Drag to resize column")).toBeTruthy();
+  });
+
+  it("drag-resizing the handle writes the active breakpoint's colSpan", () => {
+    const tree = schemaToTree(migrate(src));
+    const uid = tree.children[0].uid;
+    const { container, value } = setup({ selected: [uid] }, tree);
+    const shell = container.querySelector(`[data-designer-node-id="${uid}"]`) as HTMLElement;
+    const col = shell.parentElement as HTMLElement;
+    const row = col.closest(".ant-row") as HTMLElement;
+    // 24 cols across 240px → 10px/col. Start at half width (12), drag to full (24).
+    const rect = (width: number) =>
+      ({
+        width,
+        height: 0,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    row.getBoundingClientRect = () => rect(240);
+    col.getBoundingClientRect = () => rect(120);
+    const handle = screen.getByTitle("Drag to resize column");
+    // jsdom's PointerEvent drops clientX; a MouseEvent typed as a pointer event keeps it.
+    const fire = (target: HTMLElement | Window, type: string, clientX = 0) =>
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX }));
+    fire(handle, "pointerdown", 120);
+    fire(window, "pointermove", 240); // +120px over a 10px/col grid → span 24
+    expect(value.resizeColSpan).toHaveBeenCalledWith(uid, "lg", 24, expect.any(String));
+    fire(window, "pointerup");
+  });
+
   it("shows the empty-state legend when the form has no fields", () => {
     const tree = schemaToTree(migrate({ formVersion: 3, id: "e", title: "E", fields: [] }));
     setup({}, tree);
     expect(screen.getByText(/Drag a field from the palette/i)).toBeTruthy();
+  });
+
+  it("keeps the empty form card as a root drop target so fields can be dragged back in", () => {
+    const tree = schemaToTree(migrate({ formVersion: 3, id: "e", title: "E", fields: [] }));
+    const { container } = setup({}, tree);
+    // The card carries the ROOT uid; without it an emptied form has no hit-test target.
+    const card = container.querySelector(`[data-designer-node-id="${tree.uid}"]`);
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toMatch(/Drag a field from the palette/i);
   });
 });

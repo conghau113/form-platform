@@ -18,8 +18,9 @@ export type { HistoryEntry } from "./engine/history";
 export interface History<T> {
   present: T;
   /** Push a new present, recording a step for undo (clears the redo stack).
-   *  An optional `label` names the step for the History panel. */
-  set: (next: T | ((prev: T) => T), label?: string) => void;
+   *  An optional `label` names the step for the History panel. A `coalesce` tag
+   *  merges consecutive pushes from one gesture (drag-resize) into a single step. */
+  set: (next: T | ((prev: T) => T), label?: string, coalesce?: string) => void;
   /** Replace the present WITHOUT recording history (e.g. loading a fresh document). */
   reset: (next: T) => void;
   undo: () => void;
@@ -42,10 +43,10 @@ export function useHistory<T>(initial: T | (() => T)): History<T> {
     createHistory(typeof initial === "function" ? (initial as () => T)() : initial),
   );
 
-  const set = useCallback((next: T | ((prev: T) => T), label?: string) => {
+  const set = useCallback((next: T | ((prev: T) => T), label?: string, coalesce?: string) => {
     setState((s) => {
       const value = typeof next === "function" ? (next as (prev: T) => T)(presentOf(s)) : next;
-      return pushHistory(s, value, label);
+      return pushHistory(s, value, label, coalesce);
     });
   }, []);
 

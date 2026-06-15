@@ -13,6 +13,7 @@ import { ThemeEditor } from "../ThemeEditor";
 import { HistoryPanel } from "./HistoryPanel";
 import { OutlineTree } from "./OutlineTree";
 import { oneOf, usePersistentState } from "./persist";
+import "./CompositePanel.css";
 
 type CompositeTab = "components" | "outline" | "history" | "theme";
 
@@ -48,11 +49,11 @@ export function CompositePanel({
   );
   return (
     <Tabs
+      className="composite-panel"
       activeKey={tab}
       onChange={(key) => setTab(key as CompositeTab)}
       size="small"
-      style={{ height: "100%" }}
-      tabBarStyle={{ paddingLeft: 8, marginBottom: 0 }}
+      tabBarStyle={{ paddingLeft: 8, marginBottom: 0, flexShrink: 0 }}
       items={[
         {
           key: "components",

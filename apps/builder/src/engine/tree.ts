@@ -228,6 +228,32 @@ export function patchNode(root: TreeNode, uid: string, patch: Partial<EngineProp
   return replaceAt(root, uid, (n) => ({ ...n, node: { ...n.node, ...patch } as EngineProps }));
 }
 
+/** antd responsive breakpoints carried by `layout.colSpan` (the D8 drag-resize keys). */
+export type ColSpanKey = "xs" | "sm" | "md" | "lg";
+
+/** Field types with NO `layout` slot: the form root and the label-only sub-containers.
+ *  Everything else (every leaf, group/array/tabs/collapse/card/grid/space/steps) carries
+ *  an optional `layout`. */
+const NO_LAYOUT_TYPES: ReadonlySet<string> = new Set([
+  "form",
+  "tab-pane",
+  "collapse-panel",
+  "step",
+]);
+
+/** Write `layout.colSpan[key]` (1..24) on a field, CREATING the layout/colSpan slot when
+ *  absent — checking the node TYPE, not whether a `layout` key already exists, so a field
+ *  that was never given a layout (e.g. a fresh select) still receives its first span.
+ *  No-op (same root) for an unknown uid or a layout-less node. */
+export function setColSpan(root: TreeNode, uid: string, key: ColSpanKey, span: number): TreeNode {
+  const found = findNode(root, uid);
+  if (!found || NO_LAYOUT_TYPES.has(found.node.type)) return root;
+  const layout = (found.node as { layout?: { colSpan?: Record<string, number> } }).layout ?? {};
+  const colSpan = { ...(layout.colSpan ?? {}), [key]: span };
+  const patch = { layout: { ...layout, colSpan } };
+  return patchNode(root, uid, patch);
+}
+
 /** Deep-copy a subtree for paste/duplicate: every node gets a fresh uid and
  *  every NAMED descendant gets a name unique against `taken` (and against the
  *  other names generated during this same clone). */

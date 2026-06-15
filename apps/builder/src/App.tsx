@@ -36,6 +36,7 @@ import {
   insertAfter,
   patchNode,
   remove,
+  setColSpan,
   type TreeNode,
 } from "./engine/tree";
 import { describeNode, metaGuard, newField } from "./field-registry";
@@ -251,6 +252,14 @@ export function App() {
       setSelection((s) => (additive ? toggle(s, uid) : select(emptySelection, uid))),
     // A press on empty canvas selects the Form root, surfacing its settings.
     clearSelection: () => setSelection(select(emptySelection, tree.uid)),
+    // Direct-manipulation grid resize: write the active breakpoint's colSpan. Every
+    // step of one drag shares a `gesture` tag so it collapses to a single undo step.
+    resizeColSpan: (uid, key, span, gesture) =>
+      history.set(
+        (prev) => setColSpan(prev, uid, key, span),
+        "Resize column",
+        `resize:${uid}:${gesture}`,
+      ),
   };
 
   async function onSave() {

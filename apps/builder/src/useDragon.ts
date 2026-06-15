@@ -104,11 +104,14 @@ export function useDragon(opts: UseDragonOptions): Dragon {
       const node = uid ? findNode(tree, uid) : null;
       if (uid && shell && node) {
         const droppable = describeNode(node.node.type).behavior.droppable;
-        const parentType = findParent(tree, uid)?.parent.node.type ?? "form";
-        axis = axisOf(parentType);
+        const parent = findParent(tree, uid);
+        axis = axisOf(parent?.parent.node.type ?? "form");
         intent = dropIntent(
           { uid, rect: toRect(shell.getBoundingClientRect()), axis, droppable },
           { x: e.clientX, y: e.clientY },
+          // The root has no siblings, so before/after are meaningless: edge 0 makes the
+          // whole form card read as INNER (append into the form) at any pointer position.
+          parent ? undefined : 0,
         );
         valid = canDrop(tree, p.source, intent);
       }

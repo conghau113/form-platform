@@ -1,15 +1,39 @@
 import { CopyOutlined, DeleteOutlined, HolderOutlined } from "@ant-design/icons";
 import { FormRenderer } from "@org/form-renderer-web";
-import { childrenOf, type FieldNode } from "@org/form-schema";
+import { childrenOf, type FieldNode, isLayoutContainer } from "@org/form-schema";
 import type { ThemeConfig } from "antd";
-import { Component, createContext, type ReactNode, useCallback, useContext, useMemo } from "react";
+import {
+  Component,
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { TreeNode } from "./engine/tree";
 import { describeNode } from "./field-registry";
+import type { ColKey } from "./PropertyPanel/types";
 import type { DragState } from "./useDragon";
 import { useHover } from "./workbench/hover";
 
 const BLUE = "#1677ff";
 const RED = "#ff4d4f";
+
+/** antd's responsive Col keys off the WINDOW width (media queries), not the canvas
+ *  device simulator, so the breakpoint a drag actually changes is the one matching
+ *  the browser. xl/xxl fold to `lg` (the largest key the contract carries). */
+function activeColKey(width: number): ColKey {
+  if (width >= 992) return "lg";
+  if (width >= 768) return "md";
+  if (width >= 576) return "sm";
+  return "xs";
+}
+
+/** Grid divisions across one antd Row. */
+const GRID_COLS = 24;
 
 /* ----------------------------------------------------------------------------
  * DesignCanvas — the WYSIWYG editor surface. It renders the real `FormRenderer`
@@ -32,6 +56,10 @@ export interface DesignerValue {
   select: (uid: string, additive?: boolean) => void;
   /** A press on empty canvas: the host decides (App selects the Form root). */
   clearSelection: () => void;
+  /** Drag-resize a leaf's responsive width: write `layout.colSpan[key]` (1..24)
+   *  for the active breakpoint. `gesture` ties one continuous drag to a single
+   *  undo step (see `useHistory`'s coalesce). */
+  resizeColSpan: (uid: string, key: ColKey, span: number, gesture: string) => void;
 }
 
 const DesignerContext = createContext<DesignerValue | null>(null);
@@ -91,6 +119,54 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
     d.beginMove(dragSet, e, uid);
   };
 
+  // Grid resize (D8): only leaf fields honor `layout.colSpan` (containers/arrays
+  // render their own span), and only when antd actually wrapped this node in a Col
+  // (a Space/table cell renders it bare — nothing to resize there).
+  const shellRef = useRef<HTMLDivElement>(null);
+  const resizable = !isLayoutContainer(node) && node.type !== "array";
+  const [inCol, setInCol] = useState(false);
+  // No dep array: re-check the DOM parent every render (cheap; the parent can change
+  // as the node moves between a grid Col and a bare Space/table cell).
+  useLayoutEffect(() => {
+    setInCol(shellRef.current?.parentElement?.classList.contains("ant-col") ?? false);
+  });
+  const [resize, setResize] = useState<{ span: number; key: ColKey } | null>(null);
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Select the node so its handle stays visible for the whole drag (hover alone can
+    // shift to a neighbour as the pointer nears the column edge).
+    if (!selected) d.select(uid);
+    const col = shellRef.current?.parentElement;
+    const row = col?.closest(".ant-row");
+    if (!col || !row) return;
+    const unit = row.getBoundingClientRect().width / GRID_COLS;
+    if (unit <= 0) return;
+    const startWidth = col.getBoundingClientRect().width;
+    const startX = e.clientX;
+    const key = activeColKey(window.innerWidth);
+    const gesture = String(Date.now());
+    const spanAt = (w: number) => Math.min(GRID_COLS, Math.max(1, Math.round(w / unit)));
+    let last = spanAt(startWidth);
+    setResize({ span: last, key });
+    const onMove = (ev: PointerEvent) => {
+      const span = spanAt(startWidth + (ev.clientX - startX));
+      setResize({ span, key });
+      if (span !== last) {
+        last = span;
+        d.resizeColSpan(uid, key, span, gesture);
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setResize(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  const showHandle = resizable && inCol && (selected || isHovered || !!resize);
+
   const outline = selected
     ? `2px solid ${BLUE}`
     : isHovered
@@ -101,6 +177,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
 
   return (
     <div
+      ref={shellRef}
       data-designer-node-id={uid}
       onPointerDown={startMove}
       onPointerOver={(e) => {
@@ -179,6 +256,62 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
         <InsertionLine side={dropHere.intent.kind} axis={dropHere.axis} valid={dropHere.valid} />
       )}
 
+      {showHandle && (
+        // A wide grab zone centred on the column boundary, reaching ~14px INWARD so it
+        // also covers a widget's right-side affordance (a Select/TreeSelect/Cascader
+        // dropdown arrow, a DatePicker icon) — otherwise users aiming at that arrow miss
+        // the handle and start a node-move drag instead. High z-index keeps it above the
+        // (pointer-inert) control. A slim blue bar marks the boundary.
+        <div
+          title="Drag to resize column"
+          onPointerDown={startResize}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            right: -10,
+            width: 24,
+            cursor: "col-resize",
+            zIndex: 10,
+            touchAction: "none",
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              width: 4,
+              alignSelf: "stretch",
+              background: BLUE,
+              opacity: resize ? 0.95 : 0.55,
+              borderRadius: 2,
+            }}
+          />
+        </div>
+      )}
+
+      {resize && (
+        <span
+          style={{
+            position: "absolute",
+            top: "50%",
+            right: 10,
+            transform: "translateY(-50%)",
+            background: BLUE,
+            color: "#fff",
+            fontSize: 11,
+            lineHeight: "16px",
+            padding: "0 6px",
+            borderRadius: 2,
+            pointerEvents: "none",
+            zIndex: 6,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {resize.span} / {GRID_COLS} · {resize.key}
+        </span>
+      )}
+
       {children}
 
       {empty && (
@@ -236,11 +369,24 @@ function ToolbarButton({
 }
 
 /** Catches a transiently-invalid model (e.g. a name cleared mid-edit) so the canvas
- *  shows a message instead of crashing; remounts (via `key`) once the model is valid. */
-class CanvasBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null as Error | null };
+ *  shows a message instead of crashing. A fresh edit (new `json`) clears the error via
+ *  derived state — NOT a remount: remounting the whole form on every edit dropped input
+ *  focus and aborted in-flight gestures (notably the D8 column drag-resize, which commits
+ *  many times per drag). */
+class CanvasBoundary extends Component<
+  { json: string; children: ReactNode },
+  { error: Error | null; seenJson: string }
+> {
+  state = { error: null as Error | null, seenJson: this.props.json };
   static getDerivedStateFromError(error: Error) {
     return { error };
+  }
+  static getDerivedStateFromProps(
+    props: { json: string },
+    state: { error: Error | null; seenJson: string },
+  ) {
+    if (props.json !== state.seenJson) return { error: null, seenJson: props.json };
+    return null;
   }
   render() {
     if (this.state.error) {
@@ -288,6 +434,8 @@ export function DesignCanvas({
   const { setHovered } = useHover();
   const uidByPath = useMemo(() => buildPathIndex(tree), [tree]);
   const isEmpty = tree.children.length === 0;
+  // The form card lights up when a drag targets the root itself (append into form).
+  const rootDrop = d.drag?.intent?.uid === tree.uid ? d.drag : null;
 
   const wrapper = useCallback(
     (rendered: ReactNode, ctx: { node: FieldNode; path: number[] }) => {
@@ -306,7 +454,7 @@ export function DesignCanvas({
   // flow through context) re-render the NodeShells without rebuilding the form tree.
   const formEl = useMemo(
     () => (
-      <CanvasBoundary key={json}>
+      <CanvasBoundary json={json}>
         <FormRenderer
           schema={schema}
           theme={theme}
@@ -334,6 +482,12 @@ export function DesignCanvas({
         onPointerLeave={() => setHovered(null)}
       >
         <div
+          // The form card carries the ROOT uid so the form itself is always a drop
+          // target: hovering an empty card (or the gap below the last field) resolves
+          // here, while `closest` still prefers a nested child shell when over one.
+          // Without this an emptied form has no `[data-designer-node-id]` to hit-test,
+          // so nothing could be dropped back in.
+          data-designer-node-id={tree.uid}
           style={{
             maxWidth,
             margin: "0 auto",
@@ -341,6 +495,8 @@ export function DesignCanvas({
             borderRadius: 8,
             padding: 24,
             minHeight: 200,
+            outline: rootDrop ? `2px dashed ${rootDrop.valid ? BLUE : RED}` : undefined,
+            outlineOffset: -2,
           }}
         >
           {isEmpty ? (

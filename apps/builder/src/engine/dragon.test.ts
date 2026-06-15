@@ -106,6 +106,16 @@ describe("performDrop", () => {
     expect(findParent(inner.next, "new-number1")?.parent.uid).toBe("c1");
   });
 
+  it("appends a palette field dropped INNER onto the form root (empty-form drop zone)", () => {
+    const empty = n("root", { type: "form", id: "demo", title: "Demo" }, []);
+    expect(canDrop(empty, create("text"), beside("inner", "root"))).toBe(true);
+    const res = done(
+      performDrop(empty, create("text"), beside("inner", "root"), metaGuard(), make),
+    );
+    expect(res.next.children.map((c) => c.node.type)).toEqual(["text"]);
+    expect(findParent(res.next, res.selected[0])?.parent.uid).toBe("root");
+  });
+
   it("returns null when a create is rejected by the guard", () => {
     const root = sample();
     expect(performDrop(root, create("text"), beside("inner", "t1"), metaGuard(), make)).toBeNull();

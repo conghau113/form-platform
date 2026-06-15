@@ -62,6 +62,25 @@ describe("pure history", () => {
     expect(jumpTo(h, 99)).toBe(h);
   });
 
+  it("coalesces consecutive pushes sharing a gesture tag into one step", () => {
+    let h = createHistory(0, "init");
+    h = pushHistory(h, 1, "edit"); // a normal step, untagged
+    h = pushHistory(h, 10, "resize", "g1"); // gesture opens a NEW entry
+    h = pushHistory(h, 11, "resize", "g1"); // same gesture → REPLACES in place
+    h = pushHistory(h, 12, "resize", "g1");
+    expect(present(h)).toBe(12);
+    expect(historyEntries(h).map((e) => e.value)).toEqual([0, 1, 12]);
+    // one undo unwinds the whole drag back to before it started
+    expect(present(undoHistory(h))).toBe(1);
+  });
+
+  it("a different gesture tag starts a separate step", () => {
+    let h = createHistory(0);
+    h = pushHistory(h, 1, "resize", "g1");
+    h = pushHistory(h, 2, "resize", "g2"); // new gesture → not coalesced
+    expect(historyEntries(h).map((e) => e.value)).toEqual([0, 1, 2]);
+  });
+
   it("resetHistory starts a fresh single-entry timeline", () => {
     const h = resetHistory(42, "loaded");
     expect(present(h)).toBe(42);

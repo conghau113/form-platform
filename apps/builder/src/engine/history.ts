@@ -9,6 +9,10 @@
 export interface HistoryEntry<T> {
   value: T;
   label?: string;
+  /** Groups one continuous gesture (e.g. a drag-resize) into a single undo step:
+   *  a push whose `coalesce` tag matches the current present's REPLACES it in place
+   *  instead of appending a new entry. Each gesture uses a fresh tag. */
+  coalesce?: string;
 }
 
 export interface History<T> {
@@ -39,10 +43,21 @@ export function historyEntries<T>(h: History<T>): readonly HistoryEntry<T>[] {
 
 /** Record a new present, discarding any redo entries past the cursor. A value
  *  equal to the current present is a no-op (same reference). */
-export function pushHistory<T>(h: History<T>, value: T, label?: string): History<T> {
+export function pushHistory<T>(
+  h: History<T>,
+  value: T,
+  label?: string,
+  coalesce?: string,
+): History<T> {
   if (Object.is(value, present(h))) return h;
   const kept = h.entries.slice(0, h.cursor + 1);
-  return { entries: [...kept, { value, label }], cursor: kept.length };
+  // Coalesce: when the current present carries the same gesture tag, overwrite it
+  // so a whole drag collapses to one undo step (the slice is a fresh array).
+  if (coalesce !== undefined && kept[kept.length - 1]?.coalesce === coalesce) {
+    kept[kept.length - 1] = { value, label, coalesce };
+    return { entries: kept, cursor: kept.length - 1 };
+  }
+  return { entries: [...kept, { value, label, coalesce }], cursor: kept.length };
 }
 
 /** Replace the present and drop all history (e.g. loading a fresh document). */

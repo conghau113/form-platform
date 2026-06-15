@@ -34,6 +34,7 @@ function setup(overrides: Partial<DesignerValue> = {}) {
     remove: vi.fn(),
     select: vi.fn(),
     clearSelection: vi.fn(),
+    resizeColSpan: vi.fn(),
     ...overrides,
   };
   const result = render(

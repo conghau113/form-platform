@@ -13,6 +13,7 @@ import {
   move,
   patchNode,
   remove,
+  setColSpan,
   type TreeNode,
   topMostUids,
 } from "./tree";
@@ -183,5 +184,36 @@ describe("clone", () => {
     const node = leaf("u1", "text1");
     const copy = clone(node, new Set(["text1"]));
     expect((copy.node as { name: string }).name).toBe("text2");
+  });
+});
+
+describe("setColSpan (D8 drag-resize write-path)", () => {
+  const layoutOf = (root: TreeNode, uid: string) =>
+    (findNode(root, uid)?.node as { layout?: { colSpan?: Record<string, number> } }).layout;
+
+  it("creates the layout/colSpan slot on a field that never had one", () => {
+    // A select with NO `layout` key — the case the original `\"layout\" in node` guard wrongly skipped.
+    const root = n("root", { type: "form", id: "d", title: "D" }, [
+      n("s1", { type: "select", name: "country", label: "Country" }),
+    ]);
+    const next = setColSpan(root, "s1", "lg", 6);
+    expect(layoutOf(next, "s1")).toEqual({ colSpan: { lg: 6 } });
+  });
+
+  it("merges with an existing colSpan and preserves other layout keys", () => {
+    const root = n("root", { type: "form", id: "d", title: "D" }, [
+      n("t1", { type: "text", name: "a", layout: { colSpan: { lg: 6 }, hideOnMobile: true } }),
+    ]);
+    const next = setColSpan(root, "t1", "md", 8);
+    expect(layoutOf(next, "t1")).toEqual({ colSpan: { lg: 6, md: 8 }, hideOnMobile: true });
+  });
+
+  it("is a no-op (same root) for the form root, a layout-less sub-container, or an unknown uid", () => {
+    const root = n("root", { type: "form", id: "d", title: "D" }, [
+      n("tabs", { type: "tabs" }, [n("p1", { type: "tab-pane", label: "P" }, [leaf("x")])]),
+    ]);
+    expect(setColSpan(root, "root", "lg", 6)).toBe(root); // form root has no layout
+    expect(setColSpan(root, "p1", "lg", 6)).toBe(root); // tab-pane has no layout
+    expect(setColSpan(root, "nope", "lg", 6)).toBe(root); // unknown uid
   });
 });
