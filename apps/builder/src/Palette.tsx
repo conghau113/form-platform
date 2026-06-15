@@ -25,10 +25,13 @@ import {
   UnorderedListOutlined,
   UploadOutlined,
 } from "@ant-design/icons";
-import { Card, Empty, Input, Tooltip, Typography } from "antd";
+import type { FieldNode } from "@org/form-schema";
+import { Empty, Input, Typography } from "antd";
 import { type ReactNode, useMemo, useState } from "react";
 import { useDesigner } from "./DesignCanvas";
 import { type FieldType, type PaletteEntry, paletteEntries } from "./field-registry";
+import { DraggableChip } from "./PaletteChip";
+import { PresetSection } from "./presets";
 
 /** Per-type palette glyph. A field with no entry falls back to a generic block. */
 const TYPE_ICON: Partial<Record<FieldType, ReactNode>> = {
@@ -106,52 +109,19 @@ function PaletteItem({ entry }: { entry: PaletteEntry }) {
   const { beginCreate } = useDesigner();
   const icon = ENTRY_ICON[entry.id] ?? TYPE_ICON[entry.type] ?? <AppstoreOutlined />;
   return (
-    <Tooltip
-      title={entry.hint ?? TYPE_HINT[entry.type] ?? entry.label}
-      placement="right"
-      mouseEnterDelay={0.4}
-    >
-      <Card
-        size="small"
-        hoverable
-        style={{
-          cursor: "grab",
-          userSelect: "none",
-          touchAction: "none",
-          border: "1px solid rgb(199, 199, 199)",
-        }}
-        styles={{
-          body: {
-            padding: "8px 12px",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            fontSize: 13,
-          },
-        }}
-        onPointerDown={(e) =>
-          beginCreate(entry.type, e, { patch: entry.patch, label: entry.label })
-        }
-      >
-        <span
-          style={{
-            color: "rgba(0,0,0,0.45)",
-            fontSize: 20,
-            display: "inline-flex",
-          }}
-        >
-          {icon}
-        </span>
-        {entry.label}
-      </Card>
-    </Tooltip>
+    <DraggableChip
+      icon={icon}
+      label={entry.label}
+      hint={entry.hint ?? TYPE_HINT[entry.type] ?? entry.label}
+      onPointerDown={(e) => beginCreate(entry.type, e, { patch: entry.patch, label: entry.label })}
+    />
   );
 }
 
 /** Left column: draggable chips, one per authorable field type (types with palette
  *  variants expand to several chips), grouped by category and filtered by a free-text
  *  search over the label. */
-export function Palette() {
+export function Palette({ selectedField }: { selectedField: FieldNode | null }) {
   const [query, setQuery] = useState("");
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -182,6 +152,7 @@ export function Palette() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+      <PresetSection query={query} selectedField={selectedField} />
       {groups.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No components" />
       ) : (

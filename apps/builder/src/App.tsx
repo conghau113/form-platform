@@ -445,6 +445,7 @@ export function App() {
                   tokens={tokens}
                   onChangeTokens={setTokens}
                   onExportTheme={onExportTheme}
+                  selectedField={selected?.field ?? null}
                 />
               </aside>
 

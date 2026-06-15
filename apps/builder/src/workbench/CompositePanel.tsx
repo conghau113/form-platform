@@ -4,6 +4,7 @@ import {
   BgColorsOutlined,
   HistoryOutlined,
 } from "@ant-design/icons";
+import type { FieldNode } from "@org/form-schema";
 import type { DesignTokens } from "@org/form-theme";
 import { Tabs } from "antd";
 import type { TreeNode } from "../engine/tree";
@@ -31,6 +32,7 @@ export function CompositePanel({
   tokens,
   onChangeTokens,
   onExportTheme,
+  selectedField,
 }: {
   tree: TreeNode;
   history: {
@@ -41,6 +43,8 @@ export function CompositePanel({
   tokens: DesignTokens;
   onChangeTokens: (tokens: DesignTokens) => void;
   onExportTheme: () => void;
+  /** The selected field (for "save current field as preset"); null when none/root. */
+  selectedField: FieldNode | null;
 }) {
   const [tab, setTab] = usePersistentState<CompositeTab>(
     "compositeTab",
@@ -58,7 +62,7 @@ export function CompositePanel({
         {
           key: "components",
           label: <AppstoreOutlined title="Components" />,
-          children: <Palette />,
+          children: <Palette selectedField={selectedField} />,
         },
         {
           key: "outline",
