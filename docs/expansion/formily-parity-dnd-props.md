@@ -11,6 +11,42 @@
 
 ---
 
+## Status at a glance (updated 2026‑06‑15)
+
+Branch `refactor/modularize-fe-be`. Done chain so far: **X1 → D8 → X2+X3 → D1 → D5 → X4 →
+X5 → X8**. All additive — no `formVersion` bump on any phase. Each row links to the commit
+that landed it; the §3 lists below carry the same ✅ markers.
+
+| Phase | What | Status | Commit |
+| --- | --- | --- | --- |
+| X1 | Setter vocabulary (segmented + slider) | ✅ Done | `b49e984` |
+| X2 | Input family rich props | ✅ Done | `6188134` |
+| X3 | Choice family props | ✅ Done | `6188134` |
+| X4 | Date/time props | ✅ Done | `5a8d176` |
+| X5 | Widgets (switch/slider/rate) | ✅ Done¹ | `f74e99a` |
+| X6 | Upload (multiple/directory/Dragger) | ⬜ Todo | — |
+| X7 | Cross‑cutting size/variant/extra | ⬜ Todo | — |
+| X8 | Validator formats | ✅ Done | `06ca6c6` |
+| D1 | Copy‑on‑drag (Alt → clone) | ✅ Done | `6b7054f` |
+| D2 | Cursor states + drag handle | ⬜ Todo | — |
+| D3 | Auto‑scroll on edge | ⬜ Todo | — |
+| D4 | Spring‑loaded containers | ⬜ Todo | — |
+| D5 | Real drag ghost | ✅ Done | `5a8d176` |
+| D6 | Keyboard reorder | ⬜ Todo | — |
+| D7 | Marquee multi‑select | ⬜ Todo | — |
+| D8 | Grid column drag‑resize → `colSpan` | ✅ Done | `afe4847` |
+
+**Deferred sub‑items (need new groundwork, not part of any open phase yet):**
+- ¹ Slider `marks` + tooltip formatter — need a new **key/value setter**; `SettingControl`
+  is currently `text|number|checkbox|options|select|segmented|slider` only.
+- Date `minDate`/`maxDate` bounds (from X4) — need a date‑library parse the web renderer
+  does not yet carry (dayjs is only transitive via antd).
+
+**Suggested next:** X6 or X7 (finish the X‑track), or add the key/value setter to unlock
+slider `marks`. D‑track next cheap win is D2.
+
+---
+
 ## 0. How this maps to Formily/Designable
 
 | Their concept | Ours today | File |
@@ -136,30 +172,32 @@ independent** and can interleave. Each phase = plan → schema (if any, additive
 renderer (additive) → builder setter → form‑core (validators) → tests → changeset.
 
 ### Track X — Component props depth
-- **X1 — Setter vocabulary.** Grow `SettingControl` + descriptor renderers
+- ✅ **X1 — Setter vocabulary.** Grow `SettingControl` + descriptor renderers
   (segmented/slider/color/multiSelect/textarea/keyValue/json). No schema change.
-  *Unlocks everything below.*
-- **X2 — Input family.** text/textarea/password/number rich props (§2b rows 1–3) +
+  *Unlocks everything below.* (Shipped `segmented` + `slider`; the rest still open.)
+- ✅ **X2 — Input family.** text/textarea/password/number rich props (§2b rows 1–3) +
   `formatter/parser` as **named presets** (e.g. `"thousands"`, `"currency:USD"`), never
   functions in JSON. Schema additive; renderer maps preset→antd fn.
-- **X3 — Choice family.** radio `optionType`/`buttonStyle`, select display props,
+- ✅ **X3 — Choice family.** radio `optionType`/`buttonStyle`, select display props,
   checkbox‑group `direction`.
-- **X4 — Date/time.** `format`, `showTime`, date bounds, `allowClear`, time granularity.
-- **X5 — Widgets.** switch labels, slider `marks`/`range`/`vertical`, rate `character`.
-- **X6 — Upload.** `multiple`/`directory`/Dragger variant.
-- **X7 — Cross‑cutting** `size`/`variant`/`extra` on `commonFields`.
-- **X8 — Validator formats** (§2d).
+- ✅ **X4 — Date/time.** `format`, `showTime`, `allowClear`, time granularity. (`minDate`/
+  `maxDate` bounds deferred — see Status.)
+- ✅ **X5 — Widgets.** switch labels, slider `range`/`vertical`/`dots`, rate `character`.
+  (Slider `marks` + tooltip formatter deferred — need a key/value setter.)
+- ⬜ **X6 — Upload.** `multiple`/`directory`/Dragger variant.
+- ⬜ **X7 — Cross‑cutting** `size`/`variant`/`extra` on `commonFields`.
+- ✅ **X8 — Validator formats** (§2d).
 
 ### Track D — Designer (drag‑drop) depth
-- **D1 — Copy‑on‑drag** (Alt → clone). Tiny change in `useDragon`/`performDrop`
+- ✅ **D1 — Copy‑on‑drag** (Alt → clone). Tiny change in `useDragon`/`performDrop`
   (reuse the clipboard clone path).
-- **D2 — Cursor states + drag handle.**
-- **D3 — Auto‑scroll on edge.**
-- **D4 — Spring‑loaded containers.**
-- **D5 — Real drag ghost.**
-- **D6 — Keyboard reorder** (canvas + outline).
-- **D7 — Marquee select.**
-- **D8 — Grid column drag‑resize → `layout.colSpan`.** The flagship: a resize handler in
+- ⬜ **D2 — Cursor states + drag handle.**
+- ⬜ **D3 — Auto‑scroll on edge.**
+- ⬜ **D4 — Spring‑loaded containers.**
+- ✅ **D5 — Real drag ghost.**
+- ⬜ **D6 — Keyboard reorder** (canvas + outline).
+- ⬜ **D7 — Marquee select.**
+- ✅ **D8 — Grid column drag‑resize → `layout.colSpan`.** The flagship: a resize handler in
   the grid NodeShell that writes the active breakpoint's span. Ties D‑track to X‑track
   (direct manipulation of an existing prop).
 
