@@ -8,12 +8,13 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import type { TreeNode } from "./engine/tree";
+import { type TreeNode, topMostUids } from "./engine/tree";
 import { describeNode } from "./field-registry";
 import type { ColKey } from "./PropertyPanel/types";
 import type { DragState } from "./useDragon";
@@ -34,6 +35,79 @@ function activeColKey(width: number): ColKey {
 
 /** Grid divisions across one antd Row. */
 const GRID_COLS = 24;
+
+/** Auto-scroll (D3): how close (px) to a scroll-container edge the pointer must get before
+ *  the canvas starts scrolling, and the max px/frame at the very edge. */
+const EDGE_BAND = 56;
+const EDGE_MAX_SPEED = 20;
+
+/** Pure edge-scroll math: given the pointer and the scroll viewport rect, return the
+ *  per-frame scroll delta. Speed ramps linearly from 0 at the band's inner edge to
+ *  `max` at the viewport edge (and clamps beyond). Exported for unit testing without a
+ *  layout engine or rAF. */
+export function edgeScroll(
+  point: { x: number; y: number },
+  rect: { top: number; bottom: number; left: number; right: number },
+  band = EDGE_BAND,
+  max = EDGE_MAX_SPEED,
+): { dx: number; dy: number } {
+  const ramp = (over: number) => Math.min(max, (Math.min(over, band) / band) * max);
+  let dy = 0;
+  if (point.y < rect.top + band) dy = -ramp(rect.top + band - point.y);
+  else if (point.y > rect.bottom - band) dy = ramp(point.y - (rect.bottom - band));
+  let dx = 0;
+  if (point.x < rect.left + band) dx = -ramp(rect.left + band - point.x);
+  else if (point.x > rect.right - band) dx = ramp(point.x - (rect.right - band));
+  return { dx, dy };
+}
+
+/** Spring-load (D4): how long (ms) the pointer must dwell over a closed tab/collapse
+ *  header mid-drag before it auto-opens. */
+const SPRING_DWELL_MS = 500;
+
+/** Given the element under the pointer, return the CLOSED tab/collapse header that should
+ *  spring open on dwell, or null. A tab is springable when it isn't the active tab; a
+ *  collapse header when its panel isn't currently expanded. (Both render force-rendered
+ *  but hidden children, so opening them turns the children into reachable drop targets.)
+ *  Exported for unit testing without a real drag. */
+export function springLoadTarget(el: Element | null): HTMLElement | null {
+  if (!el) return null;
+  const tab = el.closest(".ant-tabs-tab");
+  if (tab && !tab.classList.contains("ant-tabs-tab-active")) return tab as HTMLElement;
+  const header = el.closest(".ant-collapse-header");
+  const item = header?.closest(".ant-collapse-item");
+  if (header && item && !item.classList.contains("ant-collapse-item-active")) {
+    return header as HTMLElement;
+  }
+  return null;
+}
+
+/** A viewport-space rectangle (client coords). */
+export interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Normalize two corner points into a {@link Box} (marquee, D7). Exported for testing. */
+export function normalizeBox(a: { x: number; y: number }, b: { x: number; y: number }): Box {
+  return {
+    left: Math.min(a.x, b.x),
+    top: Math.min(a.y, b.y),
+    right: Math.max(a.x, b.x),
+    bottom: Math.max(a.y, b.y),
+  };
+}
+
+/** Axis-aligned rectangle overlap test (marquee hit, D7). Exported for testing. */
+export function boxesIntersect(a: Box, b: Box): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+/** Pixels the marquee pointer must travel before a press becomes a rubber-band (vs. a
+ *  plain click that clears the selection). */
+const MARQUEE_THRESHOLD = 4;
 
 /* ----------------------------------------------------------------------------
  * DesignCanvas — the WYSIWYG editor surface. It renders the real `FormRenderer`
@@ -56,6 +130,8 @@ export interface DesignerValue {
   select: (uid: string, additive?: boolean) => void;
   /** A press on empty canvas: the host decides (App selects the Form root). */
   clearSelection: () => void;
+  /** Replace the selection with exactly these uids (D7 marquee). Empty → clears. */
+  setSelected: (uids: string[]) => void;
   /** Drag-resize a leaf's responsive width: write `layout.colSpan[key]` (1..24)
    *  for the active breakpoint. `gesture` ties one continuous drag to a single
    *  undo step (see `useHistory`'s coalesce). */
@@ -175,6 +251,16 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
         ? `2px dashed ${dropHere.valid ? BLUE : RED}`
         : undefined;
 
+  // D2 cursor states: a draggable node hints `grab` on hover/selection; during an active
+  // drag the global body cursor (set in DesignCanvas) shows grabbing/no-drop, so the shell
+  // bows out (undefined) to let it through. A pending column resize keeps `col-resize`.
+  const shellCursor =
+    resize || d.drag
+      ? undefined
+      : meta.behavior.draggable && (isHovered || selected)
+        ? "grab"
+        : undefined;
+
   return (
     <div
       ref={shellRef}
@@ -190,27 +276,39 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
         outlineOffset: 1,
         borderRadius: 2,
         minHeight: empty ? 48 : undefined,
+        cursor: shellCursor,
       }}
     >
       {isHovered && (
+        // The hover name tag doubles as an explicit drag handle (D2): a grip icon +
+        // `grab` cursor make draggability discoverable without selecting first. Pressing
+        // it starts the same move as pressing the body. Non-draggable nodes keep a plain,
+        // inert label.
         <span
           className="designer-aux"
+          title={meta.behavior.draggable ? "Drag to move" : undefined}
+          onPointerDown={meta.behavior.draggable ? startMove : undefined}
           style={{
             position: "absolute",
             top: 0,
             left: 0,
             transform: "translateY(-100%)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
             background: BLUE,
             color: "#fff",
             fontSize: 11,
             lineHeight: "16px",
             padding: "0 6px",
             borderRadius: "2px 2px 0 0",
-            pointerEvents: "none",
+            cursor: meta.behavior.draggable ? "grab" : "default",
+            pointerEvents: meta.behavior.draggable ? "auto" : "none",
             zIndex: 4,
             whiteSpace: "nowrap",
           }}
         >
+          {meta.behavior.draggable && <HolderOutlined />}
           {nodeLabel(node)}
         </span>
       )}
@@ -452,6 +550,58 @@ export function DesignCanvas({
 }) {
   const d = useDesigner();
   const { setHovered } = useHover();
+  // D2: while a drag is in flight, show a global grabbing / no-drop cursor across the
+  // whole canvas (including the gaps between shells), then restore on drop/abort.
+  useEffect(() => {
+    document.body.style.cursor = d.drag ? (d.drag.valid ? "grabbing" : "no-drop") : "";
+    return () => {
+      document.body.style.cursor = "";
+    };
+  }, [d.drag]);
+
+  // D3 auto-scroll: a single rAF loop runs for the lifetime of one drag, reading the
+  // latest pointer through a ref (so the per-move re-renders don't restart the loop) and
+  // scrolling the viewport when the pointer enters the edge band — lets you drag into a
+  // node that's currently scrolled off-screen.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pointRef = useRef<{ x: number; y: number } | null>(null);
+  pointRef.current = d.drag?.point ?? null;
+  // D4 spring-load: the header the pointer is currently dwelling over, with the timestamp
+  // the dwell began — reset when the pointer leaves it.
+  const springRef = useRef<{ el: HTMLElement; since: number } | null>(null);
+  const dragging = !!d.drag;
+  useEffect(() => {
+    if (!dragging) {
+      springRef.current = null;
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      const el = scrollRef.current;
+      const p = pointRef.current;
+      if (el && p) {
+        const { dx, dy } = edgeScroll(p, el.getBoundingClientRect());
+        if (dx) el.scrollLeft += dx;
+        if (dy) el.scrollTop += dy;
+        // D4: dwell over a closed tab/collapse header → click it open so its hidden
+        // children become drop targets. Tabs/collapse are uncontrolled, so a synthetic
+        // click is enough — no renderer change needed.
+        const target = springLoadTarget(document.elementFromPoint(p.x, p.y));
+        if (!target) {
+          springRef.current = null;
+        } else if (springRef.current?.el !== target) {
+          springRef.current = { el: target, since: performance.now() };
+        } else if (performance.now() - springRef.current.since > SPRING_DWELL_MS) {
+          target.click();
+          springRef.current = null;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [dragging]);
+
   const uidByPath = useMemo(() => buildPathIndex(tree), [tree]);
   const isEmpty = tree.children.length === 0;
   // The form card lights up when a drag targets the root itself (append into form).
@@ -487,9 +637,53 @@ export function DesignCanvas({
     [schema, json, theme, wrapper],
   );
 
+  // D7 marquee select: a rubber-band drag from empty canvas selects every node shell it
+  // intersects. A press that never crosses the threshold falls back to the old behavior
+  // (clear → select the Form root). Node shells stopPropagation their own pointerdown, so
+  // this only ever starts on empty space.
+  const [marquee, setMarquee] = useState<Box | null>(null);
+  const collectHits = useCallback(
+    (box: Box): string[] => {
+      const host = scrollRef.current;
+      if (!host) return [];
+      const uids: string[] = [];
+      for (const el of host.querySelectorAll("[data-designer-node-id]")) {
+        const uid = el.getAttribute("data-designer-node-id");
+        // Skip the root card itself — marquee selects fields, not the whole form.
+        if (!uid || uid === tree.uid) continue;
+        if (boxesIntersect(box, el.getBoundingClientRect())) uids.push(uid);
+      }
+      // Collapse parent+descendant hits to the top-most nodes (like a multi-drag/copy).
+      return topMostUids(tree, uids);
+    },
+    [tree],
+  );
+  const startMarquee = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < MARQUEE_THRESHOLD) {
+        return;
+      }
+      moved = true;
+      setMarquee(normalizeBox(start, { x: ev.clientX, y: ev.clientY }));
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (!moved) d.clearSelection();
+      else d.setSelected(collectHits(normalizeBox(start, { x: ev.clientX, y: ev.clientY })));
+      setMarquee(null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   return (
     <>
       <div
+        ref={scrollRef}
         style={{
           flex: 1,
           overflow: "auto",
@@ -497,8 +691,8 @@ export function DesignCanvas({
           background: "#f5f5f5",
           position: "relative",
         }}
-        // A press on empty canvas (shells stop propagation) selects the Form root.
-        onPointerDown={() => d.clearSelection()}
+        // A press on empty canvas starts a marquee; a no-move press clears the selection.
+        onPointerDown={startMarquee}
         onPointerLeave={() => setHovered(null)}
       >
         <div
@@ -586,6 +780,24 @@ export function DesignCanvas({
             {d.drag.copy ? `+ ${d.drag.label} (copy)` : d.drag.label}
           </div>
         ))}
+
+      {marquee && (
+        // D7 rubber-band overlay (viewport-space, so it uses client coords directly).
+        <div
+          data-testid="marquee"
+          style={{
+            position: "fixed",
+            left: marquee.left,
+            top: marquee.top,
+            width: marquee.right - marquee.left,
+            height: marquee.bottom - marquee.top,
+            border: `1px solid ${BLUE}`,
+            background: "rgba(22,119,255,0.08)",
+            pointerEvents: "none",
+            zIndex: 999,
+          }}
+        />
+      )}
     </>
   );
 }

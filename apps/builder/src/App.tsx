@@ -34,6 +34,7 @@ import {
   type FormProps,
   findNode,
   insertAfter,
+  keyboardMove,
   patchNode,
   remove,
   setColSpan,
@@ -180,6 +181,22 @@ export function App() {
             ? pasteAfter(tree, anchor, clipboard, metaGuard())
             : pasteInto(tree, tree.uid, clipboard, metaGuard());
         if (next !== tree) history.set(next, "Paste");
+      } else if (
+        // D6 keyboard reorder: ↑/↓ swap with a sibling, Tab/Shift-Tab indent/outdent.
+        // Acts on a single selected non-root node; the global listener covers both the
+        // canvas and the outline tree (it fires unless focus is in a real input).
+        (key === "arrowup" || key === "arrowdown" || key === "tab") &&
+        selection.selected.length === 1 &&
+        selection.selected[0] !== tree.uid
+      ) {
+        e.preventDefault();
+        const uid = selection.selected[0];
+        const dir =
+          key === "arrowup" ? "up" : key === "arrowdown" ? "down" : e.shiftKey ? "out" : "in";
+        const next = keyboardMove(tree, uid, dir, metaGuard());
+        // The moved node keeps its uid, so the selection stays valid; only commit when
+        // the move actually changed the tree (skips the no-op edges).
+        if (next !== tree) history.set(next, "Move");
       } else if (key === "delete" || key === "backspace") {
         if (selection.selected.length === 0) return;
         e.preventDefault();
@@ -252,6 +269,11 @@ export function App() {
       setSelection((s) => (additive ? toggle(s, uid) : select(emptySelection, uid))),
     // A press on empty canvas selects the Form root, surfacing its settings.
     clearSelection: () => setSelection(select(emptySelection, tree.uid)),
+    // D7 marquee: replace the selection with the rubber-band's hits (empty → root).
+    setSelected: (uids) =>
+      setSelection(
+        uids.length ? selectMany(emptySelection, uids) : select(emptySelection, tree.uid),
+      ),
     // Direct-manipulation grid resize: write the active breakpoint's colSpan. Every
     // step of one drag shares a `gesture` tag so it collapses to a single undo step.
     resizeColSpan: (uid, key, span, gesture) =>

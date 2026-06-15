@@ -10,6 +10,7 @@ import {
   type InsertGuard,
   insertAfter,
   insertBefore,
+  keyboardMove,
   move,
   patchNode,
   remove,
@@ -140,6 +141,32 @@ describe("tree ops", () => {
     const root = sample();
     const next = move(root, "d", { kind: "before", uid: "a" });
     expect(next.children.map((c) => c.uid)).toEqual(["d", "a", "c1"]);
+  });
+
+  it("keyboard-reorders (D6): up/down swap siblings, in/out re-parent", () => {
+    const root = sample(); // top level: [a, c1, d]
+    // ↑ on c1 → swaps before a.
+    expect(keyboardMove(root, "c1", "up").children.map((c) => c.uid)).toEqual(["c1", "a", "d"]);
+    // ↓ on a → swaps after c1.
+    expect(keyboardMove(root, "a", "down").children.map((c) => c.uid)).toEqual(["c1", "a", "d"]);
+    // Tab (in) on d → indents into the previous sibling c1 (a droppable card).
+    const indented = keyboardMove(root, "d", "in");
+    expect(findParent(indented, "d")?.parent.uid).toBe("c1");
+    expect(indented.children.map((c) => c.uid)).toEqual(["a", "c1"]);
+    // Shift-Tab (out) on b → outdents to just after its parent c1, in the root.
+    const out = keyboardMove(root, "b", "out");
+    expect(out.children.map((c) => c.uid)).toEqual(["a", "c1", "b", "d"]);
+  });
+
+  it("keyboard-reorder no-ops return the SAME root and honor the guard", () => {
+    const root = sample();
+    expect(keyboardMove(root, "a", "up")).toBe(root); // already first
+    expect(keyboardMove(root, "d", "down")).toBe(root); // already last
+    expect(keyboardMove(root, "a", "out")).toBe(root); // parent is the root
+    expect(keyboardMove(root, "a", "in")).toBe(root); // no previous sibling
+    expect(keyboardMove(root, "root", "down")).toBe(root); // the root never moves
+    const noCards: InsertGuard = (parent) => parent.node.type !== "card";
+    expect(keyboardMove(root, "d", "in", noCards)).toBe(root); // can't indent into a card
   });
 
   it("patches schema props shallowly, keeping structure and siblings", () => {

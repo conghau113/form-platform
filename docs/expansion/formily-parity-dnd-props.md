@@ -14,9 +14,9 @@
 ## Status at a glance (updated 2026‑06‑15)
 
 Branch `refactor/modularize-fe-be`. Done chain so far: **X1 → D8 → X2+X3 → D1 → D5 → X4 →
-X5 → X8 → X7 → X6**. The whole X‑track is now complete. All additive — no `formVersion`
-bump on any phase. Each row links to the commit that landed it; the §3 lists below carry
-the same ✅ markers.
+X5 → X8 → X7 → X6 → D2 → D3 → D6 → D7 → D4**. **Both tracks are now complete** (every X1–X8
+and D1–D8 phase ✅). All additive — no `formVersion` bump on any phase. Each row links to the
+commit that landed it; the §3 lists below carry the same ✅ markers.
 
 | Phase | What | Status | Commit |
 | --- | --- | --- | --- |
@@ -29,12 +29,12 @@ the same ✅ markers.
 | X7 | Cross‑cutting size/variant/extra | ✅ Done² | `pending` |
 | X8 | Validator formats | ✅ Done | `06ca6c6` |
 | D1 | Copy‑on‑drag (Alt → clone) | ✅ Done | `6b7054f` |
-| D2 | Cursor states + drag handle | ⬜ Todo | — |
-| D3 | Auto‑scroll on edge | ⬜ Todo | — |
-| D4 | Spring‑loaded containers | ⬜ Todo | — |
+| D2 | Cursor states + drag handle | ✅ Done | `pending` |
+| D3 | Auto‑scroll on edge | ✅ Done | `pending` |
+| D4 | Spring‑loaded containers | ✅ Done | `pending` |
 | D5 | Real drag ghost | ✅ Done | `5a8d176` |
-| D6 | Keyboard reorder | ⬜ Todo | — |
-| D7 | Marquee multi‑select | ⬜ Todo | — |
+| D6 | Keyboard reorder | ✅ Done | `pending` |
+| D7 | Marquee multi‑select | ✅ Done | `pending` |
 | D8 | Grid column drag‑resize → `colSpan` | ✅ Done | `afe4847` |
 
 **Deferred sub‑items (need new groundwork, not part of any open phase yet):**
@@ -47,9 +47,11 @@ the same ✅ markers.
 - Date `minDate`/`maxDate` bounds (from X4) — need a date‑library parse the web renderer
   does not yet carry (dayjs is only transitive via antd).
 
-**Suggested next:** the X‑track is complete. Either add the key/value setter to unlock the
-deferred slider `marks`/tooltip + date bounds, or move to the **D‑track** (next cheap win
-D2 — cursor states + drag handle; then D3 auto‑scroll, D6 keyboard reorder).
+**Suggested next:** **both tracks are complete (X1–X8, D1–D8).** Remaining work is the
+deferred sub‑items only: the key/value setter to unlock slider `marks`/tooltip + the date
+`minDate`/`maxDate` bounds. After that this doc's scope is done — pick up P+ (i18n,
+workflow, native parity) from the roadmap. NOTE: D3/D4/D7 interactions need a REAL browser
+to verify (jsdom can't); the pure helpers are unit‑tested, the gestures are not.
 
 ---
 
@@ -198,12 +200,23 @@ renderer (additive) → builder setter → form‑core (validators) → tests �
 ### Track D — Designer (drag‑drop) depth
 - ✅ **D1 — Copy‑on‑drag** (Alt → clone). Tiny change in `useDragon`/`performDrop`
   (reuse the clipboard clone path).
-- ⬜ **D2 — Cursor states + drag handle.**
-- ⬜ **D3 — Auto‑scroll on edge.**
-- ⬜ **D4 — Spring‑loaded containers.**
+- ✅ **D2 — Cursor states + drag handle.** Hover name tag is now an explicit grip handle
+  (`grab` cursor); the shell hints `grab` on hover/selection; an in‑flight drag shows a
+  global `grabbing`/`no-drop` cursor across the canvas. Builder‑only → no changeset.
+- ✅ **D3 — Auto‑scroll on edge.** A single rAF loop runs per drag (reads the latest
+  pointer via a ref) and scrolls the canvas when the pointer enters the edge band; speed
+  ramps to the edge. Pure `edgeScroll(point, rect)` math is unit‑tested. Builder‑only.
+- ✅ **D4 — Spring‑loaded containers.** Dwelling (~500ms) over a CLOSED tab / collapsed
+  panel header mid‑drag clicks it open (tabs/collapse are uncontrolled + `forceRender`, so
+  a synthetic click suffices — no renderer change). Pure `springLoadTarget(el)` is tested.
+  Builder‑only.
 - ✅ **D5 — Real drag ghost.**
-- ⬜ **D6 — Keyboard reorder** (canvas + outline).
-- ⬜ **D7 — Marquee select.**
+- ✅ **D6 — Keyboard reorder** (canvas + outline). ↑/↓ swap with a sibling, Tab/Shift‑Tab
+  indent/outdent, via a pure `keyboardMove(tree, uid, dir, guard)` over the existing `move`
+  op; wired into App's global keydown (covers canvas + outline). Builder‑only.
+- ✅ **D7 — Marquee select.** Rubber‑band drag from empty canvas selects every node shell it
+  intersects (`topMostUids` collapses parent+child hits); a no‑move press still clears.
+  Pure `normalizeBox`/`boxesIntersect` are tested. Builder‑only.
 - ✅ **D8 — Grid column drag‑resize → `layout.colSpan`.** The flagship: a resize handler in
   the grid NodeShell that writes the active breakpoint's span. Ties D‑track to X‑track
   (direct manipulation of an existing prop).

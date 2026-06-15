@@ -222,6 +222,44 @@ export function move(
   return insertAt(without, target.uid, node, target.kind === "after" ? 1 : 0);
 }
 
+/** Keyboard reorder direction (D6): up/down swap with a sibling; in/out re-parent. */
+export type NudgeDir = "up" | "down" | "in" | "out";
+
+/** Keyboard-driven move of a single node, expressed over {@link move}:
+ *  - `up`/`down`  : swap with the previous/next sibling (same parent).
+ *  - `in`         : become the last child of the previous sibling (indent) — a no-op
+ *                   when the guard rejects it (e.g. the sibling is a leaf).
+ *  - `out`        : move just after the parent, into the grandparent (outdent).
+ *  Returns the same tree (===) when the move is impossible, so callers can skip a
+ *  history entry. */
+export function keyboardMove(
+  root: TreeNode,
+  uid: string,
+  dir: NudgeDir,
+  guard?: InsertGuard,
+): TreeNode {
+  if (root.uid === uid) return root;
+  const loc = findParent(root, uid);
+  if (!loc) return root;
+  const { parent, index } = loc;
+  const sibs = parent.children;
+  if (dir === "up") {
+    return index > 0 ? move(root, uid, { kind: "before", uid: sibs[index - 1].uid }, guard) : root;
+  }
+  if (dir === "down") {
+    return index < sibs.length - 1
+      ? move(root, uid, { kind: "after", uid: sibs[index + 1].uid }, guard)
+      : root;
+  }
+  if (dir === "in") {
+    return index > 0 ? move(root, uid, { kind: "append", uid: sibs[index - 1].uid }, guard) : root;
+  }
+  // out: place after the parent in the grandparent; impossible when the parent is the root.
+  return parent.uid === root.uid
+    ? root
+    : move(root, uid, { kind: "after", uid: parent.uid }, guard);
+}
+
 /** Shallow-merge `patch` into the node's schema props (structure untouched). */
 export function patchNode(root: TreeNode, uid: string, patch: Partial<EngineProps>): TreeNode {
   if (!findNode(root, uid)) return root;
