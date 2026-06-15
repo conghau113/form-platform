@@ -12,6 +12,7 @@ import {
   Slider,
   Switch,
   TimePicker,
+  type TimePickerProps,
   Upload,
   type UploadFile,
 } from "antd";
@@ -246,6 +247,11 @@ export function FieldControl(props: {
           value={(value as DateValue) ?? null}
           disabled={disabled}
           picker={node.picker}
+          format={node.format}
+          showTime={node.showTime}
+          allowClear={node.allowClear}
+          size={node.size}
+          variant={node.variant}
           onChange={onChange}
         />
       );
@@ -256,6 +262,12 @@ export function FieldControl(props: {
           style={{ width: "100%" }}
           value={(value as TimeValue) ?? null}
           disabled={disabled}
+          format={node.format}
+          use12Hours={node.use12Hours}
+          minuteStep={node.minuteStep as TimePickerProps["minuteStep"]}
+          allowClear={node.allowClear}
+          size={node.size}
+          variant={node.variant}
           onChange={onChange}
         />
       );
@@ -269,6 +281,11 @@ export function FieldControl(props: {
           value={(value as DateRangeValue) ?? null}
           disabled={disabled}
           picker={node.picker}
+          format={node.format}
+          showTime={node.showTime}
+          allowClear={node.allowClear}
+          size={node.size}
+          variant={node.variant}
           onChange={onChange}
         />
       );
@@ -278,6 +295,12 @@ export function FieldControl(props: {
           style={{ width: "100%" }}
           value={(value as TimeRangeValue) ?? null}
           disabled={disabled}
+          format={node.format}
+          use12Hours={node.use12Hours}
+          minuteStep={node.minuteStep as TimePickerProps["minuteStep"]}
+          allowClear={node.allowClear}
+          size={node.size}
+          variant={node.variant}
           onChange={onChange}
         />
       );

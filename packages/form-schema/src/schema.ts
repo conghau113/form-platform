@@ -365,12 +365,44 @@ export const treeSelectFieldSchema = z.object({
 /** Calendar granularity variant for date pickers (antd `picker` prop). */
 export const datePickerVariantSchema = z.enum(["date", "week", "month", "quarter", "year"]);
 
+/** Shared display props for the date pickers (antd DatePicker / RangePicker). All
+ *  declarative: `format` is a dayjs token STRING passed straight to antd, never code. */
+const datePickerProps = {
+  /** Display/parse format token string (e.g. "YYYY-MM-DD", "DD/MM/YYYY"). */
+  format: z.string().optional(),
+  /** Also pick a time-of-day alongside the date. */
+  showTime: z.boolean().optional(),
+  /** Show a clear (×) button. */
+  allowClear: z.boolean().optional(),
+  ...sizeProp,
+  ...variantProp,
+};
+
+/** Shared display props for the time pickers (antd TimePicker / RangePicker). */
+const timePickerProps = {
+  /** Display/parse format token string (e.g. "HH:mm", "hh:mm A"). */
+  format: z.string().optional(),
+  /** 12-hour clock with an AM/PM selector. */
+  use12Hours: z.boolean().optional(),
+  /** Minute increment offered in the dropdown (e.g. 5, 15). */
+  minuteStep: z.number().int().positive().optional(),
+  /** Show a clear (×) button. */
+  allowClear: z.boolean().optional(),
+  ...sizeProp,
+  ...variantProp,
+};
+
 export const dateFieldSchema = z.object({
   type: z.literal("date"),
   ...commonFields,
   picker: datePickerVariantSchema.optional(),
+  ...datePickerProps,
 });
-export const timeFieldSchema = z.object({ type: z.literal("time"), ...commonFields });
+export const timeFieldSchema = z.object({
+  type: z.literal("time"),
+  ...commonFields,
+  ...timePickerProps,
+});
 
 /** Date interval input (antd RangePicker). The value is a `[start, end]` tuple;
  *  like `date`, the element shape is platform-specific (dayjs on web). */
@@ -378,12 +410,14 @@ export const dateRangeFieldSchema = z.object({
   type: z.literal("date-range"),
   ...commonFields,
   picker: datePickerVariantSchema.optional(),
+  ...datePickerProps,
 });
 
 /** Time interval input (antd TimePicker.RangePicker). Value is `[start, end]`. */
 export const timeRangeFieldSchema = z.object({
   type: z.literal("time-range"),
   ...commonFields,
+  ...timePickerProps,
 });
 export const checkboxFieldSchema = z.object({ type: z.literal("checkbox"), ...commonFields });
 export const switchFieldSchema = z.object({ type: z.literal("switch"), ...commonFields });

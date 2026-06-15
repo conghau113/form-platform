@@ -96,7 +96,15 @@
       "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
       "Bash(mkdir -p /tmp/pw)",
       "Bash(npm init *)",
-      "Bash(npm i *)"
+      "Bash(npm i *)",
+      "Bash(awk '/## 2b|### 2b|## 2\\\\. |Input family|2b\\\\./{p=1} p{print} /## 3|## 4/{if\\(p\\)exit}' docs/expansion/formily-parity-dnd-props.md)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/antd/package.json'\\).version\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/react/package.json'\\).version\\)\")",
+      "Bash(read f *)",
+      "Bash(powershell -Command \"Stop-Process -Id 17928 -Force -ErrorAction SilentlyContinue\")",
+      "Bash(netstat -ano)",
+      "Bash(cat .changeset/rich-input-choice-props-x2-x3-schema.md)",
+      "Bash(cat .changeset/rich-input-choice-props-x2-x3-renderer.md)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

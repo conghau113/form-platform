@@ -14,6 +14,15 @@ import { describeNode, type FieldType, fieldTypeLabel } from "./field-registry";
  * ------------------------------------------------------------------------- */
 
 const THRESHOLD = 4; // px the pointer must travel before a press becomes a drag
+const GHOST_MAX_WIDTH = 320; // cap the ghost width so a full-bleed node stays a tidy preview
+
+/** A faded clone of the dragged on-canvas node, captured once at drag start. The live
+ *  cloned DOM node (not a string) is kept so the canvas can append it without
+ *  `dangerouslySetInnerHTML`; antd styles it via document-level class CSS. */
+export interface DragGhost {
+  node: HTMLElement;
+  width: number;
+}
 
 export interface DragState {
   source: DragSource;
@@ -27,6 +36,26 @@ export interface DragState {
   label: string;
   /** Alt held → the drop clones instead of moves (drives the ghost's copy hint). */
   copy: boolean;
+  /** DOM snapshot of the dragged node (real drag ghost). Null for palette creates,
+   *  which have no on-canvas element yet → the canvas falls back to the text label. */
+  ghost: DragGhost | null;
+}
+
+/** Snapshot the dragged node's DOM as a faded-clone ghost: clone the shell, drop the
+ *  designer aux widgets (hover tag, toolbar, insertion line, resize handle) at any depth
+ *  so only the rendered field remains, and cap the width. Returns null when the element
+ *  isn't in the DOM (e.g. an outline-only drag or a non-browser test). */
+function captureGhost(uid: string | null): DragGhost | null {
+  if (!uid || typeof document === "undefined") return null;
+  const el = document.querySelector(`[data-designer-node-id="${uid}"]`);
+  if (!(el instanceof HTMLElement)) return null;
+  const width = Math.min(el.getBoundingClientRect().width || GHOST_MAX_WIDTH, GHOST_MAX_WIDTH);
+  const node = el.cloneNode(true) as HTMLElement;
+  for (const aux of node.querySelectorAll(".designer-aux")) aux.remove();
+  node.style.outline = "none";
+  node.style.margin = "0";
+  node.removeAttribute("data-designer-node-id");
+  return { node, width };
 }
 
 interface Pending {
@@ -42,6 +71,8 @@ interface Pending {
   valid: boolean;
   /** Whether Alt was held as of the last pointer event (copy-on-drag). */
   copy: boolean;
+  /** Faded clone of the dragged node, captured once at drag start. */
+  ghost: DragGhost | null;
 }
 
 /** The source as it lands: a move drag becomes a copy while Alt is held. */
@@ -136,6 +167,7 @@ export function useDragon(opts: UseDragonOptions): Dragon {
         valid,
         label: p.label,
         copy: p.copy,
+        ghost: p.ghost,
       });
     };
 
@@ -182,6 +214,7 @@ export function useDragon(opts: UseDragonOptions): Dragon {
       e: React.PointerEvent,
       additive: boolean,
       clickUid: string | null,
+      ghost: DragGhost | null,
     ) => {
       e.preventDefault();
       cleanup();
@@ -195,6 +228,7 @@ export function useDragon(opts: UseDragonOptions): Dragon {
         intent: null,
         valid: false,
         copy: false,
+        ghost,
       };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
@@ -208,16 +242,19 @@ export function useDragon(opts: UseDragonOptions): Dragon {
         const tree = ref.current.opts.getTree();
         // Drag parents once, not their already-selected children.
         const tops = topMostUids(tree, uids);
+        const click = clickUid ?? uids[0] ?? null;
         begin(
           { kind: "move", uids: tops },
           moveLabel(tree, tops),
           e,
           e.ctrlKey || e.metaKey,
-          clickUid ?? uids[0] ?? null,
+          click,
+          // Ghost the pressed node (the whole multi-selection still moves together).
+          captureGhost(click ?? tops[0] ?? null),
         );
       },
       beginCreate: (type, e) =>
-        begin({ kind: "create", fieldType: type }, fieldTypeLabel(type), e, false, null),
+        begin({ kind: "create", fieldType: type }, fieldTypeLabel(type), e, false, null, null),
     };
   }
 

@@ -98,7 +98,7 @@ function InsertionLine({
     axis === "vertical"
       ? { ...base, left: 0, right: 0, height: 3, [side === "before" ? "top" : "bottom"]: -2 }
       : { ...base, top: 0, bottom: 0, width: 3, [side === "before" ? "left" : "right"]: -2 };
-  return <div style={style} />;
+  return <div className="designer-aux" style={style} />;
 }
 
 /** The selection/hover wrapper drawn around one rendered node. */
@@ -194,6 +194,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
     >
       {isHovered && (
         <span
+          className="designer-aux"
           style={{
             position: "absolute",
             top: 0,
@@ -216,6 +217,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
 
       {selected && (
         <div
+          className="designer-aux"
           style={{
             position: "absolute",
             top: 0,
@@ -263,6 +265,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
         // the handle and start a node-move drag instead. High z-index keeps it above the
         // (pointer-inert) control. A slim blue bar marks the boundary.
         <div
+          className="designer-aux"
           title="Drag to resize column"
           onPointerDown={startResize}
           style={{
@@ -292,6 +295,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
 
       {resize && (
         <span
+          className="designer-aux"
           style={{
             position: "absolute",
             top: "50%",
@@ -316,6 +320,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
 
       {empty && (
         <div
+          className="designer-aux"
           style={{
             position: "absolute",
             inset: 4,
@@ -366,6 +371,21 @@ function ToolbarButton({
       {children}
     </button>
   );
+}
+
+/** Mounts the captured ghost clone (a live DOM node) into the floating preview without
+ *  `dangerouslySetInnerHTML`. Re-appends only when the node identity changes (once per
+ *  drag), so the per-pointer-move position updates on the parent don't re-mount it. */
+function GhostHost({ node, width }: { node: HTMLElement; width: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const host = ref.current;
+    if (!host) return;
+    host.replaceChildren(node);
+    return () => host.replaceChildren();
+  }, [node]);
+  // The clone keeps its own width; constrain the host so a wide node stays a tidy card.
+  return <div ref={ref} style={{ width, overflow: "hidden" }} />;
 }
 
 /** Catches a transiently-invalid model (e.g. a name cleared mid-edit) so the canvas
@@ -509,24 +529,63 @@ export function DesignCanvas({
         </div>
       </div>
 
-      {d.drag && (
-        <div
-          style={{
-            position: "fixed",
-            left: d.drag.point.x + 12,
-            top: d.drag.point.y + 12,
-            padding: "2px 8px",
-            background: d.drag.valid ? BLUE : "rgba(0,0,0,0.65)",
-            color: "#fff",
-            fontSize: 12,
-            borderRadius: 4,
-            pointerEvents: "none",
-            zIndex: 1000,
-          }}
-        >
-          {d.drag.copy ? `+ ${d.drag.label} (copy)` : d.drag.label}
-        </div>
-      )}
+      {d.drag &&
+        (d.drag.ghost ? (
+          // Real drag ghost (D5): a faded clone of the node, tagged with a small chip
+          // (label + copy hint), bordered by validity. Palette creates have no on-canvas
+          // node yet, so they fall back to the text label below.
+          <div
+            style={{
+              position: "fixed",
+              left: d.drag.point.x + 12,
+              top: d.drag.point.y + 12,
+              maxHeight: 220,
+              overflow: "hidden",
+              padding: 8,
+              background: "#fff",
+              border: `1px solid ${d.drag.valid ? BLUE : RED}`,
+              borderRadius: 4,
+              boxShadow: "0 6px 16px rgba(0,0,0,0.18)",
+              opacity: 0.85,
+              pointerEvents: "none",
+              zIndex: 1000,
+            }}
+          >
+            <span
+              style={{
+                display: "inline-block",
+                marginBottom: 6,
+                padding: "0 6px",
+                background: d.drag.valid ? BLUE : RED,
+                color: "#fff",
+                fontSize: 11,
+                lineHeight: "16px",
+                borderRadius: 2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {d.drag.copy ? `+ ${d.drag.label} (copy)` : d.drag.label}
+            </span>
+            <GhostHost node={d.drag.ghost.node} width={d.drag.ghost.width} />
+          </div>
+        ) : (
+          <div
+            style={{
+              position: "fixed",
+              left: d.drag.point.x + 12,
+              top: d.drag.point.y + 12,
+              padding: "2px 8px",
+              background: d.drag.valid ? BLUE : "rgba(0,0,0,0.65)",
+              color: "#fff",
+              fontSize: 12,
+              borderRadius: 4,
+              pointerEvents: "none",
+              zIndex: 1000,
+            }}
+          >
+            {d.drag.copy ? `+ ${d.drag.label} (copy)` : d.drag.label}
+          </div>
+        ))}
     </>
   );
 }

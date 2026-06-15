@@ -64,6 +64,25 @@ export const pickerSetting: SettingDescriptor = {
   ],
 };
 
+/** Display props shared by the date pickers (X4). `format` is a dayjs token string. */
+export const DATE_SETTINGS: SettingDescriptor[] = [
+  { key: "format", label: "Format", control: "text" },
+  { key: "showTime", label: "Show time", control: "checkbox" },
+  { key: "allowClear", label: "Allow clear", control: "checkbox" },
+  sizeSetting,
+  variantSetting,
+];
+
+/** Display props shared by the time pickers (X4). */
+export const TIME_SETTINGS: SettingDescriptor[] = [
+  { key: "format", label: "Format", control: "text" },
+  { key: "use12Hours", label: "12-hour clock", control: "checkbox" },
+  { key: "minuteStep", label: "Minute step", control: "number" },
+  { key: "allowClear", label: "Allow clear", control: "checkbox" },
+  sizeSetting,
+  variantSetting,
+];
+
 /** A value-bearing leaf input: draggable, not droppable. */
 export const LEAF: ComponentBehavior = {
   droppable: false,

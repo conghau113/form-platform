@@ -311,6 +311,77 @@ describe("schema field types", () => {
     expect(out.fields[6]).toMatchObject({ direction: "vertical" });
   });
 
+  it("accepts the X4 date/time picker props (additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "datetime-props",
+      title: "Date/time props",
+      fields: [
+        {
+          type: "date",
+          name: "due",
+          label: "Due",
+          picker: "date",
+          format: "DD/MM/YYYY",
+          showTime: true,
+          allowClear: true,
+          size: "large",
+          variant: "filled",
+        },
+        {
+          type: "date-range",
+          name: "stay",
+          label: "Stay",
+          format: "YYYY-MM-DD",
+          showTime: false,
+          allowClear: true,
+        },
+        {
+          type: "time",
+          name: "at",
+          label: "At",
+          format: "hh:mm A",
+          use12Hours: true,
+          minuteStep: 15,
+          allowClear: true,
+          size: "small",
+        },
+        {
+          type: "time-range",
+          name: "shift",
+          label: "Shift",
+          format: "HH:mm",
+          minuteStep: 5,
+          variant: "borderless",
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({
+      format: "DD/MM/YYYY",
+      showTime: true,
+      variant: "filled",
+    });
+    expect(out.fields[1]).toMatchObject({ format: "YYYY-MM-DD", allowClear: true });
+    expect(out.fields[2]).toMatchObject({ use12Hours: true, minuteStep: 15, size: "small" });
+    expect(out.fields[3]).toMatchObject({ format: "HH:mm", minuteStep: 5 });
+  });
+
+  it("rejects a non-positive minuteStep and a non-boolean showTime", () => {
+    const base = { formVersion: 3, id: "bad-dt", title: "Bad dt" };
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "time", name: "t", label: "T", minuteStep: 0 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "date", name: "d", label: "D", showTime: "yes" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects bad variant / size / displayFormat enums", () => {
     const base = { formVersion: 3, id: "bad-rich", title: "Bad rich" };
     const text = (extra: Record<string, unknown>) => ({
