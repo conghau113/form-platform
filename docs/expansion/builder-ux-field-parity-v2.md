@@ -29,7 +29,7 @@ not yet committed (user gates the commit).
 | I1 | Icon registry (token→component) + `prefixIcon`/`suffixIcon` | ✅ Done | `uncommitted` |
 | I2 | Icon‑picker setter wired into input family | ✅ Done | `uncommitted` |
 | P1 | Preset data model + storage (api + builder) | ✅ Done | `b01d916` |
-| P2 | Preset gallery UI (save/edit/delete, drag→canvas) | ✅ Done | `841f21c` |
+| P2 | Preset gallery UI (save/edit/delete, drag→canvas) | ✅ Done | `5437321` |
 | P3 | Built‑in preset library | ⬜ Todo | — |
 | G3 | Search within property panel + pin setters | ⬜ Todo | — |
 | U1 | Pinning (setters + presets/fields) | ⬜ Todo | — |
