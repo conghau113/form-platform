@@ -25,6 +25,8 @@ export interface DragState {
   valid: boolean;
   /** Human label for the drag ghost. */
   label: string;
+  /** Alt held → the drop clones instead of moves (drives the ghost's copy hint). */
+  copy: boolean;
 }
 
 interface Pending {
@@ -38,6 +40,13 @@ interface Pending {
   active: boolean;
   intent: DropIntent | null;
   valid: boolean;
+  /** Whether Alt was held as of the last pointer event (copy-on-drag). */
+  copy: boolean;
+}
+
+/** The source as it lands: a move drag becomes a copy while Alt is held. */
+function effectiveSource(p: Pending): DragSource {
+  return p.source.kind === "move" ? { ...p.source, copy: p.copy } : p.source;
 }
 
 export interface UseDragonOptions {
@@ -92,6 +101,8 @@ export function useDragon(opts: UseDragonOptions): Dragon {
       const dy = e.clientY - p.start.y;
       if (!p.active && Math.hypot(dx, dy) < THRESHOLD) return;
       p.active = true;
+      p.copy = e.altKey;
+      const source = effectiveSource(p);
 
       const tree = ref.current.opts.getTree();
       const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -113,21 +124,22 @@ export function useDragon(opts: UseDragonOptions): Dragon {
           // whole form card read as INNER (append into the form) at any pointer position.
           parent ? undefined : 0,
         );
-        valid = canDrop(tree, p.source, intent);
+        valid = canDrop(tree, source, intent);
       }
       p.intent = intent;
       p.valid = valid;
       setDrag({
-        source: p.source,
+        source,
         point: { x: e.clientX, y: e.clientY },
         intent,
         axis,
         valid,
         label: p.label,
+        copy: p.copy,
       });
     };
 
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
       const p = ref.current.pend;
       cleanup();
       if (!p) return;
@@ -138,9 +150,11 @@ export function useDragon(opts: UseDragonOptions): Dragon {
         }
         return;
       }
+      // The modifier as of release is authoritative for move-vs-copy.
+      p.copy = e.altKey;
       if (p.intent && p.valid) {
         const o = ref.current.opts;
-        const res = performDrop(o.getTree(), p.source, p.intent, o.guard, o.createNode);
+        const res = performDrop(o.getTree(), effectiveSource(p), p.intent, o.guard, o.createNode);
         if (res) o.commit(res.next, res.selected);
       }
     };
@@ -180,6 +194,7 @@ export function useDragon(opts: UseDragonOptions): Dragon {
         active: false,
         intent: null,
         valid: false,
+        copy: false,
       };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);

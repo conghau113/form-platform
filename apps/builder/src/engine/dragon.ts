@@ -2,6 +2,7 @@ import { canInsert, type FieldType, type NodeType } from "../field-registry";
 import type { Axis, DropIntent } from "./move-helper";
 import {
   append,
+  clone,
   collectNames,
   contains,
   findNode,
@@ -25,10 +26,12 @@ import {
  * rejected, so the canvas can detect "nothing happened" with `===`.
  * ------------------------------------------------------------------------- */
 
-/** What is being dragged: a fresh node from the palette, or existing node(s). */
+/** What is being dragged: a fresh node from the palette, or existing node(s). When
+ *  `copy` is set (Alt held), the drop CLONES the dragged subtrees instead of moving
+ *  them — the originals stay put (Designable's copy-on-drag). */
 export type DragSource =
   | { kind: "create"; fieldType: FieldType }
-  | { kind: "move"; uids: string[] };
+  | { kind: "move"; uids: string[]; copy?: boolean };
 
 /** `grid`/`space` flow horizontally; everything else stacks vertically. */
 export function axisOf(parentType: string): Axis {
@@ -60,9 +63,13 @@ export function canDrop(tree: TreeNode, source: DragSource, intent: DropIntent):
 
   return source.uids.every((uid) => {
     const node = findNode(tree, uid);
-    if (!node || node.node.type === "form") return false; // root never moves
-    if (intent.uid === uid) return false; // onto itself
-    if (contains(node, intent.uid)) return false; // into its own subtree (cycle)
+    if (!node || node.node.type === "form") return false; // root never moves/copies
+    // A copy is an independent clone, so dropping it onto/inside the original is fine
+    // (duplicate-in-place). A move onto itself or into its own subtree is a no-op/cycle.
+    if (!source.copy) {
+      if (intent.uid === uid) return false; // onto itself
+      if (contains(node, intent.uid)) return false; // into its own subtree (cycle)
+    }
     return canInsert(parentType, node.node.type);
   });
 }
@@ -98,6 +105,29 @@ export function performDrop(
     else if (intent.kind === "before") next = insertBefore(tree, intent.uid, child, guard);
     else next = insertAfter(tree, intent.uid, child, guard);
     return next === tree ? null : { next, selected: [child.uid] };
+  }
+
+  // Copy existing node(s): clone each dragged subtree (fresh uids + names unique to the
+  // destination) and INSERT it, leaving the originals in place. Same anchor handling as
+  // move so a multi-selection keeps its order.
+  if (source.copy) {
+    let next = tree;
+    const selected: string[] = [];
+    let anchor = intent.uid;
+    for (const uid of source.uids) {
+      const sub = findNode(next, uid);
+      if (!sub) continue;
+      const copy = clone(sub, collectNames(next));
+      let inserted: TreeNode;
+      if (intent.kind === "inner") inserted = append(next, intent.uid, copy, guard);
+      else if (intent.kind === "before") inserted = insertBefore(next, anchor, copy, guard);
+      else inserted = insertAfter(next, anchor, copy, guard);
+      if (inserted === next) continue; // rejected — keep the anchor for the rest
+      next = inserted;
+      selected.push(copy.uid);
+      if (intent.kind === "after") anchor = copy.uid;
+    }
+    return next === tree ? null : { next, selected };
   }
 
   // Move existing node(s). For an "after" drop the anchor advances so the moved

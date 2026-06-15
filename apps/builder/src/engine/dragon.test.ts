@@ -153,3 +153,70 @@ describe("performDrop", () => {
     ).toBeNull();
   });
 });
+
+describe("copy-on-drag (D1)", () => {
+  const copy = (uids: string[]): DragSource => ({ kind: "move", uids, copy: true });
+
+  it("allows a copy onto itself (duplicate in place) but still forbids the root", () => {
+    const root = sample();
+    expect(canDrop(root, copy(["a"]), beside("after", "a"))).toBe(true); // duplicate in place
+    expect(canDrop(root, copy(["a"]), beside("inner", "c1"))).toBe(true); // normal target too
+    expect(canDrop(root, copy(["root"]), beside("after", "a"))).toBe(false); // root still can't
+    // The move equivalent of "onto itself" is rejected — copy relaxes it.
+    expect(canDrop(root, { kind: "move", uids: ["a"] }, beside("after", "a"))).toBe(false);
+  });
+
+  it("clones a node next to itself (duplicate in place)", () => {
+    const root = sample();
+    const res = done(performDrop(root, copy(["a"]), beside("after", "a"), metaGuard(), make));
+    // The form root now starts with the original then its clone.
+    expect(res.next.children.slice(0, 2).map((c) => c.uid)).toEqual(["a", res.selected[0]]);
+    expect(res.selected[0]).not.toBe("a");
+  });
+
+  it("clones a node, leaving the original, with a fresh uid + unique name", () => {
+    const root = sample();
+    const res = done(performDrop(root, copy(["a"]), beside("inner", "c1"), metaGuard(), make));
+    // Original stays put at the form root.
+    expect(findParent(res.next, "a")?.parent.uid).toBe("root");
+    // The clone is a new node inside the card, selected, with a different uid and name.
+    const newUid = res.selected[0];
+    expect(newUid).not.toBe("a");
+    const copyNode = findNode(res.next, newUid);
+    expect(findParent(res.next, newUid)?.parent.uid).toBe("c1");
+    expect((copyNode?.node as { name?: string }).name).not.toBe("a");
+  });
+
+  it("clones a container subtree, re-keying its children too", () => {
+    const root = sample();
+    const res = done(performDrop(root, copy(["g1"]), beside("after", "a"), metaGuard(), make));
+    const original = findNode(res.next, "g1");
+    expect(original?.children.map((c) => c.uid)).toEqual(["e", "f"]); // untouched
+    const clonedGrid = findNode(res.next, res.selected[0]);
+    expect(clonedGrid?.node.type).toBe("grid");
+    const childUids = clonedGrid?.children.map((c) => c.uid) ?? [];
+    expect(childUids).toHaveLength(2);
+    expect(childUids).not.toContain("e"); // children got fresh uids
+    expect(childUids).not.toContain("f");
+  });
+
+  it("clones a multi-selection preserving order (after / before)", () => {
+    const root = sample();
+    const guard = metaGuard();
+    const after = done(performDrop(root, copy(["a", "z"]), beside("after", "b"), guard, make));
+    // card c1 now holds b then the two clones, originals still at the root.
+    expect(findNode(after.next, "c1")?.children.map((c) => c.uid)).toEqual([
+      "b",
+      after.selected[0],
+      after.selected[1],
+    ]);
+    expect(after.next.children.map((c) => c.uid).slice(0, 2)).toEqual(["a", "z"]);
+
+    const before = done(performDrop(root, copy(["a", "z"]), beside("before", "b"), guard, make));
+    expect(findNode(before.next, "c1")?.children.map((c) => c.uid)).toEqual([
+      before.selected[0],
+      before.selected[1],
+      "b",
+    ]);
+  });
+});

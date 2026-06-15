@@ -524,7 +524,7 @@ export function DesignCanvas({
             zIndex: 1000,
           }}
         >
-          {d.drag.label}
+          {d.drag.copy ? `+ ${d.drag.label} (copy)` : d.drag.label}
         </div>
       )}
     </>
