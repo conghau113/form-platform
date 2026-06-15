@@ -1,5 +1,5 @@
 import { type ArrayField, CURRENT_FORM_VERSION, type FieldNode } from "@org/form-schema";
-import { Button, Card, Row, Space, Table } from "antd";
+import { Button, Card, Grid, Row, Space, Table } from "antd";
 import { Fragment } from "react";
 import { type Control, useFieldArray, useWatch } from "react-hook-form";
 import { openFormDialog } from "../imperative.js";
@@ -64,9 +64,14 @@ export function ArrayFieldSection(props: {
   const { fields, append, remove, move, update } = useFieldArray({ control, name });
   const addButton = <Button onClick={() => append(seedRow())}>Add {node.label || "item"}</Button>;
 
+  // "auto" is responsive: table on >=md, cards below. `useBreakpoint` re-renders on
+  // resize; "card"/"table"/undefined resolve to a fixed layout (undefined ⇒ card).
+  const screens = Grid.useBreakpoint();
+  const variant = node.variant === "auto" ? (screens.md ? "table" : "card") : node.variant;
+
   // Table + editInDialog: rows are read-only and edited in a popup. Watch the live row
   // values to display the cells and seed the dialog; write the result back with `update`.
-  const editInDialog = node.variant === "table" && node.editInDialog === true;
+  const editInDialog = variant === "table" && node.editInDialog === true;
   const watched = useWatch({ control, name }) as Array<Record<string, unknown>> | undefined;
   const openRowDialog = async (index: number) => {
     const result = await openFormDialog(
@@ -85,7 +90,7 @@ export function ArrayFieldSection(props: {
   ) : null;
 
   let body: React.ReactNode;
-  if (node.variant === "table") {
+  if (variant === "table") {
     // One column per item field (cells render the control bare + label-less) plus an
     // actions column. dataSource carries each row's react-hook-form index.
     type RowRec = { key: string; index: number };

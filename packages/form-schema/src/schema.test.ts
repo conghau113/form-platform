@@ -603,6 +603,24 @@ describe("schema field types", () => {
     expect(out.fields[0]).toMatchObject({ type: "array", variant: "table" });
   });
 
+  it("accepts the responsive auto variant on an array node", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "array-auto",
+      title: "Array auto",
+      fields: [
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          variant: "auto",
+          itemFields: [{ type: "text", name: "v", label: "V" }],
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ type: "array", variant: "auto" });
+  });
+
   it("accepts the optional editInDialog flag on a table array node", () => {
     const out = formSchema.parse({
       formVersion: 3,

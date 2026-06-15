@@ -106,7 +106,8 @@
       "Bash(cat .changeset/rich-input-choice-props-x2-x3-schema.md)",
       "Bash(cat .changeset/rich-input-choice-props-x2-x3-renderer.md)",
       "Bash(cat .changeset/*x4*)",
-      "Bash(cat .changeset/*date*)"
+      "Bash(cat .changeset/*date*)",
+      "Bash(grep -vE \"getComputedStyle|not-implemented|jsdom|rc-util|react-dom|portal|useScrollLocker|commit|at module|at window|at measure|at getTarget|at E:\\\\\\\\\\\\\\\\\")"
     ],
     "deny": [
       "Bash(rm -rf:*)",

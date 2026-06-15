@@ -12,6 +12,7 @@ import {
   EditOutlined,
   FieldNumberOutlined,
   GroupOutlined,
+  InboxOutlined,
   LayoutOutlined,
   LockOutlined,
   OrderedListOutlined,
@@ -27,7 +28,7 @@ import {
 import { Card, Empty, Input, Tooltip, Typography } from "antd";
 import { type ReactNode, useMemo, useState } from "react";
 import { useDesigner } from "./DesignCanvas";
-import { type FieldType, fieldsByCategory, fieldTypeLabel } from "./field-registry";
+import { type FieldType, type PaletteEntry, paletteEntries } from "./field-registry";
 
 /** Per-type palette glyph. A field with no entry falls back to a generic block. */
 const TYPE_ICON: Partial<Record<FieldType, ReactNode>> = {
@@ -57,6 +58,15 @@ const TYPE_ICON: Partial<Record<FieldType, ReactNode>> = {
   grid: <TableOutlined />,
   space: <ColumnWidthOutlined />,
   steps: <OrderedListOutlined />,
+};
+
+/** Per-entry glyph for palette variants (overrides {@link TYPE_ICON} by entry id). */
+const ENTRY_ICON: Record<string, ReactNode> = {
+  "array:list": <UnorderedListOutlined />,
+  "array:card": <CreditCardOutlined />,
+  "array:table": <TableOutlined />,
+  "upload:button": <UploadOutlined />,
+  "upload:dragger": <InboxOutlined />,
 };
 
 /** One-line tooltip hint per type (falls back to the label when absent). */
@@ -90,12 +100,14 @@ const TYPE_HINT: Partial<Record<FieldType, string>> = {
 };
 
 /** A palette chip. Pressing it starts a "create" drag through the pointer engine;
- *  releasing over a droppable canvas node inserts a fresh field there. */
-function PaletteItem({ type }: { type: FieldType }) {
+ *  releasing over a droppable canvas node inserts a fresh field (seeded with the entry's
+ *  optional `patch` — e.g. an array variant or the upload dragger flag) there. */
+function PaletteItem({ entry }: { entry: PaletteEntry }) {
   const { beginCreate } = useDesigner();
+  const icon = ENTRY_ICON[entry.id] ?? TYPE_ICON[entry.type] ?? <AppstoreOutlined />;
   return (
     <Tooltip
-      title={TYPE_HINT[type] ?? fieldTypeLabel(type)}
+      title={entry.hint ?? TYPE_HINT[entry.type] ?? entry.label}
       placement="right"
       mouseEnterDelay={0.4}
     >
@@ -104,31 +116,30 @@ function PaletteItem({ type }: { type: FieldType }) {
         hoverable
         style={{ cursor: "grab", userSelect: "none", touchAction: "none" }}
         styles={{ body: { padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 } }}
-        onPointerDown={(e) => beginCreate(type, e)}
+        onPointerDown={(e) =>
+          beginCreate(entry.type, e, { patch: entry.patch, label: entry.label })
+        }
       >
-        <span style={{ color: "rgba(0,0,0,0.45)", display: "inline-flex" }}>
-          {TYPE_ICON[type] ?? <AppstoreOutlined />}
-        </span>
-        {fieldTypeLabel(type)}
+        <span style={{ color: "rgba(0,0,0,0.45)", display: "inline-flex" }}>{icon}</span>
+        {entry.label}
       </Card>
     </Tooltip>
   );
 }
 
-/** Left column: draggable chips, one per authorable field type, grouped by category and
- *  filtered by a free-text search over the label. */
+/** Left column: draggable chips, one per authorable field type (types with palette
+ *  variants expand to several chips), grouped by category and filtered by a free-text
+ *  search over the label. */
 export function Palette() {
   const [query, setQuery] = useState("");
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const all = fieldsByCategory();
+    const all = paletteEntries();
     if (!q) return all;
     return all
       .map(({ category, items }) => ({
         category,
-        items: items.filter(
-          (d) => fieldTypeLabel(d.type).toLowerCase().includes(q) || d.type.includes(q),
-        ),
+        items: items.filter((e) => e.label.toLowerCase().includes(q) || e.type.includes(q)),
       }))
       .filter((g) => g.items.length > 0);
   }, [query]);
@@ -151,9 +162,8 @@ export function Palette() {
             <Typography.Text type="secondary" style={{ fontSize: 12, textTransform: "uppercase" }}>
               {category}
             </Typography.Text>
-            {items.map((d) => (
-              // fieldsByCategory only returns palette-visible FieldNode types (never `form`).
-              <PaletteItem key={d.type} type={d.type as FieldType} />
+            {items.map((entry) => (
+              <PaletteItem key={entry.id} entry={entry} />
             ))}
           </div>
         ))

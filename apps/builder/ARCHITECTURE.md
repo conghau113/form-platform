@@ -29,7 +29,7 @@ Zod contract). Import via `../field-registry` (resolves to `index.ts`).
 | `types.ts` | `FieldType`, `NodeType`, `SettingDescriptor`, `ComponentBehavior`, `ComponentMeta`, … |
 | `descriptors.ts` | reusable setting descriptors, `LEAF`/`CONTAINER` behaviors, `STRING_RULES`/`NUMBER_RULES`, `FORM_SETTINGS` |
 | `registry.ts` | the big `FIELD_REGISTRY` array + `FORM_META` + `BY_TYPE` lookup |
-| `queries.ts` | `describeNode/describeField`, `FIELD_TYPES`, `PALETTE_TYPES`, `fieldTypeLabel`, `fieldsByCategory`, `canInsert`, `metaGuard` |
+| `queries.ts` | `describeNode/describeField`, `FIELD_TYPES`, `PALETTE_TYPES`, `fieldTypeLabel`, `paletteEntries`, `canInsert`, `metaGuard` |
 | `new-field.ts` | `newField` factory + `seedName` |
 | `index.ts` | barrel (public surface — unchanged from the old single file) |
 **Adding a field type = one `FIELD_REGISTRY` entry** (+ schema + renderer). No edits to

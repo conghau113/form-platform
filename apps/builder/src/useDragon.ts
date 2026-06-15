@@ -83,7 +83,11 @@ function effectiveSource(p: Pending): DragSource {
 export interface UseDragonOptions {
   getTree: () => TreeNode;
   guard: InsertGuard;
-  createNode: (type: FieldType, taken: ReadonlySet<string>) => TreeNode;
+  createNode: (
+    type: FieldType,
+    patch: Record<string, unknown> | undefined,
+    taken: ReadonlySet<string>,
+  ) => TreeNode;
   /** Commit a drop: swap in the new tree and select the dropped node(s). */
   commit: (next: TreeNode, selected: string[]) => void;
   /** A press that didn't become a drag selected these node(s). */
@@ -95,7 +99,11 @@ export interface Dragon {
   /** Start moving `uids` (filtered to top-most). `clickUid` is the node a non-drag
    *  press selects (defaults to the first uid). */
   beginMove: (uids: string[], e: React.PointerEvent, clickUid?: string) => void;
-  beginCreate: (type: FieldType, e: React.PointerEvent) => void;
+  beginCreate: (
+    type: FieldType,
+    e: React.PointerEvent,
+    opts?: { patch?: Record<string, unknown>; label?: string },
+  ) => void;
 }
 
 function toRect(r: DOMRect): Rect {
@@ -253,8 +261,15 @@ export function useDragon(opts: UseDragonOptions): Dragon {
           captureGhost(click ?? tops[0] ?? null),
         );
       },
-      beginCreate: (type, e) =>
-        begin({ kind: "create", fieldType: type }, fieldTypeLabel(type), e, false, null, null),
+      beginCreate: (type, e, opts) =>
+        begin(
+          { kind: "create", fieldType: type, patch: opts?.patch },
+          opts?.label ?? fieldTypeLabel(type),
+          e,
+          false,
+          null,
+          null,
+        ),
     };
   }
 

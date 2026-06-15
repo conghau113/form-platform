@@ -29,13 +29,17 @@ function sample(): TreeNode {
 }
 
 /** A minimal createNode for palette drags: counter-style unique name, fresh uid. */
-const make = (type: string, taken: ReadonlySet<string>): TreeNode => {
+const make = (
+  type: string,
+  patch: Record<string, unknown> | undefined,
+  taken: ReadonlySet<string>,
+): TreeNode => {
   let i = 1;
   let name = `${type}${i}`;
   while (taken.has(name)) name = `${type}${++i}`;
   return {
     uid: `new-${name}`,
-    node: { type, name, label: type } as TreeNode["node"],
+    node: { type, name, label: type, ...patch } as TreeNode["node"],
     children: [],
   };
 };

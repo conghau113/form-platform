@@ -1,6 +1,6 @@
 import type { InsertGuard, TreeNode } from "../engine/tree";
 import { BY_TYPE, FIELD_REGISTRY } from "./registry";
-import type { ComponentMeta, FieldDescriptor, FieldType, NodeType } from "./types";
+import type { ComponentMeta, FieldDescriptor, FieldType, NodeType, PaletteEntry } from "./types";
 
 /** Look up the meta for any node type, including the root `form`. Throws if unknown. */
 export function describeNode(type: NodeType): ComponentMeta {
@@ -31,11 +31,30 @@ export function fieldTypeLabel(type: NodeType): string {
  *  fall to the end, in first-seen registry order. */
 const CATEGORY_ORDER = ["Inputs", "Layouts", "Arrays", "Displays"];
 
-/** Palette entries grouped by category. Items keep registry order within a group; groups
- *  are ordered by {@link CATEGORY_ORDER} (then first-seen). Only palette-visible types are
- *  included (nameless sub-containers like tab-pane/collapse-panel stay hidden). */
-export function fieldsByCategory(): Array<{ category: string; items: FieldDescriptor[] }> {
-  const groups: Array<{ category: string; items: FieldDescriptor[] }> = [];
+/** Expand a meta into its palette chips: one per `paletteVariants` entry (each seeding the
+ *  same type + a patch), or a single plain chip when it has none. */
+function entriesFor(d: ComponentMeta): PaletteEntry[] {
+  const type = d.type as FieldType;
+  if (d.paletteVariants?.length) {
+    return d.paletteVariants.map((v) => ({
+      id: `${type}:${v.id}`,
+      type,
+      label: v.label,
+      category: d.category,
+      hint: v.hint,
+      patch: v.patch,
+    }));
+  }
+  return [{ id: type, type, label: d.label, category: d.category }];
+}
+
+/** Palette chips grouped by category. Items keep registry order within a group; groups are
+ *  ordered by {@link CATEGORY_ORDER} (then first-seen). Only palette-visible types appear
+ *  (nameless sub-containers like tab-pane/collapse-panel stay hidden). Types that declare
+ *  {@link ComponentMeta.paletteVariants} expand into one chip per variant (e.g. `array` →
+ *  list/cards/table). */
+export function paletteEntries(): Array<{ category: string; items: PaletteEntry[] }> {
+  const groups: Array<{ category: string; items: PaletteEntry[] }> = [];
   for (const d of FIELD_REGISTRY) {
     if (!d.showInPalette) continue;
     let g = groups.find((x) => x.category === d.category);
@@ -43,7 +62,7 @@ export function fieldsByCategory(): Array<{ category: string; items: FieldDescri
       g = { category: d.category, items: [] };
       groups.push(g);
     }
-    g.items.push(d);
+    g.items.push(...entriesFor(d));
   }
   const rank = (c: string) => {
     const i = CATEGORY_ORDER.indexOf(c);

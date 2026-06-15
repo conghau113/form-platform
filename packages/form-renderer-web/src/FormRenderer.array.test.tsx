@@ -81,6 +81,48 @@ describe("FormRenderer array (Form List)", () => {
     expect(onSubmit).toHaveBeenCalledWith({ people: [{ fullName: "Grace" }] });
   });
 
+  it("auto variant falls back to cards when no breakpoint matches, table when >=md", async () => {
+    const autoSchema = {
+      formVersion: 3,
+      id: "auto",
+      title: "Auto list",
+      fields: [
+        {
+          type: "array",
+          name: "people",
+          label: "People",
+          variant: "auto",
+          itemFields: [{ type: "text", name: "fullName", label: "Full name" }],
+        },
+      ],
+    };
+    // jsdom's default matchMedia stub reports no breakpoint match → responsive cards.
+    const narrow = render(<FormRenderer schema={autoSchema} onSubmit={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /Add People/i }));
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    narrow.unmount();
+
+    // Simulate a >=md viewport: the same auto array now renders as a table.
+    const orig = window.matchMedia;
+    window.matchMedia = ((q: string) => ({
+      matches: /min-width:\s*(576|768)px/.test(q),
+      media: q,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as typeof window.matchMedia;
+    try {
+      render(<FormRenderer schema={autoSchema} onSubmit={vi.fn()} />);
+      expect(await screen.findByRole("table")).toBeInTheDocument();
+    } finally {
+      window.matchMedia = orig;
+    }
+  });
+
   it("removes a row", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();

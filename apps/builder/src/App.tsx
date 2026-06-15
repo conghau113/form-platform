@@ -226,7 +226,7 @@ export function App() {
   const dragon = useDragon({
     getTree: () => tree,
     guard: metaGuard(),
-    createNode: (type, taken) => fieldToTree(newField(type, taken)),
+    createNode: (type, patch, taken) => fieldToTree(newField(type, taken, patch)),
     commit: (next, dropped) => {
       history.set(next, "Drop field");
       setSelection(selectMany(emptySelection, dropped));

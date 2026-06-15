@@ -11,6 +11,46 @@
 
 ---
 
+## Status at a glance (updated 2026‑06‑15)
+
+Branch `refactor/modularize-fe-be`. Progress against the **Suggested ordering** below.
+This table is the single human‑facing tracker — keep it current as each phase lands.
+`pending` = committed but commit hash to fill in; `uncommitted` = code done, on disk,
+not yet committed (user gates the commit).
+
+| Phase | What | Status | Commit |
+| --- | --- | --- | --- |
+| R1 | Re‑taxonomy palette (Inputs/Layouts/Arrays/Displays) + relabel | ✅ Done | `bb3f9f0` |
+| G1 | Palette search + per‑type icons + tooltips | ✅ Done | `bb3f9f0` |
+| G2 | Property panel collapsible sections | ✅ Done | `bb3f9f0` |
+| R3 | Array Cards/Table chips + `variant:"auto"` (responsive) | ✅ Done | `uncommitted` |
+| R4 | UploadDragger palette chip (built‑in seed) | ✅ Done | `uncommitted` |
+| S1 | Setter vocab: icon/token/keyValue/marks (gates I & T) | ⬜ Next | — |
+| I1 | Icon registry (token→component) + `prefixIcon`/`suffixIcon` | ⬜ Todo | — |
+| I2 | Icon‑picker setter wired into input family | ⬜ Todo | — |
+| P1 | Preset data model + storage (api + builder) | ⬜ Todo | — |
+| P2 | Preset gallery UI (save/edit/delete, drag→canvas) | ⬜ Todo | — |
+| P3 | Built‑in preset library | ⬜ Todo | — |
+| G3 | Search within property panel + pin setters | ⬜ Todo | — |
+| U1 | Pinning (setters + presets/fields) | ⬜ Todo | — |
+| T1 | Typed style tokens (guarded subset) | ⬜ Todo | — |
+| T2 | Builder style setters (uses S1) | ⬜ Todo | — |
+| R2 | Display "Text" read‑only type | ⬜ Todo | — |
+| R5 | Transfer field | ⬜ Todo | — |
+| R6 | Object (named nested value container) | ⬜ Todo | — |
+| R7 | Form Layout container | ⬜ Todo | — |
+
+**R3/R4 notes:** first additive *schema* change of this plan — `ArrayField.variant`
+enum widened `card|table` → `card|table|auto` (no `formVersion` bump). The web renderer
+resolves `auto` via `Grid.useBreakpoint()` (table ≥md, cards below). R3/R4 also added the
+data‑driven `paletteVariants` mechanism (one schema `type` → several palette chips, each
+seeding a default‑prop `patch`) — the minimal in‑app seed of the Track P preset system.
+Changeset: `.changeset/array-variant-auto-r3.md`.
+
+**Next:** **S1** — it gates the icon (I) and token‑style (T) tracks.
+
+---
+
 ## Locked decisions (from the owner, 2026‑06‑15)
 
 1. **Styling = token‑based, controlled.** Expose a SAFE, typed subset (size, width,

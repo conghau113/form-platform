@@ -5,10 +5,10 @@ export {
   describeField,
   describeNode,
   FIELD_TYPES,
-  fieldsByCategory,
   fieldTypeLabel,
   metaGuard,
   PALETTE_TYPES,
+  paletteEntries,
 } from "./queries";
 export { FIELD_REGISTRY, FORM_META } from "./registry";
 export type {
@@ -18,6 +18,8 @@ export type {
   FieldDescriptor,
   FieldType,
   NodeType,
+  PaletteEntry,
+  PaletteVariant,
   SettingChoice,
   SettingControl,
   SettingDescriptor,

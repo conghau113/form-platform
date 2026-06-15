@@ -373,6 +373,17 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     ],
     // Value is an array of file metadata — no simple default-value editor.
     defaultValueKind: "none",
+    // Two palette chips for one `upload` type: a button picker and the large drop-zone
+    // (seeds `dragger: true`). The dragger is R4's built-in seed of the preset idea.
+    paletteVariants: [
+      { id: "button", label: "Upload", patch: {} },
+      {
+        id: "dragger",
+        label: "Upload (dragger)",
+        hint: "A large drag-and-drop file area",
+        patch: { dragger: true },
+      },
+    ],
     behavior: LEAF,
     showInPalette: true,
     named: true,
@@ -388,8 +399,41 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     settings: [
       { key: "minItems", label: "Min items", control: "number" },
       { key: "maxItems", label: "Max items", control: "number" },
+      {
+        key: "variant",
+        label: "Layout",
+        control: "segmented",
+        choices: [
+          { label: "Auto", value: "auto" },
+          { label: "Cards", value: "card" },
+          { label: "Table", value: "table" },
+        ],
+      },
+      { key: "editInDialog", label: "Edit rows in dialog (table)", control: "checkbox" },
     ],
     defaultValueKind: "none",
+    // One schema `type`, three palette chips: list (responsive), cards, table. Each seeds
+    // `array` with a different `variant` default.
+    paletteVariants: [
+      {
+        id: "list",
+        label: "Array (list)",
+        hint: "A repeatable list — table on wide screens, cards on narrow",
+        patch: { variant: "auto" },
+      },
+      {
+        id: "card",
+        label: "Array Cards",
+        hint: "Repeatable rows, each in its own card",
+        patch: { variant: "card" },
+      },
+      {
+        id: "table",
+        label: "Array Table",
+        hint: "Repeatable rows laid out as a table",
+        patch: { variant: "table" },
+      },
+    ],
     // An array nests values per row; it IS droppable (item fields are its children).
     behavior: CONTAINER,
     showInPalette: true,

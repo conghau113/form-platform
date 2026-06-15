@@ -91,6 +91,20 @@ export interface FieldDescriptor {
   validations?: ValidationRuleType[];
 }
 
+/** One palette chip for a type that exposes several authoring presets of itself (e.g.
+ *  `array` → list/cards/table, `upload` → button/dragger). Each variant seeds the SAME
+ *  schema `type` plus a small `patch` of default props. This is the minimal, in-app seed
+ *  of the future preset system (Track P): a preset is a richer, persisted variant. */
+export interface PaletteVariant {
+  /** Stable suffix for the palette id/key (e.g. "card" ⇒ id "array:card"). */
+  id: string;
+  label: string;
+  /** One-line palette tooltip; falls back to the type's hint when absent. */
+  hint?: string;
+  /** Extra default props merged into the freshly seeded node (e.g. `{ variant: "table" }`). */
+  patch: Record<string, unknown>;
+}
+
 /** A full component meta: a {@link FieldDescriptor} plus designer behavior. */
 export interface ComponentMeta extends FieldDescriptor {
   behavior: ComponentBehavior;
@@ -98,6 +112,22 @@ export interface ComponentMeta extends FieldDescriptor {
   icon?: string;
   /** Whether the palette offers this type. Containers stay false until Phase E. */
   showInPalette: boolean;
+  /** When set, the palette renders one chip PER variant instead of a single type chip
+   *  (still one schema `type`). The drag seeds `newField(type) + variant.patch`. */
+  paletteVariants?: PaletteVariant[];
   /** Whether the node carries a schema `name` (value-bearing). Containers are nameless. */
   named: boolean;
+}
+
+/** A single palette chip the UI renders: a type to seed plus an optional default-prop
+ *  patch (from a {@link PaletteVariant}). Plain types expand to one entry with no patch. */
+export interface PaletteEntry {
+  /** Stable id (React key + drag identity): the type, or `type:variantId`. */
+  id: string;
+  type: FieldType;
+  label: string;
+  category: string;
+  hint?: string;
+  /** Extra default props the drop merges into the seeded node. */
+  patch?: Record<string, unknown>;
 }

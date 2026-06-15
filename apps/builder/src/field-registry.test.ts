@@ -9,6 +9,7 @@ import {
   metaGuard,
   newField,
   PALETTE_TYPES,
+  paletteEntries,
 } from "./field-registry";
 
 describe("field registry", () => {
@@ -82,6 +83,29 @@ describe("palette freeze", () => {
       "space",
       "steps",
     ]);
+  });
+
+  it("expands paletteVariants into one chip per variant, seeding the same type + patch", () => {
+    const arrays = paletteEntries().find((g) => g.category === "Arrays");
+    expect(arrays?.items.map((e) => e.id)).toEqual(["array:list", "array:card", "array:table"]);
+    // every array chip seeds the single `array` type with a distinct variant patch
+    expect(arrays?.items.every((e) => e.type === "array")).toBe(true);
+    expect(arrays?.items.map((e) => e.patch?.variant)).toEqual(["auto", "card", "table"]);
+
+    const inputs = paletteEntries().find((g) => g.category === "Inputs");
+    const upload = inputs?.items.filter((e) => e.type === "upload");
+    expect(upload?.map((e) => e.id)).toEqual(["upload:button", "upload:dragger"]);
+    expect(upload?.map((e) => e.patch?.dragger)).toEqual([undefined, true]);
+  });
+
+  it("seeds a node from a palette variant's patch (variant/dragger applied)", () => {
+    const cards = newField("array", new Set(), { variant: "card" }) as { variant?: string };
+    expect(cards.variant).toBe("card");
+    const dragger = newField("upload", new Set(), { dragger: true }) as { dragger?: boolean };
+    expect(dragger.dragger).toBe(true);
+    // a patch never overrides the generated unique name
+    const named = newField("text", new Set(["text1"]), { name: "ignored" }) as { name: string };
+    expect(named.name).toBe("text2");
   });
 
   it("keeps only the nameless sub-containers out of the palette", () => {

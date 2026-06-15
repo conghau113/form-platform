@@ -122,7 +122,11 @@ export interface DesignerValue {
   selected: string[];
   drag: DragState | null;
   beginMove: (uids: string[], e: React.PointerEvent, clickUid?: string) => void;
-  beginCreate: (type: import("./field-registry").FieldType, e: React.PointerEvent) => void;
+  beginCreate: (
+    type: import("./field-registry").FieldType,
+    e: React.PointerEvent,
+    opts?: { patch?: Record<string, unknown>; label?: string },
+  ) => void;
   copy: (uid: string) => void;
   remove: (uid: string) => void;
   /** Select a single node (Outline tree / breadcrumb); `additive` toggles it in a

@@ -30,7 +30,7 @@ import {
  *  `copy` is set (Alt held), the drop CLONES the dragged subtrees instead of moving
  *  them — the originals stay put (Designable's copy-on-drag). */
 export type DragSource =
-  | { kind: "create"; fieldType: FieldType }
+  | { kind: "create"; fieldType: FieldType; patch?: Record<string, unknown> }
   | { kind: "move"; uids: string[]; copy?: boolean };
 
 /** `grid`/`space` flow horizontally; everything else stacks vertically. */
@@ -96,10 +96,14 @@ export function performDrop(
   source: DragSource,
   intent: DropIntent,
   guard: InsertGuard,
-  createNode: (type: FieldType, taken: ReadonlySet<string>) => TreeNode,
+  createNode: (
+    type: FieldType,
+    patch: Record<string, unknown> | undefined,
+    taken: ReadonlySet<string>,
+  ) => TreeNode,
 ): DropResult | null {
   if (source.kind === "create") {
-    const child = createNode(source.fieldType, collectNames(tree));
+    const child = createNode(source.fieldType, source.patch, collectNames(tree));
     let next: TreeNode;
     if (intent.kind === "inner") next = append(tree, intent.uid, child, guard);
     else if (intent.kind === "before") next = insertBefore(tree, intent.uid, child, guard);
