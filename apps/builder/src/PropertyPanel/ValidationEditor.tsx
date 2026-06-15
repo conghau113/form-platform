@@ -1,15 +1,5 @@
 import type { AsyncValidator, ValidationRule } from "@org/form-schema";
-import {
-  Button,
-  Divider,
-  Form,
-  Input,
-  InputNumber,
-  Segmented,
-  Select,
-  Space,
-  Typography,
-} from "antd";
+import { Button, Form, Input, InputNumber, Segmented, Select, Space, Typography } from "antd";
 import { describeField, type ValidationRuleType } from "../field-registry";
 import { prop } from "./helpers";
 import { CROSS_OPS, type CrossOp, type CrossRight, coerceLiteral, readSimpleRule } from "./rules";
@@ -89,9 +79,6 @@ export function ValidationEditor({
 
   return (
     <>
-      <Divider orientation="left" plain>
-        Validation
-      </Divider>
       {allowed.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {rules.map((rule, i) => (

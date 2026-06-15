@@ -20,8 +20,8 @@ import type { ComponentMeta, NodeType } from "./types";
 export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "text",
-    label: "Text",
-    category: "Input",
+    label: "Input",
+    category: "Inputs",
     defaults: {},
     settings: [
       placeholder,
@@ -44,7 +44,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "textarea",
     label: "Textarea",
-    category: "Input",
+    category: "Inputs",
     defaults: {},
     settings: [
       placeholder,
@@ -64,7 +64,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "password",
     label: "Password",
-    category: "Input",
+    category: "Inputs",
     defaults: {},
     settings: [
       placeholder,
@@ -82,7 +82,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "number",
     label: "Number",
-    category: "Input",
+    category: "Inputs",
     defaults: {},
     settings: [
       { key: "min", label: "Min", control: "number" },
@@ -117,7 +117,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "select",
     label: "Select",
-    category: "Choice",
+    category: "Inputs",
     defaults: { options: [] },
     // Options/dataSource are authored by the bespoke DataSourceEditor (static vs remote),
     // not the generic `options` descriptor — only the behavior flags are descriptor-driven.
@@ -139,7 +139,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "checkbox-group",
     label: "Checkbox group",
-    category: "Choice",
+    category: "Inputs",
     // Options/dataSource are authored by the shared DataSourceEditor (static vs remote);
     // value is an array, so no simple default-value editor.
     defaults: { options: [] },
@@ -162,7 +162,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "radio",
     label: "Radio",
-    category: "Choice",
+    category: "Inputs",
     defaults: { options: [] },
     settings: [
       optionsSetting,
@@ -194,7 +194,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "cascader",
     label: "Cascader",
-    category: "Choice",
+    category: "Inputs",
     // Tree options/dataSource are authored by the shared DataSourceEditor (which
     // renders the recursive TreeOptionsEditor in static mode); value is a path array.
     defaults: { options: [] },
@@ -207,7 +207,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "tree-select",
     label: "Tree select",
-    category: "Choice",
+    category: "Inputs",
     defaults: { options: [] },
     settings: [{ key: "multiple", label: "Allow multiple", control: "checkbox" }],
     defaultValueKind: "none",
@@ -218,7 +218,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "checkbox",
     label: "Checkbox",
-    category: "Boolean",
+    category: "Inputs",
     defaults: {},
     settings: [],
     defaultValueKind: "boolean",
@@ -229,7 +229,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "switch",
     label: "Switch",
-    category: "Boolean",
+    category: "Inputs",
     defaults: {},
     settings: [
       { key: "checkedChildren", label: "On label", control: "text" },
@@ -252,7 +252,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "slider",
     label: "Slider",
-    category: "Number",
+    category: "Inputs",
     defaults: {},
     settings: [
       { key: "min", label: "Min", control: "number" },
@@ -271,7 +271,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "rate",
     label: "Rate",
-    category: "Number",
+    category: "Inputs",
     defaults: {},
     settings: [
       { key: "count", label: "Star count", control: "number" },
@@ -296,7 +296,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "date",
     label: "Date",
-    category: "Date & time",
+    category: "Inputs",
     defaults: {},
     settings: [pickerSetting, ...DATE_SETTINGS],
     defaultValueKind: "none",
@@ -307,7 +307,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "date-range",
     label: "Date range",
-    category: "Date & time",
+    category: "Inputs",
     defaults: {},
     settings: [pickerSetting, ...DATE_SETTINGS],
     defaultValueKind: "none",
@@ -318,7 +318,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "time",
     label: "Time",
-    category: "Date & time",
+    category: "Inputs",
     defaults: {},
     settings: TIME_SETTINGS,
     defaultValueKind: "none",
@@ -329,7 +329,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "time-range",
     label: "Time range",
-    category: "Date & time",
+    category: "Inputs",
     defaults: {},
     settings: TIME_SETTINGS,
     defaultValueKind: "none",
@@ -340,7 +340,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "color",
     label: "Color",
-    category: "Advanced",
+    category: "Inputs",
     defaults: {},
     settings: [],
     defaultValueKind: "text",
@@ -352,7 +352,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "upload",
     label: "Upload",
-    category: "Advanced",
+    category: "Inputs",
     defaults: {},
     settings: [
       { key: "accept", label: "Accept (e.g. image/*,.pdf)", control: "text" },
@@ -380,7 +380,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "array",
     label: "Array (list)",
-    category: "Layout",
+    category: "Arrays",
     // A fresh Form List starts with no item fields; they're authored in the
     // PropertyPanel's Item fields editor. minItems/maxItems render via the
     // generic number settings below.
@@ -401,7 +401,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "group",
     label: "Group",
-    category: "Layout",
+    category: "Layouts",
     defaults: { children: [] },
     settings: [],
     defaultValueKind: "none",
@@ -412,18 +412,25 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "tabs",
     label: "Tabs",
-    category: "Layout",
-    defaults: { children: [] },
+    category: "Layouts",
+    // Seed two panes so a freshly dropped Tabs is usable immediately (a bare `tabs`
+    // with no panes can't be filled — the palette never offers `tab-pane` directly).
+    defaults: {
+      children: [
+        { type: "tab-pane", label: "Tab 1", children: [] },
+        { type: "tab-pane", label: "Tab 2", children: [] },
+      ],
+    },
     settings: [],
     defaultValueKind: "none",
     behavior: { ...CONTAINER, allowAppend: (_p, c) => c === "tab-pane" },
-    showInPalette: false,
+    showInPalette: true,
     named: false,
   },
   {
     type: "tab-pane",
     label: "Tab",
-    category: "Layout",
+    category: "Layouts",
     defaults: { label: "Tab", children: [] },
     settings: [{ key: "label", label: "Tab label", control: "text" }],
     defaultValueKind: "none",
@@ -434,18 +441,24 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "collapse",
     label: "Collapse",
-    category: "Layout",
-    defaults: { children: [] },
+    category: "Layouts",
+    // Seed two panels for the same reason as Tabs (palette never offers a bare panel).
+    defaults: {
+      children: [
+        { type: "collapse-panel", label: "Section 1", children: [] },
+        { type: "collapse-panel", label: "Section 2", children: [] },
+      ],
+    },
     settings: [{ key: "accordion", label: "Accordion (one open)", control: "checkbox" }],
     defaultValueKind: "none",
     behavior: { ...CONTAINER, allowAppend: (_p, c) => c === "collapse-panel" },
-    showInPalette: false,
+    showInPalette: true,
     named: false,
   },
   {
     type: "collapse-panel",
     label: "Panel",
-    category: "Layout",
+    category: "Layouts",
     defaults: { label: "Section", children: [] },
     settings: [{ key: "label", label: "Panel label", control: "text" }],
     defaultValueKind: "none",
@@ -456,29 +469,29 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "card",
     label: "Card",
-    category: "Layout",
+    category: "Layouts",
     defaults: { children: [] },
     settings: [{ key: "title", label: "Title", control: "text" }],
     defaultValueKind: "none",
     behavior: CONTAINER,
-    showInPalette: false,
+    showInPalette: true,
     named: false,
   },
   {
     type: "grid",
     label: "Grid",
-    category: "Layout",
+    category: "Layouts",
     defaults: { cols: 2, children: [] },
     settings: [{ key: "cols", label: "Columns", control: "slider", min: 1, max: 12, step: 1 }],
     defaultValueKind: "none",
     behavior: CONTAINER,
-    showInPalette: false,
+    showInPalette: true,
     named: false,
   },
   {
     type: "space",
     label: "Space",
-    category: "Layout",
+    category: "Layouts",
     defaults: { children: [] },
     settings: [
       {
@@ -493,7 +506,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     ],
     defaultValueKind: "none",
     behavior: CONTAINER,
-    showInPalette: false,
+    showInPalette: true,
     named: false,
   },
   {
@@ -501,7 +514,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     // `step` panes; the StepsEditor in the property panel adds/removes/reorders them.
     type: "steps",
     label: "Steps",
-    category: "Layout",
+    category: "Layouts",
     defaults: {
       children: [
         { type: "step", label: "Step 1", children: [] },
@@ -517,7 +530,7 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
   {
     type: "step",
     label: "Step",
-    category: "Layout",
+    category: "Layouts",
     defaults: { label: "Step", children: [] },
     settings: [{ key: "label", label: "Step label", control: "text" }],
     defaultValueKind: "none",

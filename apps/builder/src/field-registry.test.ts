@@ -53,7 +53,7 @@ describe("setting descriptors", () => {
 });
 
 describe("palette freeze", () => {
-  it("offers exactly today's authorable types, in order (containers stay hidden)", () => {
+  it("offers exactly today's authorable types, in registry order (R1: layout containers surfaced)", () => {
     expect(PALETTE_TYPES).toEqual([
       "text",
       "textarea",
@@ -75,22 +75,19 @@ describe("palette freeze", () => {
       "color",
       "upload",
       "array",
+      "tabs",
+      "collapse",
+      "card",
+      "grid",
+      "space",
       "steps",
     ]);
   });
 
-  it("keeps all layout containers except steps out of the palette", () => {
-    for (const type of [
-      "group",
-      "tabs",
-      "tab-pane",
-      "collapse",
-      "collapse-panel",
-      "card",
-      "grid",
-      "space",
-      "step",
-    ] as const) {
+  it("keeps only the nameless sub-containers out of the palette", () => {
+    // tab-pane/collapse-panel/step are seeded by their parent and `group` is internal —
+    // none are dropped directly, so they stay out of the palette.
+    for (const type of ["group", "tab-pane", "collapse-panel", "step"] as const) {
       expect(describeNode(type).showInPalette, type).toBe(false);
       expect(PALETTE_TYPES).not.toContain(type);
     }

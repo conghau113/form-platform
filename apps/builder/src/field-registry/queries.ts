@@ -27,8 +27,13 @@ export function fieldTypeLabel(type: NodeType): string {
   return BY_TYPE.get(type)?.label ?? type;
 }
 
-/** Palette entries grouped by category, preserving registry order. Only palette-visible
- *  types are included, so containers stay hidden until Phase E. */
+/** Preferred palette section order (Formily-antd taxonomy). Categories not listed here
+ *  fall to the end, in first-seen registry order. */
+const CATEGORY_ORDER = ["Inputs", "Layouts", "Arrays", "Displays"];
+
+/** Palette entries grouped by category. Items keep registry order within a group; groups
+ *  are ordered by {@link CATEGORY_ORDER} (then first-seen). Only palette-visible types are
+ *  included (nameless sub-containers like tab-pane/collapse-panel stay hidden). */
 export function fieldsByCategory(): Array<{ category: string; items: FieldDescriptor[] }> {
   const groups: Array<{ category: string; items: FieldDescriptor[] }> = [];
   for (const d of FIELD_REGISTRY) {
@@ -40,7 +45,11 @@ export function fieldsByCategory(): Array<{ category: string; items: FieldDescri
     }
     g.items.push(d);
   }
-  return groups;
+  const rank = (c: string) => {
+    const i = CATEGORY_ORDER.indexOf(c);
+    return i === -1 ? CATEGORY_ORDER.length : i;
+  };
+  return groups.sort((a, b) => rank(a.category) - rank(b.category));
 }
 
 /** Central insert guard: may a `childType` node be placed directly inside `parentType`?

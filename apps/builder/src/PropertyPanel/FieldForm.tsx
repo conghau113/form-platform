@@ -1,5 +1,5 @@
 import type { Reaction } from "@org/form-schema";
-import { Checkbox, Divider, Form, Input, InputNumber, Select, Space } from "antd";
+import { Checkbox, Collapse, Form, Input, InputNumber, Select, Space } from "antd";
 import { DataSourceEditor, isOptionSourced } from "../DataSourceEditor";
 import { ReactionsEditor } from "../ReactionsEditor";
 import { DefaultValueEditor } from "./DefaultValueEditor";
@@ -11,7 +11,9 @@ import { type AuthoredField, COL_KEYS, type ColKey, type Patch } from "./types";
 import { ValidationEditor } from "./ValidationEditor";
 
 /** The full property editor for a single field. Reused recursively: a top-level field
- *  and a nested array item field both render through this. */
+ *  and a nested array item field both render through this. Grouped into collapsible
+ *  sections (Basic + Properties open by default; advanced ones collapsed) so the panel
+ *  reads as a short list instead of one long scroll. */
 export function FieldForm({
   field,
   siblingNames,
@@ -42,9 +44,11 @@ export function FieldForm({
 
   const equals = readEquals(field);
   const condFields = siblingNames.filter((n) => n !== field.name);
+  const isArray = field.type === "array";
 
-  return (
-    <Form layout="vertical" size="small">
+  // --- Basic identity + universal interaction pattern ------------------------
+  const basic = (
+    <>
       <Form.Item label="Label">
         <Input value={field.label} onChange={(e) => set({ label: e.target.value })} />
       </Form.Item>
@@ -65,7 +69,7 @@ export function FieldForm({
       </Form.Item>
       {/* Persistent hint under the control (Form.Item `extra`); a validation message
           never replaces it, unlike Help text. Leaves only — arrays render their own shell. */}
-      {field.type !== "array" && (
+      {!isArray && (
         <Form.Item label="Extra hint">
           <Input
             value={field.extra ?? ""}
@@ -82,7 +86,7 @@ export function FieldForm({
             Required
           </Checkbox>
         </Form.Item>
-        {field.type !== "array" && (
+        {!isArray && (
           <Form.Item>
             <Checkbox
               checked={!!field.hasFeedback}
@@ -94,7 +98,7 @@ export function FieldForm({
         )}
         {/* Universal interaction pattern (Formily-style), layered on the additive
             disabled/readOnly/readPretty flags — mutually exclusive in the UI. */}
-        {field.type !== "array" && (
+        {!isArray && (
           <Form.Item label="Pattern">
             <Select
               style={{ width: 140 }}
@@ -124,7 +128,12 @@ export function FieldForm({
           </Form.Item>
         )}
       </Space>
+    </>
+  );
 
+  // --- Type-specific props + data + default value ----------------------------
+  const properties = (
+    <>
       {/* Type-specific properties, driven by the registry descriptor */}
       <TypeSettings field={field} set={set} />
       {/* An option-sourced leaf's options (select / checkbox-group / cascader /
@@ -132,14 +141,14 @@ export function FieldForm({
       {isOptionSourced(field) && (
         <DataSourceEditor field={field} sourceNames={condFields} set={set} />
       )}
-      {field.type === "array" && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}
+      {isArray && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}
       <DefaultValueEditor field={field} set={set} />
+    </>
+  );
 
-      <ValidationEditor field={field} siblingNames={condFields} set={set} />
-
-      <Divider orientation="left" plain>
-        Layout
-      </Divider>
+  // --- Layout (responsive colSpan + mobile visibility) -----------------------
+  const layout = (
+    <>
       <Space wrap>
         {COL_KEYS.map((key) => (
           <Form.Item key={key} label={`colSpan ${key}`}>
@@ -163,14 +172,16 @@ export function FieldForm({
           Hide on mobile
         </Checkbox>
       </Form.Item>
+    </>
+  );
 
+  // --- Logic (visibility + reactions) ----------------------------------------
+  const logic = (
+    <>
       {/* Visibility is editable for top-level AND array item fields: per-row visibleWhen
           is evaluated against the row's merged scope (G4). For an item field, `condFields`
           offers the row's sibling names; referencing a top-level field still works via the
           JSON panel since the row scope merges outer values. */}
-      <Divider orientation="left" plain>
-        Visibility
-      </Divider>
       <Form.Item label="Show this field">
         <Select
           value={equals ? "when" : "always"}
@@ -211,7 +222,6 @@ export function FieldForm({
           </Form.Item>
         </Space>
       )}
-
       <ReactionsEditor
         reactions={(prop(field, "reactions") as Reaction[] | undefined) ?? []}
         fieldName={field.name}
@@ -219,10 +229,12 @@ export function FieldForm({
         sourceNames={condFields}
         onChange={(next) => set({ reactions: next.length ? next : undefined } as Patch)}
       />
+    </>
+  );
 
-      <Divider orientation="left" plain>
-        Permissions
-      </Divider>
+  // --- Permissions (RBAC) ----------------------------------------------------
+  const permissions = (
+    <>
       <Form.Item label="View roles (comma-separated)">
         <Input
           value={csv(field.permissions?.viewRoles)}
@@ -249,6 +261,33 @@ export function FieldForm({
           }}
         />
       </Form.Item>
+    </>
+  );
+
+  return (
+    <Form layout="vertical" size="small">
+      <Collapse
+        size="small"
+        defaultActiveKey={["basic", "props"]}
+        items={[
+          { key: "basic", label: "Basic", children: basic },
+          { key: "props", label: "Properties", children: properties },
+          // ValidationEditor renders nothing for arrays (no field-level rules), so the
+          // panel is only offered for leaves.
+          ...(isArray
+            ? []
+            : [
+                {
+                  key: "validation",
+                  label: "Validation",
+                  children: <ValidationEditor field={field} siblingNames={condFields} set={set} />,
+                },
+              ]),
+          { key: "layout", label: "Layout", children: layout },
+          { key: "logic", label: "Logic (visibility & reactions)", children: logic },
+          { key: "permissions", label: "Permissions", children: permissions },
+        ]}
+      />
     </Form>
   );
 }

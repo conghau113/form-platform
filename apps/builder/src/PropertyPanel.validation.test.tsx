@@ -15,6 +15,10 @@ function setup(field: FieldNode, siblingNames: string[] = ["other"]) {
       onChange={onChange}
     />,
   );
+  // FieldForm groups sections into a Collapse with only Basic+Properties open by default,
+  // so the Validation panel's controls aren't mounted until it's expanded. These tests all
+  // exercise validation, so open it up front.
+  fireEvent.click(screen.getByText("Validation"));
   // The panel re-emits the WHOLE rebuilt node; tests read the last emitted field.
   const lastField = () => onChange.mock.calls[onChange.mock.calls.length - 1]?.[1] as FieldNode;
   return { onChange, lastField };
