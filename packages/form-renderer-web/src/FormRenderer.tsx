@@ -530,6 +530,8 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
             help={
               fieldState.error?.message ?? warning ?? (opts?.hideLabel ? undefined : node.helpText)
             }
+            extra={opts?.hideLabel ? undefined : node.extra}
+            hasFeedback={node.hasFeedback}
             {...node.decoratorProps}
           >
             {/* readPretty / readOnly-without-antd-support → a plain read view (PreviewText).

@@ -198,20 +198,31 @@ export function FieldControl(props: {
       // fileList (the form value) — no auto-upload. With `settings.submitUrl`, antd uploads
       // for real to that action. The value IS the fileList.
       const fileList = (value as UploadFile[] | undefined) ?? [];
+      // Shared props for both the button and the dragger variant.
+      const uploadProps = {
+        fileList,
+        disabled,
+        accept: node.accept,
+        maxCount: node.maxCount,
+        listType: node.listType,
+        multiple: node.multiple,
+        directory: node.directory,
+        action: submitUrl,
+        beforeUpload: submitUrl ? undefined : () => false,
+        onChange: (info: { fileList: UploadFile[] }) => onChange(info.fileList),
+      };
+      const room = !node.maxCount || fileList.length < node.maxCount;
+      // The Dragger renders a full drop‑zone; the default renders a compact trigger button.
+      if (node.dragger) {
+        return (
+          <Upload.Dragger {...uploadProps}>
+            <p className="ant-upload-text">Click or drag file to this area to upload</p>
+          </Upload.Dragger>
+        );
+      }
       return (
-        <Upload
-          fileList={fileList}
-          disabled={disabled}
-          accept={node.accept}
-          maxCount={node.maxCount}
-          listType={node.listType}
-          action={submitUrl}
-          beforeUpload={submitUrl ? undefined : () => false}
-          onChange={(info) => onChange(info.fileList)}
-        >
-          {(!node.maxCount || fileList.length < node.maxCount) && (
-            <Button>{node.listType === "picture-card" ? "+ Upload" : "Select file"}</Button>
-          )}
+        <Upload {...uploadProps}>
+          {room && <Button>{node.listType === "picture-card" ? "+ Upload" : "Select file"}</Button>}
         </Upload>
       );
     }

@@ -38,6 +38,30 @@ describe("FormRenderer Phase L field types", () => {
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ perks: ["lunch", "gym"] });
   });
 
+  it("renders the persistent `extra` hint under a control, alongside a validation error", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <FormRenderer
+        onSubmit={onSubmit}
+        schema={form([
+          {
+            type: "text",
+            name: "email",
+            label: "Email",
+            extra: "We never share it",
+            validations: [{ type: "required", message: "Email is required" }],
+          },
+        ])}
+      />,
+    );
+    // The extra hint is always present...
+    expect(screen.getByText("We never share it")).toBeInTheDocument();
+    // ...and survives a validation error (which only replaces `help`, not `extra`).
+    await userEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() => expect(screen.getByText("Email is required")).toBeInTheDocument());
+    expect(screen.getByText("We never share it")).toBeInTheDocument();
+  });
+
   it("blocks submit when a required checkbox-group is empty", async () => {
     const onSubmit = vi.fn();
     render(
@@ -124,6 +148,30 @@ describe("FormRenderer Phase L field types", () => {
       await userEvent.upload(input, file);
       expect(await screen.findByText("report.pdf")).toBeInTheDocument();
       // beforeUpload→false: nothing is uploaded to a server.
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("renders the Upload dragger drop-zone variant and still keeps files local", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      render(
+        <FormRenderer
+          schema={form([
+            { type: "upload", name: "docs", label: "Documents", dragger: true, multiple: true },
+          ])}
+        />,
+      );
+      // The dragger renders its drop-zone prompt instead of the compact button.
+      expect(screen.getByText("Click or drag file to this area to upload")).toBeInTheDocument();
+      const file = new File(["x"], "report.pdf", { type: "application/pdf" });
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(input).toHaveAttribute("multiple");
+      await userEvent.upload(input, file);
+      expect(await screen.findByText("report.pdf")).toBeInTheDocument();
       expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();

@@ -367,6 +367,9 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
           { label: "Picture card", value: "picture-card" },
         ],
       },
+      { key: "multiple", label: "Allow multiple files", control: "checkbox" },
+      { key: "directory", label: "Upload directory", control: "checkbox" },
+      { key: "dragger", label: "Drop-zone (dragger)", control: "checkbox" },
     ],
     // Value is an array of file metadata — no simple default-value editor.
     defaultValueKind: "none",

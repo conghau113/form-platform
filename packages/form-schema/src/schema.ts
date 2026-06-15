@@ -159,6 +159,13 @@ const commonFields = {
   helpText: z.string().optional(),
   /** Short hint rendered as an info tooltip next to the label. */
   tooltip: z.string().optional(),
+  /** Persistent secondary hint rendered under the control (antd Form.Item `extra`).
+   *  Unlike `helpText` (antd `help`), a validation message never replaces it — use it
+   *  for always-on guidance. Web-only, additive; the native renderer ignores it. */
+  extra: z.string().optional(),
+  /** Show antd Form.Item's feedback status icon (success/error/validating). Web-only,
+   *  additive; native ignores it. */
+  hasFeedback: z.boolean().optional(),
   required: z.boolean().optional(),
   /** Interaction pattern flags, layered on each other (Formily's `pattern`, expressed
    *  additively). Precedence in the renderer is `readPretty > readOnly > disabled >
@@ -355,6 +362,13 @@ export const uploadFieldSchema = z.object({
   maxCount: z.number().int().optional(),
   /** antd list layout. */
   listType: z.enum(["text", "picture", "picture-card"]).optional(),
+  /** Allow picking several files at once in the native picker. */
+  multiple: z.boolean().optional(),
+  /** Upload a whole directory (sets the picker's `webkitdirectory`). Web-only. */
+  directory: z.boolean().optional(),
+  /** Render the large drop‑zone variant (antd `Upload.Dragger`) instead of a button.
+   *  Web-only, additive; the native renderer falls back to its default file picker. */
+  dragger: z.boolean().optional(),
 });
 
 /** Hierarchical single-path choice (antd Cascader). The value is the PATH of

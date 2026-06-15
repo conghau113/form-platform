@@ -63,6 +63,16 @@ export function FieldForm({
           onChange={(e) => set({ tooltip: e.target.value || undefined })}
         />
       </Form.Item>
+      {/* Persistent hint under the control (Form.Item `extra`); a validation message
+          never replaces it, unlike Help text. Leaves only — arrays render their own shell. */}
+      {field.type !== "array" && (
+        <Form.Item label="Extra hint">
+          <Input
+            value={field.extra ?? ""}
+            onChange={(e) => set({ extra: e.target.value || undefined } as Patch)}
+          />
+        </Form.Item>
+      )}
       <Space wrap>
         <Form.Item>
           <Checkbox
@@ -72,6 +82,16 @@ export function FieldForm({
             Required
           </Checkbox>
         </Form.Item>
+        {field.type !== "array" && (
+          <Form.Item>
+            <Checkbox
+              checked={!!field.hasFeedback}
+              onChange={(e) => set({ hasFeedback: e.target.checked || undefined } as Patch)}
+            >
+              Show feedback
+            </Checkbox>
+          </Form.Item>
+        )}
         {/* Universal interaction pattern (Formily-style), layered on the additive
             disabled/readOnly/readPretty flags — mutually exclusive in the UI. */}
         {field.type !== "array" && (

@@ -93,6 +93,9 @@ describe("schema field types", () => {
           accept: "image/*,.pdf",
           maxCount: 3,
           listType: "picture",
+          multiple: true,
+          directory: true,
+          dragger: true,
           required: true,
         },
         {
@@ -121,7 +124,14 @@ describe("schema field types", () => {
         },
       ],
     });
-    expect(out.fields[0]).toMatchObject({ type: "upload", maxCount: 3, listType: "picture" });
+    expect(out.fields[0]).toMatchObject({
+      type: "upload",
+      maxCount: 3,
+      listType: "picture",
+      multiple: true,
+      directory: true,
+      dragger: true,
+    });
     expect(out.fields[1]).toMatchObject({ type: "checkbox-group" });
     expect(out.fields[2]).toMatchObject({
       type: "checkbox-group",
@@ -484,6 +494,34 @@ describe("schema field types", () => {
         fields: [{ type: "number", name: "n", label: "N", displayFormat: "scientific" }],
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts cross-cutting decorator extras (extra hint + hasFeedback) on any leaf", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "x7",
+      title: "X7",
+      fields: [
+        { type: "text", name: "t", label: "T", extra: "Always shown below", hasFeedback: true },
+        { type: "switch", name: "s", label: "S", hasFeedback: true },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ extra: "Always shown below", hasFeedback: true });
+    expect(out.fields[1]).toMatchObject({ hasFeedback: true });
+  });
+
+  it("rejects a non-string extra / non-boolean hasFeedback", () => {
+    const base = { formVersion: 3, id: "bad-x7", title: "Bad X7" };
+    const text = (extra: Record<string, unknown>) => ({
+      type: "text",
+      name: "t",
+      label: "T",
+      ...extra,
+    });
+    expect(formSchema.safeParse({ ...base, fields: [text({ extra: 5 })] }).success).toBe(false);
+    expect(formSchema.safeParse({ ...base, fields: [text({ hasFeedback: "yes" })] }).success).toBe(
+      false,
+    );
   });
 
   it("rejects bad severity / trigger / asyncValidator shapes", () => {

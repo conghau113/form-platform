@@ -14,8 +14,9 @@
 ## Status at a glance (updated 2026‑06‑15)
 
 Branch `refactor/modularize-fe-be`. Done chain so far: **X1 → D8 → X2+X3 → D1 → D5 → X4 →
-X5 → X8**. All additive — no `formVersion` bump on any phase. Each row links to the commit
-that landed it; the §3 lists below carry the same ✅ markers.
+X5 → X8 → X7 → X6**. The whole X‑track is now complete. All additive — no `formVersion`
+bump on any phase. Each row links to the commit that landed it; the §3 lists below carry
+the same ✅ markers.
 
 | Phase | What | Status | Commit |
 | --- | --- | --- | --- |
@@ -24,8 +25,8 @@ that landed it; the §3 lists below carry the same ✅ markers.
 | X3 | Choice family props | ✅ Done | `6188134` |
 | X4 | Date/time props | ✅ Done | `5a8d176` |
 | X5 | Widgets (switch/slider/rate) | ✅ Done¹ | `f74e99a` |
-| X6 | Upload (multiple/directory/Dragger) | ⬜ Todo | — |
-| X7 | Cross‑cutting size/variant/extra | ⬜ Todo | — |
+| X6 | Upload (multiple/directory/Dragger) | ✅ Done | `pending` |
+| X7 | Cross‑cutting size/variant/extra | ✅ Done² | `pending` |
 | X8 | Validator formats | ✅ Done | `06ca6c6` |
 | D1 | Copy‑on‑drag (Alt → clone) | ✅ Done | `6b7054f` |
 | D2 | Cursor states + drag handle | ⬜ Todo | — |
@@ -39,11 +40,16 @@ that landed it; the §3 lists below carry the same ✅ markers.
 **Deferred sub‑items (need new groundwork, not part of any open phase yet):**
 - ¹ Slider `marks` + tooltip formatter — need a new **key/value setter**; `SettingControl`
   is currently `text|number|checkbox|options|select|segmented|slider` only.
+- ² X7 added the genuinely cross‑cutting **decorator extras** (`extra` persistent hint +
+  `hasFeedback`) to `commonFields`; `size`/`variant` already live per‑field from X2–X5, so
+  they were not duplicated into `commonFields`. `feedbackLayout` (§2c) is a Formily‑antd
+  prop absent from plain antd v5 → intentionally not added.
 - Date `minDate`/`maxDate` bounds (from X4) — need a date‑library parse the web renderer
   does not yet carry (dayjs is only transitive via antd).
 
-**Suggested next:** X6 or X7 (finish the X‑track), or add the key/value setter to unlock
-slider `marks`. D‑track next cheap win is D2.
+**Suggested next:** the X‑track is complete. Either add the key/value setter to unlock the
+deferred slider `marks`/tooltip + date bounds, or move to the **D‑track** (next cheap win
+D2 — cursor states + drag handle; then D3 auto‑scroll, D6 keyboard reorder).
 
 ---
 
@@ -184,8 +190,9 @@ renderer (additive) → builder setter → form‑core (validators) → tests �
   `maxDate` bounds deferred — see Status.)
 - ✅ **X5 — Widgets.** switch labels, slider `range`/`vertical`/`dots`, rate `character`.
   (Slider `marks` + tooltip formatter deferred — need a key/value setter.)
-- ⬜ **X6 — Upload.** `multiple`/`directory`/Dragger variant.
-- ⬜ **X7 — Cross‑cutting** `size`/`variant`/`extra` on `commonFields`.
+- ✅ **X6 — Upload.** `multiple`/`directory`/Dragger variant.
+- ✅ **X7 — Cross‑cutting** decorator extras (`extra` + `hasFeedback`) on `commonFields`.
+  (`size`/`variant` already per‑field from X2–X5; `feedbackLayout` is Formily‑only.)
 - ✅ **X8 — Validator formats** (§2d).
 
 ### Track D — Designer (drag‑drop) depth
