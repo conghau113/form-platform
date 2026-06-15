@@ -1,7 +1,20 @@
+import { BUILTIN_ICON_TOKENS, Icon } from "@org/form-renderer-web";
 import type { FieldNode } from "@org/form-schema";
-import { Checkbox, Form, Input, InputNumber, Segmented, Select, Slider } from "antd";
-import { describeField, type SettingDescriptor } from "../field-registry";
+import {
+  AutoComplete,
+  Checkbox,
+  ColorPicker,
+  Form,
+  Input,
+  InputNumber,
+  Segmented,
+  Select,
+  Slider,
+} from "antd";
+import { describeField, type KeyValuePair, type SettingDescriptor } from "../field-registry";
 import { prop } from "./helpers";
+import { JsonEditor } from "./JsonEditor";
+import { KeyValueEditor } from "./KeyValueEditor";
 import { type Option, OptionsEditor } from "./OptionsEditor";
 import type { Patch } from "./types";
 
@@ -44,6 +57,16 @@ export function SettingControls({
                 />
               </Form.Item>
             );
+          case "textarea":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <Input.TextArea
+                  rows={s.rows ?? 3}
+                  value={(get(s.key) as string) ?? ""}
+                  onChange={(e) => setKey(e.target.value || undefined)}
+                />
+              </Form.Item>
+            );
           case "number":
             return (
               <Form.Item key={s.key} label={s.label}>
@@ -78,6 +101,81 @@ export function SettingControls({
                   options={s.choices ?? []}
                   onChange={(v) => setKey(v ?? undefined)}
                 />
+              </Form.Item>
+            );
+          case "multiSelect":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <Select
+                  mode="multiple"
+                  style={{ width: "100%" }}
+                  allowClear
+                  value={(get(s.key) as string[]) ?? []}
+                  options={s.choices ?? []}
+                  onChange={(v) => setKey(v.length ? v : undefined)}
+                />
+              </Form.Item>
+            );
+          case "color":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <ColorPicker
+                  allowClear
+                  showText
+                  value={(get(s.key) as string) ?? undefined}
+                  onChange={(c) => setKey(c.toHexString())}
+                  onClear={() => setKey(undefined)}
+                />
+              </Form.Item>
+            );
+          case "icon": {
+            // A free-entry token picker with GLYPH PREVIEWS resolved through the renderer's
+            // icon registry (I2). Suggestions come from the descriptor's `choices` or fall
+            // back to the renderer's built-in tokens. The stored value stays the raw token
+            // string ("antd:SearchOutlined"); an unknown token simply shows no glyph.
+            const tokens = s.choices?.map((c) => c.value) ?? BUILTIN_ICON_TOKENS;
+            const iconOptions = tokens.map((token) => ({
+              value: token,
+              label: (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Icon token={token} />
+                  {token}
+                </span>
+              ),
+            }));
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <AutoComplete
+                  style={{ width: "100%" }}
+                  allowClear
+                  placeholder="antd:SearchOutlined"
+                  value={(get(s.key) as string) ?? ""}
+                  options={iconOptions}
+                  filterOption={(input, opt) =>
+                    (opt?.value as string).toLowerCase().includes(input.toLowerCase())
+                  }
+                  onChange={(v) => setKey(v || undefined)}
+                />
+              </Form.Item>
+            );
+          }
+          case "keyValue":
+          case "marks":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <KeyValueEditor
+                  pairs={(get(s.key) as KeyValuePair[]) ?? []}
+                  numericKeys={s.control === "marks"}
+                  keyLabel={s.keyLabel}
+                  valueLabel={s.valueLabel}
+                  onChange={(pairs) => setKey(pairs.length ? pairs : undefined)}
+                />
+              </Form.Item>
+            );
+          case "json":
+            return (
+              <Form.Item key={s.key} label={s.label}>
+                <JsonEditor value={get(s.key)} rows={s.rows} onChange={setKey} />
               </Form.Item>
             );
           case "segmented":

@@ -16,6 +16,7 @@ import {
   Upload,
   type UploadFile,
 } from "antd";
+import { resolveIconNode } from "../icons/index.js";
 import type {
   DateRangeValue,
   DateValue,
@@ -69,8 +70,8 @@ export function FieldControl(props: {
           placeholder={node.placeholder}
           allowClear={node.allowClear}
           showCount={node.showCount}
-          prefix={node.prefix}
-          suffix={node.suffix}
+          prefix={resolveIconNode(node.prefixIcon) ?? node.prefix}
+          suffix={resolveIconNode(node.suffixIcon) ?? node.suffix}
           addonBefore={node.addonBefore}
           addonAfter={node.addonAfter}
           size={node.size}
@@ -107,7 +108,7 @@ export function FieldControl(props: {
           max={node.max}
           step={node.step}
           precision={node.precision}
-          prefix={node.prefix}
+          prefix={resolveIconNode(node.prefixIcon) ?? node.prefix}
           addonBefore={node.addonBefore}
           addonAfter={node.addonAfter}
           controls={node.controls}

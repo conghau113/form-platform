@@ -205,6 +205,11 @@ export const textFieldSchema = z.object({
   /** Inline text/symbol rendered inside the input before/after the value. */
   prefix: z.string().optional(),
   suffix: z.string().optional(),
+  /** Icon token rendered inside the input before/after the value, resolved via the web
+   *  renderer's icon registry (e.g. `"antd:SearchOutlined"`). Takes visual precedence over
+   *  the text `prefix`/`suffix` when both are set. Web-only; other renderers ignore it. */
+  prefixIcon: z.string().optional(),
+  suffixIcon: z.string().optional(),
   /** Label fused outside the input on the left/right (antd addon). */
   addonBefore: z.string().optional(),
   addonAfter: z.string().optional(),
@@ -246,6 +251,10 @@ export const numberFieldSchema = z.object({
   precision: z.number().int().optional(),
   /** Inline prefix inside the input (e.g. "$"). */
   prefix: z.string().optional(),
+  /** Icon token rendered inside the input as the prefix, resolved via the web renderer's
+   *  icon registry (e.g. `"antd:DollarOutlined"`). Takes visual precedence over the text
+   *  `prefix` when both are set. Web-only; other renderers ignore it. */
+  prefixIcon: z.string().optional(),
   addonBefore: z.string().optional(),
   addonAfter: z.string().optional(),
   /** Show the up/down stepper handles (antd `controls`, default true). */

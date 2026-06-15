@@ -20,22 +20,45 @@ export type NodeType = FieldType | "form";
  *  analogue of Designable's setter vocabulary (`@designable/react-settings-form`), kept
  *  to a typed, form-relevant subset:
  *  - `text`/`number`/`checkbox`  : the primitive inputs
+ *  - `textarea`                  : multi-line text (`rows` controls height)
  *  - `select`/`segmented`        : a single choice from `choices` (segmented = inline
  *                                  buttons, best for 2–4 short enums like size/variant)
+ *  - `multiSelect`               : several choices from `choices`, writes a `string[]`
  *  - `slider`                    : a bounded numeric (`min`/`max`/`step`)
+ *  - `color`                     : a color token, writes a hex string
+ *  - `icon`                      : an icon token (e.g. `"lucide:search"`); a free-entry
+ *                                  picker with `choices` as suggestions (I2 upgrades it to
+ *                                  glyph previews once the I1 registry lands)
+ *  - `keyValue`/`marks`          : an ordered list of `{ key, value }` pairs; `marks`
+ *                                  constrains keys to numbers (e.g. slider tick labels)
+ *  - `json`                      : an arbitrary JSON value via a validated text editor
  *  - `options`                   : the static option-list editor (select/radio choices) */
 export type SettingControl =
   | "text"
+  | "textarea"
   | "number"
   | "checkbox"
   | "options"
   | "select"
   | "segmented"
-  | "slider";
+  | "multiSelect"
+  | "slider"
+  | "color"
+  | "icon"
+  | "keyValue"
+  | "marks"
+  | "json";
 
-/** One choice for a `select` / `segmented` setting control. */
+/** One choice for a `select` / `segmented` / `multiSelect` setting control. */
 export interface SettingChoice {
   label: string;
+  value: string;
+}
+
+/** One ordered `{ key, value }` pair edited by the `keyValue` / `marks` controls. For
+ *  `marks` the `key` is the (stringified) numeric tick position and `value` its label. */
+export interface KeyValuePair {
+  key: string;
   value: string;
 }
 
@@ -45,12 +68,18 @@ export interface SettingDescriptor {
   key: string;
   label: string;
   control: SettingControl;
-  /** Choices for `control: "select"` / `"segmented"`. */
+  /** Choices for `control: "select"` / `"segmented"` / `"multiSelect"`; suggestion tokens
+   *  for `control: "icon"`. */
   choices?: SettingChoice[];
   /** Numeric bounds for `control: "slider"` (also honored by `"number"`). */
   min?: number;
   max?: number;
   step?: number;
+  /** Visible rows for `control: "textarea"` / `"json"`. */
+  rows?: number;
+  /** Column headers for `control: "keyValue"` / `"marks"`. */
+  keyLabel?: string;
+  valueLabel?: string;
 }
 
 /** How the shared "Default value" editor renders for this type. */

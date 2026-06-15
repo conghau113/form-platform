@@ -114,13 +114,34 @@ function PaletteItem({ entry }: { entry: PaletteEntry }) {
       <Card
         size="small"
         hoverable
-        style={{ cursor: "grab", userSelect: "none", touchAction: "none" }}
-        styles={{ body: { padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 } }}
+        style={{
+          cursor: "grab",
+          userSelect: "none",
+          touchAction: "none",
+          border: "1px solid rgb(199, 199, 199)",
+        }}
+        styles={{
+          body: {
+            padding: "8px 12px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontSize: 13,
+          },
+        }}
         onPointerDown={(e) =>
           beginCreate(entry.type, e, { patch: entry.patch, label: entry.label })
         }
       >
-        <span style={{ color: "rgba(0,0,0,0.45)", display: "inline-flex" }}>{icon}</span>
+        <span
+          style={{
+            color: "rgba(0,0,0,0.45)",
+            fontSize: 20,
+            display: "inline-flex",
+          }}
+        >
+          {icon}
+        </span>
         {entry.label}
       </Card>
     </Tooltip>
@@ -145,7 +166,14 @@ export function Palette() {
   }, [query]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 12 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        padding: 12,
+      }}
+    >
       <Input
         allowClear
         size="small"
@@ -159,7 +187,14 @@ export function Palette() {
       ) : (
         groups.map(({ category, items }) => (
           <div key={category} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <Typography.Text type="secondary" style={{ fontSize: 12, textTransform: "uppercase" }}>
+            <Typography.Text
+              type="secondary"
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                textTransform: "uppercase",
+              }}
+            >
               {category}
             </Typography.Text>
             {items.map((entry) => (

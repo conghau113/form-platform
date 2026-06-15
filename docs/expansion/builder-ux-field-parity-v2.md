@@ -23,11 +23,11 @@ not yet committed (user gates the commit).
 | R1 | Re‑taxonomy palette (Inputs/Layouts/Arrays/Displays) + relabel | ✅ Done | `bb3f9f0` |
 | G1 | Palette search + per‑type icons + tooltips | ✅ Done | `bb3f9f0` |
 | G2 | Property panel collapsible sections | ✅ Done | `bb3f9f0` |
-| R3 | Array Cards/Table chips + `variant:"auto"` (responsive) | ✅ Done | `uncommitted` |
-| R4 | UploadDragger palette chip (built‑in seed) | ✅ Done | `uncommitted` |
-| S1 | Setter vocab: icon/token/keyValue/marks (gates I & T) | ⬜ Next | — |
-| I1 | Icon registry (token→component) + `prefixIcon`/`suffixIcon` | ⬜ Todo | — |
-| I2 | Icon‑picker setter wired into input family | ⬜ Todo | — |
+| R3 | Array Cards/Table chips + `variant:"auto"` (responsive) | ✅ Done | `d5b4429` |
+| R4 | UploadDragger palette chip (built‑in seed) | ✅ Done | `d5b4429` |
+| S1 | Setter vocab: icon/multiSelect/textarea/color/keyValue/marks/json | ✅ Done | `uncommitted` |
+| I1 | Icon registry (token→component) + `prefixIcon`/`suffixIcon` | ✅ Done | `uncommitted` |
+| I2 | Icon‑picker setter wired into input family | ✅ Done | `uncommitted` |
 | P1 | Preset data model + storage (api + builder) | ⬜ Todo | — |
 | P2 | Preset gallery UI (save/edit/delete, drag→canvas) | ⬜ Todo | — |
 | P3 | Built‑in preset library | ⬜ Todo | — |
@@ -47,7 +47,33 @@ data‑driven `paletteVariants` mechanism (one schema `type` → several palette
 seeding a default‑prop `patch`) — the minimal in‑app seed of the Track P preset system.
 Changeset: `.changeset/array-variant-auto-r3.md`.
 
-**Next:** **S1** — it gates the icon (I) and token‑style (T) tracks.
+**S1 notes:** builder‑only setter‑vocabulary completion — no schema, no changeset. Added
+seven `SettingControl` kinds, descriptor‑driven and reusable: `textarea`, `multiSelect`,
+`color` (antd `ColorPicker`→hex), `icon` (free‑entry token `AutoComplete`; I2 upgrades it
+to glyph previews via the I1 registry — no descriptor change), `keyValue`/`marks` (shared
+controlled `KeyValueEditor`; `marks` constrains keys to numbers for slider ticks), and
+`json` (validated `JsonEditor`). All controlled (no stale draft state when the panel swaps
+node without remounting). 9 new tests (`SettingControls.test.tsx`, builder 189/189).
+
+**I1/I2 notes:** `form-renderer-web` now ships a dependency‑free, extensible icon
+**registry** (`resolveIcon`/`registerIcon`/`registerIcons`/`registerIconNamespace`, plus an
+`Icon` component + `resolveIconNode` helper). The schema only stores a string token; the
+renderer resolves it. A curated, form‑relevant subset of `@ant-design/icons` (named imports
+only → the rest tree‑shakes) is registered as the built‑in `antd:` namespace;
+`@ant-design/icons` became a peerDependency (it travels with antd). New namespaces (e.g.
+`lucide:` — deferred until `lucide-react` is added) register with **no schema change** (locked
+decision #3). Schema (additive, no `formVersion` bump): `text` gained
+`prefixIcon`/`suffixIcon`, `number` gained `prefixIcon`; the web renderer resolves them in
+`FieldControl` and falls back to the text `prefix`/`suffix` when a token is unknown (never
+crashes). I2 upgraded the builder `icon` setter to render glyph previews (suggestions default
+to the renderer's `BUILTIN_ICON_TOKENS`) and added the `prefixIcon`/`suffixIcon` settings to
+the text + number descriptors. Changeset: `.changeset/icon-registry-prefix-suffix-i1.md`
+(I2 is builder‑only → no changeset). Verified: schema + renderer + builder typecheck clean,
+builder 190/190, renderer 107/107 (one pre‑existing parallel‑load timeout, passes alone),
+biome clean on changed files.
+
+**Next:** **P1** — preset data model + storage (api + builder), the start of the Track P
+preset system.
 
 ---
 

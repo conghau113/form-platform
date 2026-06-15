@@ -257,6 +257,8 @@ describe("schema field types", () => {
           showCount: true,
           prefix: "#",
           suffix: ".io",
+          prefixIcon: "antd:SearchOutlined",
+          suffixIcon: "antd:CheckCircleOutlined",
           addonBefore: "https://",
           addonAfter: ".com",
           size: "large",
@@ -276,6 +278,7 @@ describe("schema field types", () => {
           name: "price",
           label: "Price",
           prefix: "$",
+          prefixIcon: "antd:DollarOutlined",
           addonAfter: "USD",
           controls: false,
           keyboard: true,
@@ -312,7 +315,13 @@ describe("schema field types", () => {
         },
       ],
     });
-    expect(out.fields[0]).toMatchObject({ allowClear: true, prefix: "#", variant: "filled" });
+    expect(out.fields[0]).toMatchObject({
+      allowClear: true,
+      prefix: "#",
+      prefixIcon: "antd:SearchOutlined",
+      suffixIcon: "antd:CheckCircleOutlined",
+      variant: "filled",
+    });
     expect(out.fields[1]).toMatchObject({ autoSize: { minRows: 2, maxRows: 6 } });
     expect(out.fields[2]).toMatchObject({ autoSize: true });
     expect(out.fields[3]).toMatchObject({ displayFormat: "currency", controls: false });

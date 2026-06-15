@@ -17,6 +17,7 @@ export type {
   DefaultValueKind,
   FieldDescriptor,
   FieldType,
+  KeyValuePair,
   NodeType,
   PaletteEntry,
   PaletteVariant,
