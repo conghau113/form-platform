@@ -41,6 +41,10 @@ export function SelectControl(props: {
       mode={mode}
       showSearch={node.showSearch}
       allowClear={node.allowClear}
+      placeholder={node.placeholder}
+      maxTagCount={node.maxTagCount}
+      size={node.size}
+      variant={node.variant}
       options={options ?? []}
       loading={isFetching}
       status={isError ? "error" : undefined}

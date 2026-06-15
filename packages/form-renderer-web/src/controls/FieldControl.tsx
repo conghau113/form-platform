@@ -22,6 +22,7 @@ import type {
   TimeRangeValue,
   TimeValue,
 } from "../internal/control-types.js";
+import { numberFormatProps } from "../internal/number-format.js";
 import { CascaderControl } from "./CascaderControl.js";
 import { CheckboxGroupControl } from "./CheckboxGroupControl.js";
 import { SelectControl } from "./SelectControl.js";
@@ -57,6 +58,14 @@ export function FieldControl(props: {
           readOnly={readOnly}
           maxLength={node.maxLength}
           placeholder={node.placeholder}
+          allowClear={node.allowClear}
+          showCount={node.showCount}
+          prefix={node.prefix}
+          suffix={node.suffix}
+          addonBefore={node.addonBefore}
+          addonAfter={node.addonAfter}
+          size={node.size}
+          variant={node.variant}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -70,6 +79,10 @@ export function FieldControl(props: {
           maxLength={node.maxLength}
           rows={node.rows}
           placeholder={node.placeholder}
+          allowClear={node.allowClear}
+          showCount={node.showCount}
+          autoSize={node.autoSize}
+          size={node.size}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -85,7 +98,15 @@ export function FieldControl(props: {
           max={node.max}
           step={node.step}
           precision={node.precision}
+          prefix={node.prefix}
+          addonBefore={node.addonBefore}
+          addonAfter={node.addonAfter}
+          controls={node.controls}
+          keyboard={node.keyboard}
+          size={node.size}
+          variant={node.variant}
           onChange={onChange}
+          {...numberFormatProps(node)}
         />
       );
     case "password":
@@ -97,6 +118,9 @@ export function FieldControl(props: {
           readOnly={readOnly}
           maxLength={node.maxLength}
           placeholder={node.placeholder}
+          allowClear={node.allowClear}
+          size={node.size}
+          variant={node.variant}
           onChange={(e) => onChange(e.target.value)}
         />
       );
@@ -119,6 +143,9 @@ export function FieldControl(props: {
           value={value}
           disabled={disabled}
           options={optionsOverride ?? node.options ?? []}
+          optionType={node.optionType}
+          buttonStyle={node.buttonStyle}
+          size={node.size}
           onChange={(e) => onChange(e.target.value)}
         />
       );

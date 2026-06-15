@@ -131,6 +131,12 @@ export const decoratorPropsSchema = z.object({
 
 export type DecoratorProps = z.infer<typeof decoratorPropsSchema>;
 
+/** antd control size override. Web-only, additive — native ignores it. Shared by
+ *  the input + choice families rather than living on every field. */
+const sizeProp = { size: z.enum(["small", "middle", "large"]).optional() };
+/** antd input visual variant (border treatment). Web-only, additive. */
+const variantProp = { variant: z.enum(["outlined", "filled", "borderless"]).optional() };
+
 const commonFields = {
   name: z.string().min(1),
   label: z.string(),
@@ -169,7 +175,26 @@ export const textFieldSchema = z.object({
   ...commonFields,
   placeholder: z.string().optional(),
   maxLength: z.number().int().optional(),
+  /** Show a clear (×) button when non-empty. */
+  allowClear: z.boolean().optional(),
+  /** Show a character counter (reads `maxLength` when set). */
+  showCount: z.boolean().optional(),
+  /** Inline text/symbol rendered inside the input before/after the value. */
+  prefix: z.string().optional(),
+  suffix: z.string().optional(),
+  /** Label fused outside the input on the left/right (antd addon). */
+  addonBefore: z.string().optional(),
+  addonAfter: z.string().optional(),
+  ...sizeProp,
+  ...variantProp,
 });
+
+/** Textarea auto-grow: `true` grows freely; `{minRows,maxRows}` bounds it. When set,
+ *  antd ignores `rows`. The builder authors the boolean; the object form still parses. */
+export const textareaAutoSizeSchema = z.union([
+  z.boolean(),
+  z.object({ minRows: z.number().int().optional(), maxRows: z.number().int().optional() }),
+]);
 
 export const textareaFieldSchema = z.object({
   type: z.literal("textarea"),
@@ -177,7 +202,15 @@ export const textareaFieldSchema = z.object({
   placeholder: z.string().optional(),
   maxLength: z.number().int().optional(),
   rows: z.number().int().optional(),
+  allowClear: z.boolean().optional(),
+  showCount: z.boolean().optional(),
+  autoSize: textareaAutoSizeSchema.optional(),
+  ...sizeProp,
 });
+
+/** Declarative numeric display formatting. The renderer maps the preset to antd
+ *  formatter/parser functions — the JSON NEVER carries a function (no eval). */
+export const numberDisplayFormatSchema = z.enum(["thousands", "currency", "percent"]);
 
 export const numberFieldSchema = z.object({
   type: z.literal("number"),
@@ -188,6 +221,20 @@ export const numberFieldSchema = z.object({
   step: z.number().optional(),
   /** Number of decimal places the input formats to. */
   precision: z.number().int().optional(),
+  /** Inline prefix inside the input (e.g. "$"). */
+  prefix: z.string().optional(),
+  addonBefore: z.string().optional(),
+  addonAfter: z.string().optional(),
+  /** Show the up/down stepper handles (antd `controls`, default true). */
+  controls: z.boolean().optional(),
+  /** Let up/down arrow keys change the value (antd `keyboard`). */
+  keyboard: z.boolean().optional(),
+  /** Named display preset; see {@link numberDisplayFormatSchema}. */
+  displayFormat: numberDisplayFormatSchema.optional(),
+  /** ISO currency code used when `displayFormat = "currency"` (default "USD"). */
+  currency: z.string().optional(),
+  ...sizeProp,
+  ...variantProp,
 });
 
 export const optionSchema = z.object({
@@ -248,8 +295,14 @@ export const selectFieldSchema = z.object({
   showSearch: z.boolean().optional(),
   /** Show a clear (×) button. */
   allowClear: z.boolean().optional(),
+  /** Placeholder shown when nothing is selected. */
+  placeholder: z.string().optional(),
+  /** Max selected tags shown before "+N" (multiple/tags); `"responsive"` fits the row. */
+  maxTagCount: z.union([z.number().int(), z.literal("responsive")]).optional(),
   options: z.array(optionSchema).optional(),
   dataSource: selectDataSourceSchema.optional(),
+  ...sizeProp,
+  ...variantProp,
 });
 
 /** Multi-select rendered as a group of checkboxes. Shares the option/dataSource shape
@@ -258,6 +311,8 @@ export const selectFieldSchema = z.object({
 export const checkboxGroupFieldSchema = z.object({
   type: z.literal("checkbox-group"),
   ...commonFields,
+  /** Lay the checkboxes out in a row (default) or stacked column. */
+  direction: z.enum(["horizontal", "vertical"]).optional(),
   options: z.array(optionSchema).optional(),
   dataSource: selectDataSourceSchema.optional(),
 });
@@ -339,6 +394,11 @@ export const radioFieldSchema = z.object({
   type: z.literal("radio"),
   ...commonFields,
   options: z.array(optionSchema).optional(),
+  /** Classic radios (default) or a segmented button group (antd `optionType`). */
+  optionType: z.enum(["default", "button"]).optional(),
+  /** Button fill style — only meaningful when `optionType = "button"`. */
+  buttonStyle: z.enum(["outline", "solid"]).optional(),
+  ...sizeProp,
 });
 
 export const passwordFieldSchema = z.object({
@@ -346,6 +406,10 @@ export const passwordFieldSchema = z.object({
   ...commonFields,
   placeholder: z.string().optional(),
   maxLength: z.number().int().optional(),
+  /** Show a clear (×) button when non-empty. */
+  allowClear: z.boolean().optional(),
+  ...sizeProp,
+  ...variantProp,
 });
 
 export const sliderFieldSchema = z.object({

@@ -28,6 +28,29 @@ export const optionsSetting: SettingDescriptor = {
   label: "Options",
   control: "options",
 };
+
+/** Shared antd `size` override (small/middle/large) — input + choice families. */
+export const sizeSetting: SettingDescriptor = {
+  key: "size",
+  label: "Size",
+  control: "segmented",
+  choices: [
+    { label: "Small", value: "small" },
+    { label: "Middle", value: "middle" },
+    { label: "Large", value: "large" },
+  ],
+};
+/** Shared antd input `variant` (border treatment). */
+export const variantSetting: SettingDescriptor = {
+  key: "variant",
+  label: "Variant",
+  control: "segmented",
+  choices: [
+    { label: "Outlined", value: "outlined" },
+    { label: "Filled", value: "filled" },
+    { label: "Borderless", value: "borderless" },
+  ],
+};
 export const pickerSetting: SettingDescriptor = {
   key: "picker",
   label: "Picker",

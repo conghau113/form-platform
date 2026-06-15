@@ -26,7 +26,19 @@ export function CheckboxGroupControl(props: {
   if (isFetching) return <Typography.Text type="secondary">Loading…</Typography.Text>;
 
   // antd's Checkbox.Group has no `id` prop, so the Form.Item label stays unassociated.
+  // It also has no `direction` prop: stacking is done by flexing the group container,
+  // which still lays out the option-driven checkboxes correctly.
+  const style =
+    node.direction === "vertical"
+      ? { display: "flex", flexDirection: "column" as const, rowGap: 4 }
+      : undefined;
   return (
-    <Checkbox.Group value={value} disabled={disabled} options={options ?? []} onChange={onChange} />
+    <Checkbox.Group
+      value={value}
+      disabled={disabled}
+      options={options ?? []}
+      style={style}
+      onChange={onChange}
+    />
   );
 }

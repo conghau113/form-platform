@@ -233,6 +233,104 @@ describe("schema field types", () => {
     });
   });
 
+  it("accepts the X2/X3 rich input + choice props (additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "rich-props",
+      title: "Rich props",
+      fields: [
+        {
+          type: "text",
+          name: "code",
+          label: "Code",
+          allowClear: true,
+          showCount: true,
+          prefix: "#",
+          suffix: ".io",
+          addonBefore: "https://",
+          addonAfter: ".com",
+          size: "large",
+          variant: "filled",
+        },
+        {
+          type: "textarea",
+          name: "bio",
+          label: "Bio",
+          autoSize: { minRows: 2, maxRows: 6 },
+          showCount: true,
+          size: "small",
+        },
+        { type: "textarea", name: "notes", label: "Notes", autoSize: true },
+        {
+          type: "number",
+          name: "price",
+          label: "Price",
+          prefix: "$",
+          addonAfter: "USD",
+          controls: false,
+          keyboard: true,
+          displayFormat: "currency",
+          currency: "USD",
+          size: "middle",
+          variant: "borderless",
+        },
+        {
+          type: "select",
+          name: "tags",
+          label: "Tags",
+          multiple: true,
+          placeholder: "Pick…",
+          maxTagCount: "responsive",
+          size: "large",
+          variant: "filled",
+        },
+        {
+          type: "radio",
+          name: "plan",
+          label: "Plan",
+          optionType: "button",
+          buttonStyle: "solid",
+          size: "small",
+          options: [{ label: "A", value: "a" }],
+        },
+        {
+          type: "checkbox-group",
+          name: "perms",
+          label: "Perms",
+          direction: "vertical",
+          options: [{ label: "Read", value: "r" }],
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ allowClear: true, prefix: "#", variant: "filled" });
+    expect(out.fields[1]).toMatchObject({ autoSize: { minRows: 2, maxRows: 6 } });
+    expect(out.fields[2]).toMatchObject({ autoSize: true });
+    expect(out.fields[3]).toMatchObject({ displayFormat: "currency", controls: false });
+    expect(out.fields[4]).toMatchObject({ maxTagCount: "responsive", placeholder: "Pick…" });
+    expect(out.fields[5]).toMatchObject({ optionType: "button", buttonStyle: "solid" });
+    expect(out.fields[6]).toMatchObject({ direction: "vertical" });
+  });
+
+  it("rejects bad variant / size / displayFormat enums", () => {
+    const base = { formVersion: 3, id: "bad-rich", title: "Bad rich" };
+    const text = (extra: Record<string, unknown>) => ({
+      type: "text",
+      name: "t",
+      label: "T",
+      ...extra,
+    });
+    expect(formSchema.safeParse({ ...base, fields: [text({ variant: "ghost" })] }).success).toBe(
+      false,
+    );
+    expect(formSchema.safeParse({ ...base, fields: [text({ size: "huge" })] }).success).toBe(false);
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "number", name: "n", label: "N", displayFormat: "scientific" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects bad severity / trigger / asyncValidator shapes", () => {
     const base = { formVersion: 3, id: "bad", title: "Bad" };
     const text = (extra: Record<string, unknown>) => ({
