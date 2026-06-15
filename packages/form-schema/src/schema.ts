@@ -420,7 +420,16 @@ export const timeRangeFieldSchema = z.object({
   ...timePickerProps,
 });
 export const checkboxFieldSchema = z.object({ type: z.literal("checkbox"), ...commonFields });
-export const switchFieldSchema = z.object({ type: z.literal("switch"), ...commonFields });
+export const switchFieldSchema = z.object({
+  type: z.literal("switch"),
+  ...commonFields,
+  /** Content shown inside the switch when ON (short text/symbol). */
+  checkedChildren: z.string().optional(),
+  /** Content shown inside the switch when OFF. */
+  unCheckedChildren: z.string().optional(),
+  /** antd Switch size — only `default`/`small` (not the shared size enum). Web-only. */
+  size: z.enum(["default", "small"]).optional(),
+});
 
 /** Single choice rendered as a radio group. Shares the option/dataSource shape
  *  with select so authoring tooling can reuse it. */
@@ -452,7 +461,17 @@ export const sliderFieldSchema = z.object({
   min: z.number().optional(),
   max: z.number().optional(),
   step: z.number().optional(),
+  /** Two-handle range slider; the value becomes a `[start, end]` tuple. */
+  range: z.boolean().optional(),
+  /** Orient the track vertically. */
+  vertical: z.boolean().optional(),
+  /** Render a dot at each `step` along the track. */
+  dots: z.boolean().optional(),
 });
+
+/** Named glyph preset for the Rate character. Declarative — maps to a default star or a
+ *  plain text glyph in the renderer, never an imported icon or code. */
+export const rateCharacterSchema = z.enum(["star", "heart", "like"]);
 
 export const rateFieldSchema = z.object({
   type: z.literal("rate"),
@@ -460,6 +479,10 @@ export const rateFieldSchema = z.object({
   /** Number of stars; defaults to 5 in the renderer. */
   count: z.number().int().optional(),
   allowHalf: z.boolean().optional(),
+  /** Glyph shown for each unit; defaults to a star. */
+  character: rateCharacterSchema.optional(),
+  /** Click the selected value again to clear back to none. */
+  allowClear: z.boolean().optional(),
 });
 
 export const colorFieldSchema = z.object({ type: z.literal("color"), ...commonFields });

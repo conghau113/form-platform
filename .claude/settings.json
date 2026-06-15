@@ -104,7 +104,9 @@
       "Bash(powershell -Command \"Stop-Process -Id 17928 -Force -ErrorAction SilentlyContinue\")",
       "Bash(netstat -ano)",
       "Bash(cat .changeset/rich-input-choice-props-x2-x3-schema.md)",
-      "Bash(cat .changeset/rich-input-choice-props-x2-x3-renderer.md)"
+      "Bash(cat .changeset/rich-input-choice-props-x2-x3-renderer.md)",
+      "Bash(cat .changeset/*x4*)",
+      "Bash(cat .changeset/*date*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

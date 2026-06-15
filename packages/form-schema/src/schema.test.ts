@@ -366,6 +366,63 @@ describe("schema field types", () => {
     expect(out.fields[3]).toMatchObject({ format: "HH:mm", minuteStep: 5 });
   });
 
+  it("accepts the X5 widget props (switch/slider/rate, additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "widget-props",
+      title: "Widget props",
+      fields: [
+        {
+          type: "switch",
+          name: "active",
+          label: "Active",
+          checkedChildren: "ON",
+          unCheckedChildren: "OFF",
+          size: "small",
+        },
+        {
+          type: "slider",
+          name: "band",
+          label: "Band",
+          min: 0,
+          max: 100,
+          step: 10,
+          range: true,
+          vertical: true,
+          dots: true,
+        },
+        {
+          type: "rate",
+          name: "score",
+          label: "Score",
+          count: 10,
+          allowHalf: true,
+          character: "heart",
+          allowClear: true,
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ checkedChildren: "ON", size: "small" });
+    expect(out.fields[1]).toMatchObject({ range: true, vertical: true, dots: true });
+    expect(out.fields[2]).toMatchObject({ character: "heart", allowClear: true });
+  });
+
+  it("rejects bad switch size and rate character enums", () => {
+    const base = { formVersion: 3, id: "bad-widget", title: "Bad widget" };
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "switch", name: "s", label: "S", size: "large" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "rate", name: "r", label: "R", character: "diamond" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects a non-positive minuteStep and a non-boolean showTime", () => {
     const base = { formVersion: 3, id: "bad-dt", title: "Bad dt" };
     expect(

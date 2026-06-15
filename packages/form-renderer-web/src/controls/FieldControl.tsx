@@ -29,6 +29,14 @@ import { CheckboxGroupControl } from "./CheckboxGroupControl.js";
 import { SelectControl } from "./SelectControl.js";
 import { TreeSelectControl } from "./TreeSelectControl.js";
 
+/** Maps a rate `character` preset to the glyph passed to antd's Rate. `star` keeps antd's
+ *  default star icon (undefined); the others are plain text glyphs — no icon import. */
+const RATE_CHARACTER: Record<string, string | undefined> = {
+  star: undefined,
+  heart: "❤",
+  like: "👍",
+};
+
 export function FieldControl(props: {
   node: LeafField;
   value: unknown;
@@ -208,9 +216,25 @@ export function FieldControl(props: {
       );
     }
     case "slider":
-      return (
+      // antd types Slider's props as a single|range union keyed off `range`, so the two
+      // shapes (scalar vs. [start, end] value) are rendered as distinct elements.
+      return node.range ? (
+        <Slider
+          range
+          vertical={node.vertical}
+          dots={node.dots}
+          value={(value as [number, number]) ?? [node.min ?? 0, node.max ?? 100]}
+          disabled={disabled}
+          min={node.min}
+          max={node.max}
+          step={node.step}
+          onChange={onChange}
+        />
+      ) : (
         <Slider
           id={id}
+          vertical={node.vertical}
+          dots={node.dots}
           value={(value as number) ?? node.min ?? 0}
           disabled={disabled}
           min={node.min}
@@ -227,6 +251,8 @@ export function FieldControl(props: {
           disabled={disabled}
           count={node.count ?? 5}
           allowHalf={node.allowHalf}
+          allowClear={node.allowClear}
+          character={RATE_CHARACTER[node.character ?? "star"]}
           onChange={onChange}
         />
       );
@@ -314,7 +340,17 @@ export function FieldControl(props: {
         />
       );
     case "switch":
-      return <Switch id={id} checked={!!value} disabled={disabled} onChange={onChange} />;
+      return (
+        <Switch
+          id={id}
+          checked={!!value}
+          disabled={disabled}
+          checkedChildren={node.checkedChildren}
+          unCheckedChildren={node.unCheckedChildren}
+          size={node.size}
+          onChange={onChange}
+        />
+      );
     default:
       return null;
   }

@@ -231,7 +231,19 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     label: "Switch",
     category: "Boolean",
     defaults: {},
-    settings: [],
+    settings: [
+      { key: "checkedChildren", label: "On label", control: "text" },
+      { key: "unCheckedChildren", label: "Off label", control: "text" },
+      {
+        key: "size",
+        label: "Size",
+        control: "segmented",
+        choices: [
+          { label: "Default", value: "default" },
+          { label: "Small", value: "small" },
+        ],
+      },
+    ],
     defaultValueKind: "boolean",
     behavior: LEAF,
     showInPalette: true,
@@ -246,6 +258,9 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
       { key: "min", label: "Min", control: "number" },
       { key: "max", label: "Max", control: "number" },
       { key: "step", label: "Step", control: "number" },
+      { key: "range", label: "Range (two handles)", control: "checkbox" },
+      { key: "vertical", label: "Vertical", control: "checkbox" },
+      { key: "dots", label: "Dots at each step", control: "checkbox" },
     ],
     defaultValueKind: "number",
     validations: NUMBER_RULES,
@@ -261,6 +276,17 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     settings: [
       { key: "count", label: "Star count", control: "number" },
       { key: "allowHalf", label: "Allow half", control: "checkbox" },
+      {
+        key: "character",
+        label: "Character",
+        control: "segmented",
+        choices: [
+          { label: "Star", value: "star" },
+          { label: "Heart", value: "heart" },
+          { label: "Like", value: "like" },
+        ],
+      },
+      { key: "allowClear", label: "Allow clear", control: "checkbox" },
     ],
     defaultValueKind: "number",
     behavior: LEAF,
