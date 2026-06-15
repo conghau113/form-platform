@@ -1,4 +1,4 @@
-import type { FormSchema } from "@org/form-schema";
+import type { FormSchema, ValidationRule } from "@org/form-schema";
 import { describe, expect, it } from "vitest";
 import { buildZodSchema, collectAsyncFields, collectWarnings } from "./validation.js";
 
@@ -282,6 +282,45 @@ describe("buildZodSchema", () => {
     expect(schema.safeParse({ site: "https://example.com" }).success).toBe(true);
     expect(schema.safeParse({ tel: "abc" }).success).toBe(false);
     expect(schema.safeParse({ tel: "+84 90 123 4567" }).success).toBe(true);
+  });
+
+  it("accepts the X8 format checks (integer/number/money/idcard/zh/en/qq/zip)", () => {
+    const field = (name: string, format: ValidationRule["format"]) => ({
+      type: "text" as const,
+      name,
+      label: name,
+      validations: [{ type: "format" as const, format }],
+    });
+    const schema = buildZodSchema(
+      form([
+        field("intf", "integer"),
+        field("numf", "number"),
+        field("money", "money"),
+        field("idc", "idcard"),
+        field("zh", "zh"),
+        field("en", "en"),
+        field("qq", "qq"),
+        field("zip", "zip"),
+      ]),
+    );
+    const ok = (v: Record<string, string>) => expect(schema.safeParse(v).success).toBe(true);
+    const bad = (v: Record<string, string>) => expect(schema.safeParse(v).success).toBe(false);
+    ok({ intf: "-42" });
+    bad({ intf: "4.2" });
+    ok({ numf: "3.14" });
+    bad({ numf: "1.2.3" });
+    ok({ money: "1,234.50" });
+    bad({ money: "12.345" });
+    ok({ idc: "11010519491231002X" });
+    bad({ idc: "123" });
+    ok({ zh: "中文" });
+    bad({ zh: "abc" });
+    ok({ en: "Hello" });
+    bad({ en: "Hello1" });
+    ok({ qq: "10001" });
+    bad({ qq: "0123" });
+    ok({ zip: "100000" });
+    bad({ zip: "1234" });
   });
 
   it("treats a `required` validation rule like the required flag", () => {

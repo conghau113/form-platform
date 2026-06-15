@@ -32,6 +32,14 @@ const FORMAT_OPTIONS = [
   { label: "Email", value: "email" },
   { label: "URL", value: "url" },
   { label: "Phone", value: "phone" },
+  { label: "Integer", value: "integer" },
+  { label: "Number", value: "number" },
+  { label: "Money", value: "money" },
+  { label: "ID card", value: "idcard" },
+  { label: "Chinese", value: "zh" },
+  { label: "Letters", value: "en" },
+  { label: "QQ", value: "qq" },
+  { label: "Postal code", value: "zip" },
 ];
 
 /** A "Validation" section whose available rule kinds come from the registry
@@ -124,7 +132,7 @@ export function ValidationEditor({
               )}
               {rule.type === "format" && (
                 <Select
-                  style={{ width: 100 }}
+                  style={{ width: 130 }}
                   value={rule.format ?? "email"}
                   options={FORMAT_OPTIONS}
                   onChange={(format: ValidationRule["format"]) => update(i, { format })}

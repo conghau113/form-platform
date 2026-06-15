@@ -407,6 +407,33 @@ describe("schema field types", () => {
     expect(out.fields[2]).toMatchObject({ character: "heart", allowClear: true });
   });
 
+  it("accepts the X8 validator format enum and rejects an unknown format", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "formats",
+      title: "Formats",
+      fields: [
+        {
+          type: "text",
+          name: "amount",
+          label: "Amount",
+          validations: [{ type: "format", format: "money" }],
+        },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ validations: [{ format: "money" }] });
+    expect(
+      formSchema.safeParse({
+        formVersion: 3,
+        id: "bad-format",
+        title: "Bad format",
+        fields: [
+          { type: "text", name: "x", label: "X", validations: [{ type: "format", format: "ssn" }] },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects bad switch size and rate character enums", () => {
     const base = { formVersion: 3, id: "bad-widget", title: "Bad widget" };
     expect(

@@ -61,7 +61,9 @@ export const validationSeveritySchema = z.enum(["error", "warning"]);
 /** A single field validation rule. Translated to Zod by form-core's buildZodSchema.
  *  - `len`/`min`/`max`: numeric `value` (string length or numeric bound by field type).
  *  - `pattern`: `value` is a regex SOURCE string — compiled via `new RegExp`, NEVER eval.
- *  - `format`: a named check selected by `format` (email | url | phone).
+ *  - `format`: a named check selected by `format` (email | url | phone | integer |
+ *    number | money | idcard | zh | en | qq | zip). Each maps to a fixed regex (or a
+ *    Zod built-in) in form-core — declarative, never eval.
  *  - `required`: presence; equivalent to the `required` flag, kept here for a custom message.
  *  - `cross`: a cross-field assertion — `rule` is a SAFE JSONLogic record (same shape as
  *    `conditionSchema.rule`, evaluated via json-logic, NEVER eval) that must evaluate
@@ -71,7 +73,21 @@ export const validationSeveritySchema = z.enum(["error", "warning"]);
 export const validationRuleSchema = z.object({
   type: z.enum(["required", "len", "min", "max", "pattern", "format", "cross"]),
   value: z.union([z.string(), z.number()]).optional(),
-  format: z.enum(["email", "url", "phone"]).optional(),
+  format: z
+    .enum([
+      "email",
+      "url",
+      "phone",
+      "integer",
+      "number",
+      "money",
+      "idcard",
+      "zh",
+      "en",
+      "qq",
+      "zip",
+    ])
+    .optional(),
   message: z.string().optional(),
   /** Defaults to "error" when absent. */
   severity: validationSeveritySchema.optional(),

@@ -17,9 +17,26 @@ import {
   effectiveVisible,
 } from "./reactions.js";
 
-/** A lenient phone matcher: optional leading +, then 7–15 digits, allowing spaces,
- *  dashes and parens as separators. Compiled from a string literal — never eval. */
-const PHONE_RE = /^\+?[0-9][0-9\s\-()]{6,18}[0-9]$/;
+/** Fixed `format` checks, compiled from string literals — declarative, NEVER eval. Each
+ *  pairs a regex with a default message. `email`/`url` are handled by Zod's built-ins
+ *  instead and are intentionally absent here. Mirrors the form-relevant subset of
+ *  Formily's `@formily/validator` registry. */
+const FORMAT_CHECKS: Partial<
+  Record<NonNullable<ValidationRule["format"]>, { re: RegExp; msg: string }>
+> = {
+  // optional leading +, then 7–15 digits, allowing spaces, dashes and parens as separators
+  phone: { re: /^\+?[0-9][0-9\s\-()]{6,18}[0-9]$/, msg: "Invalid phone number" },
+  integer: { re: /^[+-]?\d+$/, msg: "Must be an integer" },
+  number: { re: /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/, msg: "Must be a number" },
+  // optional thousands grouping, up to 2 decimals
+  money: { re: /^(\d+|\d{1,3}(,\d{3})+)(\.\d{1,2})?$/, msg: "Invalid amount" },
+  // 15-digit (old) or 18-digit (new; trailing checksum may be X) Chinese ID card
+  idcard: { re: /^\d{15}$|^\d{17}[\dxX]$/, msg: "Invalid ID card number" },
+  zh: { re: /^[一-龥]+$/, msg: "Chinese characters only" },
+  en: { re: /^[A-Za-z]+$/, msg: "Letters only" },
+  qq: { re: /^[1-9][0-9]{4,10}$/, msg: "Invalid QQ number" },
+  zip: { re: /^\d{6}$/, msg: "Invalid postal code" },
+};
 
 /** Compile a regex from a schema-provided SOURCE string. A malformed pattern must
  *  not throw at build time, so we swallow the error and skip the rule. NEVER eval. */
@@ -53,12 +70,15 @@ function applyStringRules(s: z.ZodString, rules: ValidationRule[]): z.ZodString 
         }
         break;
       }
-      case "format":
+      case "format": {
         if (r.format === "email") out = out.email(r.message);
         else if (r.format === "url") out = out.url(r.message);
-        else if (r.format === "phone")
-          out = out.regex(PHONE_RE, r.message ?? "Invalid phone number");
+        else if (r.format) {
+          const check = FORMAT_CHECKS[r.format];
+          if (check) out = out.regex(check.re, r.message ?? check.msg);
+        }
         break;
+      }
     }
   }
   return out;
