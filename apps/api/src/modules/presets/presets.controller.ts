@@ -9,15 +9,15 @@ export class PresetsController {
 
   /** List all saved user presets. */
   @Get()
-  findAll(): Preset[] {
+  findAll(): Promise<Preset[]> {
     return this.presets.list();
   }
 
   /** Save (upsert) a preset. Body is validated server-side; invalid → 400. */
   @Post()
-  create(@Body() body: unknown): Preset {
+  async create(@Body() body: unknown): Promise<Preset> {
     try {
-      return this.presets.save(body);
+      return await this.presets.save(body);
     } catch (err) {
       throw new BadRequestException((err as Error).message);
     }
@@ -25,7 +25,7 @@ export class PresetsController {
 
   /** Delete a preset by id → 404 if missing. */
   @Delete(":id")
-  remove(@Param("id") id: string): void {
-    this.presets.remove(id);
+  remove(@Param("id") id: string): Promise<void> {
+    return this.presets.remove(id);
   }
 }

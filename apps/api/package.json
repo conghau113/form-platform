@@ -4,10 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/main.js",
-    "dev": "tsc && node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "dev": "prisma generate && tsc && node dist/main.js",
+    "typecheck": "prisma generate && tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:import": "tsx src/scripts/import-files-to-db.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -15,11 +19,15 @@
     "@nestjs/platform-express": "^10.4.0",
     "@org/form-schema": "workspace:*",
     "@org/form-theme": "workspace:*",
+    "@prisma/client": "^6.19.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
-    "typescript": "^5.4.0"
+    "prisma": "^6.19.3",
+    "tsx": "^4.22.4",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.1"
   }
 }

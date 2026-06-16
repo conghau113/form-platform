@@ -9,9 +9,9 @@ export class FormsController {
 
   /** Save a form. Body is validated server-side; invalid schema → 400. */
   @Post()
-  create(@Body() body: unknown): FormSchema {
+  async create(@Body() body: unknown): Promise<FormSchema> {
     try {
-      return this.forms.save(body);
+      return await this.forms.save(body);
     } catch (err) {
       throw new BadRequestException((err as Error).message);
     }
@@ -19,7 +19,7 @@ export class FormsController {
 
   /** Load a previously saved form by id → 404 if missing. */
   @Get(":id")
-  findOne(@Param("id") id: string): FormSchema {
+  findOne(@Param("id") id: string): Promise<FormSchema> {
     return this.forms.load(id);
   }
 }

@@ -1,45 +1,33 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { type Preset, parsePreset } from "@org/form-schema";
-import { assertId, DATA_DIR, ensureDataDir } from "../../common/file-store.js";
+import { assertId } from "../../common/file-store.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { PresetRepo } from "../../persistence/repositories/preset.repo.js";
 
 /**
- * File-backed preset store, sibling to FormsService/ThemesService. Unlike forms/themes
- * (one file per id), presets are a single shared collection in `<DATA_DIR>/presets.json`.
- * There is no user/auth scope yet, so the library is global. The server is the source of
- * truth: every saved body is run through `parsePreset` (validate) before it lands on disk.
+ * Preset store, sibling to FormsService/ThemesService. W0 keeps the library global (no
+ * user/auth scope yet); W3 adds per-project scope. The server is the source of truth: every
+ * saved body is run through `parsePreset` (validate) before it reaches the repo.
  */
 @Injectable()
 export class PresetsService {
-  private readonly file = resolve(DATA_DIR, "presets.json");
+  constructor(private readonly presets: PresetRepo) {}
 
   /** All saved user presets (built-in presets ship in the builder, not here). */
-  list(): Preset[] {
-    if (!existsSync(this.file)) return [];
-    return JSON.parse(readFileSync(this.file, "utf8")) as Preset[];
+  list(): Promise<Preset[]> {
+    return this.presets.list();
   }
 
   /** Validate and upsert a preset by id; returns the normalized preset. */
-  save(body: unknown): Preset {
+  save(body: unknown): Promise<Preset> {
     const preset = parsePreset(body); // validates; throws on invalid
-    const presets = this.list().filter((p) => p.id !== preset.id);
-    presets.push(preset);
-    this.write(presets);
-    return preset;
+    return this.presets.upsert(preset);
   }
 
   /** Remove a preset by id → 404 if it does not exist. */
-  remove(id: string): void {
+  async remove(id: string): Promise<void> {
     assertId(id, "preset");
-    const presets = this.list();
-    const next = presets.filter((p) => p.id !== id);
-    if (next.length === presets.length) throw new NotFoundException(`Preset not found: ${id}`);
-    this.write(next);
-  }
-
-  private write(presets: Preset[]): void {
-    ensureDataDir();
-    writeFileSync(this.file, JSON.stringify(presets, null, 2), "utf8");
+    const removed = await this.presets.remove(id);
+    if (!removed) throw new NotFoundException(`Preset not found: ${id}`);
   }
 }

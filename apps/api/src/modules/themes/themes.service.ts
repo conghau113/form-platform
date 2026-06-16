@@ -1,30 +1,28 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { type DesignTokens, migrateTheme } from "@org/form-theme";
-import { dataFile, ensureDataDir } from "../../common/file-store.js";
+import { assertId } from "../../common/file-store.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { ThemeRepo } from "../../persistence/repositories/theme.repo.js";
 
 /**
- * File-backed theme store, sibling to FormsService. A theme is persisted
- * alongside its form under the SAME id (`<id>.theme.json`), so loading a form
- * can reapply its saved look. The server is the source of truth: every body is
- * run through `migrateTheme` (validate + normalize) before it lands on disk.
+ * Theme store, sibling to FormsService. A theme is persisted against its form's id, so
+ * loading a form can reapply its saved look. The server is the source of truth: every body is
+ * run through `migrateTheme` (validate + normalize) before it reaches the repo.
  */
 @Injectable()
 export class ThemesService {
-  private fileFor(id: string): string {
-    return dataFile(id, ".theme.json", "theme");
-  }
+  constructor(private readonly themes: ThemeRepo) {}
 
-  save(id: string, body: unknown): DesignTokens {
+  save(id: string, body: unknown): Promise<DesignTokens> {
+    assertId(id, "theme");
     const theme = migrateTheme(body); // validates + normalizes to CURRENT_THEME_VERSION
-    ensureDataDir();
-    writeFileSync(this.fileFor(id), JSON.stringify(theme, null, 2), "utf8");
-    return theme;
+    return this.themes.upsert(id, theme);
   }
 
-  load(id: string): DesignTokens {
-    const file = this.fileFor(id);
-    if (!existsSync(file)) throw new NotFoundException(`Theme not found: ${id}`);
-    return JSON.parse(readFileSync(file, "utf8")) as DesignTokens;
+  async load(id: string): Promise<DesignTokens> {
+    assertId(id, "theme");
+    const tokens = await this.themes.load(id);
+    if (!tokens) throw new NotFoundException(`Theme not found: ${id}`);
+    return tokens;
   }
 }

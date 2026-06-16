@@ -1,0 +1,82 @@
+// Track W persistence (W0). The DB holds organisational metadata + form bodies; the form
+// JSON contract itself stays pure (no projectId/folderId) — `body` is the migrated contract.
+// SQLite for dev; switch `provider` to "postgresql" for production (D4).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Top-level container a user owns (e.g. "HR Platform"). W0 seeds one "Unfiled" project.
+model Project {
+  id          String       @id @default(cuid())
+  ownerId     String
+  name        String
+  slug        String
+  description String?
+  folders     Folder[]
+  forms       FormRecord[]
+  presets     Preset[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([ownerId, slug])
+}
+
+/// Adjacency-list tree (parentId) → unlimited nesting. CRUD/endpoints arrive in W1.
+model Folder {
+  id        String       @id @default(cuid())
+  projectId String
+  parentId  String?
+  name      String
+  order     Int          @default(0)
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    Folder?      @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Folder[]     @relation("FolderTree")
+  forms     FormRecord[]
+  createdAt DateTime     @default(now())
+
+  @@index([projectId, parentId])
+}
+
+/// Org index for a form. `id` == form.id; `body` is the migrated contract (source of truth
+/// stays `migrate()` in FormsService). Listing a folder never has to parse a form body.
+model FormRecord {
+  id        String   @id
+  projectId String
+  folderId  String?
+  title     String
+  status    String?
+  body      Json
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder    Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, folderId])
+}
+
+/// Reusable field template. W0 stores them global (scope="global"); W3 adds per-project scope.
+model Preset {
+  id        String   @id
+  scope     String
+  projectId String?
+  ownerId   String
+  name      String
+  fieldType String
+  icon      String?
+  patch     Json
+  updatedAt DateTime @updatedAt
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([scope, projectId])
+}
+
+/// A form's saved design tokens, keyed by formId (mirrors the old `<id>.theme.json`).
+model Theme {
+  formId    String   @id
+  tokens    Json
+  updatedAt DateTime @updatedAt
+}
