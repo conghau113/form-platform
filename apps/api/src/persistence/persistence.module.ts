@@ -1,9 +1,11 @@
 import { Global, Module } from "@nestjs/common";
 import { PrismaService } from "./prisma/prisma.service.js";
+import { PrismaFolderRepo } from "./prisma/prisma-folder.repo.js";
 import { PrismaFormRepo } from "./prisma/prisma-form.repo.js";
 import { PrismaPresetRepo } from "./prisma/prisma-preset.repo.js";
 import { PrismaProjectRepo } from "./prisma/prisma-project.repo.js";
 import { PrismaThemeRepo } from "./prisma/prisma-theme.repo.js";
+import { FolderRepo } from "./repositories/folder.repo.js";
 import { FormRepo } from "./repositories/form.repo.js";
 import { PresetRepo } from "./repositories/preset.repo.js";
 import { ProjectRepo } from "./repositories/project.repo.js";
@@ -22,7 +24,8 @@ import { ThemeRepo } from "./repositories/theme.repo.js";
     { provide: PresetRepo, useClass: PrismaPresetRepo },
     { provide: ThemeRepo, useClass: PrismaThemeRepo },
     { provide: ProjectRepo, useClass: PrismaProjectRepo },
+    { provide: FolderRepo, useClass: PrismaFolderRepo },
   ],
-  exports: [FormRepo, PresetRepo, ThemeRepo, ProjectRepo],
+  exports: [FormRepo, PresetRepo, ThemeRepo, ProjectRepo, FolderRepo],
 })
 export class PersistenceModule {}

@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
+import { FoldersModule } from "./modules/folders/folders.module.js";
 import { FormsModule } from "./modules/forms/forms.module.js";
 import { PresetsModule } from "./modules/presets/presets.module.js";
+import { ProjectsModule } from "./modules/projects/projects.module.js";
 import { ThemesModule } from "./modules/themes/themes.module.js";
 import { PersistenceModule } from "./persistence/persistence.module.js";
 
@@ -9,6 +11,13 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
  *  and providers flat. `PersistenceModule` is global, so feature services can inject the
  *  repo interfaces without re-importing it. */
 @Module({
-  imports: [PersistenceModule, FormsModule, ThemesModule, PresetsModule],
+  imports: [
+    PersistenceModule,
+    ProjectsModule,
+    FoldersModule,
+    FormsModule,
+    ThemesModule,
+    PresetsModule,
+  ],
 })
 export class AppModule {}

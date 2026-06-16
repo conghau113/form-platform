@@ -205,7 +205,7 @@ must be adopted without loss:
 | Phase | Deliverable | Touches | Contract? | Effort | Status |
 | --- | --- | --- | --- | --- | --- |
 | **W0** | Prisma + repository interfaces; migrate flat `.data` → DB into "Unfiled"; existing `/forms` `/presets` `/themes` re‑backed by repos (no behaviour change) | api | none | L | ✅ **DONE** (uncommitted; reviewer PASS, no blockers) |
-| **W1** | `Project` + `Folder` + `FormRecord` models, CRUD + `/tree`; `ownerId` + minimal auth (session/JWT) | api | none | L | next |
+| **W1** | `Project` + `Folder` + `FormRecord` models, CRUD + `/tree`; `ownerId` + minimal auth (header `x-owner-id`) | api | none | L | ✅ **DONE** (reviewer PASS; typecheck 15/15, api 18/18, live smoke green) |
 | **W2** | Builder Explorer (tree + CRUD + move) + `react-router` | builder | none | L | — |
 | **W3** | Preset `scope`/`projectId` (global + project), library filtered by project, promote‑to‑global | api + builder | none | M | — |
 | **W4** | **Linked fields**: additive `{ presetId, overrides? }` on field; form‑core resolves preset at render/migrate; handle missing/changed preset; migration + fixture test | schema + form‑core + renderer + builder | **additive (bump+migration)** | XL | — |
