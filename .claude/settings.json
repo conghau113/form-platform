@@ -107,7 +107,22 @@
       "Bash(cat .changeset/rich-input-choice-props-x2-x3-renderer.md)",
       "Bash(cat .changeset/*x4*)",
       "Bash(cat .changeset/*date*)",
-      "Bash(grep -vE \"getComputedStyle|not-implemented|jsdom|rc-util|react-dom|portal|useScrollLocker|commit|at module|at window|at measure|at getTarget|at E:\\\\\\\\\\\\\\\\\")"
+      "Bash(grep -vE \"getComputedStyle|not-implemented|jsdom|rc-util|react-dom|portal|useScrollLocker|commit|at module|at window|at measure|at getTarget|at E:\\\\\\\\\\\\\\\\\")",
+      "Bash(node -e \"console.log\\(require\\('./apps/builder/node_modules/antd/package.json'\\).version\\)\")",
+      "Bash(node -e \"const a=require\\('./apps/builder/node_modules/antd'\\); console.log\\('ColorPicker:', !!a.ColorPicker\\)\")",
+      "Bash(ls packages/form-renderer-web/src/controls/*.test.*)",
+      "Bash(ls packages/form-renderer-web/src/*.test.*)",
+      "Bash(ls packages/form-renderer-web/*.config.* packages/form-renderer-web/vitest*)",
+      "Read(//c/Users/ASUS/AppData/Local/Temp/claude/e--web-web-tool-form-platform-starter-form-platform/c854949a-8521-4e6c-9531-08cc8b086797/tasks/**)",
+      "Bash(cd /e/web/web-tool/form-platform-starter/form-platform && cat .changeset/icon-registry-prefix-suffix-i1.md)",
+      "Read(//e/e/web/web-tool/form-platform-starter/form-platform/.changeset/**)",
+      "Bash(cd /e/web/web-tool/form-platform-starter/form-platform && ls -la packages/form-renderer-web/src/icons/)",
+      "Read(//e/e/web/web-tool/form-platform-starter/form-platform/packages/form-renderer-web/src/**)",
+      "Bash(cd /e/web/web-tool/form-platform-starter/form-platform && cat apps/builder/package.json | grep -A2 '\"private\"' ; echo \"---renderer private?---\"; grep '\"private\"' packages/form-renderer-web/package.json packages/form-schema/package.json)",
+      "Read(//e/e/web/web-tool/form-platform-starter/form-platform/apps/builder/**)",
+      "Bash(cd /e/web/web-tool/form-platform-starter/form-platform/apps/api && find src -type f | head -60 && echo \"---PKG---\" && cat package.json)",
+      "Read(//e/e/web/web-tool/form-platform-starter/form-platform/apps/api/**)",
+      "Bash(xargs grep -l \"Palette\\\\|CompositePanel\")"
     ],
     "deny": [
       "Bash(rm -rf:*)",
