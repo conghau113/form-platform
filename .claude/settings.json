@@ -127,7 +127,9 @@
       "Bash(PORT=3011 node dist/main.js)",
       "Bash(git restore *)",
       "mcp__chrome-devtools__click",
-      "mcp__chrome-devtools__list_network_requests"
+      "mcp__chrome-devtools__list_network_requests",
+      "Bash(xargs grep -l \"CurrentOwner\\\\|x-owner-id\\\\|SEED_OWNER_ID\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ],
     "deny": [
       "Bash(rm -rf:*)",

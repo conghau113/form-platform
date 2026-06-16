@@ -35,4 +35,22 @@ describe("parsePreset", () => {
   it("rejects a non-object patch", () => {
     expect(() => parsePreset({ ...valid, patch: "nope" })).toThrow();
   });
+
+  it("accepts a global preset without a projectId", () => {
+    const global: Preset = { ...valid, scope: "global" };
+    expect(parsePreset(global)).toEqual(global);
+  });
+
+  it("accepts a project-scoped preset with a projectId", () => {
+    const scoped: Preset = { ...valid, scope: "project", projectId: "proj-1" };
+    expect(parsePreset(scoped)).toEqual(scoped);
+  });
+
+  it("rejects a project-scoped preset without a projectId", () => {
+    expect(() => parsePreset({ ...valid, scope: "project" })).toThrow();
+  });
+
+  it("rejects an unknown scope", () => {
+    expect(() => parsePreset({ ...valid, scope: "team" })).toThrow();
+  });
 });

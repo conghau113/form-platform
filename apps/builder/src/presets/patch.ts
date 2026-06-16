@@ -1,4 +1,4 @@
-import type { FieldNode, Preset } from "@org/form-schema";
+import type { FieldNode, Preset, PresetScope } from "@org/form-schema";
 
 /**
  * patch.ts — distil a concrete field into a reusable preset.
@@ -21,17 +21,25 @@ export function presetPatchFromField(field: FieldNode): Record<string, unknown> 
 }
 
 /** Build a user preset from the selected field. The icon defaults to the field's prefix
- *  (then suffix) icon token when present, so a "Search input" carries its glyph. */
-export function presetFromField(name: string, field: FieldNode): Preset {
+ *  (then suffix) icon token when present, so a "Search input" carries its glyph. `scope`
+ *  (W3) defaults to global; pass `{ scope: "project", projectId }` to scope it to a project. */
+export function presetFromField(
+  name: string,
+  field: FieldNode,
+  scope?: { scope: PresetScope; projectId?: string },
+): Preset {
   const patch = presetPatchFromField(field);
   const icon =
     (typeof patch.prefixIcon === "string" ? patch.prefixIcon : undefined) ??
     (typeof patch.suffixIcon === "string" ? patch.suffixIcon : undefined);
   return {
-    id: `user-${Date.now()}`,
+    // Unique per save (a UUID, not a timestamp) so two presets saved in the same tick can't
+    // collide on id and overwrite each other. Hyphens are within the preset-id charset.
+    id: `user-${crypto.randomUUID()}`,
     fieldType: field.type,
     name: name.trim() || "Untitled preset",
     icon,
     patch,
+    ...(scope ?? {}),
   };
 }

@@ -33,6 +33,7 @@ export function CompositePanel({
   onChangeTokens,
   onExportTheme,
   selectedField,
+  projectId,
 }: {
   tree: TreeNode;
   history: {
@@ -45,6 +46,8 @@ export function CompositePanel({
   onExportTheme: () => void;
   /** The selected field (for "save current field as preset"); null when none/root. */
   selectedField: FieldNode | null;
+  /** Project context (W3) → scopes the preset library. */
+  projectId?: string;
 }) {
   const [tab, setTab] = usePersistentState<CompositeTab>(
     "compositeTab",
@@ -62,7 +65,7 @@ export function CompositePanel({
         {
           key: "components",
           label: <AppstoreOutlined title="Components" />,
-          children: <Palette selectedField={selectedField} />,
+          children: <Palette selectedField={selectedField} projectId={projectId} />,
         },
         {
           key: "outline",

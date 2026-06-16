@@ -80,6 +80,8 @@ function collectFieldNames(nodes: FieldNode[]): string[] {
 export interface AppProps {
   /** Form to load on mount (the `/projects/:id/forms/:formId` leaf). */
   formId?: string;
+  /** Project context (W3): scopes the preset library to global ∪ this project. Absent ⇒ global only. */
+  projectId?: string;
   /** Called after a successful save (lets the workspace rail refresh form titles). */
   onSaved?: () => void;
   /** Reports whether the editor has unsaved changes (drives the navigation guard). */
@@ -88,7 +90,7 @@ export interface AppProps {
   provideSave?: (save: () => Promise<boolean>) => void;
 }
 
-export function App({ formId, onSaved, onDirtyChange, provideSave }: AppProps = {}) {
+export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: AppProps = {}) {
   const history = useHistory<TreeNode>(() => schemaToTree(migrate(example)));
   const tree = history.present;
   // History cursor at the last load/save; the editor is "dirty" when it has moved.
@@ -504,6 +506,7 @@ export function App({ formId, onSaved, onDirtyChange, provideSave }: AppProps = 
                   onChangeTokens={setTokens}
                   onExportTheme={onExportTheme}
                   selectedField={selected?.field ?? null}
+                  projectId={projectId}
                 />
               </aside>
 

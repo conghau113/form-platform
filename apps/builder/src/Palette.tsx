@@ -121,7 +121,13 @@ function PaletteItem({ entry }: { entry: PaletteEntry }) {
 /** Left column: draggable chips, one per authorable field type (types with palette
  *  variants expand to several chips), grouped by category and filtered by a free-text
  *  search over the label. */
-export function Palette({ selectedField }: { selectedField: FieldNode | null }) {
+export function Palette({
+  selectedField,
+  projectId,
+}: {
+  selectedField: FieldNode | null;
+  projectId?: string;
+}) {
   const [query, setQuery] = useState("");
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -152,7 +158,7 @@ export function Palette({ selectedField }: { selectedField: FieldNode | null }) 
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <PresetSection query={query} selectedField={selectedField} />
+      <PresetSection query={query} selectedField={selectedField} projectId={projectId} />
       {groups.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No components" />
       ) : (

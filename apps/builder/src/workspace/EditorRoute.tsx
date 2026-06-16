@@ -13,7 +13,7 @@ import type { WorkspaceOutletContext } from "./ProjectWorkspace";
  * the data router. Hard refresh / tab close is handled by App's own `beforeunload` listener.
  */
 export function EditorRoute() {
-  const { formId } = useParams<{ formId: string }>();
+  const { formId, projectId } = useParams<{ formId: string; projectId: string }>();
   const { onFormSaved } = useOutletContext<WorkspaceOutletContext>();
 
   const dirtyRef = useRef(false);
@@ -38,6 +38,7 @@ export function EditorRoute() {
           the form (history.reset → fresh undo) when the route param changes. */}
       <App
         formId={formId}
+        projectId={projectId}
         onSaved={onFormSaved}
         onDirtyChange={onDirtyChange}
         provideSave={provideSave}

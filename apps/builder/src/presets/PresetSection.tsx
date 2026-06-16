@@ -1,7 +1,7 @@
-import { AppstoreOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, DeleteOutlined, GlobalOutlined, PlusOutlined } from "@ant-design/icons";
 import { Icon } from "@org/form-renderer-web";
 import type { FieldNode, Preset } from "@org/form-schema";
-import { Button, Input, Modal, message, Tooltip, Typography } from "antd";
+import { Button, Input, Modal, message, Segmented, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useDesigner } from "../DesignCanvas";
 import { DraggableChip } from "../PaletteChip";
@@ -9,9 +9,20 @@ import { presetFromField } from "./patch";
 import { usePresets } from "./usePresets";
 
 /** One preset chip. Pressing it starts a "create" drag that seeds a fresh field of
- *  `preset.fieldType` merged with `preset.patch`; user presets carry a delete button. */
-function PresetChip({ preset, onDelete }: { preset: Preset; onDelete?: () => void }) {
+ *  `preset.fieldType` merged with `preset.patch`; user presets carry delete (and, for
+ *  project-scoped presets, a "promote to global") actions. */
+function PresetChip({
+  preset,
+  onDelete,
+  onPromote,
+}: {
+  preset: Preset;
+  onDelete?: () => void;
+  onPromote?: () => void;
+}) {
   const { beginCreate } = useDesigner();
+  // Stop an action press from starting a create-drag on the chip behind it.
+  const stop = (e: React.PointerEvent) => e.stopPropagation();
   return (
     <DraggableChip
       icon={preset.icon ? <Icon token={preset.icon} /> : <AppstoreOutlined />}
@@ -21,16 +32,31 @@ function PresetChip({ preset, onDelete }: { preset: Preset; onDelete?: () => voi
         beginCreate(preset.fieldType, e, { patch: preset.patch, label: preset.name })
       }
       extra={
-        onDelete && (
-          <Button
-            type="text"
-            size="small"
-            aria-label={`Delete ${preset.name}`}
-            icon={<DeleteOutlined />}
-            // Stop the press from starting a create-drag on the chip behind it.
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={onDelete}
-          />
+        (onPromote || onDelete) && (
+          <>
+            {onPromote && (
+              <Tooltip title="Promote to global" placement="top">
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={`Promote ${preset.name} to global`}
+                  icon={<GlobalOutlined />}
+                  onPointerDown={stop}
+                  onClick={onPromote}
+                />
+              </Tooltip>
+            )}
+            {onDelete && (
+              <Button
+                type="text"
+                size="small"
+                aria-label={`Delete ${preset.name}`}
+                icon={<DeleteOutlined />}
+                onPointerDown={stop}
+                onClick={onDelete}
+              />
+            )}
+          </>
         )
       }
     />
@@ -38,18 +64,31 @@ function PresetChip({ preset, onDelete }: { preset: Preset; onDelete?: () => voi
 }
 
 /** "Save current field as preset" — a small modal that names the selected field and
- *  POSTs it as a user preset. Disabled (button hidden by the caller) when nothing is
- *  selected. */
-function SaveButton({ field, onSave }: { field: FieldNode; onSave: (p: Preset) => Promise<void> }) {
+ *  POSTs it as a user preset. When a project is open the author chooses the scope
+ *  (this project vs global, default project); standalone it always saves global. */
+function SaveButton({
+  field,
+  projectId,
+  onSave,
+}: {
+  field: FieldNode;
+  projectId?: string;
+  onSave: (p: Preset) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [scope, setScope] = useState<"project" | "global">(projectId ? "project" : "global");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      await onSave(presetFromField(name, field));
+      const scopeOpts =
+        projectId && scope === "project"
+          ? ({ scope: "project", projectId } as const)
+          : ({ scope: "global" } as const);
+      await onSave(presetFromField(name, field, scopeOpts));
       message.success(`Saved preset "${name.trim()}"`);
       setOpen(false);
       setName("");
@@ -80,13 +119,26 @@ function SaveButton({ field, onSave }: { field: FieldNode; onSave: (p: Preset) =
         onCancel={() => setOpen(false)}
         destroyOnHidden
       >
-        <Input
-          autoFocus
-          placeholder="Preset name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onPressEnter={submit}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <Input
+            autoFocus
+            placeholder="Preset name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onPressEnter={submit}
+          />
+          {projectId && (
+            <Segmented
+              block
+              value={scope}
+              onChange={(v) => setScope(v as "project" | "global")}
+              options={[
+                { label: "Dự án này", value: "project" },
+                { label: "Toàn cục", value: "global" },
+              ]}
+            />
+          )}
+        </div>
       </Modal>
     </>
   );
@@ -97,14 +149,22 @@ function SaveButton({ field, onSave }: { field: FieldNode; onSave: (p: Preset) =
 export function PresetSection({
   query,
   selectedField,
+  projectId,
 }: {
   query: string;
   selectedField: FieldNode | null;
+  /** Project context (W3): library is global ∪ this project; enables scope/promote actions. */
+  projectId?: string;
 }) {
-  const { builtin, user, save, remove } = usePresets();
+  const { builtin, user, save, remove, promote } = usePresets(projectId);
 
   const onDelete = (id: string) => {
     remove(id).catch((e: Error) => message.error(`Delete preset failed: ${e.message}`));
+  };
+  const onPromote = (id: string) => {
+    promote(id)
+      .then(() => message.success("Promoted to global"))
+      .catch((e: Error) => message.error(`Promote preset failed: ${e.message}`));
   };
 
   const matches = useMemo(() => {
@@ -125,13 +185,19 @@ export function PresetSection({
         >
           Presets
         </Typography.Text>
-        {selectedField && <SaveButton field={selectedField} onSave={save} />}
+        {selectedField && <SaveButton field={selectedField} projectId={projectId} onSave={save} />}
       </div>
       {matches.builtin.map((p) => (
         <PresetChip key={p.id} preset={p} />
       ))}
       {matches.user.map((p) => (
-        <PresetChip key={p.id} preset={p} onDelete={() => onDelete(p.id)} />
+        <PresetChip
+          key={p.id}
+          preset={p}
+          onDelete={() => onDelete(p.id)}
+          // Only project-scoped presets can be promoted (and only when a project is open).
+          onPromote={projectId && p.scope === "project" ? () => onPromote(p.id) : undefined}
+        />
       ))}
     </div>
   );

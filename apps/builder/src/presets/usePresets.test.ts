@@ -63,4 +63,37 @@ describe("usePresets", () => {
     });
     expect(result.current.user).toEqual([]);
   });
+
+  it("reloads the user list when projectId changes", async () => {
+    const fetchFn = mockFetch({ list: [userPreset] });
+    const { result, rerender } = renderHook(({ pid }: { pid?: string }) => usePresets(pid), {
+      initialProps: { pid: undefined as string | undefined },
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const firstCalls = fetchFn.mock.calls.length;
+    rerender({ pid: "proj-1" });
+    await waitFor(() => expect(fetchFn.mock.calls.length).toBeGreaterThan(firstCalls));
+    expect(fetchFn).toHaveBeenLastCalledWith(
+      expect.stringContaining("projectId=proj-1"),
+      expect.anything(),
+    );
+  });
+
+  it("promote swaps in the promoted (now global) preset", async () => {
+    const projectPreset: Preset = { ...userPreset, scope: "project", projectId: "proj-1" };
+    const promoted: Preset = { ...userPreset, scope: "global" };
+    const fn = vi.fn((url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method === "GET") return Promise.resolve(ok([projectPreset]));
+      if (method === "POST" && url.endsWith("/promote")) return Promise.resolve(ok(promoted));
+      return Promise.resolve(ok({}));
+    });
+    vi.stubGlobal("fetch", fn);
+    const { result } = renderHook(() => usePresets("proj-1"));
+    await waitFor(() => expect(result.current.user).toHaveLength(1));
+    await act(async () => {
+      await result.current.promote(userPreset.id);
+    });
+    expect(result.current.user).toEqual([promoted]);
+  });
 });

@@ -64,7 +64,7 @@ export async function importFilesToDb(
   if (existsSync(presetsPath)) {
     const list = JSON.parse(readFileSync(presetsPath, "utf8")) as unknown[];
     for (const entry of list) {
-      await presets.upsert(parsePreset(entry));
+      await presets.upsert(SEED_OWNER_ID, parsePreset(entry));
       result.presets++;
     }
   }
