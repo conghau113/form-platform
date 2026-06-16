@@ -122,7 +122,12 @@
       "Read(//e/e/web/web-tool/form-platform-starter/form-platform/apps/builder/**)",
       "Bash(cd /e/web/web-tool/form-platform-starter/form-platform/apps/api && find src -type f | head -60 && echo \"---PKG---\" && cat package.json)",
       "Read(//e/e/web/web-tool/form-platform-starter/form-platform/apps/api/**)",
-      "Bash(xargs grep -l \"Palette\\\\|CompositePanel\")"
+      "Bash(xargs grep -l \"Palette\\\\|CompositePanel\")",
+      "Bash(PORT=3010 pnpm start)",
+      "Bash(PORT=3011 node dist/main.js)",
+      "Bash(git restore *)",
+      "mcp__chrome-devtools__click",
+      "mcp__chrome-devtools__list_network_requests"
     ],
     "deny": [
       "Bash(rm -rf:*)",

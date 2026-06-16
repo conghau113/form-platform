@@ -1,7 +1,7 @@
 import { childrenOf, type FieldNode, type FormSchema, migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@org/form-theme";
 import { Button, message, Segmented, Space, Typography, Upload } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { DesignerProvider, type DesignerValue } from "./DesignCanvas";
 import {
@@ -77,9 +77,23 @@ function collectFieldNames(nodes: FieldNode[]): string[] {
   return out;
 }
 
-export function App() {
+export interface AppProps {
+  /** Form to load on mount (the `/projects/:id/forms/:formId` leaf). */
+  formId?: string;
+  /** Called after a successful save (lets the workspace rail refresh form titles). */
+  onSaved?: () => void;
+  /** Reports whether the editor has unsaved changes (drives the navigation guard). */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Hands a stable save function up so the guard can "save then proceed". Returns success. */
+  provideSave?: (save: () => Promise<boolean>) => void;
+}
+
+export function App({ formId, onSaved, onDirtyChange, provideSave }: AppProps = {}) {
   const history = useHistory<TreeNode>(() => schemaToTree(migrate(example)));
   const tree = history.present;
+  // History cursor at the last load/save; the editor is "dirty" when it has moved.
+  // State (not a ref) so a save/load re-renders and the dirty-driven effects recompute.
+  const [savedIndex, setSavedIndex] = useState(0);
   const form = tree.node as FormProps;
   const [selection, setSelection] = useState<SelectionState>(emptySelection);
   const selectedUid = selection.selected[0] ?? null;
@@ -94,6 +108,8 @@ export function App() {
     oneOf("design", "json", "preview"),
   );
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
+  // Tokens at the last load/save — the clean theme baseline for the dirty check.
+  const [savedTokens, setSavedTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
   const [mode, setMode] = useState<"form" | "workflow">("form");
   const [clipboard, setClipboard] = useState<Clipboard>(emptyClipboard);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -110,6 +126,12 @@ export function App() {
 
   // Drop selection highlights for nodes that no longer exist (after delete/undo/load).
   useEffect(() => setSelection((s) => pruneSelection(s, tree)), [tree]);
+
+  // When mounted as the `/projects/:projectId/forms/:formId` leaf, load that form (+ theme) once.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load is keyed on formId only.
+  useEffect(() => {
+    if (formId) void onLoad(formId);
+  }, [formId]);
 
   // A valid JSON-editor edit replaces the tree as one history step.
   const applyJson = useCallback(
@@ -284,7 +306,8 @@ export function App() {
       ),
   };
 
-  async function onSave() {
+  /** Save form + theme. Returns true on success so the navigation guard can proceed. */
+  async function onSave(): Promise<boolean> {
     try {
       const res = await fetch(`${API}/forms`, {
         method: "POST",
@@ -294,7 +317,7 @@ export function App() {
       const data = await res.json();
       if (!res.ok) {
         message.error(`Save failed: ${data.message ?? res.statusText}`);
-        return;
+        return false;
       }
       // Persist the theme alongside the form under the same id.
       const themeRes = await fetch(`${API}/themes/${encodeURIComponent(data.id)}`, {
@@ -305,11 +328,17 @@ export function App() {
       if (!themeRes.ok) {
         const themeData = await themeRes.json().catch(() => ({}));
         message.error(`Theme save failed: ${themeData.message ?? themeRes.statusText}`);
-        return;
+        return false;
       }
+      // Mark the current state (form + theme) as clean and refresh the workspace tree.
+      setSavedIndex(history.index);
+      setSavedTokens(tokens);
+      onSaved?.();
       message.success(`Saved "${data.id}" (form + theme)`);
+      return true;
     } catch (e) {
       message.error(`Save failed: ${(e as Error).message}`);
+      return false;
     }
   }
 
@@ -322,9 +351,13 @@ export function App() {
         return;
       }
       loadSchema(migrate(data));
+      // A fresh load resets history to cursor 0 → that is the clean baseline.
+      setSavedIndex(0);
       // Reapply the saved theme if one exists; a missing theme is not an error.
       const themeRes = await fetch(`${API}/themes/${encodeURIComponent(data.id)}`);
-      setTokens(themeRes.ok ? migrateTheme(await themeRes.json()) : DEFAULT_TOKENS);
+      const nextTokens = themeRes.ok ? migrateTheme(await themeRes.json()) : DEFAULT_TOKENS;
+      setTokens(nextTokens);
+      setSavedTokens(nextTokens);
       message.success(`Loaded "${data.id}"`);
     } catch (e) {
       message.error(`Load failed: ${(e as Error).message}`);
@@ -337,6 +370,31 @@ export function App() {
     setMode("form");
     void onLoad(formId);
   }
+
+  // --- Workspace integration: dirty signal, stable save, unload guard ---
+  // Dirty = the form tree moved past its saved cursor OR the design tokens changed (both are
+  // persisted together by `onSave`), so neither form edits nor theme edits are silently lost.
+  const dirty =
+    history.index !== savedIndex || JSON.stringify(tokens) !== JSON.stringify(savedTokens);
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+
+  // Register ONE stable save fn that reads the latest closure via a ref — so the
+  // navigation guard never calls a stale snapshot of the current json/tokens.
+  const latestSave = useRef(onSave);
+  latestSave.current = onSave;
+  const stableSave = useCallback(() => latestSave.current(), []);
+  useEffect(() => provideSave?.(stableSave), [provideSave, stableSave]);
+
+  // Native browser prompt on refresh / tab close while there are unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ""; // some engines still require this for the native prompt
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
 
   function onExportTheme() {
     const blob = new Blob([JSON.stringify(tokens, null, 2)], { type: "application/json" });

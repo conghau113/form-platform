@@ -1,0 +1,40 @@
+/**
+ * Workspace record shapes (Track W). These mirror the api repo boundary types
+ * (`apps/api/src/persistence/repositories/{project,folder,form}.repo.ts`) but are declared here
+ * so the builder stays decoupled from the api package. Dates arrive as ISO strings over the wire.
+ */
+
+export interface ProjectRecord {
+  id: string;
+  ownerId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FolderRecord {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  name: string;
+  order: number;
+  createdAt: string;
+}
+
+export interface FormSummary {
+  id: string;
+  projectId: string;
+  folderId: string | null;
+  title: string;
+  status: string | null;
+  updatedAt: string;
+}
+
+/** `GET /projects/:id/tree` payload: flat lists the client assembles into a tree. */
+export interface ProjectTree {
+  project: ProjectRecord;
+  folders: FolderRecord[];
+  forms: FormSummary[];
+}

@@ -206,7 +206,7 @@ must be adopted without loss:
 | --- | --- | --- | --- | --- | --- |
 | **W0** | Prisma + repository interfaces; migrate flat `.data` → DB into "Unfiled"; existing `/forms` `/presets` `/themes` re‑backed by repos (no behaviour change) | api | none | L | ✅ **DONE** (uncommitted; reviewer PASS, no blockers) |
 | **W1** | `Project` + `Folder` + `FormRecord` models, CRUD + `/tree`; `ownerId` + minimal auth (header `x-owner-id`) | api | none | L | ✅ **DONE** (reviewer PASS; typecheck 15/15, api 18/18, live smoke green) |
-| **W2** | Builder Explorer (tree + CRUD + move) + `react-router` | builder | none | L | — |
+| **W2** | Builder Explorer (tree + CRUD + move) + `react-router`. **+W2.1 (master–detail):** Explorer + editor unified into one project page — persistent collapsible rail + nested `/projects/:projectId/forms/:formId` editor (data router + `useBlocker` unsaved-changes guard: Save/Discard/Cancel on any nav, `beforeunload` on refresh) | builder | none | L | ✅ **DONE** (uncommitted; reviewer PASS both W2 & W2.1; builder 221/221, prod build green) |
 | **W3** | Preset `scope`/`projectId` (global + project), library filtered by project, promote‑to‑global | api + builder | none | M | — |
 | **W4** | **Linked fields**: additive `{ presetId, overrides? }` on field; form‑core resolves preset at render/migrate; handle missing/changed preset; migration + fixture test | schema + form‑core + renderer + builder | **additive (bump+migration)** | XL | — |
 | **W5** | Project sharing / roles (multi‑tenant) | api + builder | none | L | — |
