@@ -1,4 +1,5 @@
 import { CopyOutlined, DeleteOutlined, HolderOutlined } from "@ant-design/icons";
+import type { PresetResolver } from "@org/form-core";
 import { FormRenderer } from "@org/form-renderer-web";
 import { childrenOf, type FieldNode, isLayoutContainer } from "@org/form-schema";
 import type { ThemeConfig } from "antd";
@@ -543,6 +544,7 @@ export function DesignCanvas({
   tree,
   theme,
   maxWidth = 820,
+  presetResolver,
 }: {
   schema: unknown;
   /** Stable string key for the schema — resets the error boundary on a valid edit. */
@@ -551,6 +553,8 @@ export function DesignCanvas({
   theme?: ThemeConfig;
   /** Canvas content width — driven by the toolbar device simulator (F2). */
   maxWidth?: number;
+  /** Resolves linked fields (W4) so the canvas shows live preset values. */
+  presetResolver?: PresetResolver;
 }) {
   const d = useDesigner();
   const { setHovered } = useHover();
@@ -635,10 +639,11 @@ export function DesignCanvas({
           designMode
           access={{ roles: ["admin"] }}
           nodeWrapper={wrapper}
+          presetResolver={presetResolver}
         />
       </CanvasBoundary>
     ),
-    [schema, json, theme, wrapper],
+    [schema, json, theme, wrapper, presetResolver],
   );
 
   // D7 marquee select: a rubber-band drag from empty canvas selects every node shell it

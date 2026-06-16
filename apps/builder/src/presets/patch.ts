@@ -8,7 +8,10 @@ import type { FieldNode, Preset, PresetScope } from "@org/form-schema";
  * preset envelope). Applied later as `newField(fieldType, taken, patch)`.
  */
 
-const INSTANCE_KEYS = new Set(["type", "name"]);
+// Instance-identity keys, stripped when distilling a preset: `name`/`type` (re-seeded /
+// carried on the envelope) plus the W4 link keys `presetId`/`overrides` — a preset distilled
+// from a linked field must capture its *resolved shape*, never the link back to another preset.
+const INSTANCE_KEYS = new Set(["type", "name", "presetId", "overrides"]);
 
 /** Every authorable prop of a field except the instance-identity keys (and `undefined`s). */
 export function presetPatchFromField(field: FieldNode): Record<string, unknown> {

@@ -14,7 +14,8 @@ import type { WorkspaceOutletContext } from "./ProjectWorkspace";
  */
 export function EditorRoute() {
   const { formId, projectId } = useParams<{ formId: string; projectId: string }>();
-  const { onFormSaved } = useOutletContext<WorkspaceOutletContext>();
+  const { onFormSaved, explorerCollapsed, setExplorerCollapsed } =
+    useOutletContext<WorkspaceOutletContext>();
 
   const dirtyRef = useRef(false);
   const saveRef = useRef<() => Promise<boolean>>(async () => true);
@@ -42,6 +43,8 @@ export function EditorRoute() {
         onSaved={onFormSaved}
         onDirtyChange={onDirtyChange}
         provideSave={provideSave}
+        explorerCollapsed={explorerCollapsed}
+        onExplorerCollapsedChange={setExplorerCollapsed}
       />
       <Modal
         open={blocker.state === "blocked"}

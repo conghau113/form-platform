@@ -129,7 +129,9 @@
       "mcp__chrome-devtools__click",
       "mcp__chrome-devtools__list_network_requests",
       "Bash(xargs grep -l \"CurrentOwner\\\\|x-owner-id\\\\|SEED_OWNER_ID\")",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(head -25 reactions.test.ts)",
+      "Bash(head -25 conditions.test.ts)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

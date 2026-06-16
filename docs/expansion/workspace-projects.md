@@ -23,7 +23,10 @@ already made for `presets` and `theme`.
   renderer, never needs a migration. The contract and the workspace evolve independently.
 
 Only **W4 (linked fields)** ever touches the contract, and it does so additively
-(`{ presetId, overrides? }`) with a migration + fixture test, per the golden rules.
+(`{ presetId, overrides? }`). Because both keys are *new optional* props (same character as
+`validations`/`reactions`), this is purely additive: old JSON keeps parsing, so it needs **no
+`CURRENT_FORM_VERSION` bump and no migration** — only a parse-compat test (per the additive
+rule). The earlier "bump + migration + fixture" framing was corrected once W4 was built.
 
 ---
 
@@ -208,7 +211,7 @@ must be adopted without loss:
 | **W1** | `Project` + `Folder` + `FormRecord` models, CRUD + `/tree`; `ownerId` + minimal auth (header `x-owner-id`) | api | none | L | ✅ **DONE** (reviewer PASS; typecheck 15/15, api 18/18, live smoke green) |
 | **W2** | Builder Explorer (tree + CRUD + move) + `react-router`. **+W2.1 (master–detail):** Explorer + editor unified into one project page — persistent collapsible rail + nested `/projects/:projectId/forms/:formId` editor (data router + `useBlocker` unsaved-changes guard: Save/Discard/Cancel on any nav, `beforeunload` on refresh) | builder | none | L | ✅ **DONE** (uncommitted; reviewer PASS both W2 & W2.1; builder 221/221, prod build green) |
 | **W3** | Preset `scope`/`projectId` (global + project), library filtered by project, promote‑to‑global | schema (additive) + api + builder | none (no formVersion bump; optional preset metadata + changeset) | M | ✅ **DONE** (uncommitted; form‑schema 56/56, api 23/23, builder 225/225, biome clean) |
-| **W4** | **Linked fields**: additive `{ presetId, overrides? }` on field; form‑core resolves preset at render/migrate; handle missing/changed preset; migration + fixture test | schema + form‑core + renderer + builder | **additive (bump+migration)** | XL | — |
+| **W4** | **Linked fields**: additive `{ presetId, overrides? }` on field; form‑core `resolveLinkedFields` re‑syncs at render (preset `patch` base + instance `overrides`); missing/changed preset freezes to a snapshot; builder link/unlink UI + stale badge + shared preset store + injected `presetResolver` | schema + form‑core + renderer + builder | **additive, NO bump** (optional props per additive rule; parse‑compat test, no migration) | XL | ✅ **DONE** (uncommitted; reviewer PASS no blockers; schema 57, core 99, builder link/PresetLink 11, api 24, typecheck clean) |
 | **W5** | Project sharing / roles (multi‑tenant) | api + builder | none | L | — |
 
 **Recommended order:** W0 → W1 → W2 → W3 → (ship usable workspace) → W4 → W5.
@@ -224,8 +227,10 @@ Every phase follows the repo's existing loop (see `AGENTS.md` / `CLAUDE.md`):
 1. **Plan** the phase (plan mode for the cross‑package ones — W0, W1, W4). Write the sub‑task
    list into this doc's status table before coding.
 2. **Build additively.** New optional props / new modules only. Old saved JSON keeps parsing.
-   For W4 (the only contract change): bump `CURRENT_FORM_VERSION`, add migration N→N+1, add a
-   test migrating an old fixture forward — never break older form JSON.
+   W4 (the only contract change) added optional `presetId`/`overrides` — purely additive, so it
+   needed **no** `CURRENT_FORM_VERSION` bump and no migration, just a parse-compat test proving a
+   current-version doc with the new keys still parses. (Bump + migration N→N+1 + a forward-migrate
+   test is reserved for a *breaking* shape change — renaming/removing/retyping a prop.)
 3. **Repository‑first on the backend.** New persistence goes behind a repo interface; services
    never import Prisma directly. Unit‑test against in‑memory fakes; integration‑test against
    SQLite.

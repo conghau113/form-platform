@@ -191,6 +191,18 @@ const commonFields = {
    *  this key keeps parsing, so no formVersion bump is required. */
   reactions: z.array(reactionSchema).optional(),
   permissions: permissionSchema.optional(),
+  /** Link to a reusable **preset** (Track W4 — linked fields). When set, this field is an
+   *  *instance* of the named preset: a consumer (form-core's `resolveLinkedFields`) re-applies
+   *  the preset's `patch` then {@link overrides} on top of this node when the preset is
+   *  resolvable, and falls back to this node's own props (a frozen snapshot) when it is not
+   *  (deleted / changed type). Organisational metadata referenced by id — it never embeds the
+   *  preset body. Additive: old JSON without this key keeps parsing, so no formVersion bump. */
+  presetId: z.string().optional(),
+  /** Per-instance overrides layered on top of the linked preset's `patch` (keys where this
+   *  instance diverges). Opaque declarative data, never eval'd — same character as a preset's
+   *  own `patch`. Meaningful only alongside {@link presetId}. Additive: old JSON without this
+   *  key keeps parsing, so no formVersion bump is required. */
+  overrides: z.record(z.string(), z.unknown()).optional(),
 };
 
 export const textFieldSchema = z.object({

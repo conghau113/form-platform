@@ -95,4 +95,29 @@ describe("migrate", () => {
   it("rejects a document newer than the renderer supports", () => {
     expect(() => migrate({ formVersion: 999, id: "x", title: "x", fields: [] })).toThrow();
   });
+
+  it("parses a current-version doc carrying linked-field props (presetId/overrides) without a bump", () => {
+    // Track W4: a linked field references a preset by id and records local overrides.
+    // These are additive optional props, so a v3 (CURRENT) body with them parses as a
+    // no-op migration — old JSON without them keeps parsing (the cases above prove that).
+    const doc = {
+      formVersion: CURRENT_FORM_VERSION,
+      id: "linked",
+      title: "Linked",
+      fields: [
+        {
+          type: "text",
+          name: "org",
+          label: "Organization",
+          placeholder: "Pick one",
+          presetId: "organization_select",
+          overrides: { label: "Org (custom)" },
+        },
+      ],
+    };
+    const out = migrate(doc);
+    expect(out).toEqual(doc);
+    expect((out.fields[0] as any).presetId).toBe("organization_select");
+    expect((out.fields[0] as any).overrides).toEqual({ label: "Org (custom)" });
+  });
 });

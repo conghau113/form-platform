@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { useDesigner } from "../DesignCanvas";
 import { DraggableChip } from "../PaletteChip";
 import { presetFromField } from "./patch";
-import { usePresets } from "./usePresets";
+import type { PresetStore } from "./usePresets";
 
 /** One preset chip. Pressing it starts a "create" drag that seeds a fresh field of
  *  `preset.fieldType` merged with `preset.patch`; user presets carry delete (and, for
@@ -150,13 +150,16 @@ export function PresetSection({
   query,
   selectedField,
   projectId,
+  presets,
 }: {
   query: string;
   selectedField: FieldNode | null;
   /** Project context (W3): library is global ∪ this project; enables scope/promote actions. */
   projectId?: string;
+  /** Shared preset store, lifted to App (W4) so this gallery + the preview agree. */
+  presets: PresetStore;
 }) {
-  const { builtin, user, save, remove, promote } = usePresets(projectId);
+  const { builtin, user, save, remove, promote } = presets;
 
   const onDelete = (id: string) => {
     remove(id).catch((e: Error) => message.error(`Delete preset failed: ${e.message}`));

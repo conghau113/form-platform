@@ -1,13 +1,15 @@
-import { childrenOf, type FieldNode, isLayoutContainer } from "@org/form-schema";
+import { childrenOf, type FieldNode, isLayoutContainer, type Preset } from "@org/form-schema";
 import { Button, Empty, Form, Input, Typography } from "antd";
 import { useEffect, useState } from "react";
 import { type NodePath, nodeAtPath, patchNodeAtPath } from "../engine/field-path";
 import type { StepsOp } from "../engine/steps-ops";
 import type { FormProps } from "../engine/tree";
 import { describeNode, fieldTypeLabel } from "../field-registry";
+import { computeOverrides } from "../presets/link";
 import { FieldForm } from "./FieldForm";
 import { FormSettingsEditor } from "./FormSettingsEditor";
 import { nodeLabel, nodeName } from "./helpers";
+import { PresetLink } from "./PresetLink";
 import { StepsEditor } from "./StepsEditor";
 import { TypeSettings } from "./TypeSettings";
 import type { AuthoredField, SelectedNode } from "./types";
@@ -33,6 +35,7 @@ export function PropertyPanel({
   form,
   siblingNames: topSiblingNames,
   fieldNames,
+  presets = [],
   onChange,
   onChangeForm,
   onStepsEdit,
@@ -42,6 +45,8 @@ export function PropertyPanel({
   form?: FormProps | null;
   /** Top-level field names, candidates for a visibleWhen condition. */
   siblingNames: string[];
+  /** Built-in + user presets (Track W4) — populates the leaf's "Linked preset" control. */
+  presets?: Preset[];
   /** Every named field reachable in the top-level value scope (containers descended,
    *  array subtrees skipped) — reaction TARGET candidates for a top-level field. */
   fieldNames: string[];
@@ -141,16 +146,34 @@ export function PropertyPanel({
         .filter((n): n is string => Boolean(n) && n !== nodeName(node))
     : topSiblingNames.filter((n) => n !== nodeName(node));
 
+  // A linked leaf (W4): edits to its props must refresh `overrides` (the diff vs the preset's
+  // patch) so the saved body stays renderer-resolvable. Link/unlink themselves carry `presetId`
+  // in the patch and bypass this, since the link is changing rather than being edited.
+  const linkedPreset = (() => {
+    const presetId = (node as { presetId?: string }).presetId;
+    if (!presetId) return undefined;
+    const p = presets.find((x) => x.id === presetId);
+    return p && p.fieldType === node.type ? p : undefined;
+  })();
+  const fieldSet = linkedPreset
+    ? (patch: Partial<AuthoredField>) => {
+        if ("presetId" in patch) return set(patch);
+        const next = { ...node, ...patch } as FieldNode;
+        set({ ...patch, overrides: computeOverrides(next, linkedPreset.patch) });
+      }
+    : set;
+
   return (
     <div style={{ padding: 16, overflow: "auto", height: "100%" }}>
       {breadcrumb}
+      <PresetLink field={node} presets={presets} set={set} />
       <FieldForm
         field={node as AuthoredField}
         siblingNames={siblingNames}
         // Reaction targets: all top-level-scope names for a top-level field; the row's
         // sibling names when editing an array item field (path.length > 0).
         targetNames={path.length ? siblingNames : fieldNames}
-        set={set}
+        set={fieldSet}
         onDrill={(index) => setDrillPath([...path, index])}
       />
     </div>

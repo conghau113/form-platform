@@ -44,6 +44,7 @@ import { describeNode, metaGuard, newField } from "./field-registry";
 import { useHistory } from "./history";
 import { parseFormFile } from "./io";
 import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
+import { presetResolverFromList, usePresets } from "./presets";
 import { TemplateGallery } from "./TemplateGallery";
 import { useUserTemplates } from "./templates";
 import { useDragon } from "./useDragon";
@@ -54,6 +55,7 @@ import { oneOf, usePersistentState } from "./workbench/persist";
 import { SettingsPanel } from "./workbench/SettingsPanel";
 import { type Device, ToolbarPanel, type ViewMode } from "./workbench/ToolbarPanel";
 import { ViewPanel } from "./workbench/ViewPanel";
+import { ExplorerToggle } from "./workspace/ExplorerToggle";
 
 const API = "http://localhost:3001";
 
@@ -88,9 +90,20 @@ export interface AppProps {
   onDirtyChange?: (dirty: boolean) => void;
   /** Hands a stable save function up so the guard can "save then proceed". Returns success. */
   provideSave?: (save: () => Promise<boolean>) => void;
+  /** Workspace shell: explorer rail collapsed state (hide toggle lives in this header). */
+  explorerCollapsed?: boolean;
+  onExplorerCollapsedChange?: (collapsed: boolean) => void;
 }
 
-export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: AppProps = {}) {
+export function App({
+  formId,
+  projectId,
+  onSaved,
+  onDirtyChange,
+  provideSave,
+  explorerCollapsed,
+  onExplorerCollapsedChange,
+}: AppProps = {}) {
   const history = useHistory<TreeNode>(() => schemaToTree(migrate(example)));
   const tree = history.present;
   // History cursor at the last load/save; the editor is "dirty" when it has moved.
@@ -116,6 +129,15 @@ export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: 
   const [clipboard, setClipboard] = useState<Clipboard>(emptyClipboard);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const userTemplates = useUserTemplates();
+
+  // Preset library (Track W3/W4), lifted here so the gallery, the "Linked preset" control and
+  // the live preview share ONE store — editing a preset then propagates to its linked fields.
+  const presets = usePresets(projectId);
+  const allPresets = useMemo(
+    () => [...presets.builtin, ...presets.user],
+    [presets.builtin, presets.user],
+  );
+  const presetResolver = useMemo(() => presetResolverFromList(allPresets), [allPresets]);
 
   // The neutral design tokens are mapped to an antd ThemeConfig that wraps the
   // preview, so editing a token re-themes the rendered form live.
@@ -399,7 +421,9 @@ export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: 
   }, [dirty]);
 
   function onExportTheme() {
-    const blob = new Blob([JSON.stringify(tokens, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(tokens, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -441,6 +465,12 @@ export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: 
             borderBottom: "1px solid rgba(0,0,0,0.08)",
           }}
         >
+          {onExplorerCollapsedChange && (
+            <ExplorerToggle
+              collapsed={explorerCollapsed ?? false}
+              onCollapsedChange={onExplorerCollapsedChange}
+            />
+          )}
           <Typography.Title level={4} style={{ margin: 0, whiteSpace: "nowrap" }}>
             Builder
           </Typography.Title>
@@ -507,6 +537,7 @@ export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: 
                   onExportTheme={onExportTheme}
                   selectedField={selected?.field ?? null}
                   projectId={projectId}
+                  presets={presets}
                 />
               </aside>
 
@@ -538,6 +569,7 @@ export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: 
                   antdTheme={antdTheme}
                   maxWidth={VIEWPORTS[device]}
                   onApplyJson={applyJson}
+                  presetResolver={presetResolver}
                 />
               </section>
 
@@ -551,6 +583,7 @@ export function App({ formId, projectId, onSaved, onDirtyChange, provideSave }: 
                   form={formSelected ? form : null}
                   siblingNames={siblingNames}
                   fieldNames={fieldNames}
+                  presets={allPresets}
                   onChange={(uid, field) =>
                     history.set(applyFieldEdit(tree, uid, field), "Edit field")
                   }

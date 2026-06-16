@@ -1,3 +1,4 @@
+import type { PresetResolver } from "@org/form-core";
 import { FormRenderer } from "@org/form-renderer-web";
 import type { FormSchema } from "@org/form-schema";
 import { Alert, ConfigProvider, type ThemeConfig, theme } from "antd";
@@ -64,6 +65,7 @@ export function ViewPanel({
   antdTheme,
   maxWidth,
   onApplyJson,
+  presetResolver,
 }: {
   mode: ViewMode;
   schema: unknown;
@@ -74,10 +76,19 @@ export function ViewPanel({
   maxWidth: number;
   /** Receives the validated schema when the JSON editor applies a valid edit. */
   onApplyJson: (schema: FormSchema) => void;
+  /** Resolves linked fields (W4) so the canvas + preview show live preset values. */
+  presetResolver?: PresetResolver;
 }) {
   if (mode === "design") {
     return (
-      <DesignCanvas schema={schema} json={json} tree={tree} theme={antdTheme} maxWidth={maxWidth} />
+      <DesignCanvas
+        schema={schema}
+        json={json}
+        tree={tree}
+        theme={antdTheme}
+        maxWidth={maxWidth}
+        presetResolver={presetResolver}
+      />
     );
   }
 
@@ -87,7 +98,11 @@ export function ViewPanel({
         <ConfigProvider theme={antdTheme}>
           <PreviewSurface maxWidth={maxWidth}>
             <PreviewBoundary key={json}>
-              <FormRenderer schema={schema} access={{ roles: ["admin"] }} />
+              <FormRenderer
+                schema={schema}
+                access={{ roles: ["admin"] }}
+                presetResolver={presetResolver}
+              />
             </PreviewBoundary>
           </PreviewSurface>
         </ConfigProvider>

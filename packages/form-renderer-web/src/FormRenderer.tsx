@@ -12,6 +12,8 @@ import {
   dataSourceDeps,
   effectiveVisible,
   isVisible,
+  type PresetResolver,
+  resolveLinkedFields,
 } from "@org/form-core";
 import { type FieldNode, type FormSchema, isLayoutContainer, migrate } from "@org/form-schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -92,6 +94,12 @@ export interface FormRendererProps {
    *  Submit button. Per-field `readPretty`/`readOnly` flags in the schema still apply when this
    *  is false. */
   readPretty?: boolean;
+  /** Resolve **linked fields** (Track W4): a field carrying a `presetId` is re-synced against
+   *  the preset returned here (preset `patch` base, instance `overrides` on top). Presets live
+   *  outside the contract, so the host injects this — typically from its workspace preset store.
+   *  Absent ⇒ linked fields render from their own props (a frozen snapshot), so runtime output
+   *  is unchanged and the renderer stays usable with no preset source at all. */
+  presetResolver?: PresetResolver;
 }
 
 /** Imperative handle exposed via `ref`. `submit()` programmatically triggers validation +
@@ -113,10 +121,14 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     designMode = false,
     hideSubmit = false,
     readPretty = false,
+    presetResolver,
   },
   ref,
 ) {
-  const form: FormSchema = useMemo(() => migrate(schema), [schema]);
+  const form: FormSchema = useMemo(() => {
+    const migrated = migrate(schema);
+    return presetResolver ? resolveLinkedFields(migrated, presetResolver).form : migrated;
+  }, [schema, presetResolver]);
 
   // Self-contained QueryClient so consumers don't have to provide one. Retries
   // are off so dataSource error states surface immediately. Created once.

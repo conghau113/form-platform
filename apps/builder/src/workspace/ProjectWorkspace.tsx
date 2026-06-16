@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Outlet, useMatch, useParams } from "react-router-dom";
 import { ExplorerRail } from "./ExplorerRail";
 import { useProjects, useProjectTree } from "./useWorkspace";
@@ -7,6 +8,8 @@ export interface WorkspaceOutletContext {
   projectId: string;
   /** Refetch the tree (form titles refresh after a save). */
   onFormSaved: () => void;
+  explorerCollapsed: boolean;
+  setExplorerCollapsed: (collapsed: boolean) => void;
 }
 
 /**
@@ -21,9 +24,16 @@ export function ProjectWorkspace() {
   const { tree, loading, error, reload } = useProjectTree(projectId);
   const activeFormId = useMatch("/projects/:projectId/forms/:formId")?.params.formId;
 
+  const [explorerCollapsed, setExplorerCollapsed] = useState(false);
+
   if (!projectId) return null;
 
-  const context: WorkspaceOutletContext = { projectId, onFormSaved: reload };
+  const context: WorkspaceOutletContext = {
+    projectId,
+    onFormSaved: reload,
+    explorerCollapsed,
+    setExplorerCollapsed,
+  };
 
   return (
     <div style={{ display: "flex", height: "100vh", minHeight: 0 }}>
@@ -35,6 +45,7 @@ export function ProjectWorkspace() {
         error={error}
         reload={reload}
         activeFormId={activeFormId}
+        collapsed={explorerCollapsed}
       />
       <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
         <Outlet context={context} />

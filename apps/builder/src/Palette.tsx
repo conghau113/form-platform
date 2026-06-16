@@ -31,7 +31,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { useDesigner } from "./DesignCanvas";
 import { type FieldType, type PaletteEntry, paletteEntries } from "./field-registry";
 import { DraggableChip } from "./PaletteChip";
-import { PresetSection } from "./presets";
+import { PresetSection, type PresetStore } from "./presets";
 
 /** Per-type palette glyph. A field with no entry falls back to a generic block. */
 const TYPE_ICON: Partial<Record<FieldType, ReactNode>> = {
@@ -124,9 +124,11 @@ function PaletteItem({ entry }: { entry: PaletteEntry }) {
 export function Palette({
   selectedField,
   projectId,
+  presets,
 }: {
   selectedField: FieldNode | null;
   projectId?: string;
+  presets: PresetStore;
 }) {
   const [query, setQuery] = useState("");
   const groups = useMemo(() => {
@@ -158,7 +160,12 @@ export function Palette({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <PresetSection query={query} selectedField={selectedField} projectId={projectId} />
+      <PresetSection
+        query={query}
+        selectedField={selectedField}
+        projectId={projectId}
+        presets={presets}
+      />
       {groups.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No components" />
       ) : (

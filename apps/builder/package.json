@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^5.4.0",
+    "@org/form-core": "workspace:*",
     "@org/form-renderer-web": "workspace:*",
     "@org/form-schema": "workspace:*",
     "@org/form-theme": "workspace:*",

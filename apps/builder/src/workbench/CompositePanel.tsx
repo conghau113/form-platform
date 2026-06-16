@@ -10,11 +10,12 @@ import { Tabs } from "antd";
 import type { TreeNode } from "../engine/tree";
 import type { HistoryEntry } from "../history";
 import { Palette } from "../Palette";
+import type { PresetStore } from "../presets";
 import { ThemeEditor } from "../ThemeEditor";
+import "./CompositePanel.css";
 import { HistoryPanel } from "./HistoryPanel";
 import { OutlineTree } from "./OutlineTree";
 import { oneOf, usePersistentState } from "./persist";
-import "./CompositePanel.css";
 
 type CompositeTab = "components" | "outline" | "history" | "theme";
 
@@ -34,6 +35,7 @@ export function CompositePanel({
   onExportTheme,
   selectedField,
   projectId,
+  presets,
 }: {
   tree: TreeNode;
   history: {
@@ -48,6 +50,8 @@ export function CompositePanel({
   selectedField: FieldNode | null;
   /** Project context (W3) → scopes the preset library. */
   projectId?: string;
+  /** Shared preset store (W4), lifted to App so the gallery + preview + link control agree. */
+  presets: PresetStore;
 }) {
   const [tab, setTab] = usePersistentState<CompositeTab>(
     "compositeTab",
@@ -60,28 +64,34 @@ export function CompositePanel({
       activeKey={tab}
       onChange={(key) => setTab(key as CompositeTab)}
       size="small"
-      tabBarStyle={{ paddingLeft: 8, marginBottom: 0, flexShrink: 0 }}
+      tabBarStyle={{
+        paddingLeft: 16,
+        // margin: "auto",
+        marginBottom: 0,
+      }}
       items={[
         {
           key: "components",
-          label: <AppstoreOutlined title="Components" />,
-          children: <Palette selectedField={selectedField} projectId={projectId} />,
+          label: <AppstoreOutlined style={{ fontSize: 16 }} title="Components" />,
+          children: (
+            <Palette selectedField={selectedField} projectId={projectId} presets={presets} />
+          ),
         },
         {
           key: "outline",
-          label: <ApartmentOutlined title="Outline" />,
+          label: <ApartmentOutlined style={{ fontSize: 16 }} title="Outline" />,
           children: <OutlineTree root={tree} />,
         },
         {
           key: "history",
-          label: <HistoryOutlined title="History" />,
+          label: <HistoryOutlined style={{ fontSize: 16 }} title="History" />,
           children: (
             <HistoryPanel entries={history.entries} index={history.index} onJump={history.jumpTo} />
           ),
         },
         {
           key: "theme",
-          label: <BgColorsOutlined title="Theme" />,
+          label: <BgColorsOutlined style={{ fontSize: 16 }} title="Theme" />,
           children: (
             <div style={{ padding: 12 }}>
               <ThemeEditor tokens={tokens} onChange={onChangeTokens} onExport={onExportTheme} />
