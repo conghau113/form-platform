@@ -30,7 +30,7 @@ not yet committed (user gates the commit).
 | I2 | Icon‑picker setter wired into input family | ✅ Done | `uncommitted` |
 | P1 | Preset data model + storage (api + builder) | ✅ Done | `b01d916` |
 | P2 | Preset gallery UI (save/edit/delete, drag→canvas) | ✅ Done | `5437321` |
-| P3 | Built‑in preset library | ⬜ Todo | — |
+| P3 | Built‑in preset library | ✅ Done | `98d5c3a` |
 | G3 | Search within property panel + pin setters | ⬜ Todo | — |
 | U1 | Pinning (setters + presets/fields) | ⬜ Todo | — |
 | T1 | Typed style tokens (guarded subset) | ⬜ Todo | — |
@@ -72,8 +72,11 @@ the text + number descriptors. Changeset: `.changeset/icon-registry-prefix-suffi
 builder 190/190, renderer 107/107 (one pre‑existing parallel‑load timeout, passes alone),
 biome clean on changed files.
 
-**Next:** **P1** — preset data model + storage (api + builder), the start of the Track P
-preset system.
+**Next:** Track P (P1→P3) is **complete** (`98d5c3a`). The owner has since opened a new,
+larger direction — a **production workspace** (projects → nested folders → forms, plus a
+project‑scoped named field library). That is specced in its own doc:
+**`workspace-projects.md` (Track W)**, which now takes priority over the remaining
+builder‑UX cosmetic items (G3/U1/T1/T2/R2/R5/R6/R7) given the production goal.
 
 ---
 
