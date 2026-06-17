@@ -1,7 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import type { FieldNode, Preset, PresetScope } from "@org/form-schema";
 import type { Prisma } from "@prisma/client";
-import { PresetRepo } from "../repositories/preset.repo.js";
+import {
+  type PresetMeta,
+  type PresetProjectScope,
+  PresetRepo,
+} from "../repositories/preset.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { PrismaService } from "./prisma.service.js";
 
@@ -35,18 +39,32 @@ export class PrismaPresetRepo extends PresetRepo {
     super();
   }
 
-  /** Global presets for the owner, unioned with this project's presets when `projectId` is set. */
-  async list(ownerId: string, projectId?: string): Promise<Preset[]> {
-    const where: Prisma.PresetWhereInput = projectId
-      ? { ownerId, OR: [{ scope: "global" }, { scope: "project", projectId }] }
-      : { ownerId, scope: "global" };
+  /**
+   * The user's own global presets, unioned with a project's *shared* presets when given. Global
+   * rows are the user's (`ownerId: userId`); project rows belong to the project owner so every
+   * collaborator sees the same project library.
+   */
+  async list(userId: string, project?: PresetProjectScope): Promise<Preset[]> {
+    const where: Prisma.PresetWhereInput = project
+      ? {
+          OR: [
+            { ownerId: userId, scope: "global" },
+            { ownerId: project.ownerId, scope: "project", projectId: project.id },
+          ],
+        }
+      : { ownerId: userId, scope: "global" };
     const rows = await this.prisma.preset.findMany({ where });
     return rows.map(toPreset);
   }
 
-  async findOwner(id: string): Promise<string | null> {
-    const row = await this.prisma.preset.findUnique({ where: { id }, select: { ownerId: true } });
-    return row?.ownerId ?? null;
+  async findMeta(id: string): Promise<PresetMeta | null> {
+    const row = await this.prisma.preset.findUnique({
+      where: { id },
+      select: { ownerId: true, scope: true, projectId: true },
+    });
+    return row
+      ? { ownerId: row.ownerId, scope: row.scope as PresetScope, projectId: row.projectId }
+      : null;
   }
 
   async upsert(ownerId: string, preset: Preset): Promise<Preset> {

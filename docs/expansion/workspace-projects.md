@@ -259,21 +259,25 @@ Every phase follows the repo's existing loop (see `AGENTS.md` / `CLAUDE.md`):
   its `fieldType` changes — freeze last resolved value vs detach to a plain field.
 - **Versioning forms** (later): published vs draft, history — `status` is reserved in
   `FormRecord` but the workflow is out of scope here.
-- **Preset sharing for collaborators** (W5 follow‑up): presets are gated by `ownerId`, not project
-  membership, so a shared project's *project‑scoped presets* are not yet visible to its
-  collaborators. Closing this means routing `PresetsService.list` (and project‑preset writes)
-  through `ProjectsService.requireAccess` for the `projectId` scope. Deferred to keep W5 focused on
-  project/folder/form sharing.
+- **Preset sharing for collaborators** (W5 follow‑up, ✅ DONE): project‑scoped presets are now a
+  *shared project library* stored under the **project owner**, so every collaborator who can see
+  the project sees the same library. `PresetsService` routes through `ProjectsService.requireAccess`:
+  `list` gates `viewer` (the user's globals ∪ the project owner's project presets), `save`/`remove`
+  gate `editor`, `promote` gates `owner`. Global presets stay personal to their owner; cross‑owner
+  id reuse still → 409, another owner's global → 404. `PresetRepo.list(userId, project?)` +
+  `findMeta` (replaced `findOwner`). Single‑owner default behaviour unchanged.
 - **Save‑path access (fixed in W5)**: `FormsService.save` with no explicit `projectId` previously
   kept an existing form's placement *without any access check* (a W1 back‑compat gap that let any
   caller overwrite any form body by id). W5 now asserts `editor` on the form's current project on
   that branch too.
-- **Theme access (W5 follow‑up)**: `ThemesService.save`/`load` are keyed only by form id with **no
-  access check** (`/themes/:id` has no `@CurrentOwner`). Now that form bodies are gated, this is the
-  remaining unguarded form‑adjacent surface — any caller can read/overwrite any form's theme.
-  Closing it means looking up the form's `projectId` (via `FormRepo`) and routing through
-  `requireAccess` (load=viewer, save=editor) **and** having the builder theme client send the
-  `x-owner-id` header. Deferred from W5 to avoid widening scope into the theme client.
+- **Theme access (W5 follow‑up, ✅ DONE)**: `/themes/:id` now reads `@CurrentOwner()` and
+  `ThemesService` looks up the theme's form (`FormRepo`) and routes through `requireAccess`
+  (load=viewer, save=editor); an unknown form id → 404, so no orphan themes. The controller
+  re‑throws `HttpException` so 403/404 survive (only validation → 400). The builder still relies on
+  the `@CurrentOwner` default (`SEED_OWNER_ID`) like its form client — sending a real `x-owner-id`
+  from the theme client only matters once identity‑switching lands (not yet wired anywhere).
+- **Batch `ProjectsService.list`** (still open): `list` does one `findById` per shared project id.
+  Fine at current scale; batch later.
 
 ---
 
