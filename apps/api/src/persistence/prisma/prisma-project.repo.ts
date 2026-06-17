@@ -64,6 +64,12 @@ export class PrismaProjectRepo extends ProjectRepo {
     return project ? toRecord(project) : null;
   }
 
+  async findByIds(ids: string[]): Promise<ProjectRecord[]> {
+    if (ids.length === 0) return [];
+    const projects = await this.prisma.project.findMany({ where: { id: { in: ids } } });
+    return projects.map(toRecord);
+  }
+
   async update(id: string, patch: ProjectUpdateInput): Promise<ProjectRecord> {
     const project = await this.prisma.project.update({
       where: { id },

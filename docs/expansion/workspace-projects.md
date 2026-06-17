@@ -276,8 +276,9 @@ Every phase follows the repo's existing loop (see `AGENTS.md` / `CLAUDE.md`):
   re‑throws `HttpException` so 403/404 survive (only validation → 400). The builder still relies on
   the `@CurrentOwner` default (`SEED_OWNER_ID`) like its form client — sending a real `x-owner-id`
   from the theme client only matters once identity‑switching lands (not yet wired anywhere).
-- **Batch `ProjectsService.list`** (still open): `list` does one `findById` per shared project id.
-  Fine at current scale; batch later.
+- **Batch `ProjectsService.list`** (✅ DONE): added `ProjectRepo.findByIds(ids)` (single
+  `WHERE id IN (...)`, empty-array short-circuit); `list` now resolves all shared projects in one
+  query, run alongside the owned-projects query. Behaviour identical.
 
 ---
 

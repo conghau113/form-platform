@@ -89,6 +89,9 @@ class FakeProjectRepo extends ProjectRepo {
   async findById(id: string): Promise<ProjectRecord | null> {
     return this.rows.get(id) ?? null;
   }
+  async findByIds(ids: string[]): Promise<ProjectRecord[]> {
+    return ids.map((id) => this.rows.get(id)).filter((p): p is ProjectRecord => p != null);
+  }
   async update(): Promise<ProjectRecord> {
     throw new Error("not used");
   }

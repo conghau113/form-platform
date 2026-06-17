@@ -35,6 +35,8 @@ export abstract class ProjectRepo {
   abstract list(ownerId: string): Promise<ProjectRecord[]>;
   /** One project by id, or `null` when absent (service checks ownership → 404 on mismatch). */
   abstract findById(id: string): Promise<ProjectRecord | null>;
+  /** Resolve many projects in one query (any order); missing ids are simply absent from the result. */
+  abstract findByIds(ids: string[]): Promise<ProjectRecord[]>;
   abstract update(id: string, patch: ProjectUpdateInput): Promise<ProjectRecord>;
   abstract delete(id: string): Promise<void>;
 }

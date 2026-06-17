@@ -69,11 +69,11 @@ export class ProjectsService {
 
   /** Projects the user can see: ones they own plus ones shared with them (most-recent first). */
   async list(userId: string): Promise<ProjectRecord[]> {
-    const owned = await this.projects.list(userId);
     const sharedIds = await this.members.listProjectIdsForUser(userId);
-    const shared = (await Promise.all(sharedIds.map((id) => this.projects.findById(id)))).filter(
-      (p): p is ProjectRecord => p !== null,
-    );
+    const [owned, shared] = await Promise.all([
+      this.projects.list(userId),
+      this.projects.findByIds(sharedIds), // one query, not one findById per shared id
+    ]);
     const byId = new Map(owned.map((p) => [p.id, p]));
     for (const p of shared) if (!byId.has(p.id)) byId.set(p.id, p);
     return [...byId.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
