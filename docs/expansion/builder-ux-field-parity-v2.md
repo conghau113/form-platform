@@ -126,7 +126,8 @@ re‑checked each against the current code before deciding:
   this plan.
 
 ### Decision
-**Do not run the tail of this plan mechanically.** New ordering by leverage ÷ cost:
+**Do not run the tail of this plan mechanically.** New ordering by leverage ÷ cost.
+**→ Detailed, checklist‑tracked execution plan: `next-direction-v2-r2-r7.md`.**
 
 1. **V2 — injectable `fetcher`** (Track V). Highest leverage, lowest risk. Add
    `FormRendererProps.fetcher?: typeof fetch`; thread to `useRemoteOptions` →
