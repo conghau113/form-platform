@@ -31,8 +31,8 @@ not yet committed (user gates the commit).
 | P1 | Preset data model + storage (api + builder) | ✅ Done | `b01d916` |
 | P2 | Preset gallery UI (save/edit/delete, drag→canvas) | ✅ Done | `5437321` |
 | P3 | Built‑in preset library | ✅ Done | `98d5c3a` |
-| G3 | Search within property panel + pin setters | ⬜ Todo | — |
-| U1 | Pinning (setters + presets/fields) | ⬜ Todo | — |
+| G3 | Search within property panel + pin sections | ✅ Done | `uncommitted` |
+| U1 | Pinning (panel sections + palette entries + presets) | ✅ Done | `uncommitted` |
 | T1 | Typed style tokens (guarded subset) | ⬜ Todo | — |
 | T2 | Builder style setters (uses S1) | ⬜ Todo | — |
 | R2 | Display "Text" read‑only type | ⬜ Todo | — |
@@ -77,6 +77,26 @@ larger direction — a **production workspace** (projects → nested folders →
 project‑scoped named field library). That is specced in its own doc:
 **`workspace-projects.md` (Track W)**, which now takes priority over the remaining
 builder‑UX cosmetic items (G3/U1/T1/T2/R2/R5/R6/R7) given the production goal.
+
+**G3 + U1 notes (resumed after Track W shipped):** builder‑only, additive, no schema, no
+changeset. Scope decision (owner‑confirmed): search/pin operate at the **section** level, not
+per‑setter — `FieldForm` builds sections as hand‑written JSX, so per‑setter search would mean
+refactoring the whole panel into a data‑driven setter registry (deferred). Delivered:
+- **G3** — `FieldForm.tsx` gained a "Search settings" `Input` + the section `Collapse` became
+  *controlled* (`activeKey` = matched keys while searching, else user `openKeys`). Each panel’s
+  `extra` carries a pin toggle (`PushpinOutlined`/`Filled`); pinned sections float to the top.
+  New `PropertyPanel/sections.ts` holds `SECTION_LABELS` + `SECTION_KEYWORDS` + `sectionMatches`
+  (so searching "role"→Permissions, "colspan"→Layout, "reaction"→Logic).
+- **U1** — new `pins.ts` `usePins(key)` hook reusing the existing `workbench/persist.ts`
+  `usePersistentState` (localStorage, + new `isStringArray` guard); returns
+  `{order, pinned, isPinned, toggle}`. Pinned sets persist across reload. `Palette.tsx` lifts
+  pinned component chips into a top "Pinned" group (ordered by pin time, no category dup);
+  `presets/PresetSection.tsx` lifts pinned presets into a "Pinned" subgroup (delete/promote
+  actions follow the preset). Storage keys: `panel.pinnedSections`, `palette.pinnedEntries`,
+  `palette.pinnedPresets`.
+- Verify: typecheck 15/15, builder **250/250** (+10: pins.test 5, sections.test 5), biome clean
+  on changed files. Reviewer subagent PASS — no blocking issues (nit on pin‑order honoured:
+  pinned groups now sort by `usePins.order`). Branch `feat/builder-ux-g3-u1` off `main`.
 
 ---
 

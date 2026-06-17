@@ -1,14 +1,21 @@
+import { PushpinFilled, PushpinOutlined, SearchOutlined } from "@ant-design/icons";
 import type { Reaction } from "@org/form-schema";
-import { Checkbox, Collapse, Form, Input, InputNumber, Select, Space } from "antd";
+import { Button, Checkbox, Collapse, Form, Input, InputNumber, Select, Space } from "antd";
+import { type ReactNode, useState } from "react";
 import { DataSourceEditor, isOptionSourced } from "../DataSourceEditor";
+import { usePins } from "../pins";
 import { ReactionsEditor } from "../ReactionsEditor";
 import { DefaultValueEditor } from "./DefaultValueEditor";
 import { csv, mergePermissions, parseCsv, prop } from "./helpers";
 import { ItemFieldsEditor } from "./ItemFieldsEditor";
 import { readEquals } from "./rules";
+import { type PanelSectionKey, SECTION_LABELS, sectionMatches } from "./sections";
 import { TypeSettings } from "./TypeSettings";
 import { type AuthoredField, COL_KEYS, type ColKey, type Patch } from "./types";
 import { ValidationEditor } from "./ValidationEditor";
+
+const PINNED_SECTIONS_KEY = "panel.pinnedSections";
+const DEFAULT_OPEN: PanelSectionKey[] = ["basic", "props"];
 
 /** The full property editor for a single field. Reused recursively: a top-level field
  *  and a nested array item field both render through this. Grouped into collapsible
@@ -264,29 +271,76 @@ export function FieldForm({
     </>
   );
 
+  // --- Section assembly + G3 search/pin --------------------------------------
+  // Section bodies above are unchanged; here they become a descriptor list so the panel
+  // can be searched (by label/keyword) and individual sections pinned to the top.
+  const sections: { key: PanelSectionKey; children: ReactNode }[] = [
+    { key: "basic", children: basic },
+    { key: "props", children: properties },
+    // ValidationEditor renders nothing for arrays (no field-level rules), so the panel is
+    // only offered for leaves.
+    ...(isArray
+      ? []
+      : [
+          {
+            key: "validation" as const,
+            children: <ValidationEditor field={field} siblingNames={condFields} set={set} />,
+          },
+        ]),
+    { key: "layout", children: layout },
+    { key: "logic", children: logic },
+    { key: "permissions", children: permissions },
+  ];
+
+  const [query, setQuery] = useState("");
+  const [openKeys, setOpenKeys] = useState<string[]>(DEFAULT_OPEN);
+  const { isPinned, toggle } = usePins(PINNED_SECTIONS_KEY);
+
+  const q = query.trim().toLowerCase();
+  const visible = sections
+    .filter((s) => sectionMatches(s.key, q))
+    // Pinned sections float to the top; order is otherwise stable.
+    .sort((a, b) => Number(isPinned(b.key)) - Number(isPinned(a.key)));
+  // While searching, expand every match; otherwise honour the user's open/collapse state.
+  const activeKey = q ? visible.map((s) => s.key) : openKeys;
+
   return (
     <Form layout="vertical" size="small">
+      <Input
+        allowClear
+        size="small"
+        placeholder="Search settings"
+        prefix={<SearchOutlined />}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        style={{ marginBottom: 8 }}
+      />
       <Collapse
         size="small"
-        defaultActiveKey={["basic", "props"]}
-        items={[
-          { key: "basic", label: "Basic", children: basic },
-          { key: "props", label: "Properties", children: properties },
-          // ValidationEditor renders nothing for arrays (no field-level rules), so the
-          // panel is only offered for leaves.
-          ...(isArray
-            ? []
-            : [
-                {
-                  key: "validation",
-                  label: "Validation",
-                  children: <ValidationEditor field={field} siblingNames={condFields} set={set} />,
-                },
-              ]),
-          { key: "layout", label: "Layout", children: layout },
-          { key: "logic", label: "Logic (visibility & reactions)", children: logic },
-          { key: "permissions", label: "Permissions", children: permissions },
-        ]}
+        activeKey={activeKey}
+        onChange={(keys) => setOpenKeys(Array.isArray(keys) ? keys : [keys])}
+        items={visible.map((s) => {
+          const label = SECTION_LABELS[s.key];
+          const pinned = isPinned(s.key);
+          return {
+            key: s.key,
+            label,
+            children: s.children,
+            extra: (
+              <Button
+                type="text"
+                size="small"
+                aria-label={pinned ? `Unpin "${label}"` : `Pin "${label}"`}
+                title={pinned ? `Unpin "${label}"` : `Pin "${label}"`}
+                icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggle(s.key);
+                }}
+              />
+            ),
+          };
+        })}
       />
     </Form>
   );

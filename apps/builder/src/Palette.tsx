@@ -17,6 +17,8 @@ import {
   LockOutlined,
   OrderedListOutlined,
   PartitionOutlined,
+  PushpinFilled,
+  PushpinOutlined,
   SearchOutlined,
   SlidersOutlined,
   StarOutlined,
@@ -26,12 +28,15 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 import type { FieldNode } from "@org/form-schema";
-import { Empty, Input, Typography } from "antd";
+import { Button, Empty, Input, Typography } from "antd";
 import { type ReactNode, useMemo, useState } from "react";
 import { useDesigner } from "./DesignCanvas";
 import { type FieldType, type PaletteEntry, paletteEntries } from "./field-registry";
 import { DraggableChip } from "./PaletteChip";
+import { usePins } from "./pins";
 import { PresetSection, type PresetStore } from "./presets";
+
+const PINNED_ENTRIES_KEY = "palette.pinnedEntries";
 
 /** Per-type palette glyph. A field with no entry falls back to a generic block. */
 const TYPE_ICON: Partial<Record<FieldType, ReactNode>> = {
@@ -105,7 +110,15 @@ const TYPE_HINT: Partial<Record<FieldType, string>> = {
 /** A palette chip. Pressing it starts a "create" drag through the pointer engine;
  *  releasing over a droppable canvas node inserts a fresh field (seeded with the entry's
  *  optional `patch` — e.g. an array variant or the upload dragger flag) there. */
-function PaletteItem({ entry }: { entry: PaletteEntry }) {
+function PaletteItem({
+  entry,
+  pinned,
+  onTogglePin,
+}: {
+  entry: PaletteEntry;
+  pinned: boolean;
+  onTogglePin: (id: string) => void;
+}) {
   const { beginCreate } = useDesigner();
   const icon = ENTRY_ICON[entry.id] ?? TYPE_ICON[entry.type] ?? <AppstoreOutlined />;
   return (
@@ -114,6 +127,17 @@ function PaletteItem({ entry }: { entry: PaletteEntry }) {
       label={entry.label}
       hint={entry.hint ?? TYPE_HINT[entry.type] ?? entry.label}
       onPointerDown={(e) => beginCreate(entry.type, e, { patch: entry.patch, label: entry.label })}
+      extra={
+        <Button
+          type="text"
+          size="small"
+          aria-label={pinned ? `Unpin ${entry.label}` : `Pin ${entry.label}`}
+          icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
+          // Stop the press from starting a create-drag on the chip behind it.
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => onTogglePin(entry.id)}
+        />
+      }
     />
   );
 }
@@ -131,17 +155,27 @@ export function Palette({
   presets: PresetStore;
 }) {
   const [query, setQuery] = useState("");
-  const groups = useMemo(() => {
+  const { order, pinned, isPinned, toggle } = usePins(PINNED_ENTRIES_KEY);
+  const { pinnedGroup, groups } = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const matches = (e: PaletteEntry) =>
+      !q || e.label.toLowerCase().includes(q) || e.type.includes(q);
     const all = paletteEntries();
-    if (!q) return all;
-    return all
+    // Pinned entries are lifted out of their categories into a single "Pinned" group at the
+    // top (no duplication), ordered by when they were pinned; the rest keep their category
+    // grouping. Both honour the search.
+    const pinnedGroup = all
+      .flatMap((g) => g.items)
+      .filter((e) => pinned.has(e.id) && matches(e))
+      .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    const groups = all
       .map(({ category, items }) => ({
         category,
-        items: items.filter((e) => e.label.toLowerCase().includes(q) || e.type.includes(q)),
+        items: items.filter((e) => !pinned.has(e.id) && matches(e)),
       }))
       .filter((g) => g.items.length > 0);
-  }, [query]);
+    return { pinnedGroup, groups };
+  }, [query, order, pinned]);
 
   return (
     <div
@@ -166,7 +200,20 @@ export function Palette({
         projectId={projectId}
         presets={presets}
       />
-      {groups.length === 0 ? (
+      {pinnedGroup.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Typography.Text
+            type="secondary"
+            style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}
+          >
+            Pinned
+          </Typography.Text>
+          {pinnedGroup.map((entry) => (
+            <PaletteItem key={entry.id} entry={entry} pinned onTogglePin={toggle} />
+          ))}
+        </div>
+      )}
+      {groups.length === 0 && pinnedGroup.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No components" />
       ) : (
         groups.map(({ category, items }) => (
@@ -182,7 +229,12 @@ export function Palette({
               {category}
             </Typography.Text>
             {items.map((entry) => (
-              <PaletteItem key={entry.id} entry={entry} />
+              <PaletteItem
+                key={entry.id}
+                entry={entry}
+                pinned={isPinned(entry.id)}
+                onTogglePin={toggle}
+              />
             ))}
           </div>
         ))

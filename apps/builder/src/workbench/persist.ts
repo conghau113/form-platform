@@ -47,3 +47,8 @@ export function oneOf<T extends string>(...values: T[]): (v: unknown) => v is T 
 export function isBoolean(v: unknown): v is boolean {
   return typeof v === "boolean";
 }
+
+/** Guard for a persisted list of ids (e.g. pinned sections/chips). */
+export function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === "string");
+}
