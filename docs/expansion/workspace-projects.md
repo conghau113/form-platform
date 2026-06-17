@@ -212,7 +212,7 @@ must be adopted without loss:
 | **W2** | Builder Explorer (tree + CRUD + move) + `react-router`. **+W2.1 (master–detail):** Explorer + editor unified into one project page — persistent collapsible rail + nested `/projects/:projectId/forms/:formId` editor (data router + `useBlocker` unsaved-changes guard: Save/Discard/Cancel on any nav, `beforeunload` on refresh) | builder | none | L | ✅ **DONE** (uncommitted; reviewer PASS both W2 & W2.1; builder 221/221, prod build green) |
 | **W3** | Preset `scope`/`projectId` (global + project), library filtered by project, promote‑to‑global | schema (additive) + api + builder | none (no formVersion bump; optional preset metadata + changeset) | M | ✅ **DONE** (uncommitted; form‑schema 56/56, api 23/23, builder 225/225, biome clean) |
 | **W4** | **Linked fields**: additive `{ presetId, overrides? }` on field; form‑core `resolveLinkedFields` re‑syncs at render (preset `patch` base + instance `overrides`); missing/changed preset freezes to a snapshot; builder link/unlink UI + stale badge + shared preset store + injected `presetResolver` | schema + form‑core + renderer + builder | **additive, NO bump** (optional props per additive rule; parse‑compat test, no migration) | XL | ✅ **DONE** (uncommitted; reviewer PASS no blockers; schema 57, core 99, builder link/PresetLink 11, api 24, typecheck clean) |
-| **W5** | Project sharing / roles (multi‑tenant) | api + builder | none | L | — |
+| **W5** | **Project sharing / roles**: `ProjectMember` grant model (`editor`/`viewer`; owner stays implicit via `Project.ownerId`, so **no backfill**), role‑based `requireAccess` replacing the owner‑only gate (read=viewer, write=editor, project rename/delete=owner), `list` = owned ∪ shared, members API (`/projects/:id/members` GET/POST/PATCH/DELETE — mutations owner‑only), builder `ShareDialog` + "Shared" badge | api + builder | none | L | ✅ **DONE** (uncommitted; api 33/33 incl. 9 sharing tests, builder 240/240, typecheck + biome clean. **Scope:** project/folder/form sharing; *preset* visibility for collaborators is a follow‑up — see §10) |
 
 **Recommended order:** W0 → W1 → W2 → W3 → (ship usable workspace) → W4 → W5.
 W0–W3 give a fully usable, organised, production‑shaped workspace **without ever touching the
@@ -259,6 +259,21 @@ Every phase follows the repo's existing loop (see `AGENTS.md` / `CLAUDE.md`):
   its `fieldType` changes — freeze last resolved value vs detach to a plain field.
 - **Versioning forms** (later): published vs draft, history — `status` is reserved in
   `FormRecord` but the workflow is out of scope here.
+- **Preset sharing for collaborators** (W5 follow‑up): presets are gated by `ownerId`, not project
+  membership, so a shared project's *project‑scoped presets* are not yet visible to its
+  collaborators. Closing this means routing `PresetsService.list` (and project‑preset writes)
+  through `ProjectsService.requireAccess` for the `projectId` scope. Deferred to keep W5 focused on
+  project/folder/form sharing.
+- **Save‑path access (fixed in W5)**: `FormsService.save` with no explicit `projectId` previously
+  kept an existing form's placement *without any access check* (a W1 back‑compat gap that let any
+  caller overwrite any form body by id). W5 now asserts `editor` on the form's current project on
+  that branch too.
+- **Theme access (W5 follow‑up)**: `ThemesService.save`/`load` are keyed only by form id with **no
+  access check** (`/themes/:id` has no `@CurrentOwner`). Now that form bodies are gated, this is the
+  remaining unguarded form‑adjacent surface — any caller can read/overwrite any form's theme.
+  Closing it means looking up the form's `projectId` (via `FormRepo`) and routing through
+  `requireAccess` (load=viewer, save=editor) **and** having the builder theme client send the
+  `x-owner-id` header. Deferred from W5 to avoid widening scope into the theme client.
 
 ---
 

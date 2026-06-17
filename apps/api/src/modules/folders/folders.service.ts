@@ -27,8 +27,9 @@ export interface UpdateFolderDto {
 }
 
 /**
- * Owner-scoped folder CRUD (Track W, W1). Ownership is enforced by resolving the folder's
- * project through {@link ProjectsService.getOne} (404 on mismatch). Moves are guarded against
+ * Folder CRUD (Track W, W1; W5 sharing). Access is enforced by resolving the folder's project
+ * through {@link ProjectsService.requireAccess} at the `editor` role (404 no-access / 403
+ * view-only — every folder mutation is a write). Moves are guarded against
  * cycles ({@link wouldCreateCycle}, 409); deletes are blocked when the folder is non-empty unless
  * `cascade` is set (Prisma cascades sub-folders; forms fall to the project root via SetNull).
  */
@@ -41,7 +42,7 @@ export class FoldersService {
 
   async create(ownerId: string, dto: CreateFolderDto): Promise<FolderRecord> {
     if (!dto.name?.trim()) throw new BadRequestException("Folder name is required");
-    await this.projects.getOne(ownerId, dto.projectId); // asserts ownership (404 otherwise)
+    await this.projects.requireAccess(ownerId, dto.projectId, "editor"); // 404/403 otherwise
     if (dto.parentId) await this.requireParentInProject(dto.parentId, dto.projectId);
     return this.folders.create({
       projectId: dto.projectId,
@@ -80,11 +81,11 @@ export class FoldersService {
     await this.folders.delete(id);
   }
 
-  /** Load a folder and assert its project belongs to `ownerId` (404 on mismatch). */
+  /** Load a folder and assert the user may edit its project (404 no-access / 403 view-only). */
   private async requireOwned(ownerId: string, id: string): Promise<FolderRecord> {
     const folder = await this.folders.findById(id);
     if (!folder) throw new NotFoundException(`Folder not found: ${id}`);
-    await this.projects.getOne(ownerId, folder.projectId); // throws 404 if not the owner's project
+    await this.projects.requireAccess(ownerId, folder.projectId, "editor");
     return folder;
   }
 

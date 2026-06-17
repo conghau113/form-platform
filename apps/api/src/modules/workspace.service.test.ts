@@ -1,4 +1,9 @@
-import { ConflictException, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from "@nestjs/common";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   type FolderChildCounts,
@@ -19,7 +24,13 @@ import {
   ProjectRepo,
   type ProjectUpdateInput,
 } from "../persistence/repositories/project.repo.js";
+import {
+  type MemberRole,
+  type ProjectMemberRecord,
+  ProjectMemberRepo,
+} from "../persistence/repositories/project-member.repo.js";
 import { FoldersService } from "./folders/folders.service.js";
+import { MembersService } from "./projects/members.service.js";
 import { ProjectsService } from "./projects/projects.service.js";
 
 let seq = 0;
@@ -132,20 +143,52 @@ class FakeFormRepo extends FormRepo {
   }
 }
 
+class FakeProjectMemberRepo extends ProjectMemberRepo {
+  readonly rows = new Map<string, ProjectMemberRecord>();
+  private key(projectId: string, userId: string) {
+    return `${projectId}:${userId}`;
+  }
+  async listByProject(projectId: string): Promise<ProjectMemberRecord[]> {
+    return [...this.rows.values()].filter((m) => m.projectId === projectId);
+  }
+  async listProjectIdsForUser(userId: string): Promise<string[]> {
+    return [...this.rows.values()].filter((m) => m.userId === userId).map((m) => m.projectId);
+  }
+  async find(projectId: string, userId: string): Promise<ProjectMemberRecord | null> {
+    return this.rows.get(this.key(projectId, userId)) ?? null;
+  }
+  async upsert(input: {
+    projectId: string;
+    userId: string;
+    role: MemberRole;
+  }): Promise<ProjectMemberRecord> {
+    const row: ProjectMemberRecord = { ...input, createdAt: new Date() };
+    this.rows.set(this.key(input.projectId, input.userId), row);
+    return row;
+  }
+  async remove(projectId: string, userId: string): Promise<boolean> {
+    return this.rows.delete(this.key(projectId, userId));
+  }
+}
+
 const OWNER = "owner-a";
 let projectRepo: FakeProjectRepo;
 let folderRepo: FakeFolderRepo;
 let formRepo: FakeFormRepo;
+let memberRepo: FakeProjectMemberRepo;
 let projects: ProjectsService;
 let folders: FoldersService;
+let membersSvc: MembersService;
 
 beforeEach(() => {
   seq = 0;
   projectRepo = new FakeProjectRepo();
   folderRepo = new FakeFolderRepo();
   formRepo = new FakeFormRepo();
-  projects = new ProjectsService(projectRepo, folderRepo, formRepo);
+  memberRepo = new FakeProjectMemberRepo();
+  projects = new ProjectsService(projectRepo, folderRepo, formRepo, memberRepo);
   folders = new FoldersService(folderRepo, projects);
+  membersSvc = new MembersService(projects, memberRepo);
 });
 
 describe("ProjectsService", () => {
@@ -170,6 +213,107 @@ describe("ProjectsService", () => {
     expect(tree.project.id).toBe(p.id);
     expect(tree.folders).toHaveLength(1);
     expect(tree.forms).toHaveLength(1);
+  });
+});
+
+describe("ProjectsService sharing (W5)", () => {
+  it("resolves owner as the implicit owner role (no member row needed)", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    await expect(projects.resolveRole(OWNER, p.id)).resolves.toBe("owner");
+    await expect(projects.resolveRole("nobody", p.id)).resolves.toBeNull();
+  });
+
+  it("lets a viewer read but not write; an editor can write", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    await memberRepo.upsert({ projectId: p.id, userId: "viewer-u", role: "viewer" });
+    await memberRepo.upsert({ projectId: p.id, userId: "editor-u", role: "editor" });
+
+    // viewer: read OK, write (create folder) → 403
+    await expect(projects.getTree("viewer-u", p.id)).resolves.toMatchObject({
+      project: { id: p.id },
+    });
+    await expect(folders.create("viewer-u", { projectId: p.id, name: "X" })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    // editor: write OK
+    await expect(folders.create("editor-u", { projectId: p.id, name: "X" })).resolves.toMatchObject(
+      {
+        name: "X",
+      },
+    );
+  });
+
+  it("keeps project rename/delete owner-only (editor → 403)", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    await memberRepo.upsert({ projectId: p.id, userId: "editor-u", role: "editor" });
+    await expect(projects.update("editor-u", p.id, { name: "Nope" })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(projects.remove("editor-u", p.id)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("hides a project from a complete non-member (404, no existence leak)", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    await expect(projects.getOne("stranger", p.id)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("lists owned ∪ shared projects, most-recent first, de-duplicated", async () => {
+    const owned = await projects.create(OWNER, { name: "Owned" });
+    const shared = await projects.create("other-owner", { name: "Shared" });
+    await memberRepo.upsert({ projectId: shared.id, userId: OWNER, role: "viewer" });
+
+    const list = await projects.list(OWNER);
+    const ids = list.map((p) => p.id);
+    expect(ids).toContain(owned.id);
+    expect(ids).toContain(shared.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("MembersService (W5)", () => {
+  it("lets the owner grant, change, and revoke a collaborator", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+
+    const granted = await membersSvc.grant(OWNER, p.id, "bob", "viewer");
+    expect(granted).toMatchObject({ userId: "bob", role: "viewer" });
+
+    const view = await membersSvc.list(OWNER, p.id);
+    expect(view.ownerId).toBe(OWNER);
+    expect(view.members).toHaveLength(1);
+
+    const updated = await membersSvc.updateRole(OWNER, p.id, "bob", "editor");
+    expect(updated.role).toBe("editor");
+
+    await membersSvc.revoke(OWNER, p.id, "bob");
+    expect((await membersSvc.list(OWNER, p.id)).members).toHaveLength(0);
+  });
+
+  it("rejects an invalid role and sharing with the owner (400)", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    await expect(membersSvc.grant(OWNER, p.id, "bob", "admin")).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(membersSvc.grant(OWNER, p.id, OWNER, "editor")).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it("forbids a non-owner from managing members (editor → 403, viewer roster read OK)", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    await membersSvc.grant(OWNER, p.id, "ed", "editor");
+    await expect(membersSvc.grant("ed", p.id, "carol", "viewer")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    // but an editor (viewer+) may read the roster
+    await expect(membersSvc.list("ed", p.id)).resolves.toMatchObject({ ownerId: OWNER });
+  });
+
+  it("404s when changing/revoking a non-member", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    await expect(membersSvc.updateRole(OWNER, p.id, "ghost", "viewer")).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(membersSvc.revoke(OWNER, p.id, "ghost")).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 

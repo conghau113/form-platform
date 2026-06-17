@@ -8,6 +8,7 @@ import type { FormSummary } from "../../persistence/repositories/form.repo.js";
 import { FormRepo } from "../../persistence/repositories/form.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectRepo } from "../../persistence/repositories/project.repo.js";
+import type { ProjectRole } from "../../persistence/repositories/project-member.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
 
@@ -42,19 +43,19 @@ export class FormsService {
 
   async load(ownerId: string, id: string): Promise<FormSchema> {
     assertId(id, "form");
-    await this.requireOwned(ownerId, id);
+    await this.requireAccess(ownerId, id, "viewer");
     const form = await this.forms.load(id);
     if (!form) throw new NotFoundException(`Form not found: ${id}`);
     return form;
   }
 
   async list(ownerId: string, projectId: string, folderId?: string | null): Promise<FormSummary[]> {
-    await this.projectsService.getOne(ownerId, projectId); // asserts ownership (404 otherwise)
+    await this.projectsService.getOne(ownerId, projectId); // viewer+ read gate (404 otherwise)
     return this.forms.listSummaries({ projectId, folderId });
   }
 
   async move(ownerId: string, id: string, folderId: string | null): Promise<FormSummary> {
-    const summary = await this.requireOwned(ownerId, id);
+    const summary = await this.requireAccess(ownerId, id, "editor");
     if (folderId) await this.requireFolderInProject(folderId, summary.projectId);
     const moved = await this.forms.move(id, folderId);
     if (!moved) throw new NotFoundException(`Form not found: ${id}`);
@@ -62,7 +63,7 @@ export class FormsService {
   }
 
   async remove(ownerId: string, id: string): Promise<void> {
-    await this.requireOwned(ownerId, id);
+    await this.requireAccess(ownerId, id, "editor");
     await this.forms.delete(id);
   }
 
@@ -72,24 +73,32 @@ export class FormsService {
     opts: SaveFormOptions,
   ): Promise<{ projectId: string; folderId: string | null }> {
     if (opts.projectId) {
-      await this.projectsService.getOne(opts.ownerId, opts.projectId); // assert ownership
+      await this.projectsService.requireAccess(opts.ownerId, opts.projectId, "editor");
       const folderId = opts.folderId ?? null;
       if (folderId) await this.requireFolderInProject(folderId, opts.projectId);
       return { projectId: opts.projectId, folderId };
     }
     // No explicit target: keep an existing form where it is; a new form lands in "Unfiled".
     const existing = await this.forms.findSummary(id);
-    if (existing) return { projectId: existing.projectId, folderId: existing.folderId };
+    if (existing) {
+      // Still a write: the caller must be able to edit the form's current project.
+      await this.projectsService.requireAccess(opts.ownerId, existing.projectId, "editor");
+      return { projectId: existing.projectId, folderId: existing.folderId };
+    }
     const unfiled = await this.projects.ensureUnfiled(opts.ownerId);
     return { projectId: unfiled.id, folderId: null };
   }
 
-  /** Load a form summary and assert its project belongs to `ownerId` (404 on mismatch). */
-  private async requireOwned(ownerId: string, id: string): Promise<FormSummary> {
+  /** Load a form summary and assert the user holds at least `minRole` on its project. */
+  private async requireAccess(
+    ownerId: string,
+    id: string,
+    minRole: ProjectRole,
+  ): Promise<FormSummary> {
     assertId(id, "form");
     const summary = await this.forms.findSummary(id);
     if (!summary) throw new NotFoundException(`Form not found: ${id}`);
-    await this.projectsService.getOne(ownerId, summary.projectId); // throws 404 if not owned
+    await this.projectsService.requireAccess(ownerId, summary.projectId, minRole);
     return summary;
   }
 

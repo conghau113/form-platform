@@ -1,6 +1,14 @@
 import type { FormSchema } from "@org/form-schema";
 import { API_BASE, ownerHeaders } from "./config";
-import type { FolderRecord, FormSummary, ProjectRecord, ProjectTree } from "./types";
+import type {
+  FolderRecord,
+  FormSummary,
+  MemberRole,
+  ProjectMember,
+  ProjectMembersView,
+  ProjectRecord,
+  ProjectTree,
+} from "./types";
 
 /**
  * Thin client for the workspace api (Track W: `/projects`, `/folders`, `/forms`). Mirrors the
@@ -159,4 +167,56 @@ export async function deleteForm(id: string): Promise<void> {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Delete form failed: ${await readError(res)}`);
+}
+
+// --- Sharing / members (W5) -------------------------------------------------
+
+function membersUrl(projectId: string, userId?: string): string {
+  const base = `${API_BASE}/projects/${encodeURIComponent(projectId)}/members`;
+  return userId ? `${base}/${encodeURIComponent(userId)}` : base;
+}
+
+export async function listMembers(projectId: string): Promise<ProjectMembersView> {
+  const res = await fetch(membersUrl(projectId), { headers: ownerHeaders() });
+  if (!res.ok) throw new Error(`List members failed: ${await readError(res)}`);
+  return (await res.json()) as ProjectMembersView;
+}
+
+/** Share with a collaborator (or re-grant a new role to an existing one). Owner only. */
+export async function grantMember(
+  projectId: string,
+  userId: string,
+  role: MemberRole,
+): Promise<ProjectMember> {
+  const res = await fetch(membersUrl(projectId), {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ userId, role }),
+  });
+  if (!res.ok) throw new Error(`Share failed: ${await readError(res)}`);
+  return (await res.json()) as ProjectMember;
+}
+
+/** Change an existing collaborator's role. Owner only. */
+export async function updateMemberRole(
+  projectId: string,
+  userId: string,
+  role: MemberRole,
+): Promise<ProjectMember> {
+  const res = await fetch(membersUrl(projectId, userId), {
+    method: "PATCH",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ role }),
+  });
+  if (!res.ok) throw new Error(`Update role failed: ${await readError(res)}`);
+  return (await res.json()) as ProjectMember;
+}
+
+/** Revoke a collaborator's access. Owner only. */
+export async function revokeMember(projectId: string, userId: string): Promise<void> {
+  const res = await fetch(membersUrl(projectId, userId), {
+    method: "DELETE",
+    headers: ownerHeaders(),
+  });
+  if (!res.ok) throw new Error(`Revoke failed: ${await readError(res)}`);
 }

@@ -38,3 +38,20 @@ export interface ProjectTree {
   folders: FolderRecord[];
   forms: FormSummary[];
 }
+
+/** A grantable collaborator role (the owner is implicit, derived from `ProjectRecord.ownerId`). */
+export type MemberRole = "editor" | "viewer";
+
+/** A sharing grant (W5). `userId` is the collaborator's `x-owner-id`. */
+export interface ProjectMember {
+  projectId: string;
+  userId: string;
+  role: MemberRole;
+  createdAt: string;
+}
+
+/** `GET /projects/:id/members` payload: the canonical owner plus collaborator grants. */
+export interface ProjectMembersView {
+  ownerId: string;
+  members: ProjectMember[];
+}

@@ -5,6 +5,7 @@ export { ExplorerRail } from "./ExplorerRail";
 export * from "./newForm";
 export { ProjectsPage } from "./ProjectsPage";
 export { ProjectWorkspace } from "./ProjectWorkspace";
+export { ShareDialog } from "./ShareDialog";
 export * from "./tree";
 export * from "./types";
 export * from "./useWorkspace";

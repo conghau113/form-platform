@@ -1,7 +1,27 @@
-import { DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Card, Dropdown, Empty, Input, Modal, message, Spin, Typography } from "antd";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  FolderOpenOutlined,
+  PlusOutlined,
+  ShareAltOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Dropdown,
+  Empty,
+  Input,
+  Modal,
+  message,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { OWNER_ID } from "./config";
+import { ShareDialog } from "./ShareDialog";
 import type { ProjectRecord } from "./types";
 import { useProjects } from "./useWorkspace";
 
@@ -17,6 +37,7 @@ export function ProjectsPage() {
   const [name, setName] = useState("");
   const [renaming, setRenaming] = useState<ProjectRecord | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [sharing, setSharing] = useState<ProjectRecord | null>(null);
 
   async function onCreate() {
     if (!name.trim()) return;
@@ -84,36 +105,59 @@ export function ProjectsPage() {
             gap: 16,
           }}
         >
-          {projects.map((project) => (
-            <Dropdown
-              key={project.id}
-              trigger={["contextMenu"]}
-              menu={{
-                items: [
-                  { key: "open", icon: <FolderOpenOutlined />, label: "Open" },
-                  { key: "rename", icon: <EditOutlined />, label: "Rename" },
-                  { key: "delete", icon: <DeleteOutlined />, label: "Delete", danger: true },
-                ],
-                onClick: ({ key }) => {
-                  if (key === "open") navigate(`/projects/${project.id}`);
-                  else if (key === "rename") {
-                    setRenaming(project);
-                    setRenameValue(project.name);
-                  } else if (key === "delete") onDelete(project);
-                },
-              }}
-            >
-              <Card
-                hoverable
-                title={project.name}
-                onClick={() => navigate(`/projects/${project.id}`)}
+          {projects.map((project) => {
+            const owned = project.ownerId === OWNER_ID;
+            return (
+              <Dropdown
+                key={project.id}
+                trigger={["contextMenu"]}
+                menu={{
+                  items: [
+                    { key: "open", icon: <FolderOpenOutlined />, label: "Open" },
+                    {
+                      key: "share",
+                      icon: <ShareAltOutlined />,
+                      label: owned ? "Share" : "Members",
+                    },
+                    ...(owned
+                      ? [
+                          { key: "rename", icon: <EditOutlined />, label: "Rename" },
+                          {
+                            key: "delete",
+                            icon: <DeleteOutlined />,
+                            label: "Delete",
+                            danger: true,
+                          },
+                        ]
+                      : []),
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === "open") navigate(`/projects/${project.id}`);
+                    else if (key === "share") setSharing(project);
+                    else if (key === "rename") {
+                      setRenaming(project);
+                      setRenameValue(project.name);
+                    } else if (key === "delete") onDelete(project);
+                  },
+                }}
               >
-                <Typography.Text type="secondary">
-                  {project.description || "No description"}
-                </Typography.Text>
-              </Card>
-            </Dropdown>
-          ))}
+                <Card
+                  hoverable
+                  title={
+                    <Space>
+                      {project.name}
+                      {!owned && <Tag color="blue">Shared</Tag>}
+                    </Space>
+                  }
+                  onClick={() => navigate(`/projects/${project.id}`)}
+                >
+                  <Typography.Text type="secondary">
+                    {project.description || "No description"}
+                  </Typography.Text>
+                </Card>
+              </Dropdown>
+            );
+          })}
         </div>
       )}
 
@@ -148,6 +192,8 @@ export function ProjectsPage() {
           onPressEnter={onRename}
         />
       </Modal>
+
+      <ShareDialog project={sharing} onClose={() => setSharing(null)} />
     </div>
   );
 }

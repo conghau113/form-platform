@@ -6,30 +6,16 @@ import {
   FolderAddOutlined,
   FormOutlined,
   LeftOutlined,
+  ShareAltOutlined,
 } from "@ant-design/icons";
 import type { MenuProps, TreeDataNode, TreeProps } from "antd";
-import {
-  Button,
-  Dropdown,
-  Input,
-  message,
-  Modal,
-  Select,
-  Spin,
-  Tree,
-  Typography,
-} from "antd";
+import { Button, Dropdown, Input, Modal, message, Select, Spin, Tree, Typography } from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as api from "./client";
 import { duplicateForm, newForm } from "./newForm";
-import {
-  buildTree,
-  dropFolderId,
-  formKey,
-  parseKey,
-  type WorkspaceNode,
-} from "./tree";
+import { ShareDialog } from "./ShareDialog";
+import { buildTree, dropFolderId, formKey, parseKey, type WorkspaceNode } from "./tree";
 import type { ProjectRecord, ProjectTree } from "./types";
 
 /** A one-field text prompt (create / rename). Resolves the entered value to `onOk`. */
@@ -72,9 +58,10 @@ export function ExplorerRail({
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [promptValue, setPromptValue] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const currentProject = projects.find((p) => p.id === projectId) ?? null;
 
-  const openForm = (id: string) =>
-    navigate(`/projects/${projectId}/forms/${id}`);
+  const openForm = (id: string) => navigate(`/projects/${projectId}/forms/${id}`);
 
   function ask(p: Prompt) {
     setPromptValue(p.initial);
@@ -104,8 +91,7 @@ export function ExplorerRail({
   function deleteFolder(id: string, name: string) {
     Modal.confirm({
       title: `Delete folder "${name}"?`,
-      content:
-        "Sub-folders are deleted; forms inside move to the project root.",
+      content: "Sub-folders are deleted; forms inside move to the project root.",
       okText: "Delete",
       okButtonProps: { danger: true },
       onOk: () => run(api.deleteFolder(id, true)),
@@ -148,8 +134,7 @@ export function ExplorerRail({
       okText: "Save",
       initial: current,
       // Load the contract, set its title, re-save (no placement → keeps its folder).
-      onOk: (title) =>
-        run(api.loadForm(id).then((src) => api.saveForm({ ...src, title }))),
+      onOk: (title) => run(api.loadForm(id).then((src) => api.saveForm({ ...src, title }))),
     });
   }
   function deleteForm(id: string, title: string) {
@@ -168,7 +153,7 @@ export function ExplorerRail({
       String(info.node.key),
       !info.dropToGap,
       tree?.folders ?? [],
-      tree?.forms ?? []
+      tree?.forms ?? [],
     );
     if (dragged.kind === "form") run(api.moveForm(dragged.id, target));
     else run(api.updateFolder(dragged.id, { parentId: target }));
@@ -233,9 +218,7 @@ export function ExplorerRail({
     const node = data as unknown as WorkspaceNode;
     const { items, onClick } = nodeMenu(node);
     return (
-      <Dropdown
-        trigger={["contextMenu"]}
-        menu={{ items, onClick: ({ key }) => onClick(key) }}>
+      <Dropdown trigger={["contextMenu"]} menu={{ items, onClick: ({ key }) => onClick(key) }}>
         <span style={{ userSelect: "none" }}>{node.title}</span>
       </Dropdown>
     );
@@ -255,23 +238,24 @@ export function ExplorerRail({
         flexDirection: "column",
         minHeight: 0,
         overflow: "hidden",
-      }}>
+      }}
+    >
       <div
         style={{
           padding: "10px 12px",
           borderBottom: "1px solid rgba(0,0,0,0.06)",
-        }}>
+        }}
+      >
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 8,
             marginBottom: 8,
-          }}>
+          }}
+        >
           <Link to="/projects">
-            <Button
-              type="text"
-              icon={<LeftOutlined style={{ fontSize: 12 }} />}>
+            <Button type="text" icon={<LeftOutlined style={{ fontSize: 12 }} />}>
               <span style={{ fontWeight: 600 }}>PROJECTS</span>
             </Button>
           </Link>
@@ -284,18 +268,24 @@ export function ExplorerRail({
           onChange={(value) => navigate(`/projects/${value}`)}
         />
         <div style={{ display: "flex", gap: 8 }}>
-          <Button
-            size="small"
-            icon={<FolderAddOutlined />}
-            onClick={() => createFolder(null)}>
+          <Button size="small" icon={<FolderAddOutlined />} onClick={() => createFolder(null)}>
             Folder
           </Button>
           <Button
             size="small"
             type="primary"
             icon={<FileAddOutlined />}
-            onClick={() => createForm(null)}>
+            onClick={() => createForm(null)}
+          >
             Form
+          </Button>
+          <Button
+            size="small"
+            icon={<ShareAltOutlined />}
+            style={{ marginLeft: "auto" }}
+            onClick={() => setSharing(true)}
+          >
+            Share
           </Button>
         </div>
       </div>
@@ -334,7 +324,8 @@ export function ExplorerRail({
           if (promptValue.trim()) prompt?.onOk(promptValue.trim());
           setPrompt(null);
         }}
-        onCancel={() => setPrompt(null)}>
+        onCancel={() => setPrompt(null)}
+      >
         <Input
           autoFocus
           value={promptValue}
@@ -345,6 +336,8 @@ export function ExplorerRail({
           }}
         />
       </Modal>
+
+      <ShareDialog project={sharing ? currentProject : null} onClose={() => setSharing(false)} />
     </aside>
   );
 }
