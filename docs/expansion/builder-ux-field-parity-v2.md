@@ -31,14 +31,17 @@ not yet committed (user gates the commit).
 | P1 | Preset data model + storage (api + builder) | ✅ Done | `b01d916` |
 | P2 | Preset gallery UI (save/edit/delete, drag→canvas) | ✅ Done | `5437321` |
 | P3 | Built‑in preset library | ✅ Done | `98d5c3a` |
-| G3 | Search within property panel + pin sections | ✅ Done | `uncommitted` |
-| U1 | Pinning (panel sections + palette entries + presets) | ✅ Done | `uncommitted` |
-| T1 | Typed style tokens (guarded subset) | ⬜ Todo | — |
-| T2 | Builder style setters (uses S1) | ⬜ Todo | — |
-| R2 | Display "Text" read‑only type | ⬜ Todo | — |
-| R5 | Transfer field | ⬜ Todo | — |
-| R6 | Object (named nested value container) | ⬜ Todo | — |
-| R7 | Form Layout container | ⬜ Todo | — |
+| G3 | Search within property panel + pin sections | ✅ Done | `fb2efd9` |
+| U1 | Pinning (panel sections + palette entries + presets) | ✅ Done | `fb2efd9` |
+| R2 | Display "Text" read‑only type | 🟢 Next | — |
+| R7 | Form Layout container | 🟢 Next | — |
+| T1 | Typed style tokens (guarded subset) | ⏸ Deferred | — |
+| T2 | Builder style setters (uses S1) | ⏸ Deferred | — |
+| R5 | Transfer field | ⏸ Deferred | — |
+| R6 | Object (named nested value container) | ⏸ Deferred | — |
+
+> **Re‑prioritised 2026‑06‑18 — see "Re‑prioritisation" below.** S1/I1/I2 shipped in
+> `540f0a8` (the `uncommitted` note above predated that commit).
 
 **R3/R4 notes:** first additive *schema* change of this plan — `ArrayField.variant`
 enum widened `card|table` → `card|table|auto` (no `formVersion` bump). The web renderer
@@ -97,6 +100,61 @@ refactoring the whole panel into a data‑driven setter registry (deferred). Del
 - Verify: typecheck 15/15, builder **250/250** (+10: pins.test 5, sections.test 5), biome clean
   on changed files. Reviewer subagent PASS — no blocking issues (nit on pin‑order honoured:
   pinned groups now sort by `usePins.order`). Branch `feat/builder-ux-g3-u1` off `main`.
+
+---
+
+## Re‑prioritisation (2026‑06‑18, after Track W shipped)
+
+Track W turned this into a **production workspace** (projects → folders → forms, sharing/roles,
+linked presets). That changes the value calculus of the four remaining cosmetic items. We
+re‑checked each against the current code before deciding:
+
+**Verified gaps (still real):**
+- `group` exists but is **value‑transparent** — `form-core/validation.ts:373` ("group nodes
+  hold no value of their own"); children's values stay flat. So **R6 Object** (values nested
+  under a name) is genuinely unimplemented, and is heavy (new form‑core path handling +
+  validation lockstep in `buildShape`/`walkLeaves`).
+- No static display type (`readPretty` shows a field's *value*, not authored content) → **R2**
+  still missing. No `transfer` type → **R5** still missing. No layout‑context container → **R7**
+  still missing.
+- **The renderer cannot inject auth on remote calls.** `FormRenderer` has no `fetcher` prop;
+  `useRemoteOptions.ts:38` calls `fetchDataSourceOptions(ds, depValues)` with the default
+  `fetch`. Yet `fetchDataSourceOptions` AND `checkAsyncValidator` (`form-core`) *already* accept
+  an injectable `fetchImpl`. This is the real blocker for embedding the renderer in an
+  authenticated host — and it is **cheap** (wire a prop through two call sites). This is **Track
+  V / V2** (`renderer-portability.md`), not a phase of this doc, but it now outranks the tail of
+  this plan.
+
+### Decision
+**Do not run the tail of this plan mechanically.** New ordering by leverage ÷ cost:
+
+1. **V2 — injectable `fetcher`** (Track V). Highest leverage, lowest risk. Add
+   `FormRendererProps.fetcher?: typeof fetch`; thread to `useRemoteOptions` →
+   `fetchDataSourceOptions(ds, depValues, fetcher)` and to the async resolver →
+   `checkAsyncValidator(av, name, value, fetcher)`. Default stays global `fetch` (runtime
+   unchanged). Renderer (published) → **changeset**. Optionally surface a builder dev‑preview
+   fetcher later. *Effort S, value high.*
+2. **R2 — Display "Text"** (this doc). New additive read‑only type `display-text` (authored
+   content/typography, no value, no name). Touches `form-schema` (additive type, no
+   `formVersion` bump — see `[[form-platform-additive-schema-rule]]`), `form-core` (skip in
+   value/validation walks — it holds no value, like a container leaf), `form-renderer-web`
+   (render typography), builder (palette entry under **Displays** + minimal property panel).
+   Closes the "Displays" taxonomy that R1 set up. *Effort S–M, value medium‑high.*
+3. **R7 — Form Layout container** (this doc). Container that applies `labelCol`/`layout`
+   (horizontal/vertical/inline) to descendant Form.Items via context. Additive container type.
+   *Effort M, value medium.* Do after R2.
+
+**Deferred (do only on a concrete request):**
+- **T1/T2 — style tokens.** Partly in tension with the "semantic layout only" golden rule, and
+  Track W already ships theme tokens at the form level. If revived, scope to a tiny safe subset
+  (width / size) and reuse the S1 setter vocab.
+- **R5 — Transfer.** Niche dual‑list; low real‑world form demand for the build cost.
+- **R6 — Object.** Real but heavy and niche; only worth the form‑core value‑nesting work when a
+  concrete nested‑object use‑case appears.
+
+**Separate, larger tracks (not this doc) worth opening after V2/R2/R7:** i18n (roadmap Phase P —
+multilingual labels + validation messages), then workflow / native renderer. These outrank
+R5/R6/T1/T2 for a production product.
 
 ---
 
@@ -204,17 +262,21 @@ is sequenced EARLY (right after R1) because it improves every existing and futur
 ---
 
 ## Suggested ordering (impact × cost)
-1. **R1** — instant, fixes "categorisation is off", zero schema risk.
-2. **G1 + G2** — palette search/icons + property‑panel grouping. Removes the usability
-   pain immediately and benefits every existing + future field. (Owner's stated goal.)
-3. **R3 + R4** — leverage the existing `array.variant` + a tiny preset; very visible.
-4. **S1** — unblocks icons + token style + slider marks.
-5. **I1 + I2** — icons in prefix/suffix (an explicit owner ask, high visibility).
-6. **P1 → P2 → P3** — the preset system (the long‑term flagship).
-7. **G3 + U1** — property‑panel search + pinning.
-8. **T1 + T2** — token‑based styling.
-9. **R2, R5, R7** — Display Text, Transfer, Form Layout (new fields).
-10. **R6** — Object (heaviest; value nesting + form‑core).
+
+> ⚠️ **Superseded for the tail (2026‑06‑18).** Steps 1–7 below shipped as written. The original
+> steps 8–10 (T1/T2, R5, R6) are **deferred** — see **"Re‑prioritisation (2026‑06‑18)"** near the
+> top of this doc. The live next‑up order is **V2 (Track V) → R2 → R7**, then i18n.
+
+1. **R1** — instant, fixes "categorisation is off", zero schema risk. ✅
+2. **G1 + G2** — palette search/icons + property‑panel grouping. ✅
+3. **R3 + R4** — leverage the existing `array.variant` + a tiny preset. ✅
+4. **S1** — unblocks icons + token style + slider marks. ✅
+5. **I1 + I2** — icons in prefix/suffix. ✅
+6. **P1 → P2 → P3** — the preset system. ✅
+7. **G3 + U1** — property‑panel search + pinning. ✅
+8. ~~T1 + T2~~ → **deferred** (style tokens).
+9. ~~R2, R5, R7~~ → **R2 + R7 kept (next, after V2); R5 deferred.**
+10. ~~R6~~ → **deferred** (heaviest; value nesting + form‑core).
 
 ## Guardrails (every phase)
 - **Additive only** — optional props / new optional types; old saved JSON keeps parsing →
