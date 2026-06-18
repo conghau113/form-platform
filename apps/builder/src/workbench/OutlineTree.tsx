@@ -1,7 +1,7 @@
 import { CaretDownOutlined, CaretRightOutlined } from "@ant-design/icons";
 import { Empty } from "antd";
 import { useState } from "react";
-import { useDesigner } from "../DesignCanvas";
+import { useDesigner } from "../canvas/DesignerContext";
 import type { EngineProps, TreeNode } from "../engine/tree";
 import { describeNode } from "../field-registry";
 import { useHover } from "./hover";

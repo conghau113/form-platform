@@ -3,7 +3,7 @@ import { FormRenderer } from "@org/form-renderer-web";
 import type { FormSchema } from "@org/form-schema";
 import { Alert, ConfigProvider, type ThemeConfig, theme } from "antd";
 import { Component, type ReactNode } from "react";
-import { DesignCanvas } from "../DesignCanvas";
+import { DesignCanvas } from "../canvas";
 import type { TreeNode } from "../engine/tree";
 import { JsonEditor } from "./JsonEditor";
 import type { ViewMode } from "./ToolbarPanel";

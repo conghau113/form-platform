@@ -5,21 +5,27 @@ import { childrenOf, type FieldNode, isLayoutContainer } from "@org/form-schema"
 import type { ThemeConfig } from "antd";
 import {
   Component,
-  createContext,
   type ReactNode,
   useCallback,
-  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { type TreeNode, topMostUids } from "./engine/tree";
-import { describeNode } from "./field-registry";
-import type { ColKey } from "./PropertyPanel/types";
+import {
+  type Box,
+  boxesIntersect,
+  edgeScroll,
+  normalizeBox,
+  springLoadTarget,
+} from "../engine/geometry";
+import { type TreeNode, topMostUids } from "../engine/tree";
+import { describeNode } from "../field-registry";
+import type { ColKey } from "../PropertyPanel/types";
+import { useHover } from "../workbench/hover";
+import { useDesigner } from "./DesignerContext";
 import type { DragState } from "./useDragon";
-import { useHover } from "./workbench/hover";
 
 const BLUE = "#1677ff";
 const RED = "#ff4d4f";
@@ -37,74 +43,9 @@ function activeColKey(width: number): ColKey {
 /** Grid divisions across one antd Row. */
 const GRID_COLS = 24;
 
-/** Auto-scroll (D3): how close (px) to a scroll-container edge the pointer must get before
- *  the canvas starts scrolling, and the max px/frame at the very edge. */
-const EDGE_BAND = 56;
-const EDGE_MAX_SPEED = 20;
-
-/** Pure edge-scroll math: given the pointer and the scroll viewport rect, return the
- *  per-frame scroll delta. Speed ramps linearly from 0 at the band's inner edge to
- *  `max` at the viewport edge (and clamps beyond). Exported for unit testing without a
- *  layout engine or rAF. */
-export function edgeScroll(
-  point: { x: number; y: number },
-  rect: { top: number; bottom: number; left: number; right: number },
-  band = EDGE_BAND,
-  max = EDGE_MAX_SPEED,
-): { dx: number; dy: number } {
-  const ramp = (over: number) => Math.min(max, (Math.min(over, band) / band) * max);
-  let dy = 0;
-  if (point.y < rect.top + band) dy = -ramp(rect.top + band - point.y);
-  else if (point.y > rect.bottom - band) dy = ramp(point.y - (rect.bottom - band));
-  let dx = 0;
-  if (point.x < rect.left + band) dx = -ramp(rect.left + band - point.x);
-  else if (point.x > rect.right - band) dx = ramp(point.x - (rect.right - band));
-  return { dx, dy };
-}
-
 /** Spring-load (D4): how long (ms) the pointer must dwell over a closed tab/collapse
  *  header mid-drag before it auto-opens. */
 const SPRING_DWELL_MS = 500;
-
-/** Given the element under the pointer, return the CLOSED tab/collapse header that should
- *  spring open on dwell, or null. A tab is springable when it isn't the active tab; a
- *  collapse header when its panel isn't currently expanded. (Both render force-rendered
- *  but hidden children, so opening them turns the children into reachable drop targets.)
- *  Exported for unit testing without a real drag. */
-export function springLoadTarget(el: Element | null): HTMLElement | null {
-  if (!el) return null;
-  const tab = el.closest(".ant-tabs-tab");
-  if (tab && !tab.classList.contains("ant-tabs-tab-active")) return tab as HTMLElement;
-  const header = el.closest(".ant-collapse-header");
-  const item = header?.closest(".ant-collapse-item");
-  if (header && item && !item.classList.contains("ant-collapse-item-active")) {
-    return header as HTMLElement;
-  }
-  return null;
-}
-
-/** A viewport-space rectangle (client coords). */
-export interface Box {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-/** Normalize two corner points into a {@link Box} (marquee, D7). Exported for testing. */
-export function normalizeBox(a: { x: number; y: number }, b: { x: number; y: number }): Box {
-  return {
-    left: Math.min(a.x, b.x),
-    top: Math.min(a.y, b.y),
-    right: Math.max(a.x, b.x),
-    bottom: Math.max(a.y, b.y),
-  };
-}
-
-/** Axis-aligned rectangle overlap test (marquee hit, D7). Exported for testing. */
-export function boxesIntersect(a: Box, b: Box): boolean {
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-}
 
 /** Pixels the marquee pointer must travel before a press becomes a rubber-band (vs. a
  *  plain click that clears the selection). */
@@ -117,39 +58,6 @@ const MARQUEE_THRESHOLD = 4;
  * floating toolbar (drag handle / copy / delete), the live insertion line during
  * a drag, and a "+" placeholder inside empty droppable containers.
  * ------------------------------------------------------------------------- */
-
-/** App-provided designer state + handlers (selection, drag engine, node ops). */
-export interface DesignerValue {
-  selected: string[];
-  drag: DragState | null;
-  beginMove: (uids: string[], e: React.PointerEvent, clickUid?: string) => void;
-  beginCreate: (
-    type: import("./field-registry").FieldType,
-    e: React.PointerEvent,
-    opts?: { patch?: Record<string, unknown>; label?: string },
-  ) => void;
-  copy: (uid: string) => void;
-  remove: (uid: string) => void;
-  /** Select a single node (Outline tree / breadcrumb); `additive` toggles it in a
-   *  multi-selection. */
-  select: (uid: string, additive?: boolean) => void;
-  /** A press on empty canvas: the host decides (App selects the Form root). */
-  clearSelection: () => void;
-  /** Replace the selection with exactly these uids (D7 marquee). Empty → clears. */
-  setSelected: (uids: string[]) => void;
-  /** Drag-resize a leaf's responsive width: write `layout.colSpan[key]` (1..24)
-   *  for the active breakpoint. `gesture` ties one continuous drag to a single
-   *  undo step (see `useHistory`'s coalesce). */
-  resizeColSpan: (uid: string, key: ColKey, span: number, gesture: string) => void;
-}
-
-const DesignerContext = createContext<DesignerValue | null>(null);
-export const DesignerProvider = DesignerContext.Provider;
-export function useDesigner(): DesignerValue {
-  const v = useContext(DesignerContext);
-  if (!v) throw new Error("useDesigner must be used inside a DesignerProvider");
-  return v;
-}
 
 function nodeLabel(node: FieldNode): string {
   if ("label" in node && node.label) return node.label;

@@ -3,7 +3,7 @@ import { DEFAULT_TOKENS, type DesignTokens, migrateTheme, toAntdTheme } from "@o
 import { Button, message, Segmented, Space, Typography, Upload } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import example from "../../../examples/form.v1.json";
-import { DesignerProvider, type DesignerValue } from "./DesignCanvas";
+import { DesignerProvider, type DesignerValue, useDragon } from "./canvas";
 import { useHistory } from "./editor";
 import {
   type Clipboard,
@@ -46,7 +46,6 @@ import { parseFormFile } from "./lib";
 import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
 import { presetResolverFromList, usePresets } from "./presets";
 import { TemplateGallery, useUserTemplates } from "./templates";
-import { useDragon } from "./useDragon";
 import { CompositePanel } from "./workbench/CompositePanel";
 import { HoverProvider } from "./workbench/hover";
 import { oneOf, usePersistentState } from "./workbench/persist";

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { axisOf, canDrop, type DragSource, performDrop } from "./engine/dragon";
-import { type DropIntent, dropIntent, type Rect } from "./engine/move-helper";
-import { findNode, findParent, type InsertGuard, type TreeNode, topMostUids } from "./engine/tree";
-import { describeNode, type FieldType, fieldTypeLabel } from "./field-registry";
+import { axisOf, canDrop, type DragSource, performDrop } from "../engine/dragon";
+import { type DropIntent, dropIntent, type Rect } from "../engine/move-helper";
+import { findNode, findParent, type InsertGuard, type TreeNode, topMostUids } from "../engine/tree";
+import { describeNode, type FieldType, fieldTypeLabel } from "../field-registry";
 
 /* ----------------------------------------------------------------------------
  * useDragon — the DOM seam over the pure drag core (engine/dragon.ts). A drag

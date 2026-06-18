@@ -15,12 +15,25 @@
 |---|---|---|---|
 | R0 — Safety net | ✅ DONE (1d64574) | `refactor/r0-safety-net` | baseline typecheck 15/15 + builder 250 green; added `App.characterization.test.tsx` (5 tests) pinning save/load/dirty/keydown wiring → 255 green. No `App.test.tsx` existed before. |
 | R1 — Relocate root files | ✅ DONE | `refactor/r0-safety-net` | 8 feature folders + barrels (`palette/reactions/datasource/theme/templates/workflow/lib/editor`); `app/`→`editor/` (Win casing); cut a palette↔presets barrel cycle. typecheck clean, 253/255 (2 known load-flaky). |
-| R2 — Split DesignCanvas | ⏳ next | — | |
-| R3 — Decompose App.tsx | pending | — | |
+| R2 — Split DesignCanvas | ✅ DONE | `refactor/r0-safety-net` | 812→~700 LOC component. Pure geometry→`engine/geometry.ts`(+test); `DesignerValue`/context/`useDesigner`→`canvas/DesignerContext.tsx`; component+`useDragon`→`canvas/` + barrel. Context-consumers import `../canvas/DesignerContext` directly (lean/cycle-proof). typecheck clean, 255/255. |
+| R3 — Decompose App.tsx | ⏳ next | — | |
 | R4 — react-query workspace/presets | pending | — | |
 | R5 — react-query form save/load | pending | — | |
 | R6 — api polish | pending | — | |
 | R7 — guardrails | pending | — | |
+
+## Structure decision (2026-06-19): keep FLAT feature folders, reject full FSD
+
+An external review (Codex) proposed a full Feature-Sliced Design layout
+(`app/pages/features/entities/shared` + 6 new packages: `form-builder-core`, `api-contracts`,
+`api-client`, `ui`, `config`, `testing`). **Decision: keep the flat post-R1 feature folders.**
+- The real maintainability wins are R3 (god-component split) + react-query (R4/R5) — those happen
+  regardless of folder depth. Flat-vs-FSD is largely cosmetic.
+- Re-nesting ~70 already-foldered files into `features/*/` is a second mass move touching hundreds
+  of import lines for marginal benefit — the exact waste we are avoiding.
+- `entities/` would duplicate `@org/form-schema` (the contract) → violates the project's #1 rule.
+- Owner chose "no new packages." `form-builder-core` stays deferred (no 2nd consumer).
+- Revisit FSD-lite only if a 2nd app (e.g. an embed portal) or a multi-dev team appears.
 
 ## Anti-waste principles (read before starting)
 
@@ -108,15 +121,19 @@ green, no assertion changed.
 
 ---
 
-## Phase R2 — Split `DesignCanvas.tsx` (812 LOC → 3 concerns)
+## Phase R2 — Split `DesignCanvas.tsx` (812 LOC → 3 concerns) ✅ DONE
 
-- [ ] Move pure geometry (`edgeScroll`, `springLoadTarget`, `normalizeBox`, `boxesIntersect`,
-      `Box` — currently *exported from a .tsx*) → `engine/geometry.ts`; move their tests into
-      `engine/geometry.test.ts`. (Already pure + tested — just in the wrong file.)
-- [ ] Extract `DesignerContext`/`DesignerProvider`/`useDesigner`/`DesignerValue` →
-      `canvas/DesignerContext.tsx`.
-- [ ] `DesignCanvas.tsx` keeps only the component; move it + `useDragon.ts` under `canvas/` with
-      a barrel. Update importers (`App.tsx`, `ViewPanel`, …).
+- [x] Moved pure geometry (`edgeScroll`, `springLoadTarget`, `normalizeBox`, `boxesIntersect`,
+      `Box`) → `engine/geometry.ts`; moved their 3 tests → `engine/geometry.test.ts`.
+- [x] Extracted `DesignerValue`/`DesignerProvider`/`useDesigner` → `canvas/DesignerContext.tsx`.
+- [x] `DesignCanvas.tsx` + `useDragon.ts` → `canvas/` with `index.ts` barrel. Importers updated:
+      `App`→`./canvas`, `ViewPanel`→`../canvas`; context-only consumers (`Palette`,
+      `PresetSection`, `OutlineTree`, `OutlineTree.test`) import `../canvas/DesignerContext`
+      directly to keep their module graph lean and cycle-proof.
+
+**Result:** root `src/*.tsx` is now just `App.tsx` + `main.tsx` (+ 2 folder-test files). typecheck
+clean; builder 255/255 (all green this run). Browser smoke gate (drag/marquee/resize/spring-load)
+still pending owner verification.
 
 **Smoke gate (browser, required):** drag-create from palette, on-canvas move, marquee select,
 **column resize** (the D8 grid drag), **spring-load** (dwell over a closed tab/collapse mid-drag),

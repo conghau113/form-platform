@@ -1,7 +1,7 @@
 import { migrate } from "@org/form-schema";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { DesignerProvider, type DesignerValue } from "../DesignCanvas";
+import { DesignerProvider, type DesignerValue } from "../canvas/DesignerContext";
 import { schemaToTree } from "../engine/transform";
 import type { TreeNode } from "../engine/tree";
 import { HoverProvider, useHover } from "./hover";

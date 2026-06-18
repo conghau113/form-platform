@@ -30,7 +30,7 @@ import {
 import type { FieldNode } from "@org/form-schema";
 import { Button, Empty, Input, Typography } from "antd";
 import { type ReactNode, useMemo, useState } from "react";
-import { useDesigner } from "../DesignCanvas";
+import { useDesigner } from "../canvas/DesignerContext";
 import { type FieldType, type PaletteEntry, paletteEntries } from "../field-registry";
 import { usePins } from "../lib";
 import { PresetSection, type PresetStore } from "../presets";

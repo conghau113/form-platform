@@ -10,7 +10,7 @@ import { Icon } from "@org/form-renderer-web";
 import type { FieldNode, Preset } from "@org/form-schema";
 import { Button, Input, Modal, message, Segmented, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
-import { useDesigner } from "../DesignCanvas";
+import { useDesigner } from "../canvas/DesignerContext";
 import { usePins } from "../lib";
 // Reach the chip file directly (not the `../palette` barrel) — the barrel pulls in Palette,
 // which imports this preset module, so the barrel would form an import cycle.

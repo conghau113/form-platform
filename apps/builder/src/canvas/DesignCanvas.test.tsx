@@ -1,19 +1,12 @@
 import { migrate } from "@org/form-schema";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import {
-  boxesIntersect,
-  DesignCanvas,
-  DesignerProvider,
-  type DesignerValue,
-  edgeScroll,
-  normalizeBox,
-  springLoadTarget,
-} from "./DesignCanvas";
-import { schemaToTree, treeToSchema } from "./engine/transform";
-import type { TreeNode } from "./engine/tree";
+import { schemaToTree, treeToSchema } from "../engine/transform";
+import type { TreeNode } from "../engine/tree";
+import { HoverProvider } from "../workbench/hover";
+import { DesignCanvas } from "./DesignCanvas";
+import { DesignerProvider, type DesignerValue } from "./DesignerContext";
 import type { DragState } from "./useDragon";
-import { HoverProvider } from "./workbench/hover";
 
 /** A minimal in-flight drag (D2/ghost tests only care about `valid`). */
 function dragState(valid: boolean): DragState {
@@ -149,32 +142,6 @@ describe("DesignCanvas", () => {
     expect(document.body.style.cursor).toBe("no-drop");
   });
 
-  it("computes edge auto-scroll deltas only inside the edge band (D3)", () => {
-    const rect = { top: 0, bottom: 600, left: 0, right: 800 };
-    // Comfortably inside → no scroll.
-    expect(edgeScroll({ x: 400, y: 300 }, rect, 56, 20)).toEqual({ dx: 0, dy: 0 });
-    // Near the top edge → scroll up (negative dy), ramped (not yet max).
-    const up = edgeScroll({ x: 400, y: 10 }, rect, 56, 20);
-    expect(up.dy).toBeLessThan(0);
-    expect(up.dy).toBeGreaterThan(-20);
-    // At/over the bottom edge → scroll down at max speed.
-    expect(edgeScroll({ x: 400, y: 600 }, rect, 56, 20).dy).toBe(20);
-    // Past the right edge → max rightward scroll, clamped.
-    expect(edgeScroll({ x: 900, y: 300 }, rect, 56, 20).dx).toBe(20);
-  });
-
-  it("normalizes corner points and tests box intersection (D7)", () => {
-    expect(normalizeBox({ x: 10, y: 20 }, { x: 0, y: 5 })).toEqual({
-      left: 0,
-      top: 5,
-      right: 10,
-      bottom: 20,
-    });
-    const a = { left: 0, top: 0, right: 10, bottom: 10 };
-    expect(boxesIntersect(a, { left: 5, top: 5, right: 15, bottom: 15 })).toBe(true);
-    expect(boxesIntersect(a, { left: 20, top: 20, right: 30, bottom: 30 })).toBe(false);
-  });
-
   it("marquee-selects the node shells it sweeps over (D7)", () => {
     const { container, tree, value } = setup();
     const uid = tree.children[0].uid;
@@ -202,31 +169,6 @@ describe("DesignCanvas", () => {
     fire(window, "pointerup", 10, 10);
     expect(value.clearSelection).toHaveBeenCalled();
     expect(value.setSelected).not.toHaveBeenCalled();
-  });
-
-  it("spring-loads only CLOSED tab/collapse headers (D4)", () => {
-    const make = (html: string) => {
-      const root = document.createElement("div");
-      root.innerHTML = html;
-      return root.firstElementChild as HTMLElement;
-    };
-    // Inactive tab → springs; active tab → no.
-    const inactiveTab = make('<div class="ant-tabs-tab"><span>T</span></div>');
-    expect(springLoadTarget(inactiveTab.querySelector("span"))).toBe(inactiveTab);
-    const activeTab = make('<div class="ant-tabs-tab ant-tabs-tab-active"><span>T</span></div>');
-    expect(springLoadTarget(activeTab.querySelector("span"))).toBeNull();
-    // Collapsed panel header → springs; expanded → no.
-    const closed = make(
-      '<div class="ant-collapse-item"><div class="ant-collapse-header">H</div></div>',
-    );
-    expect(springLoadTarget(closed.querySelector(".ant-collapse-header"))).toBe(
-      closed.querySelector(".ant-collapse-header"),
-    );
-    const open = make(
-      '<div class="ant-collapse-item ant-collapse-item-active"><div class="ant-collapse-header">H</div></div>',
-    );
-    expect(springLoadTarget(open.querySelector(".ant-collapse-header"))).toBeNull();
-    expect(springLoadTarget(null)).toBeNull();
   });
 
   it("shows the empty-state legend when the form has no fields", () => {
