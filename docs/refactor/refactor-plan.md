@@ -11,6 +11,20 @@
 
 ## Progress log
 
+> **RESUME HERE (next session):** Branch `refactor/r0-safety-net` (off `feat/builder-ux-g3-u1` =
+> main+3; NOT bare main, since G3+U1 is unmerged). R0+R1+R2 done & committed (`1d64574`,
+> `5d44a53`, `1bc12c4`) AND browser-verified. **Next = R3** (decompose `App.tsx`) — the riskiest
+> phase; read its landmine list below before starting. Run `pnpm --filter @app/builder test`
+> (expect 255) + `typecheck` as the gate; R0's `App.characterization.test.tsx` is the safety net.
+> NOTE: `apps/api` build hits a Windows Prisma EPERM (file lock) unrelated to this work — build
+> the builder alone (`pnpm --filter @app/builder build`) to verify FE.
+>
+> **Verification (2026-06-19):** builder prod build green (3353 modules); full suite 255/255;
+> real-browser smoke at `/projects/x/forms/y` (no API needed — App seeds the example form):
+> palette/canvas/property-panel all render, clicking a canvas field selects it + populates the
+> PropertyPanel (exercises the new `canvas/DesignerContext` + R1 barrels). Only benign console
+> noise (404s from the absent API, antd v5 deprecations, RR future-flag).
+
 | Phase | Status | Branch | Notes |
 |---|---|---|---|
 | R0 — Safety net | ✅ DONE (1d64574) | `refactor/r0-safety-net` | baseline typecheck 15/15 + builder 250 green; added `App.characterization.test.tsx` (5 tests) pinning save/load/dirty/keydown wiring → 255 green. No `App.test.tsx` existed before. |
