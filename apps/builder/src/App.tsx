@@ -4,6 +4,7 @@ import { Button, message, Segmented, Space, Typography, Upload } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import example from "../../../examples/form.v1.json";
 import { DesignerProvider, type DesignerValue } from "./DesignCanvas";
+import { useHistory } from "./editor";
 import {
   type Clipboard,
   copyNodes,
@@ -41,20 +42,18 @@ import {
   type TreeNode,
 } from "./engine/tree";
 import { describeNode, metaGuard, newField } from "./field-registry";
-import { useHistory } from "./history";
-import { parseFormFile } from "./io";
+import { parseFormFile } from "./lib";
 import { PropertyPanel, type SelectedNode } from "./PropertyPanel";
 import { presetResolverFromList, usePresets } from "./presets";
-import { TemplateGallery } from "./TemplateGallery";
-import { useUserTemplates } from "./templates";
+import { TemplateGallery, useUserTemplates } from "./templates";
 import { useDragon } from "./useDragon";
-import { WorkflowEditor } from "./WorkflowEditor";
 import { CompositePanel } from "./workbench/CompositePanel";
 import { HoverProvider } from "./workbench/hover";
 import { oneOf, usePersistentState } from "./workbench/persist";
 import { SettingsPanel } from "./workbench/SettingsPanel";
 import { type Device, ToolbarPanel, type ViewMode } from "./workbench/ToolbarPanel";
 import { ViewPanel } from "./workbench/ViewPanel";
+import { WorkflowEditor } from "./workflow";
 import { ExplorerToggle } from "./workspace/ExplorerToggle";
 
 const API = "http://localhost:3001";

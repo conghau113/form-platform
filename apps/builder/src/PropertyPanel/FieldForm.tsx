@@ -2,9 +2,9 @@ import { PushpinFilled, PushpinOutlined, SearchOutlined } from "@ant-design/icon
 import type { Reaction } from "@org/form-schema";
 import { Button, Checkbox, Collapse, Form, Input, InputNumber, Select, Space } from "antd";
 import { type ReactNode, useState } from "react";
-import { DataSourceEditor, isOptionSourced } from "../DataSourceEditor";
-import { usePins } from "../pins";
-import { ReactionsEditor } from "../ReactionsEditor";
+import { DataSourceEditor, isOptionSourced } from "../datasource";
+import { usePins } from "../lib";
+import { ReactionsEditor } from "../reactions";
 import { DefaultValueEditor } from "./DefaultValueEditor";
 import { csv, mergePermissions, parseCsv, prop } from "./helpers";
 import { ItemFieldsEditor } from "./ItemFieldsEditor";

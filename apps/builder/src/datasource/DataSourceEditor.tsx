@@ -10,7 +10,7 @@ import {
   Space,
   Typography,
 } from "antd";
-import { OptionsEditor } from "./PropertyPanel";
+import { OptionsEditor } from "../PropertyPanel";
 import { TreeOptionsEditor } from "./TreeOptionsEditor";
 
 /** The leaf types that share the static-options / remote-dataSource shape. The two

@@ -1,6 +1,6 @@
 import type { Reaction, ReactionEffect } from "@org/form-schema";
 import { Button, Divider, Input, Select, Space, Typography } from "antd";
-import { type Option, OptionsEditor, readEqualsRule } from "./PropertyPanel";
+import { type Option, OptionsEditor, readEqualsRule } from "../PropertyPanel";
 
 /** The effects an authored reaction can apply, with friendly labels. */
 const EFFECT_OPTIONS: { label: string; value: ReactionEffect }[] = [

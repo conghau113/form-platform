@@ -11,9 +11,9 @@ import {
   redoHistory,
   resetHistory,
   undoHistory,
-} from "./engine/history";
+} from "../engine/history";
 
-export type { HistoryEntry } from "./engine/history";
+export type { HistoryEntry } from "../engine/history";
 
 export interface History<T> {
   present: T;

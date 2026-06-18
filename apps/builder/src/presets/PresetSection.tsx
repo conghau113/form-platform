@@ -11,8 +11,10 @@ import type { FieldNode, Preset } from "@org/form-schema";
 import { Button, Input, Modal, message, Segmented, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useDesigner } from "../DesignCanvas";
-import { DraggableChip } from "../PaletteChip";
-import { usePins } from "../pins";
+import { usePins } from "../lib";
+// Reach the chip file directly (not the `../palette` barrel) — the barrel pulls in Palette,
+// which imports this preset module, so the barrel would form an import cycle.
+import { DraggableChip } from "../palette/PaletteChip";
 import { presetFromField } from "./patch";
 import type { PresetStore } from "./usePresets";
 

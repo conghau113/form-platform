@@ -7,11 +7,11 @@ import {
 import type { FieldNode } from "@org/form-schema";
 import type { DesignTokens } from "@org/form-theme";
 import { Tabs } from "antd";
+import type { HistoryEntry } from "../editor";
 import type { TreeNode } from "../engine/tree";
-import type { HistoryEntry } from "../history";
-import { Palette } from "../Palette";
+import { Palette } from "../palette";
 import type { PresetStore } from "../presets";
-import { ThemeEditor } from "../ThemeEditor";
+import { ThemeEditor } from "../theme";
 import "./CompositePanel.css";
 import { HistoryPanel } from "./HistoryPanel";
 import { OutlineTree } from "./OutlineTree";

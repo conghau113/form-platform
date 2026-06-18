@@ -14,7 +14,7 @@ import {
 } from "@xyflow/react";
 import { Alert, Button, Divider, Input, message, Space, Tag, Typography } from "antd";
 import { useCallback, useMemo, useState } from "react";
-import workflowExample from "../../../examples/workflow.v1.json";
+import workflowExample from "../../../../examples/workflow.v1.json";
 import {
   type FlowEdge,
   type FlowEdgeData,

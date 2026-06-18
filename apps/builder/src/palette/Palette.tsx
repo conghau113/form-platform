@@ -30,11 +30,11 @@ import {
 import type { FieldNode } from "@org/form-schema";
 import { Button, Empty, Input, Typography } from "antd";
 import { type ReactNode, useMemo, useState } from "react";
-import { useDesigner } from "./DesignCanvas";
-import { type FieldType, type PaletteEntry, paletteEntries } from "./field-registry";
+import { useDesigner } from "../DesignCanvas";
+import { type FieldType, type PaletteEntry, paletteEntries } from "../field-registry";
+import { usePins } from "../lib";
+import { PresetSection, type PresetStore } from "../presets";
 import { DraggableChip } from "./PaletteChip";
-import { usePins } from "./pins";
-import { PresetSection, type PresetStore } from "./presets";
 
 const PINNED_ENTRIES_KEY = "palette.pinnedEntries";
 

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { isStringArray, usePersistentState } from "./workbench/persist";
+import { isStringArray, usePersistentState } from "../workbench/persist";
 
 /** Shared "pin to top" state (U1): a persisted set of ids the user has pinned — palette
  *  component entries, presets, or property-panel sections. Backed by the workbench

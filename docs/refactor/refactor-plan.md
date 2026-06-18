@@ -9,6 +9,19 @@
 
 ---
 
+## Progress log
+
+| Phase | Status | Branch | Notes |
+|---|---|---|---|
+| R0 — Safety net | ✅ DONE (1d64574) | `refactor/r0-safety-net` | baseline typecheck 15/15 + builder 250 green; added `App.characterization.test.tsx` (5 tests) pinning save/load/dirty/keydown wiring → 255 green. No `App.test.tsx` existed before. |
+| R1 — Relocate root files | ✅ DONE | `refactor/r0-safety-net` | 8 feature folders + barrels (`palette/reactions/datasource/theme/templates/workflow/lib/editor`); `app/`→`editor/` (Win casing); cut a palette↔presets barrel cycle. typecheck clean, 253/255 (2 known load-flaky). |
+| R2 — Split DesignCanvas | ⏳ next | — | |
+| R3 — Decompose App.tsx | pending | — | |
+| R4 — react-query workspace/presets | pending | — | |
+| R5 — react-query form save/load | pending | — | |
+| R6 — api polish | pending | — | |
+| R7 — guardrails | pending | — | |
+
 ## Anti-waste principles (read before starting)
 
 This refactor only pays off if it is done deliberately. Four rules keep it from becoming churn:
@@ -54,7 +67,7 @@ indirectly. Build the net first.
 - [ ] **Audit coverage of `App.tsx` behaviour.** List what is and isn't tested:
       keyboard (undo/redo, select-all, copy/paste, keyboard-move, delete), save/load (form +
       theme), dirty calc + nav guard, import/export.
-- [ ] **Write characterization tests for the gaps** (`app/App.test.tsx` or focused hook tests),
+- [ ] **Write characterization tests for the gaps** (`editor/App.test.tsx` or focused hook tests),
       mocking `fetch`. These assert *current* behaviour exactly — they are the contract R3 must
       preserve. Do not "fix" anything here; just pin behaviour.
 - [ ] Manual smoke once, to know the baseline UX: load a form, drag a field from the palette,
@@ -67,19 +80,27 @@ loudly if R2/R3 change them.
 
 ---
 
-## Phase R1 — Relocate root feature files into folders (pure move)
+## Phase R1 — Relocate root feature files into folders (pure move) ✅ DONE
 
 Biggest readability win, lowest risk. Move, add barrels, fix imports. **No logic edits.**
 
-- [ ] `palette/` ← `Palette.tsx`, `PaletteChip.tsx`
-- [ ] `reactions/` ← `ReactionsEditor.tsx` (+ `.test`)
-- [ ] `datasource/` ← `DataSourceEditor.tsx` (+ `.test`), `TreeOptionsEditor.tsx` (+ `.test`)
-- [ ] `theme/` ← `ThemeEditor.tsx`
-- [ ] `templates/` ← `TemplateGallery.tsx` (+ `.test`), `templates.ts`
-- [ ] `workflow/` ← `WorkflowEditor.tsx`, `workflow-model.ts` (+ `.test`)
-- [ ] `lib/` ← `io.ts` (+ `.test`), `pins.ts` (+ `.test`)
-- [ ] `app/` ← `history.ts` (+ `.test`) (the editor-state hook wrapper; not a root util)
-- [ ] Each new folder gets `index.ts` (public surface only); update importers to barrels.
+- [x] `palette/` ← `Palette.tsx`, `PaletteChip.tsx`
+- [x] `reactions/` ← `ReactionsEditor.tsx` (+ `.test`)
+- [x] `datasource/` ← `DataSourceEditor.tsx` (+ `.test`), `TreeOptionsEditor.tsx` (+ `.test`)
+- [x] `theme/` ← `ThemeEditor.tsx`
+- [x] `templates/` ← `TemplateGallery.tsx` (+ `.test`), `templates.ts`
+- [x] `workflow/` ← `WorkflowEditor.tsx`, `workflow-model.ts` (+ `.test`)
+- [x] `lib/` ← `io.ts` (+ `.test`), `pins.ts` (+ `.test`)
+- [x] `editor/` ← `history.ts` (+ `.test`) (the editor-state hook wrapper; renamed from `app/`
+      to avoid a Windows case collision with `App.tsx`)
+- [x] Each new folder gets `index.ts` (public surface only); importers updated to barrels.
+- [x] Broke a would-be import cycle: `presets/PresetSection` imports `DraggableChip` from the
+      `../palette/PaletteChip` file directly (the `../palette` barrel pulls in `Palette`, which
+      imports the preset module).
+
+**Result:** root `src/*.tsx` reduced to `App.tsx` + `DesignCanvas.tsx` (R2) + `main.tsx` +
+`useDragon.ts` (R2) + 2 folder-test files. typecheck clean; builder 253/255 (the 2 fails are the
+known load-flaky `PropertyPanel.validation` severity tests — 14/14 in isolation).
 
 **Smoke gate:** app boots, every relocated feature still opens (palette drag, reactions editor,
 datasource editor, theme editor, template gallery, workflow tab). **DoD:** typecheck + full test
@@ -118,13 +139,13 @@ each extraction. Known closure/state landmines — get these right or behaviour 
 
 Extraction order:
 
-- [ ] `app/useFormEditor.ts` — `history` + `selection` + `clipboard` + derived
+- [ ] `editor/useFormEditor.ts` — `history` + `selection` + `clipboard` + derived
       `schema`/`json`/`selectedNode`/`fieldNames`. Returns a typed object.
-- [ ] `app/useEditorShortcuts.ts` — the `window keydown` effect (exact deps preserved).
-- [ ] `app/useFormPersistence.ts` — save/load form **and** theme; **inline `fetch` moves into a
+- [ ] `editor/useEditorShortcuts.ts` — the `window keydown` effect (exact deps preserved).
+- [ ] `editor/useFormPersistence.ts` — save/load form **and** theme; **inline `fetch` moves into a
       `forms`/`themes` `client.ts`** consumed here. Keep it a plain hook for now (react-query
       swap is R4) so this stays behaviour-only. Preserve the `latestSave` ref.
-- [ ] `app/useNavigationGuard.ts` — `dirty`, `beforeunload`, `onDirtyChange`, `provideSave`.
+- [ ] `editor/useNavigationGuard.ts` — `dirty`, `beforeunload`, `onDirtyChange`, `provideSave`.
 - [ ] `App.tsx` → wiring + layout only, target <200 LOC.
 
 **Smoke gate (browser, required):** every R0 behaviour — undo/redo, copy/paste, keyboard move,

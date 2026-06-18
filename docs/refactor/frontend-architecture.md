@@ -69,11 +69,14 @@ apps/builder/src/
   main.tsx                  # entry: providers (QueryClientProvider, Router, ConfigProvider)
   App.tsx                   # thin composition shell ONLY — layout + wiring (<200 LOC)
 
-  app/                      # cross-cutting editor state, extracted out of App.tsx
-    useFormEditor.ts        # history + selection + clipboard + derived schema/json
-    useEditorShortcuts.ts   # the window keydown handler (undo/redo/copy/paste/move/delete)
-    useFormPersistence.ts   # save/load form + theme  (react-query mutations)
-    useNavigationGuard.ts   # dirty signal + beforeunload + provideSave plumbing
+  editor/                   # cross-cutting editor state, extracted out of App.tsx
+                            # (named editor/ not app/: on case-insensitive Windows FS an
+                            #  app/ folder collides with App.tsx)
+    history.ts              # undo/redo hook (thin shell over engine/history) — moved in R1
+    useFormEditor.ts        # history + selection + clipboard + derived schema/json   (R3)
+    useEditorShortcuts.ts   # the window keydown handler (undo/redo/copy/paste/move/delete) (R3)
+    useFormPersistence.ts   # save/load form + theme  (react-query mutations)          (R3/R5)
+    useNavigationGuard.ts   # dirty signal + beforeunload + provideSave plumbing        (R3)
 
   canvas/                   # was DesignCanvas.tsx (812 LOC) — split:
     DesignCanvas.tsx        # the component

@@ -1,8 +1,8 @@
 import { type FormSchema, migrate } from "@org/form-schema";
 import { useCallback } from "react";
-import formV1 from "../../../examples/form.v1.json";
-import formV3 from "../../../examples/form.v3.json";
-import { usePersistentState } from "./workbench/persist";
+import formV1 from "../../../../examples/form.v1.json";
+import formV3 from "../../../../examples/form.v3.json";
+import { usePersistentState } from "../workbench/persist";
 
 /* ----------------------------------------------------------------------------
  * templates.ts — Phase I starter presets + the user-saved template store.

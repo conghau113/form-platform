@@ -1,5 +1,5 @@
 import { Empty } from "antd";
-import type { HistoryEntry } from "../history";
+import type { HistoryEntry } from "../editor";
 
 /* ----------------------------------------------------------------------------
  * HistoryPanel — the CompositePanel "History" tab. Lists every recorded undo
