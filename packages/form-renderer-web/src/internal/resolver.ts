@@ -46,11 +46,12 @@ export async function runAsyncCheck(
   name: string,
   value: unknown,
   validator: AsyncValidator,
+  fetcher?: typeof fetch,
 ): Promise<AsyncValidationResult> {
   await new Promise((resolve) => setTimeout(resolve, validator.debounceMs ?? 400));
   if (!Object.is(cache.get(path)?.value, value)) return { valid: true };
   try {
-    return await checkAsyncValidator(validator, name, value);
+    return await checkAsyncValidator(validator, name, value, fetcher);
   } catch {
     return { valid: true };
   }

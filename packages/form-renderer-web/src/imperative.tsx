@@ -16,6 +16,8 @@ interface BasePopupOptions {
   theme?: ThemeConfig;
   initialValues?: Record<string, unknown>;
   access?: AccessContext;
+  /** Injectable `fetch` forwarded to the wrapped `FormRenderer` (auth headers / custom base). */
+  fetcher?: typeof fetch;
   okText?: string;
   cancelText?: string;
 }
@@ -72,6 +74,7 @@ function PopupHost(props: {
       theme={opts.theme}
       initialValues={opts.initialValues}
       access={opts.access}
+      fetcher={opts.fetcher}
       onSubmit={(values) => settle(values)}
     />
   );

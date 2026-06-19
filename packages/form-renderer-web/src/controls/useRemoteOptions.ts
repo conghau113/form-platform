@@ -7,6 +7,7 @@ import {
 } from "@org/form-core";
 import { useQuery } from "@tanstack/react-query";
 import type { OptionList, OptionSourced } from "../internal/control-types.js";
+import { useFetcher } from "../internal/FetcherContext.js";
 
 /** Resolve the option list for a select/checkbox-group, fetching a remote `dataSource`
  *  via react-query when present. Fetching + option mapping live in form-core so native
@@ -25,6 +26,8 @@ export function useRemoteOptions(
   missing: string[];
 } {
   const ds = node.dataSource;
+  // Host-injected fetch (auth headers / custom base), or the global fetch by default.
+  const fetcher = useFetcher();
   // A dependent control waits until EVERY field it depends on has a value before fetching.
   const deps = ds ? dataSourceDeps(ds) : [];
   const ready = !ds || dataSourceReady(ds, depValues);
@@ -34,8 +37,9 @@ export function useRemoteOptions(
     // Keyed on the url + every dep value, so changing any parent refetches.
     queryKey: ["form-datasource", ds?.url, ...deps.map((field) => depValues[field] ?? null)],
     enabled: !!ds && ready,
-    // ds is defined whenever the query is enabled.
-    queryFn: () => fetchDataSourceOptions(ds as NonNullable<typeof ds>, depValues),
+    // ds is defined whenever the query is enabled. The fetcher is intentionally NOT in the
+    // queryKey — same url/deps means the same options regardless of which fetch impl runs.
+    queryFn: () => fetchDataSourceOptions(ds as NonNullable<typeof ds>, depValues, fetcher),
     // Cache fetched options for ttlMs (default 0 = always fresh).
     staleTime: ds?.ttlMs ?? 0,
   });

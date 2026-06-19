@@ -52,6 +52,7 @@ import {
   type Values,
 } from "./internal/control-types.js";
 import { collectStepNames, containsType, schemaDefaults } from "./internal/defaults.js";
+import { FetcherContext } from "./internal/FetcherContext.js";
 import { type AsyncCache, getAtPath, runAsyncCheck, setErrorAtPath } from "./internal/resolver.js";
 import { FieldPreview } from "./preview/FieldPreview.js";
 
@@ -100,6 +101,11 @@ export interface FormRendererProps {
    *  Absent ⇒ linked fields render from their own props (a frozen snapshot), so runtime output
    *  is unchanged and the renderer stays usable with no preset source at all. */
   presetResolver?: PresetResolver;
+  /** Injectable `fetch` for the renderer's remote calls — dataSource option lists and
+   *  `asyncValidator` value checks. Lets an authenticated host add `Authorization` headers or
+   *  point at a proxy base, e.g. `(u, o) => fetch(u, { ...o, headers: { Authorization } })`.
+   *  Absent ⇒ the global `fetch` is used, so runtime is unchanged. */
+  fetcher?: typeof fetch;
 }
 
 /** Imperative handle exposed via `ref`. `submit()` programmatically triggers validation +
@@ -122,6 +128,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     hideSubmit = false,
     readPretty = false,
     presetResolver,
+    fetcher,
   },
   ref,
 ) {
@@ -170,7 +177,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
         if (!entry || !Object.is(entry.value, value)) {
           entry = {
             value,
-            promise: runAsyncCheck(asyncCache.current, path, name, value, validator),
+            promise: runAsyncCheck(asyncCache.current, path, name, value, validator, fetcher),
           };
           asyncCache.current.set(path, entry);
         }
@@ -616,34 +623,36 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
   const hasSteps = useMemo(() => containsType(form.fields, "steps"), [form]);
   return (
     <QueryClientProvider client={queryClient}>
-      <ConfigProvider theme={theme}>
-        <Form
-          component={false}
-          layout={lp?.layout ?? "vertical"}
-          labelCol={lp?.labelCol}
-          wrapperCol={lp?.wrapperCol}
-          size={lp?.size}
-          colon={lp?.colon}
-          labelAlign={lp?.labelAlign}
-          labelWrap={lp?.labelWrap}
-        >
-          <form onSubmit={submit} noValidate>
-            <Row gutter={16}>
-              {form.fields.map((n, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: schema fields are static per render
-                <Fragment key={i}>{renderNode(n, "", { path: [i] })}</Fragment>
-              ))}
-            </Row>
-            {/* The Submit button is meaningless on the design canvas, in form-wide review
+      <FetcherContext.Provider value={fetcher}>
+        <ConfigProvider theme={theme}>
+          <Form
+            component={false}
+            layout={lp?.layout ?? "vertical"}
+            labelCol={lp?.labelCol}
+            wrapperCol={lp?.wrapperCol}
+            size={lp?.size}
+            colon={lp?.colon}
+            labelAlign={lp?.labelAlign}
+            labelWrap={lp?.labelWrap}
+          >
+            <form onSubmit={submit} noValidate>
+              <Row gutter={16}>
+                {form.fields.map((n, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: schema fields are static per render
+                  <Fragment key={i}>{renderNode(n, "", { path: [i] })}</Fragment>
+                ))}
+              </Row>
+              {/* The Submit button is meaningless on the design canvas, in form-wide review
                 (readPretty) mode, and when a popup wrapper drives submission (hideSubmit). */}
-            {!designMode && !hideSubmit && !readPretty && !hasSteps && (
-              <Button type="primary" htmlType="submit">
-                {submitLabel}
-              </Button>
-            )}
-          </form>
-        </Form>
-      </ConfigProvider>
+              {!designMode && !hideSubmit && !readPretty && !hasSteps && (
+                <Button type="primary" htmlType="submit">
+                  {submitLabel}
+                </Button>
+              )}
+            </form>
+          </Form>
+        </ConfigProvider>
+      </FetcherContext.Provider>
     </QueryClientProvider>
   );
 });

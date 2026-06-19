@@ -15,7 +15,7 @@ Status legend: ⬜ todo · 🟡 in progress · ✅ done.
 
 ---
 
-## Phase V2 — Injectable `fetcher` in the web renderer  ⬜
+## Phase V2 — Injectable `fetcher` in the web renderer  ✅
 **Branch:** `feat/v2-renderer-fetcher` · **Packages:** `form-renderer-web` (published → changeset)
 
 **Why:** The renderer can't add auth headers / a custom base to its remote calls (dataSource
@@ -30,24 +30,24 @@ resolver (which already lives in `FormRenderer`'s closure). Default = global `fe
 unchanged** when the prop is absent.
 
 **Steps**
-- [ ] `FormRenderer.tsx` — add `fetcher?: typeof fetch` to `FormRendererProps`; destructure it.
-- [ ] New `internal/FetcherContext.ts` — `createContext<typeof fetch | undefined>(undefined)`
+- [x] `FormRenderer.tsx` — add `fetcher?: typeof fetch` to `FormRendererProps`; destructure it.
+- [x] New `internal/FetcherContext.ts` — `createContext<typeof fetch | undefined>(undefined)`
       + a `useFetcher()` helper (falls back to global `fetch`).
-- [ ] `FormRenderer.tsx` — wrap the form body in `<FetcherContext.Provider value={fetcher}>`
+- [x] `FormRenderer.tsx` — wrap the form body in `<FetcherContext.Provider value={fetcher}>`
       (inside the existing `QueryClientProvider`/`ConfigProvider`).
-- [ ] `controls/useRemoteOptions.ts` — read `useFetcher()`; pass it as the 3rd arg of
-      `fetchDataSourceOptions(ds, depValues, fetcher)`. Add it to the react‑query `queryKey` is
-      NOT needed (same url/deps), but DO keep it out of the key.
-- [ ] `internal/resolver.ts` — `runAsyncCheck(..., fetcher?: typeof fetch)`; forward to
+- [x] `controls/useRemoteOptions.ts` — read `useFetcher()`; pass it as the 3rd arg of
+      `fetchDataSourceOptions(ds, depValues, fetcher)`. Kept OUT of the react‑query `queryKey`
+      (same url/deps ⇒ same options regardless of fetch impl).
+- [x] `internal/resolver.ts` — `runAsyncCheck(..., fetcher?: typeof fetch)`; forward to
       `checkAsyncValidator(validator, name, value, fetcher)`.
-- [ ] `FormRenderer.tsx` — at the `runAsyncCheck(...)` call site in the resolver, pass the
+- [x] `FormRenderer.tsx` — at the `runAsyncCheck(...)` call site in the resolver, pass the
       `fetcher` prop through.
-- [ ] `imperative.tsx` — `openFormDialog`/`openFormDrawer` forward `fetcher` (they already accept
+- [x] `imperative.tsx` — `openFormDialog`/`openFormDrawer` forward `fetcher` (they already accept
       a `FormRendererProps` subset).
-- [ ] Test (`FormRenderer.fetcher.test.tsx`): a custom `fetcher` spy is invoked for (a) a remote
+- [x] Test (`FormRenderer.fetcher.test.tsx`): a custom `fetcher` spy is invoked for (a) a remote
       `dataSource` select and (b) an `asyncValidator` check; absent prop ⇒ falls back to global
       fetch (existing async/datasource tests still pass).
-- [ ] Changeset: `form-renderer-web` **minor** (additive prop). `form-core` none (already supports
+- [x] Changeset: `form-renderer-web` **minor** (additive prop). `form-core` none (already supports
       `fetchImpl`).
 
 **DoD:** `pnpm typecheck`, `pnpm --filter @org/form-renderer-web test` green, biome clean on
@@ -74,19 +74,33 @@ Commit: `__________`
 **no `name`, no value**. Additive per `[[form-platform-additive-schema-rule]]` ⇒ **no
 `formVersion` bump** (parse‑compat test, not a migration).
 
+> **Post‑refactor note (2026‑06‑19):** verified against the modularised source. Approach
+> unchanged; structural deltas folded into the steps below. The "Displays" category already
+> exists in `field-registry/queries.ts` `CATEGORY_ORDER` (no field uses it yet). The builder
+> side is a **declarative registry entry** (not bespoke panel code): `new-field.ts` is fully
+> data‑driven via the `named` flag, so `named:false` makes the node seed with **no name/value**
+> automatically. Setting descriptors (`text`/`segmented`/`number` controls) already render the
+> property panel from `settings:[]`.
+
 **Steps**
 - [ ] `form-schema/src/schema.ts` — `displayTextFieldSchema` (`type:"display-text"`, `content:
       string`, `variant?: "title"|"paragraph"|"text"`, `level?: 1..5` for titles, optional
-      `align`); add to the leaf union + `fieldNodeSchema`; export the inferred type.
+      `align`); add to the `fieldNodeSchema` union (`schema.ts:834`); export the inferred type.
+      It is a **nameless leaf** (no `name`), like the `*-pane`/`step` panes.
 - [ ] `schema.test` — parses a display‑text node; an old fixture without it still parses (compat).
-- [ ] `form-core` — treat it as **value‑less** in `buildShape`/`walkLeaves` (skip like a
-      container leaf so it never contributes a zod field or blocks submit). Add a core test
-      (a form with only a display‑text + one input validates against just the input).
+- [ ] `form-core` (`validation.ts`) — treat it as **value‑less**: add an explicit skip in
+      `buildShape` (line ~335, before the `shape[node.name]=leafZod(...)` fallback) **and** the
+      lockstep `walkLeaves`, so it never contributes a zod field or blocks submit. (It is NOT an
+      `isLayoutContainer`, so without this it would wrongly be treated as a named leaf.) Add a
+      core test (a form with only a display‑text + one input validates against just the input).
 - [ ] `form-renderer-web` — render `Typography.Title/Paragraph/Text` from `content`/`variant`;
       **no `Form.Item` name wrapper** (it owns no value). Honour `readPretty`/design mode.
-- [ ] builder `field-registry` — new entry under the **Displays** category + palette chip + a
-      minimal property panel (content textarea + variant/level setters via existing S1 vocab).
-- [ ] builder tests — palette‑freeze/registry test updated; create + parse round‑trip.
+- [ ] builder `field-registry/registry.ts` — new `ComponentMeta` entry: `category:"Displays"`,
+      `behavior: LEAF`, `named:false`, `defaultValueKind:"none"`, `showInPalette:true`,
+      `settings:[{content textarea}, {variant segmented}, {level number}]`. No new‑field.ts edit
+      (the `named:false` path handles it). No bespoke property panel — descriptors drive it.
+- [ ] builder tests — `field-registry.test.ts` (parses every seeded node) + palette‑freeze test
+      updated; create + parse round‑trip.
 - [ ] Changeset: `form-schema` + `form-renderer-web` **minor**; builder none (private).
 
 **DoD:** typecheck 15/15, all package + builder tests green, biome clean, changeset present,
@@ -108,19 +122,32 @@ Commit: `__________`
 `labelAlign`. Web renderer applies these to descendant `Form.Item`s via a React context the
 controls already read for rendering; **native ignores** (single column) — never crashes.
 
+> **Post‑refactor note (2026‑06‑19):** approach unchanged. The container **schema objects**
+> still live in `schema.ts` (e.g. `groupFieldSchema` at `schema.ts:708`, union at `:834`), but
+> the `isLayoutContainer` type‑guard + the `LayoutContainerField` type now live in
+> **`packages/form-schema/src/containers.ts`** — update both files, not just `schema.ts`. Builder
+> side is again a declarative registry entry (`named:false`, `CONTAINER` behavior).
+
 **Steps**
 - [ ] `form-schema/src/schema.ts` — `formLayoutFieldSchema` (container: `type:"form-layout"`,
-      `children`, `layout?`, `labelCol?`, `wrapperCol?`, `labelAlign?`); add to the container
-      union + `isLayoutContainer` set; export type.
+      `children: z.array(fieldNodeSchema)`, `layout?`, `labelCol?`, `wrapperCol?`, `labelAlign?`,
+      `visibleWhen?`/`permissions?` like other containers); add to the `fieldNodeSchema` union
+      (`:834`); export type.
+- [ ] `form-schema/src/containers.ts` — add `"form-layout"` to the `isLayoutContainer` guard +
+      `LayoutContainerField` union so value walks treat it as transparent.
 - [ ] `schema.test` + compat test (old JSON still parses).
-- [ ] `form-core` — confirm `isLayoutContainer` includes it so value walks descend transparently
-      (mirror `group`); add a test (children's values stay flat, validation descends).
-- [ ] `form-renderer-web` — a `LayoutContext` that carries the current `layout`/`labelCol`; the
-      `form-layout` container provides it; `FieldControl`/`Form.Item` consume it (fallback to the
-      form default). Add a render test (a field inside an inline layout gets inline label props).
-- [ ] builder `field-registry` — entry under **Layouts** + palette chip (seeds 1–2 children via
-      `defaults`, like tabs/collapse) + property panel (layout segmented + labelCol number).
-- [ ] builder tests — registry/palette + create round‑trip.
+- [ ] `form-core` — confirm `buildShape`/`walkLeaves` descend it transparently via
+      `isLayoutContainer` (mirror `group`, `validation.ts:322`); add a test (children's values
+      stay flat, validation descends).
+- [ ] `form-renderer-web` — add a **dedicated `form-layout` branch in `renderNode` BEFORE** the
+      existing generic `isLayoutContainer` fallback (`FormRenderer.tsx:489`, which only paints a
+      plain transparent Row). It provides a `LayoutContext` carrying `layout`/`labelCol`; the leaf
+      `Form.Item` consumes it (fallback to the form default `layoutProps`). Add a render test (a
+      field inside an inline layout gets inline label props).
+- [ ] builder `field-registry/registry.ts` — entry `category:"Layouts"`, `behavior: CONTAINER`,
+      `named:false`, palette‑visible; `defaults` seed 1–2 children (like tabs/collapse) +
+      `settings:[{layout segmented}, {labelCol number}]`.
+- [ ] builder tests — `field-registry.test.ts`/palette + create round‑trip.
 - [ ] Changeset: `form-schema` + `form-renderer-web` **minor**; builder none.
 
 **DoD:** typecheck + all tests green, biome clean, changeset, reviewer PASS. **Verify:** drop a
