@@ -21,7 +21,7 @@ export interface WorkspaceOutletContext {
 export function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
   const { projects } = useProjects();
-  const { tree, loading, error, reload } = useProjectTree(projectId);
+  const { tree, loading, error, invalidate } = useProjectTree(projectId);
   const activeFormId = useMatch("/projects/:projectId/forms/:formId")?.params.formId;
 
   const [explorerCollapsed, setExplorerCollapsed] = useState(false);
@@ -30,7 +30,7 @@ export function ProjectWorkspace() {
 
   const context: WorkspaceOutletContext = {
     projectId,
-    onFormSaved: reload,
+    onFormSaved: invalidate,
     explorerCollapsed,
     setExplorerCollapsed,
   };
@@ -43,7 +43,7 @@ export function ProjectWorkspace() {
         tree={tree}
         loading={loading}
         error={error}
-        reload={reload}
+        invalidate={invalidate}
         activeFormId={activeFormId}
         collapsed={explorerCollapsed}
       />

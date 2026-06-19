@@ -1,0 +1,12 @@
+/**
+ * Query-key factory — the single source of truth for every react-query cache key in the builder.
+ * Centralising them keeps invalidation honest: a mutation invalidates `qk.projects` (etc.) rather
+ * than re-typing a string array that can drift out of sync with the query that reads it.
+ */
+export const qk = {
+  projects: ["projects"] as const,
+  projectTree: (projectId: string) => ["projects", projectId, "tree"] as const,
+  presets: (projectId?: string) => ["presets", projectId ?? null] as const,
+  form: (formId: string) => ["forms", formId] as const,
+  theme: (formId: string) => ["themes", formId] as const,
+} as const;

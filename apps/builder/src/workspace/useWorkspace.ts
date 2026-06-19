@@ -1,99 +1,78 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { qk } from "../query";
 import * as api from "./client";
 import type { ProjectRecord, ProjectTree } from "./types";
 
 /**
- * Workspace data hooks (Track W, W2). Like `usePresets`, the server is the source of truth: every
- * action round-trips and then refetches, so concurrent edits and server-side normalisation (slugs,
- * cascades) are always reflected. Callers `await` the actions and surface failures with `message`.
+ * Workspace data hooks (Track W, react-query as of R4). The server is the source of truth: the
+ * list/tree live in the query cache, and every mutation `invalidateQueries` so the next read
+ * reflects server-side normalisation (slugs, cascades) and concurrent edits. No hand-rolled
+ * `alive` flags, manual `loading`, or imperative `reload()` — the cache owns all of that.
+ * Callers `await` the mutation actions (`mutateAsync`) and surface failures with `message`.
  */
 
 export interface ProjectsStore {
   projects: ProjectRecord[];
   loading: boolean;
-  reload: () => Promise<void>;
   create: (input: { name: string; description?: string | null }) => Promise<ProjectRecord>;
   rename: (id: string, name: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
 
 export function useProjects(): ProjectsStore {
-  const [projects, setProjects] = useState<ProjectRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const query = useQuery({ queryKey: qk.projects, queryFn: api.listProjects });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.projects });
 
-  const reload = useCallback(async () => {
-    setProjects(await api.listProjects());
-  }, []);
+  const create = useMutation({
+    mutationFn: api.createProject,
+    onSuccess: invalidate,
+  });
+  const rename = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api.updateProject(id, { name }),
+    onSuccess: invalidate,
+  });
+  const remove = useMutation({
+    mutationFn: api.deleteProject,
+    onSuccess: invalidate,
+  });
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .listProjects()
-      .then((list) => alive && setProjects(list))
-      .catch(() => alive && setProjects([]))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const create = useCallback(async (input: { name: string; description?: string | null }) => {
-    const project = await api.createProject(input);
-    setProjects((list) => [project, ...list]);
-    return project;
-  }, []);
-
-  const rename = useCallback(async (id: string, name: string) => {
-    const updated = await api.updateProject(id, { name });
-    setProjects((list) => list.map((p) => (p.id === id ? updated : p)));
-  }, []);
-
-  const remove = useCallback(async (id: string) => {
-    await api.deleteProject(id);
-    setProjects((list) => list.filter((p) => p.id !== id));
-  }, []);
-
-  return { projects, loading, reload, create, rename, remove };
+  return {
+    projects: query.data ?? [],
+    loading: query.isPending,
+    create: (input) => create.mutateAsync(input),
+    rename: async (id, name) => {
+      await rename.mutateAsync({ id, name });
+    },
+    remove: async (id) => {
+      await remove.mutateAsync(id);
+    },
+  };
 }
 
 export interface ProjectTreeStore {
   tree: ProjectTree | null;
   loading: boolean;
   error: string | null;
-  /** Refetch the whole tree — every mutating action calls this so state stays server-true. */
-  reload: () => Promise<void>;
+  /** Mark the cached tree stale + refetch — called after a mutation (rename/move/delete/create). */
+  invalidate: () => Promise<void>;
 }
 
-/** Loads a single project's folder/form tree and refetches on demand (after a mutation). */
+/** Loads a single project's folder/form tree; refetches automatically when `projectId` changes. */
 export function useProjectTree(projectId: string | undefined): ProjectTreeStore {
-  const [tree, setTree] = useState<ProjectTree | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: qk.projectTree(projectId ?? ""),
+    queryFn: () => api.getProjectTree(projectId as string),
+    enabled: !!projectId,
+  });
 
-  const reload = useCallback(async () => {
-    if (!projectId) return;
-    const next = await api.getProjectTree(projectId);
-    setTree(next);
-    setError(null);
-  }, [projectId]);
-
-  useEffect(() => {
-    let alive = true;
-    if (!projectId) return;
-    setLoading(true);
-    api
-      .getProjectTree(projectId)
-      .then((next) => {
-        if (!alive) return;
-        setTree(next);
-        setError(null);
-      })
-      .catch((e) => alive && setError((e as Error).message))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, [projectId]);
-
-  return { tree, loading, error, reload };
+  return {
+    tree: query.data ?? null,
+    loading: query.isPending,
+    error: query.error ? (query.error as Error).message : null,
+    invalidate: async () => {
+      if (projectId) await qc.invalidateQueries({ queryKey: qk.projectTree(projectId) });
+    },
+  };
 }

@@ -12,30 +12,35 @@
 ## Progress log
 
 > **RESUME HERE (next session):** Branch `refactor/r0-safety-net` (off `feat/builder-ux-g3-u1` =
-> main+3; NOT bare main, since G3+U1 is unmerged). R0+R1+R2 done & committed (`1d64574`,
-> `5d44a53`, `1bc12c4`) AND browser-verified. **R3 done & UNCOMMITTED** (owner gates commit;
-> reviewer PASS, no blocking issues) — `App.tsx` decomposed into `editor/` hooks; typecheck clean,
-> biome clean, builder 255/255 with R0's `App.characterization.test.tsx` passing UNCHANGED.
-> **R3 browser smoke still pending owner verification** (undo/redo, copy/paste, keyboard move,
-> delete, save→clean+rail refresh, load→form+theme, import/export, unsaved-changes guard).
-> **Next = R4** (react-query for workspace + presets). NOTE: `apps/api` build hits a Windows Prisma
-> EPERM (file lock) unrelated to this work — build the builder alone
-> (`pnpm --filter @app/builder build`) to verify FE.
+> main+3; NOT bare main, since G3+U1 is unmerged). R0–R4 done & committed (`1d64574`, `5d44a53`,
+> `1bc12c4`, R3 `cefe4fc`, R4 = this commit). **R4 done & COMMITTED** (reviewer PASS, no blockers,
+> 1 nit folded — package.json alpha order): `@tanstack/react-query` added to the builder; workspace
+> (`useProjects`/`useProjectTree`) + presets (`usePresets`) migrated off hand-rolled
+> `useState`+`useEffect`+`alive` to `useQuery`/`useMutation` with `invalidateQueries`. New
+> `query/{queryClient,keys,index,testing}`; `main.tsx` wraps `<QueryClientProvider>` (+ dev
+> Devtools); `reload()` → cache `invalidate()` (ExplorerRail/ProjectWorkspace prop renamed).
+> typecheck clean, builder 255/255 (R0 characterization + presets tests pass; presets test now uses
+> a stateful fake `/presets` server under a QueryClientProvider), prod build green (3370 modules).
+> **R3 + R4 browser smoke still pending owner verification.** **Next = R5** (react-query for form
+> save/load — `useFormPersistence` → `useMutation`, then grep that `fetch(` lives ONLY in
+> `*/client.ts`). NOTE: `apps/api` build hits a Windows Prisma EPERM (file lock) unrelated to this
+> work — build the builder alone (`pnpm --filter @app/builder build`) to verify FE.
 >
-> **Verification (2026-06-19):** builder prod build green (3353 modules); full suite 255/255;
-> real-browser smoke at `/projects/x/forms/y` (no API needed — App seeds the example form):
-> palette/canvas/property-panel all render, clicking a canvas field selects it + populates the
-> PropertyPanel (exercises the new `canvas/DesignerContext` + R1 barrels). Only benign console
-> noise (404s from the absent API, antd v5 deprecations, RR future-flag).
+> **Verification (2026-06-19):** builder prod build green (R3 3353 → R4 3370 modules); full suite
+> 255/255; R3 real-browser smoke at `/projects/x/forms/y` (no API needed — App seeds the example
+> form): palette/canvas/property-panel render, clicking a canvas field selects it + populates the
+> PropertyPanel. Only benign console noise (404s from the absent API, antd v5 deprecations, RR
+> future-flag). R4 browser smoke (projects/folders/forms CRUD + preset save/delete/promote + W4
+> live-propagation) still pending owner.
 
 | Phase | Status | Branch | Notes |
 |---|---|---|---|
 | R0 — Safety net | ✅ DONE (1d64574) | `refactor/r0-safety-net` | baseline typecheck 15/15 + builder 250 green; added `App.characterization.test.tsx` (5 tests) pinning save/load/dirty/keydown wiring → 255 green. No `App.test.tsx` existed before. |
 | R1 — Relocate root files | ✅ DONE | `refactor/r0-safety-net` | 8 feature folders + barrels (`palette/reactions/datasource/theme/templates/workflow/lib/editor`); `app/`→`editor/` (Win casing); cut a palette↔presets barrel cycle. typecheck clean, 253/255 (2 known load-flaky). |
 | R2 — Split DesignCanvas | ✅ DONE | `refactor/r0-safety-net` | 812→~700 LOC component. Pure geometry→`engine/geometry.ts`(+test); `DesignerValue`/context/`useDesigner`→`canvas/DesignerContext.tsx`; component+`useDragon`→`canvas/` + barrel. Context-consumers import `../canvas/DesignerContext` directly (lean/cycle-proof). typecheck clean, 255/255. |
-| R3 — Decompose App.tsx | ✅ DONE (uncommitted) | `refactor/r0-safety-net` | 604→388 LOC shell (logic ~240 + JSX layout ~148). 4 hooks + a client extracted into `editor/`: `useFormEditor` (history/selection/clipboard + derived schema/json/selected/fieldNames + applyJson/loadSchema), `useEditorShortcuts` (keydown, dep set `[history,tree,selection,clipboard]` preserved verbatim w/ biome-ignore), `useFormPersistence` (tokens/savedTokens/savedIndex + onSave/onLoad via new `client.ts` + formId load-on-mount), `useNavigationGuard` (dirty + onDirtyChange + latestSave-ref/stableSave/provideSave + beforeunload). `client.ts` = the only `fetch` site (postForm/postTheme/getForm/getTheme + `API` const). barrel updated. typecheck clean, biome clean, builder 255/255 (R0 characterization passes UNCHANGED). reviewer PASS no blockers. **Browser smoke pending owner.** |
-| R4 — react-query workspace/presets | ⏳ next | — | |
-| R5 — react-query form save/load | pending | — | |
+| R3 — Decompose App.tsx | ✅ DONE (cefe4fc) | `refactor/r0-safety-net` | 604→388 LOC shell (logic ~240 + JSX layout ~148). 4 hooks + a client extracted into `editor/`: `useFormEditor` (history/selection/clipboard + derived schema/json/selected/fieldNames + applyJson/loadSchema), `useEditorShortcuts` (keydown, dep set `[history,tree,selection,clipboard]` preserved verbatim w/ biome-ignore), `useFormPersistence` (tokens/savedTokens/savedIndex + onSave/onLoad via new `client.ts` + formId load-on-mount), `useNavigationGuard` (dirty + onDirtyChange + latestSave-ref/stableSave/provideSave + beforeunload). `client.ts` = the only `fetch` site (postForm/postTheme/getForm/getTheme + `API` const). barrel updated. typecheck clean, biome clean, builder 255/255 (R0 characterization passes UNCHANGED). reviewer PASS no blockers. **Browser smoke pending owner.** |
+| R4 — react-query workspace/presets | ✅ DONE | `refactor/r0-safety-net` | `@tanstack/react-query` added; `query/` module (queryClient + `qk` keys + barrel + test helpers); `main.tsx` wraps `QueryClientProvider` (+ dev Devtools). `useProjects`/`useProjectTree`/`usePresets` → `useQuery`+`useMutation`; deleted every `alive` flag + manual `loading`/`reload` → `invalidateQueries`. W4 invariant preserved (one cache entry per `qk.presets(projectId)`, App calls `usePresets` once). presets test → stateful fake server + provider wrapper; R0 characterization wrapped in `renderWithQuery`, assertions unchanged. typecheck clean, 255/255, prod build green (3370 modules). reviewer PASS. Browser smoke pending owner. |
+| R5 — react-query form save/load | ⏳ next | — | |
 | R6 — api polish | pending | — | |
 | R7 — guardrails | pending | — | |
 
@@ -199,18 +204,21 @@ unsaved-changes guard on navigate + on refresh. **DoD:** R0 characterization tes
 > deletes the hand-rolled `alive`-flag/`reload()` boilerplate and replaces it with cache +
 > invalidation. That is the observable win.
 
-- [ ] Add `@tanstack/react-query` (+ devtools in dev) to `apps/builder`.
-- [ ] `query/queryClient.ts` (conservative editor defaults: `refetchOnWindowFocus: false`,
-      sane `staleTime`, low retry) + wrap app in `<QueryClientProvider>` in `main.tsx`.
-- [ ] `query/keys.ts` key factory (`qk.projects`, `qk.projectTree(id)`, `qk.presets(projectId?)`,
-      `qk.form(id)`, `qk.theme(id)`).
-- [ ] `workspace/useWorkspace.ts` → `useQuery`/`useMutation`; `useProjectTree` uses
-      `enabled: !!projectId`. Delete every `alive` flag, manual `loading`, and `reload()`;
-      mutations `invalidateQueries`.
-- [ ] `presets/usePresets.ts` → `useQuery` + mutation-invalidation. **Preserve the W4 invariant:**
-      gallery + link UI + preview share ONE store and live-propagate (react-query cache provides
-      this; the `presetResolver` must derive from the cached list).
-- [ ] `templates`: migrate only if server-backed; if localStorage-only, leave it (not server state).
+- [x] Add `@tanstack/react-query` (+ devtools in dev) to `apps/builder`.
+- [x] `query/queryClient.ts` (conservative editor defaults: `refetchOnWindowFocus: false`,
+      `staleTime: 30s`, `retry: false`) + wrap app in `<QueryClientProvider>` in `main.tsx`
+      (+ dev-only `<ReactQueryDevtools>`). Plus `query/index.ts` barrel + `query/testing.tsx`
+      (`renderWithQuery`/`renderHookWithQuery` test helpers).
+- [x] `query/keys.ts` key factory (`qk.projects`, `qk.projectTree(id)`, `qk.presets(projectId?)`,
+      `qk.form(id)`, `qk.theme(id)` — last two staged for R5).
+- [x] `workspace/useWorkspace.ts` → `useQuery`/`useMutation`; `useProjectTree` uses
+      `enabled: !!projectId`. Deleted every `alive` flag + manual `loading`; `reload()` replaced by
+      a cache `invalidate()` (ExplorerRail/ProjectWorkspace prop renamed `reload`→`invalidate`);
+      project create/rename/remove are mutations that `invalidateQueries`.
+- [x] `presets/usePresets.ts` → `useQuery` + save/remove/promote mutations that `invalidateQueries`.
+      W4 invariant preserved: App calls `usePresets(projectId)` ONCE and threads the resolver down,
+      so gallery + link UI + preview share the single `qk.presets(projectId)` cache entry.
+- [x] `templates`: LEFT as-is — `useUserTemplates` is localStorage-only (not server state).
 
 **Smoke gate (browser, required):** projects/folders/forms CRUD; preset save/delete/promote;
 **edit a preset → its linked field's preview updates live** (the W4 invariant). **DoD:** no `alive`

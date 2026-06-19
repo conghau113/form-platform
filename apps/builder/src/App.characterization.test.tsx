@@ -1,7 +1,10 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import example from "../../../examples/form.v1.json";
 import { App } from "./App";
+// R4: App now reads presets via react-query, so it must render under a QueryClientProvider.
+// `renderWithQuery` adds that wrapper; the assertions below are unchanged from R0.
+import { renderWithQuery } from "./query/testing";
 
 /**
  * Characterization tests (Refactor R0). These PIN the current behaviour of the parts of
@@ -64,7 +67,7 @@ describe("App — persistence & lifecycle characterization (R0)", () => {
   it("reports not-dirty at mount", async () => {
     mockFetch();
     const onDirtyChange = vi.fn();
-    render(<App onDirtyChange={onDirtyChange} />);
+    renderWithQuery(<App onDirtyChange={onDirtyChange} />);
     await waitFor(() => expect(onDirtyChange).toHaveBeenCalled());
     // The very first signal is the clean baseline: history cursor === savedIndex, tokens unchanged.
     expect(onDirtyChange.mock.calls[0][0]).toBe(false);
@@ -74,7 +77,7 @@ describe("App — persistence & lifecycle characterization (R0)", () => {
     const fetchFn = mockFetch();
     let save: (() => Promise<boolean>) | undefined;
     const onSaved = vi.fn();
-    render(<App provideSave={(fn) => (save = fn)} onSaved={onSaved} />);
+    renderWithQuery(<App provideSave={(fn) => (save = fn)} onSaved={onSaved} />);
     await waitFor(() => expect(save).toBeTypeOf("function"));
 
     let result: boolean | undefined;
@@ -94,7 +97,7 @@ describe("App — persistence & lifecycle characterization (R0)", () => {
     const fetchFn = mockFetch({ saveFormFails: true });
     let save: (() => Promise<boolean>) | undefined;
     const onSaved = vi.fn();
-    render(<App provideSave={(fn) => (save = fn)} onSaved={onSaved} />);
+    renderWithQuery(<App provideSave={(fn) => (save = fn)} onSaved={onSaved} />);
     await waitFor(() => expect(save).toBeTypeOf("function"));
 
     let result: boolean | undefined;
@@ -112,7 +115,7 @@ describe("App — persistence & lifecycle characterization (R0)", () => {
 
   it("loads the form AND its theme on mount when given a formId", async () => {
     const fetchFn = mockFetch({ themeExists: true });
-    render(<App formId="contact-request" />);
+    renderWithQuery(<App formId="contact-request" />);
     await waitFor(() => {
       const urls = fetchFn.mock.calls.map(([u]) => String(u));
       expect(urls.some((u) => u.includes("/forms/contact-request"))).toBe(true);
@@ -129,7 +132,7 @@ describe("App — keyboard shortcut wiring characterization (R0)", () => {
   it("installs a global keydown listener and removes it on unmount", () => {
     const add = vi.spyOn(window, "addEventListener");
     const remove = vi.spyOn(window, "removeEventListener");
-    const { unmount } = render(<App />);
+    const { unmount } = renderWithQuery(<App />);
     const installed = add.mock.calls.find(([type]) => type === "keydown");
     expect(installed).toBeDefined();
     unmount();

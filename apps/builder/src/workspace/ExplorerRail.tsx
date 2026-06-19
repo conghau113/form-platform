@@ -32,8 +32,8 @@ export interface ExplorerRailProps {
   tree: ProjectTree | null;
   loading: boolean;
   error: string | null;
-  /** Refetch the tree after a mutation (rename/move/delete/create). */
-  reload: () => Promise<void>;
+  /** Invalidate the cached tree after a mutation (rename/move/delete/create) → refetch. */
+  invalidate: () => Promise<void>;
   /** Form currently open in the editor pane — highlighted in the tree. */
   activeFormId?: string;
   collapsed?: boolean;
@@ -42,8 +42,9 @@ export interface ExplorerRailProps {
 /**
  * Persistent Explorer rail (master side of the project workspace). Renders the folder/form tree
  * (antd `Tree` over {@link buildTree}) with single-click-to-open, drag-to-move, and a right-click
- * context menu. Tree data + `reload` are owned by the parent shell; this component is otherwise
- * self-contained (CRUD round-trips through {@link api} then `reload`s). Collapsible to a thin bar.
+ * context menu. Tree data + `invalidate` are owned by the parent shell; this component is otherwise
+ * self-contained (CRUD round-trips through {@link api} then `invalidate`s the cache). Collapsible
+ * to a thin bar.
  */
 export function ExplorerRail({
   projectId,
@@ -51,7 +52,7 @@ export function ExplorerRail({
   tree,
   loading,
   error,
-  reload,
+  invalidate,
   activeFormId,
   collapsed = false,
 }: ExplorerRailProps) {
@@ -68,7 +69,7 @@ export function ExplorerRail({
     setPrompt(p);
   }
   function run(action: Promise<unknown>) {
-    action.then(reload).catch((e) => message.error((e as Error).message));
+    action.then(invalidate).catch((e) => message.error((e as Error).message));
   }
 
   // --- folder actions ---
@@ -110,7 +111,7 @@ export function ExplorerRail({
             projectId,
             folderId,
           });
-          await reload();
+          await invalidate();
           openForm(saved.id);
         } catch (e) {
           message.error((e as Error).message);
@@ -123,7 +124,7 @@ export function ExplorerRail({
       .loadForm(id)
       .then((src) => api.saveForm(duplicateForm(src), { projectId, folderId }))
       .then(async (saved) => {
-        await reload();
+        await invalidate();
         openForm(saved.id);
       })
       .catch((e) => message.error((e as Error).message));
