@@ -24,3 +24,9 @@ pnpm-debug.log*
 Thumbs.db
 .idea/
 *.local
+
+# windows / git-bash crash dumps
+*.stackdump
+
+# local scratch / AI helper output (not part of the project)
+project-tree-for-ai.txt
