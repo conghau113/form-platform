@@ -54,6 +54,14 @@ export const permissionSchema = z.object({
   editRoles: z.array(z.string()).optional(),
 });
 
+/** Per-node localization overrides: attribute name → locale code → translated string
+ *  (e.g. `{ label: { vi: "Thư điện tử" }, placeholder: { vi: "ban@vidu.com" } }`).
+ *  Resolved at render by form-core's `localizeForm`; NEVER eval. Additive/optional ⇒ an
+ *  absent map means "use the authored default string" (the default locale), so old JSON
+ *  keeps parsing and runtime is unchanged when no locale is requested. */
+export const i18nMapSchema = z.record(z.string(), z.record(z.string(), z.string()));
+export type I18nMap = z.infer<typeof i18nMapSchema>;
+
 /** Rule severity: `error` (default) blocks submit; `warning` never blocks — it only
  *  surfaces as a non-blocking hint (antd `validateStatus="warning"`). */
 export const validationSeveritySchema = z.enum(["error", "warning"]);
@@ -203,6 +211,10 @@ const commonFields = {
    *  own `patch`. Meaningful only alongside {@link presetId}. Additive: old JSON without this
    *  key keeps parsing, so no formVersion bump is required. */
   overrides: z.record(z.string(), z.unknown()).optional(),
+  /** Localized overrides of this field's text attributes (`label`/`placeholder`/`helpText`/
+   *  `tooltip`/`extra`). See {@link i18nMapSchema}. Additive: old JSON without this key keeps
+   *  parsing, so no formVersion bump is required. */
+  i18n: i18nMapSchema.optional(),
 };
 
 export const textFieldSchema = z.object({
@@ -284,6 +296,9 @@ export const numberFieldSchema = z.object({
 export const optionSchema = z.object({
   label: z.string(),
   value: z.union([z.string(), z.number()]),
+  /** Localized overrides of this option's `label`, keyed by locale code (e.g.
+   *  `{ vi: "Nam" }`). Resolved by form-core's `localizeForm`. Additive/optional. */
+  i18n: z.record(z.string(), z.string()).optional(),
 });
 
 /** A hierarchical option for cascader / tree-select: an option that may carry
@@ -556,6 +571,8 @@ export const displayTextFieldSchema = z.object({
   layout: layoutSchema.optional(),
   visibleWhen: conditionSchema.optional(),
   permissions: permissionSchema.optional(),
+  /** Localized overrides of `content`, keyed by locale. See {@link i18nMapSchema}. */
+  i18n: i18nMapSchema.optional(),
 });
 
 export type DisplayTextField = z.infer<typeof displayTextFieldSchema>;
@@ -588,6 +605,7 @@ export interface GroupField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -616,6 +634,7 @@ export interface ArrayField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   itemFields: FieldNode[];
 }
 
@@ -638,6 +657,7 @@ export interface TabPaneField {
   label: string;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -646,6 +666,7 @@ export interface TabsField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: TabPaneField[];
 }
 
@@ -654,6 +675,7 @@ export interface CollapsePanelField {
   label: string;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -664,6 +686,7 @@ export interface CollapseField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: CollapsePanelField[];
 }
 
@@ -673,6 +696,7 @@ export interface CardField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -683,6 +707,7 @@ export interface GridField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -692,6 +717,7 @@ export interface SpaceField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -702,6 +728,7 @@ export interface StepField {
   description?: string;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -710,6 +737,7 @@ export interface StepsField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: StepField[];
 }
 
@@ -733,6 +761,7 @@ export interface FormLayoutField {
   layout?: z.infer<typeof layoutSchema>;
   visibleWhen?: z.infer<typeof conditionSchema>;
   permissions?: z.infer<typeof permissionSchema>;
+  i18n?: I18nMap;
   children: FieldNode[];
 }
 
@@ -760,6 +789,7 @@ export const groupFieldSchema: z.ZodType<GroupField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -779,6 +809,7 @@ export const arrayFieldSchema: z.ZodType<ArrayField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     itemFields: z.array(fieldNodeSchema),
   }),
 );
@@ -789,6 +820,7 @@ export const tabPaneFieldSchema: z.ZodType<TabPaneField> = z.lazy(() =>
     label: z.string(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -799,6 +831,7 @@ export const tabsFieldSchema: z.ZodType<TabsField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(tabPaneFieldSchema),
   }),
 );
@@ -809,6 +842,7 @@ export const collapsePanelFieldSchema: z.ZodType<CollapsePanelField> = z.lazy(()
     label: z.string(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -820,6 +854,7 @@ export const collapseFieldSchema: z.ZodType<CollapseField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(collapsePanelFieldSchema),
   }),
 );
@@ -831,6 +866,7 @@ export const cardFieldSchema: z.ZodType<CardField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -842,6 +878,7 @@ export const gridFieldSchema: z.ZodType<GridField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -853,6 +890,7 @@ export const spaceFieldSchema: z.ZodType<SpaceField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -864,6 +902,7 @@ export const stepFieldSchema: z.ZodType<StepField> = z.lazy(() =>
     description: z.string().optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -874,6 +913,7 @@ export const stepsFieldSchema: z.ZodType<StepsField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(stepFieldSchema),
   }),
 );
@@ -889,6 +929,7 @@ export const formLayoutFieldSchema: z.ZodType<FormLayoutField> = z.lazy(() =>
     layout: layoutSchema.optional(),
     visibleWhen: conditionSchema.optional(),
     permissions: permissionSchema.optional(),
+    i18n: i18nMapSchema.optional(),
     children: z.array(fieldNodeSchema),
   }),
 );
@@ -937,6 +978,9 @@ export const formSchema = z.object({
   /** Form-wide antd layout (label/wrapper cols, horizontal/vertical…). Optional
    *  → additive; renderers fall back to their historical defaults when absent. */
   layoutProps: formLayoutPropsSchema.optional(),
+  /** Localized overrides of the form's own text (currently `title`), e.g.
+   *  `{ title: { vi: "…" } }`. See {@link i18nMapSchema}. Additive/optional. */
+  i18n: i18nMapSchema.optional(),
   fields: z.array(fieldNodeSchema),
   settings: z
     .object({

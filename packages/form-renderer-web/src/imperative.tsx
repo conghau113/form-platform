@@ -18,6 +18,10 @@ interface BasePopupOptions {
   access?: AccessContext;
   /** Injectable `fetch` forwarded to the wrapped `FormRenderer` (auth headers / custom base). */
   fetcher?: typeof fetch;
+  /** Render the popup form in this locale (i18n), forwarded to the wrapped `FormRenderer`. */
+  locale?: string;
+  /** Fallback locale used when `locale` lacks a translation (forwarded to `FormRenderer`). */
+  fallbackLocale?: string;
   okText?: string;
   cancelText?: string;
 }
@@ -75,6 +79,8 @@ function PopupHost(props: {
       initialValues={opts.initialValues}
       access={opts.access}
       fetcher={opts.fetcher}
+      locale={opts.locale}
+      fallbackLocale={opts.fallbackLocale}
       onSubmit={(values) => settle(values)}
     />
   );

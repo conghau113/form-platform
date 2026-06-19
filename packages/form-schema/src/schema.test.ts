@@ -1089,3 +1089,66 @@ describe("layout containers (additive)", () => {
     expect(childrenOf(text)).toBeNull();
   });
 });
+
+describe("i18n overrides (additive, Phase P)", () => {
+  it("accepts per-node, per-option, container and form-level i18n maps", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "i18n",
+      title: "Survey",
+      i18n: { title: { vi: "Khảo sát" } },
+      fields: [
+        {
+          type: "text",
+          name: "email",
+          label: "Email",
+          placeholder: "you@example.com",
+          i18n: { label: { vi: "Thư điện tử" }, placeholder: { vi: "ban@vidu.com" } },
+        },
+        {
+          type: "radio",
+          name: "gender",
+          label: "Gender",
+          options: [
+            { label: "Male", value: "m", i18n: { vi: "Nam" } },
+            { label: "Female", value: "f", i18n: { vi: "Nữ" } },
+          ],
+        },
+        {
+          type: "card",
+          title: "Details",
+          i18n: { title: { vi: "Chi tiết" } },
+          children: [
+            { type: "display-text", content: "Note", i18n: { content: { vi: "Ghi chú" } } },
+          ],
+        },
+      ],
+    });
+    expect(out.i18n).toEqual({ title: { vi: "Khảo sát" } });
+    expect(out.fields[0]).toMatchObject({ i18n: { label: { vi: "Thư điện tử" } } });
+    const radio = out.fields[1] as { options: Array<{ i18n?: Record<string, string> }> };
+    expect(radio.options[0].i18n).toEqual({ vi: "Nam" });
+  });
+
+  it("still parses old JSON with no i18n anywhere (additive — no formVersion bump)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "plain",
+      title: "Plain",
+      fields: [{ type: "text", name: "n", label: "N" }],
+    });
+    expect(out.i18n).toBeUndefined();
+    expect((out.fields[0] as { i18n?: unknown }).i18n).toBeUndefined();
+  });
+
+  it("rejects a malformed i18n map (not an object of locale strings)", () => {
+    expect(() =>
+      formSchema.parse({
+        formVersion: 3,
+        id: "bad-i18n",
+        title: "Bad",
+        fields: [{ type: "text", name: "n", label: "N", i18n: { label: "not-a-map" } }],
+      }),
+    ).toThrow();
+  });
+});

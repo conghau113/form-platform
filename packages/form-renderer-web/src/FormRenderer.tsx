@@ -12,6 +12,7 @@ import {
   dataSourceDeps,
   effectiveVisible,
   isVisible,
+  localizeForm,
   type PresetResolver,
   resolveLinkedFields,
 } from "@org/form-core";
@@ -108,6 +109,14 @@ export interface FormRendererProps {
    *  point at a proxy base, e.g. `(u, o) => fetch(u, { ...o, headers: { Authorization } })`.
    *  Absent ⇒ the global `fetch` is used, so runtime is unchanged. */
   fetcher?: typeof fetch;
+  /** Render the form in this locale (i18n — Phase P): every text attribute carrying an `i18n`
+   *  override (labels, placeholders, option labels, container titles, display-text, the form
+   *  title) is resolved to its translation via form-core's `localizeForm`. Absent ⇒ the authored
+   *  default strings render, so runtime is unchanged. */
+  locale?: string;
+  /** Locale used when `locale` has no translation for a given string (before falling back to the
+   *  authored default). Only meaningful alongside `locale`. */
+  fallbackLocale?: string;
 }
 
 /** Imperative handle exposed via `ref`. `submit()` programmatically triggers validation +
@@ -131,13 +140,18 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     readPretty = false,
     presetResolver,
     fetcher,
+    locale,
+    fallbackLocale,
   },
   ref,
 ) {
   const form: FormSchema = useMemo(() => {
     const migrated = migrate(schema);
-    return presetResolver ? resolveLinkedFields(migrated, presetResolver).form : migrated;
-  }, [schema, presetResolver]);
+    const linked = presetResolver ? resolveLinkedFields(migrated, presetResolver).form : migrated;
+    // i18n resolves last so a localized preset/linked field is translated too. No locale ⇒
+    // the authored strings pass through unchanged.
+    return locale ? localizeForm(linked, locale, fallbackLocale) : linked;
+  }, [schema, presetResolver, locale, fallbackLocale]);
 
   // Self-contained QueryClient so consumers don't have to provide one. Retries
   // are off so dataSource error states surface immediately. Created once.
