@@ -111,7 +111,7 @@ PASS after adding the form‑core changeset)
 
 ---
 
-## Phase R7 — Form Layout container  ⬜
+## Phase R7 — Form Layout container  ✅
 **Branch:** `feat/r7-form-layout` · **Packages:** `form-schema` + `form-renderer-web` (changeset) + builder
 
 **Why:** When a form grows, authors want a region with horizontal/vertical/inline label layout
@@ -129,32 +129,45 @@ controls already read for rendering; **native ignores** (single column) — neve
 > side is again a declarative registry entry (`named:false`, `CONTAINER` behavior).
 
 **Steps**
-- [ ] `form-schema/src/schema.ts` — `formLayoutFieldSchema` (container: `type:"form-layout"`,
+- [x] `form-schema/src/schema.ts` — `formLayoutFieldSchema` (container: `type:"form-layout"`,
       `children: z.array(fieldNodeSchema)`, `layout?`, `labelCol?`, `wrapperCol?`, `labelAlign?`,
       `visibleWhen?`/`permissions?` like other containers); add to the `fieldNodeSchema` union
       (`:834`); export type.
-- [ ] `form-schema/src/containers.ts` — add `"form-layout"` to the `isLayoutContainer` guard +
+- [x] `form-schema/src/containers.ts` — add `"form-layout"` to the `isLayoutContainer` guard +
       `LayoutContainerField` union so value walks treat it as transparent.
-- [ ] `schema.test` + compat test (old JSON still parses).
-- [ ] `form-core` — confirm `buildShape`/`walkLeaves` descend it transparently via
+- [x] `schema.test` + compat test (old JSON still parses).
+- [x] `form-core` — confirm `buildShape`/`walkLeaves` descend it transparently via
       `isLayoutContainer` (mirror `group`, `validation.ts:322`); add a test (children's values
       stay flat, validation descends).
-- [ ] `form-renderer-web` — add a **dedicated `form-layout` branch in `renderNode` BEFORE** the
+- [x] `form-renderer-web` — add a **dedicated `form-layout` branch in `renderNode` BEFORE** the
       existing generic `isLayoutContainer` fallback (`FormRenderer.tsx:489`, which only paints a
       plain transparent Row). It provides a `LayoutContext` carrying `layout`/`labelCol`; the leaf
       `Form.Item` consumes it (fallback to the form default `layoutProps`). Add a render test (a
       field inside an inline layout gets inline label props).
-- [ ] builder `field-registry/registry.ts` — entry `category:"Layouts"`, `behavior: CONTAINER`,
+- [x] builder `field-registry/registry.ts` — entry `category:"Layouts"`, `behavior: CONTAINER`,
       `named:false`, palette‑visible; `defaults` seed 1–2 children (like tabs/collapse) +
       `settings:[{layout segmented}, {labelCol number}]`.
-- [ ] builder tests — `field-registry.test.ts`/palette + create round‑trip.
-- [ ] Changeset: `form-schema` + `form-renderer-web` **minor**; builder none.
+- [x] builder tests — `field-registry.test.ts`/palette + create round‑trip.
+- [x] Changeset: `form-schema` + `form-renderer-web` **minor**; builder none.
 
-**DoD:** typecheck + all tests green, biome clean, changeset, reviewer PASS. **Verify:** drop a
-Form Layout, set it to "inline", add two inputs → labels render inline on the canvas/preview;
-saved JSON keeps children's values flat.
+> **Naming/impl notes (2026‑06‑19):** the antd orientation enum ships as **`formLayout`** (not
+> `layout`) — every container already carries a responsive `layout: layoutSchema` (colSpan), so
+> reusing `layout` would collide; the container keeps the responsive `layout` for consistency.
+> `labelCol`/`wrapperCol` stay JSON‑authorable (no scalar col setter — the root Form's
+> `FORM_SETTINGS` omits them too). antd `Form.Item` supports per‑item `layout` (h/v) since 5.18
+> (installed 5.29.3); `"inline"` maps to per‑item horizontal. form‑core needed NO source change
+> (descends via `isLayoutContainer`); every leaf `Form.Item` now renders through a new
+> `LayoutFormItem` that reads a `LayoutContext` (field `decoratorProps` win; no region ⇒ bare
+> `Form.Item`, runtime byte‑for‑byte unchanged).
 
-Commit: `__________`
+**DoD:** typecheck green (R7 pkgs; only failure = unrelated `@app/api` Prisma EPERM on Windows);
+form‑schema 61/61, form‑core 101/101, renderer containers 9/9 + base 5/5 (isolated), builder
+field‑registry 10/10 (the 4 builder + 1 renderer failures in the full parallel run are the known
+under‑load flakes — pass in isolation); biome clean on changed files; changeset present; reviewer
+PASS (no required fixes). **Owner verify in browser:** drop a Form Layout, set it to "inline", add
+two inputs → labels render inline on the canvas/preview; saved JSON keeps children's values flat.
+
+Commit: `c9e1b76` (branch `feat/r7-form-layout`, off `feat/r2-display-text`; reviewer PASS)
 
 ---
 
