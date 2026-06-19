@@ -38,6 +38,10 @@ apps/
   file cheap for an agent to read.
 - Tooling: pnpm + Turborepo, Biome (lint+format), Vitest (test), Changesets (release).
 - Renderer changes must be ADDITIVE — older schema versions keep rendering.
+- App structure: each app has an `ARCHITECTURE.md` (`apps/builder`, `apps/api`); the conventions +
+  phased plan live in `docs/refactor/{frontend-architecture,refactor-plan}.md` and the
+  `feature-module` skill. Builder = feature folders (no new root `src/*.tsx`) + react-query
+  (`fetch` only in `client.ts`); api = controller/service/repo + DTOs for non-contract bodies.
 
 ## Commands
 - `pnpm install` · `pnpm build` (turbo) · `pnpm typecheck` · `pnpm test`

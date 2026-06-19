@@ -12,8 +12,9 @@
 ## Progress log
 
 > **RESUME HERE (next session):** Branch `refactor/r0-safety-net` (off `feat/builder-ux-g3-u1` =
-> main+3; NOT bare main, since G3+U1 is unmerged). R0–R6 done & committed (`1d64574`, `5d44a53`,
-> `1bc12c4`, R3 `cefe4fc`, R4 `2e749fc`, R5 `004a8a2`, R6 = this commit). **R4 done & COMMITTED** (reviewer PASS, no blockers,
+> main+3; NOT bare main, since G3+U1 is unmerged). **R0–R7 ALL done & committed** (`1d64574`,
+> `5d44a53`, `1bc12c4`, R3 `cefe4fc`, R4 `2e749fc`, R5 `004a8a2`, R6 `2e1dbad`, R7 = this commit).
+> **R4 done & COMMITTED** (reviewer PASS, no blockers,
 > 1 nit folded — package.json alpha order): `@tanstack/react-query` added to the builder; workspace
 > (`useProjects`/`useProjectTree`) + presets (`usePresets`) migrated off hand-rolled
 > `useState`+`useEffect`+`alive` to `useQuery`/`useMutation` with `invalidateQueries`. New
@@ -25,11 +26,16 @@
 > ONLY in the 3 `client.ts`. **R6 done & COMMITTED** (reviewer PASS, api 47/47): rewrote stale
 > `apps/api/ARCHITECTURE.md`; global `ValidationPipe` + class-validator DTOs for non-contract bodies
 > (projects/folders/members/form-move); contract bodies (form/theme/preset) stay schema-validated;
-> new `dto-validation.test.ts` pins 400-at-edge. **R3–R5 browser smoke still pending owner.**
-> **Next = R7** (guardrails — discourage new root `apps/builder/src/*.tsx`; update
-> `apps/builder/ARCHITECTURE.md` + repo-map skill; cross-link the refactor docs from AGENTS.md).
-> NOTE: `apps/api` typecheck/build runs `prisma generate` which hits a Windows Prisma EPERM — run
-> `tsc --noEmit` directly to typecheck the api; build the builder alone for FE.
+> new `dto-validation.test.ts` pins 400-at-edge. **R7 done & COMMITTED** (`structure.test.ts` guard
+> against new root `src/*.tsx`; rewrote `apps/builder/ARCHITECTURE.md`; updated repo-map skill;
+> cross-linked from AGENTS.md). **REFACTOR R0–R7 COMPLETE.**
+>
+> **Remaining before merge (owner):** (1) browser smoke for R3–R5 — undo/redo, copy/paste, kbd
+> move, delete, save→clean+rail refresh, load→form+theme, import/export, unsaved-changes guard,
+> projects/folders/forms CRUD, preset save/delete/promote, edit-preset→linked-preview-updates-live.
+> (2) Merge `refactor/r0-safety-net` → `main`. Branch is off `feat/builder-ux-g3-u1` (=main+3, G3+U1
+> unmerged) — decide that ordering at merge time. NOTE: `apps/api` typecheck/build runs `prisma
+> generate` (Windows Prisma EPERM) — run `tsc --noEmit` directly; build the builder alone for FE.
 >
 > **Verification (2026-06-19):** builder prod build green (R3 3353 → R4 3370 modules); full suite
 > 255/255; R3 real-browser smoke at `/projects/x/forms/y` (no API needed — App seeds the example
@@ -47,7 +53,7 @@
 | R4 — react-query workspace/presets | ✅ DONE | `refactor/r0-safety-net` | `@tanstack/react-query` added; `query/` module (queryClient + `qk` keys + barrel + test helpers); `main.tsx` wraps `QueryClientProvider` (+ dev Devtools). `useProjects`/`useProjectTree`/`usePresets` → `useQuery`+`useMutation`; deleted every `alive` flag + manual `loading`/`reload` → `invalidateQueries`. W4 invariant preserved (one cache entry per `qk.presets(projectId)`, App calls `usePresets` once). presets test → stateful fake server + provider wrapper; R0 characterization wrapped in `renderWithQuery`, assertions unchanged. typecheck clean, 255/255, prod build green (3370 modules). reviewer PASS. Browser smoke pending owner. |
 | R5 — react-query form save/load | ✅ DONE | `refactor/r0-safety-net` | `useFormPersistence` save → `useMutation` (snapshot {index,tokens} → POST form→theme via client → onSuccess commits clean baselines + invalidates `qk.form(id)`/`qk.theme(id)` + `onSaved?.()`). `onSave(): Promise<boolean>` preserved (nav-guard ref + Save button). Load stays imperative (resets history). `fetch(` now ONLY in editor/workspace/presets `client.ts`. typecheck clean, 255/255 (R0 characterization 5/5 unchanged), prod build green. reviewer PASS. Browser smoke pending owner. |
 | R6 — api polish | ✅ DONE | `refactor/r0-safety-net` | Rewrote stale `apps/api/ARCHITECTURE.md` (Prisma + controller/service/repo layering + RBAC `requireAccess` + the two validation gates). Added `class-validator`/`class-transformer` + global `ValidationPipe({whitelist,transform,exposeUnsetFields:false})`. class-validator DTOs under `modules/*/dto/` for NON-contract bodies (projects/folders/members/form-move); contract bodies (form/theme/preset) stay `@Body() unknown` → schema `migrate()`/parse (no duplication). New `dto-validation.test.ts` proves 400-at-edge + whitelist strip + `parentId` presence invariant. api 47/47 (+6), tsc clean, biome clean. reviewer PASS. |
-| R7 — guardrails | ⏳ next | — | |
+| R7 — guardrails | ✅ DONE | `refactor/r0-safety-net` | `structure.test.ts` guard (no new root `src/*.tsx`); rewrote `apps/builder/ARCHITECTURE.md` top-level layout → feature-folder map + react-query section; updated `repo-map` skill (builder folders + api Prisma/DTO); cross-linked refactor docs from `AGENTS.md`. builder 256/256 (1 known load-flake isolated-passes). **R0–R7 COMPLETE.** |
 
 ## Structure decision (2026-06-19): keep FLAT feature folders, reject full FSD
 
@@ -279,11 +285,18 @@ validated by `@org/form-schema`; a class-validator DTO would duplicate the contr
 
 ## Phase R7 — Guardrails so the debt doesn't return
 
-- [ ] Discourage new top-level `apps/builder/src/*.tsx` (a Biome `noRestrictedImports`-style rule
-      or a CI note).
-- [ ] Update [apps/builder/ARCHITECTURE.md](../../apps/builder/ARCHITECTURE.md) with the new
-      feature-folder map; update the `repo-map` skill if folder names changed.
-- [ ] Cross-link these docs from `AGENTS.md` (one line).
+- [x] Discourage new top-level `apps/builder/src/*.tsx` — a **test guard** (`src/structure.test.ts`)
+      asserts root non-test `*.tsx` ⊆ `{App.tsx, main.tsx}`; a stray `src/Foo.tsx` fails the suite by
+      name (stronger than a Biome import rule, which can't see file placement).
+- [x] Updated [apps/builder/ARCHITECTURE.md](../../apps/builder/ARCHITECTURE.md) — top-level layout
+      is now the feature-folder map (editor/canvas/palette/presets/workspace/query/…) + a
+      "react-query only / `fetch` in `client.ts`" section. Updated the `repo-map` skill's builder +
+      api rows (builder feature folders; api Prisma + controller/service/repo + DTOs).
+- [x] Cross-linked the refactor docs + per-app `ARCHITECTURE.md` from `AGENTS.md` (one bullet under
+      Conventions).
+
+**DONE.** builder 256/256 (the new structure test; 1 PropertyPanel.validation severity test is the
+known load-flake — 14/14 isolated). typecheck + biome clean. **Refactor R0–R7 COMPLETE.**
 
 ---
 

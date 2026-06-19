@@ -33,8 +33,8 @@ its own `ARCHITECTURE.md` with a file-by-file table — open that for detail.
 ## Apps (`apps/`)
 | App | Owns |
 |---|---|
-| `builder` | drag-drop editor (Vite). Big areas now foldered: **`field-registry/`** (meta registry) and **`PropertyPanel/`** (field editor). See `apps/builder/ARCHITECTURE.md` |
-| `api` | NestJS backend, file-backed. **Feature modules under `src/modules/<feature>/`** + `src/common/file-store.ts`. See `apps/api/ARCHITECTURE.md` |
+| `builder` | drag-drop editor (Vite). **Every feature is a folder** (only `App.tsx` + `main.tsx` at root): `editor/` (state + persistence hooks + the form/theme `client.ts`), `canvas/`, `palette/`, `presets/`, `workspace/`, `query/` (react-query), `theme/`/`templates/`/`workflow/`/`datasource/`/`reactions/`/`lib/`, plus `field-registry/` + `PropertyPanel/`. Server state via react-query (`fetch` only in `client.ts`). See `apps/builder/ARCHITECTURE.md` |
+| `api` | NestJS backend, **Prisma** (SQLite dev) behind repo interfaces. Controller→service→repo layering; **feature modules under `src/modules/<feature>/`** with DTOs in `dto/` for non-contract bodies + global `ValidationPipe`; RBAC via `ProjectsService.requireAccess`. See `apps/api/ARCHITECTURE.md` |
 
 ## "I need to change X" → go here
 - A leaf control's antd UI → `packages/form-renderer-web/src/controls/FieldControl.tsx`

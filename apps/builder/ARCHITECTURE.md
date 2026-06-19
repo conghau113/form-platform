@@ -4,21 +4,36 @@ The drag-drop form editor (Vite + antd + dnd-kit). Authors a schema tree, previe
 via `@org/form-renderer-web`, and saves through `@app/api`.
 
 ## Top-level layout (`src/`)
-| Concern | File / folder |
+Every feature is a **folder with an `index.ts` barrel** (refactor R1–R5). The only files allowed at
+the root of `src/` are `App.tsx` (the shell) and `main.tsx` (the entry); a new feature goes in a new
+folder, never a new top-level `*.tsx` (the `feature-module` skill rule #1, enforced by
+`structure.test.ts`).
+
+| Concern | Folder / file |
 |---|---|
-| App shell, selection state, save/load wiring | `App.tsx` |
-| Palette of draggable field types | `Palette.tsx` |
-| Design canvas (renders the form in designMode) | `DesignCanvas.tsx` |
-| dnd-kit drag controller | `useDragon.ts` |
-| Undo/redo + JSON import/export | `history.ts`, `io.ts` |
-| Form templates gallery | `templates.ts`, `TemplateGallery.tsx` |
-| Theme editor | `ThemeEditor.tsx` |
-| Workflow editor (early) | `WorkflowEditor.tsx`, `workflow-model.ts` |
-| Tree engine (immutable node ops, paths, insert guard) | `engine/` |
+| App shell — wiring + 3-pane layout only (logic lives in `editor/`) | `App.tsx` |
+| Entry — router (`createBrowserRouter`) + `QueryClientProvider` | `main.tsx` |
+| Editor state + persistence hooks + the only form/theme `fetch` | `editor/` (`useFormEditor`, `useEditorShortcuts`, `useFormPersistence`, `useNavigationGuard`, `history`, `client.ts`) |
+| Design canvas + `DesignerContext` + dnd-kit drag controller | `canvas/` (`DesignCanvas`, `DesignerContext`, `useDragon`) |
+| Palette of draggable field types | `palette/` |
+| Preset gallery + linked-field control + `fetch` client | `presets/` |
+| Workspace explorer (projects/folders), routes + `fetch` client | `workspace/` |
+| react-query — `QueryClient`, `qk` key factory, test helpers | `query/` |
+| Theme editor · templates gallery · workflow editor (early) | `theme/` · `templates/` · `workflow/` |
+| Bespoke editors reused by the panel | `datasource/`, `reactions/` |
+| Undo/redo wrapper + JSON import/export + UI pins | `lib/` (`io`, `pins`) |
+| Tree engine (immutable node ops, paths, insert guard, geometry) | `engine/` |
 | Outline / JSON / settings / view side panels | `workbench/` |
-| Bespoke editors reused by the panel | `DataSourceEditor.tsx`, `ReactionsEditor.tsx`, `TreeOptionsEditor.tsx` |
 | **Component registry** (meta: palette/seed/settings/behavior) | `field-registry/` |
 | **Property panel** (the right-hand field editor) | `PropertyPanel/` |
+
+## Data fetching — react-query only
+Server state (workspace, presets, form/theme save) goes through react-query: a feature's
+`client.ts` (the **only** place `fetch` is allowed) → a `useQuery`/`useMutation` hook → the
+component. Keys come from `query/keys.ts` (`qk`); mutations `invalidateQueries` rather than
+re-fetching by hand. There is no `useState`+`useEffect`+`alive`-flag fetching and no manual
+`reload()` left in the tree (refactor R4/R5). `fetch(` appears only in `editor/client.ts`,
+`workspace/client.ts`, and `presets/client.ts`.
 
 ## `field-registry/` — the meta-driven registry
 Single source of truth the builder derives palette, model factories, property panel,
