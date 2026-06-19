@@ -1,7 +1,9 @@
 import { type FormSchema, migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme } from "@org/form-theme";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { message } from "antd";
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import { qk } from "../query";
 import { getForm, getTheme, postForm, postTheme } from "./client";
 
 export interface FormPersistenceArgs {
@@ -32,9 +34,18 @@ export interface FormPersistence {
   onLoad: (id?: string) => Promise<void>;
 }
 
+/** What a successful save commits: the server id plus the form/theme snapshot taken at save time
+ *  (so the clean baselines reflect exactly what was persisted, not a later edit). */
+interface SaveResult {
+  id: string;
+  savedIndex: number;
+  savedTokens: DesignTokens;
+}
+
 /** Owns design tokens + the saved (clean) baselines and the form/theme save/load round-trips.
- *  Extracted from `App` in refactor R3; `fetch` now lives in `./client`. Plain hook for now
- *  (the react-query swap is R5) so this stays behaviour-only. */
+ *  Extracted from `App` in R3. R5: the save round-trip is a react-query `useMutation` that
+ *  invalidates the saved form/theme cache entries on success; `fetch` lives only in `./client`.
+ *  Load stays imperative — it resets editor history, which a passive cached query must not do. */
 export function useFormPersistence({
   json,
   historyIndex,
@@ -43,36 +54,54 @@ export function useFormPersistence({
   formId,
   onSaved,
 }: FormPersistenceArgs): FormPersistence {
+  const qc = useQueryClient();
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
   // History cursor / tokens at the last load/save — the clean baselines for the dirty check.
   const [savedIndex, setSavedIndex] = useState(0);
   const [savedTokens, setSavedTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
 
+  const saveMutation = useMutation<SaveResult, Error>({
+    mutationFn: async () => {
+      // Snapshot the state being persisted so the clean baselines match it exactly.
+      const snapshotIndex = historyIndex;
+      const snapshotTokens = tokens;
+      const res = await postForm(json);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`Save failed: ${data.message ?? res.statusText}`);
+      // Persist the theme alongside the form under the same id.
+      const themeRes = await postTheme(data.id, snapshotTokens);
+      if (!themeRes.ok) {
+        const themeData = await themeRes.json().catch(() => ({}));
+        throw new Error(`Theme save failed: ${themeData.message ?? themeRes.statusText}`);
+      }
+      return { id: data.id, savedIndex: snapshotIndex, savedTokens: snapshotTokens };
+    },
+    onSuccess: ({ id, savedIndex: index, savedTokens: themeSnapshot }) => {
+      // Mark the persisted state clean, drop any stale cached reads of this form/theme, and let
+      // the workspace rail refresh its titles (the tree invalidation lives behind `onSaved`).
+      setSavedIndex(index);
+      setSavedTokens(themeSnapshot);
+      qc.invalidateQueries({ queryKey: qk.form(id) });
+      qc.invalidateQueries({ queryKey: qk.theme(id) });
+      onSaved?.();
+      message.success(`Saved "${id}" (form + theme)`);
+    },
+    onError: (error) => {
+      // Tagged failures (`Save failed` / `Theme save failed`) already read well; anything else
+      // (e.g. a network reject) gets the same `Save failed:` prefix the inline version used.
+      const msg = error.message;
+      const tagged = msg.startsWith("Save failed") || msg.startsWith("Theme save failed");
+      message.error(tagged ? msg : `Save failed: ${msg}`);
+    },
+  });
+
   /** Save form + theme. Returns true on success so the navigation guard can proceed. */
   async function onSave(): Promise<boolean> {
     try {
-      const res = await postForm(json);
-      const data = await res.json();
-      if (!res.ok) {
-        message.error(`Save failed: ${data.message ?? res.statusText}`);
-        return false;
-      }
-      // Persist the theme alongside the form under the same id.
-      const themeRes = await postTheme(data.id, tokens);
-      if (!themeRes.ok) {
-        const themeData = await themeRes.json().catch(() => ({}));
-        message.error(`Theme save failed: ${themeData.message ?? themeRes.statusText}`);
-        return false;
-      }
-      // Mark the current state (form + theme) as clean and refresh the workspace tree.
-      setSavedIndex(historyIndex);
-      setSavedTokens(tokens);
-      onSaved?.();
-      message.success(`Saved "${data.id}" (form + theme)`);
+      await saveMutation.mutateAsync();
       return true;
-    } catch (e) {
-      message.error(`Save failed: ${(e as Error).message}`);
-      return false;
+    } catch {
+      return false; // `onError` already surfaced the message.
     }
   }
 

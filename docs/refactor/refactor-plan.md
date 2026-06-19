@@ -12,8 +12,8 @@
 ## Progress log
 
 > **RESUME HERE (next session):** Branch `refactor/r0-safety-net` (off `feat/builder-ux-g3-u1` =
-> main+3; NOT bare main, since G3+U1 is unmerged). R0–R4 done & committed (`1d64574`, `5d44a53`,
-> `1bc12c4`, R3 `cefe4fc`, R4 = this commit). **R4 done & COMMITTED** (reviewer PASS, no blockers,
+> main+3; NOT bare main, since G3+U1 is unmerged). R0–R5 done & committed (`1d64574`, `5d44a53`,
+> `1bc12c4`, R3 `cefe4fc`, R4 `2e749fc`, R5 = this commit). **R4 done & COMMITTED** (reviewer PASS, no blockers,
 > 1 nit folded — package.json alpha order): `@tanstack/react-query` added to the builder; workspace
 > (`useProjects`/`useProjectTree`) + presets (`usePresets`) migrated off hand-rolled
 > `useState`+`useEffect`+`alive` to `useQuery`/`useMutation` with `invalidateQueries`. New
@@ -21,9 +21,12 @@
 > Devtools); `reload()` → cache `invalidate()` (ExplorerRail/ProjectWorkspace prop renamed).
 > typecheck clean, builder 255/255 (R0 characterization + presets tests pass; presets test now uses
 > a stateful fake `/presets` server under a QueryClientProvider), prod build green (3370 modules).
-> **R3 + R4 browser smoke still pending owner verification.** **Next = R5** (react-query for form
-> save/load — `useFormPersistence` → `useMutation`, then grep that `fetch(` lives ONLY in
-> `*/client.ts`). NOTE: `apps/api` build hits a Windows Prisma EPERM (file lock) unrelated to this
+> **R5 done & COMMITTED** (reviewer PASS, no blockers): `useFormPersistence` save → `useMutation`
+> (invalidates `qk.form(id)`/`qk.theme(id)`, keeps `onSaved` tree-refresh seam); load stays
+> imperative; `fetch(` now ONLY in the 3 `client.ts`. **R3–R5 browser smoke still pending owner.**
+> **Next = R6** (backend polish — update stale `apps/api/ARCHITECTURE.md`, add class-validator DTOs
+> + global ValidationPipe for non-contract endpoints; independent, can branch off `main`). Then R7
+> (guardrails). NOTE: `apps/api` build hits a Windows Prisma EPERM (file lock) unrelated to this
 > work — build the builder alone (`pnpm --filter @app/builder build`) to verify FE.
 >
 > **Verification (2026-06-19):** builder prod build green (R3 3353 → R4 3370 modules); full suite
@@ -40,7 +43,7 @@
 | R2 — Split DesignCanvas | ✅ DONE | `refactor/r0-safety-net` | 812→~700 LOC component. Pure geometry→`engine/geometry.ts`(+test); `DesignerValue`/context/`useDesigner`→`canvas/DesignerContext.tsx`; component+`useDragon`→`canvas/` + barrel. Context-consumers import `../canvas/DesignerContext` directly (lean/cycle-proof). typecheck clean, 255/255. |
 | R3 — Decompose App.tsx | ✅ DONE (cefe4fc) | `refactor/r0-safety-net` | 604→388 LOC shell (logic ~240 + JSX layout ~148). 4 hooks + a client extracted into `editor/`: `useFormEditor` (history/selection/clipboard + derived schema/json/selected/fieldNames + applyJson/loadSchema), `useEditorShortcuts` (keydown, dep set `[history,tree,selection,clipboard]` preserved verbatim w/ biome-ignore), `useFormPersistence` (tokens/savedTokens/savedIndex + onSave/onLoad via new `client.ts` + formId load-on-mount), `useNavigationGuard` (dirty + onDirtyChange + latestSave-ref/stableSave/provideSave + beforeunload). `client.ts` = the only `fetch` site (postForm/postTheme/getForm/getTheme + `API` const). barrel updated. typecheck clean, biome clean, builder 255/255 (R0 characterization passes UNCHANGED). reviewer PASS no blockers. **Browser smoke pending owner.** |
 | R4 — react-query workspace/presets | ✅ DONE | `refactor/r0-safety-net` | `@tanstack/react-query` added; `query/` module (queryClient + `qk` keys + barrel + test helpers); `main.tsx` wraps `QueryClientProvider` (+ dev Devtools). `useProjects`/`useProjectTree`/`usePresets` → `useQuery`+`useMutation`; deleted every `alive` flag + manual `loading`/`reload` → `invalidateQueries`. W4 invariant preserved (one cache entry per `qk.presets(projectId)`, App calls `usePresets` once). presets test → stateful fake server + provider wrapper; R0 characterization wrapped in `renderWithQuery`, assertions unchanged. typecheck clean, 255/255, prod build green (3370 modules). reviewer PASS. Browser smoke pending owner. |
-| R5 — react-query form save/load | ⏳ next | — | |
+| R5 — react-query form save/load | ✅ DONE | `refactor/r0-safety-net` | `useFormPersistence` save → `useMutation` (snapshot {index,tokens} → POST form→theme via client → onSuccess commits clean baselines + invalidates `qk.form(id)`/`qk.theme(id)` + `onSaved?.()`). `onSave(): Promise<boolean>` preserved (nav-guard ref + Save button). Load stays imperative (resets history). `fetch(` now ONLY in editor/workspace/presets `client.ts`. typecheck clean, 255/255 (R0 characterization 5/5 unchanged), prod build green. reviewer PASS. Browser smoke pending owner. |
 | R6 — api polish | pending | — | |
 | R7 — guardrails | pending | — | |
 
@@ -228,12 +231,19 @@ flag remains in these hooks.
 
 ## Phase R5 — react-query for form save/load
 
-- [ ] `useFormPersistence` (from R3) → `useMutation` for save (invalidate `qk.form(id)`,
-      `qk.theme(id)`, and the workspace tree so titles refresh) + query/imperative load on mount.
-- [ ] Grep `apps/builder/src` for `fetch(` — it must appear **only** in `*/client.ts`.
+- [x] `useFormPersistence` (from R3) → `useMutation` for save: mutationFn snapshots
+      `{historyIndex, tokens}` and POSTs form→theme via `./client`, throwing tagged errors on
+      non-OK; `onSuccess` commits the clean baselines, invalidates `qk.form(id)` + `qk.theme(id)`,
+      and fires `onSaved?.()` (the workspace-tree refresh seam — the tree key stays decoupled from
+      this hook). Public `onSave(): Promise<boolean>` preserved for the nav-guard ref + Save button.
+      Load stays IMPERATIVE on mount (it resets editor history → a passive cached query must not).
+- [x] Grep `apps/builder/src` for `fetch(` — appears **only** in the 3 `*/client.ts`
+      (editor/workspace/presets). ✓
 
 **Smoke gate (browser, required):** save marks clean + refreshes rail + `onSaved` fires; load
-applies form + theme. **DoD:** zero raw `fetch` outside `client.ts`.
+applies form + theme. **DoD:** zero raw `fetch` outside `client.ts`. **DONE** — reviewer PASS,
+typecheck clean, builder 255/255 (R0 characterization 5/5 unchanged), prod build green. Browser
+smoke pending owner.
 
 ---
 
