@@ -82,6 +82,7 @@ describe("palette freeze", () => {
       "grid",
       "space",
       "steps",
+      "display-text",
     ]);
   });
 

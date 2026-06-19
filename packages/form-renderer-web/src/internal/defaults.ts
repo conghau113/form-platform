@@ -11,6 +11,8 @@ export function schemaDefaults(nodes: FieldNode[], into: Values = {}): Values {
       // Seed an empty list so useFieldArray stays controlled; row defaults are
       // applied per-row on append, not here.
       into[node.name] = [];
+    } else if (node.type === "display-text") {
+      // Value-less static content — nothing to seed.
     } else if (node.defaultValue !== undefined) {
       into[node.name] = node.defaultValue;
     } else if (

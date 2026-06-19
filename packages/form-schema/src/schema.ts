@@ -538,6 +538,28 @@ export const rateFieldSchema = z.object({
 
 export const colorFieldSchema = z.object({ type: z.literal("color"), ...commonFields });
 
+/** A static, value-LESS display node: authored content shown to the user (a heading,
+ *  paragraph or inline note). It is a nameless leaf — it owns no `name` and no value, so
+ *  it never contributes to the submitted object or to validation. Additive: old JSON
+ *  without it keeps parsing, so no formVersion bump is required. */
+export const displayTextFieldSchema = z.object({
+  type: z.literal("display-text"),
+  /** The authored content rendered to the user. */
+  content: z.string(),
+  /** How the content renders: a heading (`Typography.Title`), a `Paragraph`, or inline
+   *  `Text`. Defaults to "paragraph" in the renderer when absent. */
+  variant: z.enum(["title", "paragraph", "text"]).optional(),
+  /** antd `Typography.Title` level (1–5); only meaningful when `variant: "title"`. */
+  level: z.number().int().min(1).max(5).optional(),
+  /** Text alignment. Web-only, additive; other renderers ignore it. */
+  align: z.enum(["left", "center", "right"]).optional(),
+  layout: layoutSchema.optional(),
+  visibleWhen: conditionSchema.optional(),
+  permissions: permissionSchema.optional(),
+});
+
+export type DisplayTextField = z.infer<typeof displayTextFieldSchema>;
+
 export type LeafField =
   | z.infer<typeof textFieldSchema>
   | z.infer<typeof textareaFieldSchema>
@@ -693,6 +715,7 @@ export interface StepsField {
 
 export type FieldNode =
   | LeafField
+  | DisplayTextField
   | GroupField
   | ArrayField
   | TabsField
@@ -852,6 +875,7 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     sliderFieldSchema,
     rateFieldSchema,
     colorFieldSchema,
+    displayTextFieldSchema,
     groupFieldSchema,
     arrayFieldSchema,
     tabsFieldSchema,

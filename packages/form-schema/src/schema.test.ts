@@ -794,6 +794,46 @@ describe("schema field types", () => {
     expect((migrated.fields[0] as { reactions: unknown[] }).reactions).toHaveLength(1);
   });
 
+  it("accepts a value-less display-text node and keeps it a non-container leaf (additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "display",
+      title: "Display",
+      fields: [
+        { type: "display-text", content: "Welcome", variant: "title", level: 2, align: "center" },
+        { type: "display-text", content: "Fill in the form below." },
+        { type: "text", name: "name", label: "Name" },
+      ],
+    });
+    expect(out.fields[0]).toMatchObject({ type: "display-text", variant: "title", level: 2 });
+    expect(out.fields[1]).toMatchObject({
+      type: "display-text",
+      content: "Fill in the form below.",
+    });
+    // It owns no value, so it must NOT be a value-transparent layout container.
+    expect(isLayoutContainer(out.fields[0] as FieldNode)).toBe(false);
+    expect(childrenOf(out.fields[0] as FieldNode)).toBeNull();
+  });
+
+  it("rejects a display-text missing content or with a bad variant/level", () => {
+    const base = { formVersion: 3, id: "bad-display", title: "Bad" };
+    expect(formSchema.safeParse({ ...base, fields: [{ type: "display-text" }] }).success).toBe(
+      false,
+    );
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "display-text", content: "x", variant: "banner" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      formSchema.safeParse({
+        ...base,
+        fields: [{ type: "display-text", content: "x", level: 9 }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("rejects an unknown field type", () => {
     expect(() =>
       formSchema.parse({

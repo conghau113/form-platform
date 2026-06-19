@@ -25,6 +25,20 @@ describe("buildZodSchema", () => {
     expect(schema.safeParse({ fullName: "Ada" }).success).toBe(true);
   });
 
+  it("treats a display-text node as value-less (no schema key, never blocks submit)", () => {
+    const schema = buildZodSchema(
+      form([
+        { type: "display-text", content: "Section heading", variant: "title" },
+        { type: "text", name: "name", label: "Name", required: true },
+      ]),
+    );
+    // The display node contributes nothing; only the input is validated.
+    expect(schema.safeParse({ name: "Ada" }).success).toBe(true);
+    const clean = schema.parse({ name: "Ada" });
+    expect("content" in clean).toBe(false);
+    expect(Object.keys(clean)).toEqual(["name"]);
+  });
+
   it("does not validate a field hidden by visibleWhen=false", () => {
     const schema = buildZodSchema(
       form([

@@ -598,6 +598,43 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     showInPalette: false,
     named: false,
   },
+  // --- Displays (static, value-less content) --------------------------------
+  {
+    // A nameless leaf: authored static content (heading / paragraph / note). `named:false`
+    // makes newField seed it with NO name/value (parses against displayTextFieldSchema).
+    type: "display-text",
+    label: "Text",
+    category: "Displays",
+    defaults: { content: "Display text" },
+    settings: [
+      { key: "content", label: "Content", control: "textarea", rows: 3 },
+      {
+        key: "variant",
+        label: "Style",
+        control: "segmented",
+        choices: [
+          { label: "Heading", value: "title" },
+          { label: "Paragraph", value: "paragraph" },
+          { label: "Text", value: "text" },
+        ],
+      },
+      { key: "level", label: "Heading level (1–5)", control: "number" },
+      {
+        key: "align",
+        label: "Align",
+        control: "segmented",
+        choices: [
+          { label: "Left", value: "left" },
+          { label: "Center", value: "center" },
+          { label: "Right", value: "right" },
+        ],
+      },
+    ],
+    defaultValueKind: "none",
+    behavior: LEAF,
+    showInPalette: true,
+    named: false,
+  },
 ];
 
 /** The root Form node's meta. It is never in the palette and never seeded by `newField`

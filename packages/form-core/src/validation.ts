@@ -326,6 +326,10 @@ function buildShape(
       Object.assign(shape, buildShape(node.children, values, access, effects));
       continue;
     }
+    // A `display-text` node is a value-LESS leaf (static authored content); it is not a
+    // layout container, so without this skip the leaf fallback below would wrongly try to
+    // read `node.name` and add a zod field for it.
+    if (node.type === "display-text") continue;
     if (node.type === "array") {
       shape[node.name] = arrayZod(node, values, access);
       continue;
@@ -405,6 +409,8 @@ function walkLeaves(
       walkLeaves(node.children, values, access, effects, prefix, visit);
       continue;
     }
+    // Value-less display node — never a leaf with a value (mirrors buildShape's skip).
+    if (node.type === "display-text") continue;
     if (node.type === "array") {
       const rows = values[node.name];
       if (!Array.isArray(rows)) continue;

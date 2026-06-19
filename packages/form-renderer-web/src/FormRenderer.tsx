@@ -28,6 +28,7 @@ import {
   Space,
   Tabs,
   type ThemeConfig,
+  Typography,
 } from "antd";
 import type React from "react";
 import {
@@ -489,6 +490,30 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
               submitLabel={submitLabel}
             />,
           )}
+        </Col>
+      );
+    }
+
+    if (node.type === "display-text") {
+      // Static authored content — no value, no Form.Item wrapper. Honors visibility/RBAC
+      // (handled above) and design-mode selection (wrapNode); native renderers map it to
+      // their own typography. Title level only applies to the "title" variant.
+      const align = node.align ? ({ textAlign: node.align } as const) : undefined;
+      const body =
+        node.variant === "title" ? (
+          <Typography.Title level={(node.level ?? 3) as 1 | 2 | 3 | 4 | 5} style={align}>
+            {node.content}
+          </Typography.Title>
+        ) : node.variant === "text" ? (
+          <Typography.Text style={align}>{node.content}</Typography.Text>
+        ) : (
+          <Typography.Paragraph style={{ ...align, marginBottom: 0 }}>
+            {node.content}
+          </Typography.Paragraph>
+        );
+      return (
+        <Col key={`${namePrefix}display-text`} {...containerSpan}>
+          {wrapNode(body)}
         </Col>
       );
     }

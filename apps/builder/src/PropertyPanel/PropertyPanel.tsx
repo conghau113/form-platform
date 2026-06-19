@@ -138,6 +138,20 @@ export function PropertyPanel({
     );
   }
 
+  // Nameless value-less leaves (e.g. `display-text`): static content with no schema key,
+  // no default value and no validation. Show a settings-only editor driven by the registry
+  // descriptors — the full FieldForm (name/value/validation) does not apply.
+  if (!describeNode(node.type).named) {
+    return (
+      <div style={{ padding: 16, overflow: "auto", height: "100%" }}>
+        {breadcrumb}
+        <Form layout="vertical" size="small">
+          <TypeSettings field={node} set={set} />
+        </Form>
+      </div>
+    );
+  }
+
   // Visibility candidates: sibling fields in the same container as the edited node.
   const parent = path.length ? nodeAtPath(root, path.slice(0, -1)) : null;
   const siblingNames = path.length
