@@ -59,7 +59,7 @@ changed files, changeset present. Reviewer subagent before commit.
 **Result the user sees:** nothing visual in the builder — it's a renderer API. Demonstrated by
 the test, and by a host app that passes `fetcher={(u,o)=>fetch(u,{...o,headers:{Authorization}})}`.
 
-Commit: `__________`
+Commit: `99dbacf` (branch `feat/v2-renderer-fetcher`, off `main`; reviewer PASS, no required fixes)
 
 ---
 
