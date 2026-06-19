@@ -570,6 +570,42 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     named: false,
   },
   {
+    // A value-transparent region that re-labels its descendants (antd Form label layout).
+    // Nameless like the other layout containers; `formLayout` avoids colliding with the
+    // responsive `layout` (colSpan). labelCol/wrapperCol stay JSON-authorable (no scalar
+    // setter for the col object, same as the root Form's FORM_SETTINGS).
+    type: "form-layout",
+    label: "Form Layout",
+    category: "Layouts",
+    defaults: { children: [] },
+    settings: [
+      {
+        key: "formLayout",
+        label: "Label layout",
+        control: "segmented",
+        choices: [
+          { label: "Vertical", value: "vertical" },
+          { label: "Horizontal", value: "horizontal" },
+          { label: "Inline", value: "inline" },
+        ],
+      },
+      {
+        key: "labelAlign",
+        label: "Label align",
+        control: "segmented",
+        choices: [
+          { label: "Right", value: "right" },
+          { label: "Left", value: "left" },
+        ],
+      },
+      { key: "colon", label: "Show colon", control: "checkbox" },
+    ],
+    defaultValueKind: "none",
+    behavior: CONTAINER,
+    showInPalette: true,
+    named: false,
+  },
+  {
     // The wizard container — the first palette-visible container. Dragging it seeds two
     // `step` panes; the StepsEditor in the property panel adds/removes/reorders them.
     type: "steps",

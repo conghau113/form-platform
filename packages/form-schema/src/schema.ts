@@ -713,6 +713,29 @@ export interface StepsField {
   children: StepField[];
 }
 
+/** A value-TRANSPARENT layout region (like `group`, but nameless) that applies an antd
+ *  label layout to every descendant `Form.Item` — so authors can switch a whole region to
+ *  horizontal/inline labels (with optional `labelCol`/`wrapperCol`) without editing each
+ *  field. Web-only styling; the native single-column renderer ignores the label props and
+ *  just renders the children. `formLayout` names the orientation to avoid colliding with the
+ *  responsive `layout` (colSpan) every container shares. */
+export interface FormLayoutField {
+  type: "form-layout";
+  /** antd `Form` label orientation applied to descendant Form.Items. */
+  formLayout?: "horizontal" | "vertical" | "inline";
+  /** Label column geometry for horizontal layouts (antd `labelCol`). */
+  labelCol?: z.infer<typeof formColSchema>;
+  /** Control column geometry for horizontal layouts (antd `wrapperCol`). */
+  wrapperCol?: z.infer<typeof formColSchema>;
+  labelAlign?: "left" | "right";
+  colon?: boolean;
+  /** Responsive placement of the container itself (colSpan), like other containers. */
+  layout?: z.infer<typeof layoutSchema>;
+  visibleWhen?: z.infer<typeof conditionSchema>;
+  permissions?: z.infer<typeof permissionSchema>;
+  children: FieldNode[];
+}
+
 export type FieldNode =
   | LeafField
   | DisplayTextField
@@ -726,7 +749,8 @@ export type FieldNode =
   | GridField
   | SpaceField
   | StepsField
-  | StepField;
+  | StepField
+  | FormLayoutField;
 
 export const groupFieldSchema: z.ZodType<GroupField> = z.lazy(() =>
   z.object({
@@ -854,6 +878,21 @@ export const stepsFieldSchema: z.ZodType<StepsField> = z.lazy(() =>
   }),
 );
 
+export const formLayoutFieldSchema: z.ZodType<FormLayoutField> = z.lazy(() =>
+  z.object({
+    type: z.literal("form-layout"),
+    formLayout: z.enum(["horizontal", "vertical", "inline"]).optional(),
+    labelCol: formColSchema.optional(),
+    wrapperCol: formColSchema.optional(),
+    labelAlign: z.enum(["left", "right"]).optional(),
+    colon: z.boolean().optional(),
+    layout: layoutSchema.optional(),
+    visibleWhen: conditionSchema.optional(),
+    permissions: permissionSchema.optional(),
+    children: z.array(fieldNodeSchema),
+  }),
+);
+
 export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
   z.union([
     textFieldSchema,
@@ -887,6 +926,7 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     spaceFieldSchema,
     stepsFieldSchema,
     stepFieldSchema,
+    formLayoutFieldSchema,
   ]),
 );
 

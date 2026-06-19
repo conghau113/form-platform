@@ -679,6 +679,27 @@ describe("buildZodSchema with layout containers", () => {
     if (ok.success) expect(ok.data).toEqual({ a: "x", b: true });
   });
 
+  it("hoists fields inside a form-layout region into the flat shape (value-transparent)", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "form-layout",
+          formLayout: "horizontal",
+          labelCol: { span: 6 },
+          children: [
+            { type: "text", name: "first", label: "First", required: true },
+            { type: "text", name: "last", label: "Last" },
+          ],
+        },
+      ]),
+    );
+    expect(schema.safeParse({}).success).toBe(false); // nested `first` is required
+    const ok = schema.safeParse({ first: "Ada", last: "Lovelace" });
+    expect(ok.success).toBe(true);
+    // Children stay flat — the region contributes no key of its own.
+    if (ok.success) expect(ok.data).toEqual({ first: "Ada", last: "Lovelace" });
+  });
+
   it("excludes all descendants of a container hidden by visibleWhen", () => {
     const fields: FormSchema["fields"] = [
       { type: "select", name: "mode", label: "Mode" },

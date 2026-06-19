@@ -99,6 +99,39 @@ describe("FormRenderer layout containers", () => {
     expect(container.querySelector(".ant-col-12")).not.toBeNull();
   });
 
+  it("scopes a form-layout region's label layout to its descendants and hoists their values", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    const schema = {
+      formVersion: 3,
+      id: "form-layout",
+      title: "Form layout region",
+      // Root form stays vertical; only the region's child gets a horizontal label.
+      fields: [
+        { type: "text", name: "outside", label: "Outside" },
+        {
+          type: "form-layout",
+          formLayout: "horizontal",
+          labelCol: { span: 6 },
+          wrapperCol: { span: 18 },
+          children: [{ type: "text", name: "inside", label: "Inside" }],
+        },
+      ],
+    };
+    const { container } = render(<FormRenderer schema={schema} onSubmit={onSubmit} />);
+    // Exactly the in-region Form.Item is horizontal; the top-level field keeps the form default.
+    expect(container.querySelectorAll(".ant-form-item-horizontal")).toHaveLength(1);
+    // The region's labelCol/wrapperCol land on that item.
+    expect(container.querySelector(".ant-col-6")).not.toBeNull();
+    expect(container.querySelector(".ant-col-18")).not.toBeNull();
+    // Value-transparent: the region contributes no key — `inside` hoists to the flat object.
+    await user.type(screen.getByLabelText("Inside"), "x");
+    await user.type(screen.getByLabelText("Outside"), "y");
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ inside: "x", outside: "y" });
+  });
+
   it("sizes grid cells from cols (3 cols -> md-8) with field colSpan overriding", () => {
     const schema = {
       formVersion: 3,

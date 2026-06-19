@@ -54,6 +54,7 @@ import {
 } from "./internal/control-types.js";
 import { collectStepNames, containsType, schemaDefaults } from "./internal/defaults.js";
 import { FetcherContext } from "./internal/FetcherContext.js";
+import { LayoutFormItem, LayoutProvider } from "./internal/LayoutContext.js";
 import { type AsyncCache, getAtPath, runAsyncCheck, setErrorAtPath } from "./internal/resolver.js";
 import { FieldPreview } from "./preview/FieldPreview.js";
 
@@ -518,6 +519,29 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
       );
     }
 
+    if (node.type === "form-layout") {
+      // A value-transparent region that re-labels its descendants: it provides a
+      // LayoutContext that each leaf's Form.Item reads (the children themselves render
+      // through the normal Row/Col path). Native renderers ignore the label props.
+      return (
+        <Col key={`${namePrefix}form-layout`} {...containerSpan}>
+          {wrapNode(
+            <LayoutProvider
+              value={{
+                layout: node.formLayout,
+                labelCol: node.labelCol,
+                wrapperCol: node.wrapperCol,
+                labelAlign: node.labelAlign,
+                colon: node.colon,
+              }}
+            >
+              <Row gutter={16}>{renderChildrenAt(node.children, here)}</Row>
+            </LayoutProvider>,
+          )}
+        </Col>
+      );
+    }
+
     if (isLayoutContainer(node)) {
       // Orphaned tab-pane / collapse-panel placed outside their parent (possible
       // in hand-written JSON): render their children as a plain transparent row.
@@ -564,7 +588,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
         name={fieldName}
         control={control}
         render={({ field, fieldState }) => (
-          <Form.Item
+          <LayoutFormItem
             label={opts?.hideLabel ? undefined : node.label}
             htmlFor={opts?.hideLabel ? undefined : fieldName}
             tooltip={opts?.hideLabel ? undefined : node.tooltip}
@@ -630,7 +654,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                 submitUrl={form.settings?.submitUrl}
               />
             )}
-          </Form.Item>
+          </LayoutFormItem>
         )}
       />
     );

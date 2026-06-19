@@ -989,6 +989,39 @@ describe("layout containers (additive)", () => {
     ).toThrow();
   });
 
+  it("accepts a form-layout container as a value-transparent layout region", () => {
+    const out = formSchema.parse(
+      wrap([
+        {
+          type: "form-layout",
+          formLayout: "horizontal",
+          labelCol: { span: 6 },
+          wrapperCol: { span: 18 },
+          labelAlign: "right",
+          colon: false,
+          children: [{ type: "text", name: "email", label: "Email" }],
+        },
+      ]),
+    );
+    const region = out.fields[0] as FieldNode;
+    expect(region).toMatchObject({
+      type: "form-layout",
+      formLayout: "horizontal",
+      labelCol: { span: 6 },
+    });
+    // It hoists its children's values (like group), so it IS a layout container.
+    expect(isLayoutContainer(region)).toBe(true);
+    expect(childrenOf(region)?.[0]).toMatchObject({ type: "text", name: "email" });
+  });
+
+  it("rejects a form-layout with an unknown formLayout orientation", () => {
+    expect(() =>
+      formSchema.parse(
+        wrap([{ type: "form-layout", formLayout: "grid", children: [] } as unknown as FieldNode]),
+      ),
+    ).toThrow();
+  });
+
   it("rejects grid cols outside 1..24", () => {
     expect(() => formSchema.parse(wrap([{ type: "grid", cols: 0, children: [] }]))).toThrow();
     expect(() => formSchema.parse(wrap([{ type: "grid", cols: 25, children: [] }]))).toThrow();

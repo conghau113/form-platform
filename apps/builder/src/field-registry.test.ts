@@ -81,6 +81,7 @@ describe("palette freeze", () => {
       "card",
       "grid",
       "space",
+      "form-layout",
       "steps",
       "display-text",
     ]);

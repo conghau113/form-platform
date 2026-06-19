@@ -3,6 +3,7 @@ import type {
   CollapseField,
   CollapsePanelField,
   FieldNode,
+  FormLayoutField,
   GridField,
   GroupField,
   SpaceField,
@@ -24,7 +25,8 @@ export type LayoutContainerField =
   | GridField
   | SpaceField
   | StepsField
-  | StepField;
+  | StepField
+  | FormLayoutField;
 
 export const LAYOUT_CONTAINER_TYPES = [
   "group",
@@ -37,6 +39,7 @@ export const LAYOUT_CONTAINER_TYPES = [
   "space",
   "steps",
   "step",
+  "form-layout",
 ] as const;
 
 const containerTypes: ReadonlySet<string> = new Set(LAYOUT_CONTAINER_TYPES);
