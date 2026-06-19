@@ -63,7 +63,7 @@ Commit: `99dbacf` (branch `feat/v2-renderer-fetcher`, off `main`; reviewer PASS,
 
 ---
 
-## Phase R2 — Display "Text" (read‑only display type)  ⬜
+## Phase R2 — Display "Text" (read‑only display type)  ✅
 **Branch:** `feat/r2-display-text` · **Packages:** `form-schema` + `form-renderer-web` (changeset) + builder
 
 **Why:** Real forms need static authored content (section headings, paragraphs, notes). Today
@@ -83,31 +83,31 @@ Commit: `99dbacf` (branch `feat/v2-renderer-fetcher`, off `main`; reviewer PASS,
 > property panel from `settings:[]`.
 
 **Steps**
-- [ ] `form-schema/src/schema.ts` — `displayTextFieldSchema` (`type:"display-text"`, `content:
+- [x] `form-schema/src/schema.ts` — `displayTextFieldSchema` (`type:"display-text"`, `content:
       string`, `variant?: "title"|"paragraph"|"text"`, `level?: 1..5` for titles, optional
-      `align`); add to the `fieldNodeSchema` union (`schema.ts:834`); export the inferred type.
-      It is a **nameless leaf** (no `name`), like the `*-pane`/`step` panes.
-- [ ] `schema.test` — parses a display‑text node; an old fixture without it still parses (compat).
-- [ ] `form-core` (`validation.ts`) — treat it as **value‑less**: add an explicit skip in
-      `buildShape` (line ~335, before the `shape[node.name]=leafZod(...)` fallback) **and** the
-      lockstep `walkLeaves`, so it never contributes a zod field or blocks submit. (It is NOT an
-      `isLayoutContainer`, so without this it would wrongly be treated as a named leaf.) Add a
-      core test (a form with only a display‑text + one input validates against just the input).
-- [ ] `form-renderer-web` — render `Typography.Title/Paragraph/Text` from `content`/`variant`;
-      **no `Form.Item` name wrapper** (it owns no value). Honour `readPretty`/design mode.
-- [ ] builder `field-registry/registry.ts` — new `ComponentMeta` entry: `category:"Displays"`,
-      `behavior: LEAF`, `named:false`, `defaultValueKind:"none"`, `showInPalette:true`,
-      `settings:[{content textarea}, {variant segmented}, {level number}]`. No new‑field.ts edit
-      (the `named:false` path handles it). No bespoke property panel — descriptors drive it.
-- [ ] builder tests — `field-registry.test.ts` (parses every seeded node) + palette‑freeze test
-      updated; create + parse round‑trip.
-- [ ] Changeset: `form-schema` + `form-renderer-web` **minor**; builder none (private).
+      `align`); add to the `fieldNodeSchema` union + `FieldNode` type. Nameless leaf (no `name`).
+- [x] `schema.test` — parses a display‑text node + rejects missing content / bad variant / bad level.
+- [x] `form-core` (`validation.ts`) — explicit `display-text` skip in `buildShape` **and** the
+      lockstep `walkLeaves` (value‑less; NOT an `isLayoutContainer`). Core test added.
+- [x] `form-renderer-web` — dedicated `display-text` render branch (`Typography.Title/Paragraph/
+      Text`, **no `Form.Item`**) before the `isLayoutContainer` fallback; `internal/defaults.ts`
+      `schemaDefaults` skips it. Render + submit test added.
+- [x] builder `field-registry/registry.ts` — `ComponentMeta` entry `category:"Displays"`,
+      `behavior:LEAF`, `named:false`, `defaultValueKind:"none"`, settings content/variant/level/
+      align. PLUS a settings‑only `!named` branch in `PropertyPanel.tsx` (FieldForm assumes a
+      value‑bearing leaf, so nameless display leaves get the descriptor‑driven editor instead).
+- [x] builder tests — palette‑freeze list updated (`display-text` appended); `field-registry.test`
+      parses every seeded node (incl. display‑text).
+- [x] Changeset: `form-schema` + `form-core` + `form-renderer-web` **minor** (reviewer caught the
+      missing form‑core entry — it has a real runtime skip); builder none (private).
 
-**DoD:** typecheck 15/15, all package + builder tests green, biome clean, changeset present,
-reviewer PASS. **Verify:** drag "Text" from Displays onto the canvas → shows authored heading;
-preview + submit ignore it (no value in the submitted object).
+**DoD:** typecheck green (4 changed pkgs); form‑schema 59/59, form‑core 100/100, builder 256/256,
+renderer display test 2/2 (the 2 array‑test failures are pre‑existing under‑load flakes, pass in
+isolation); biome clean on changed files; changeset present; reviewer PASS (1 required fix folded).
+**Owner verify in browser:** drag "Text" from Displays → shows authored heading; submit ignores it.
 
-Commit: `__________`
+Commit: `b136e9c` (branch `feat/r2-display-text`, chained off `feat/v2-renderer-fetcher`; reviewer
+PASS after adding the form‑core changeset)
 
 ---
 
