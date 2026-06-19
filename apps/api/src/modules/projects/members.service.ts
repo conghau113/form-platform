@@ -73,7 +73,9 @@ export class MembersService {
   }
 }
 
-/** Narrow an arbitrary string to a grantable role (editor/viewer) or reject it (400). */
+/** Narrow an arbitrary string to a grantable role (editor/viewer) or reject it (400). The edge
+ *  DTO (`@IsIn`) already rejects bad roles, so this is defense-in-depth — but it is also the
+ *  `string → MemberRole` type narrowing the repo needs, so both layers are intentional. */
 function assertMemberRole(role: string): MemberRole {
   if ((MEMBER_ROLES as readonly string[]).includes(role)) return role as MemberRole;
   throw new BadRequestException(`Invalid role: ${role} (expected editor | viewer)`);

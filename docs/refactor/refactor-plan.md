@@ -12,8 +12,8 @@
 ## Progress log
 
 > **RESUME HERE (next session):** Branch `refactor/r0-safety-net` (off `feat/builder-ux-g3-u1` =
-> main+3; NOT bare main, since G3+U1 is unmerged). R0–R5 done & committed (`1d64574`, `5d44a53`,
-> `1bc12c4`, R3 `cefe4fc`, R4 `2e749fc`, R5 = this commit). **R4 done & COMMITTED** (reviewer PASS, no blockers,
+> main+3; NOT bare main, since G3+U1 is unmerged). R0–R6 done & committed (`1d64574`, `5d44a53`,
+> `1bc12c4`, R3 `cefe4fc`, R4 `2e749fc`, R5 `004a8a2`, R6 = this commit). **R4 done & COMMITTED** (reviewer PASS, no blockers,
 > 1 nit folded — package.json alpha order): `@tanstack/react-query` added to the builder; workspace
 > (`useProjects`/`useProjectTree`) + presets (`usePresets`) migrated off hand-rolled
 > `useState`+`useEffect`+`alive` to `useQuery`/`useMutation` with `invalidateQueries`. New
@@ -21,13 +21,15 @@
 > Devtools); `reload()` → cache `invalidate()` (ExplorerRail/ProjectWorkspace prop renamed).
 > typecheck clean, builder 255/255 (R0 characterization + presets tests pass; presets test now uses
 > a stateful fake `/presets` server under a QueryClientProvider), prod build green (3370 modules).
-> **R5 done & COMMITTED** (reviewer PASS, no blockers): `useFormPersistence` save → `useMutation`
-> (invalidates `qk.form(id)`/`qk.theme(id)`, keeps `onSaved` tree-refresh seam); load stays
-> imperative; `fetch(` now ONLY in the 3 `client.ts`. **R3–R5 browser smoke still pending owner.**
-> **Next = R6** (backend polish — update stale `apps/api/ARCHITECTURE.md`, add class-validator DTOs
-> + global ValidationPipe for non-contract endpoints; independent, can branch off `main`). Then R7
-> (guardrails). NOTE: `apps/api` build hits a Windows Prisma EPERM (file lock) unrelated to this
-> work — build the builder alone (`pnpm --filter @app/builder build`) to verify FE.
+> **R5 done & COMMITTED** (reviewer PASS): `useFormPersistence` save → `useMutation`; `fetch(` now
+> ONLY in the 3 `client.ts`. **R6 done & COMMITTED** (reviewer PASS, api 47/47): rewrote stale
+> `apps/api/ARCHITECTURE.md`; global `ValidationPipe` + class-validator DTOs for non-contract bodies
+> (projects/folders/members/form-move); contract bodies (form/theme/preset) stay schema-validated;
+> new `dto-validation.test.ts` pins 400-at-edge. **R3–R5 browser smoke still pending owner.**
+> **Next = R7** (guardrails — discourage new root `apps/builder/src/*.tsx`; update
+> `apps/builder/ARCHITECTURE.md` + repo-map skill; cross-link the refactor docs from AGENTS.md).
+> NOTE: `apps/api` typecheck/build runs `prisma generate` which hits a Windows Prisma EPERM — run
+> `tsc --noEmit` directly to typecheck the api; build the builder alone for FE.
 >
 > **Verification (2026-06-19):** builder prod build green (R3 3353 → R4 3370 modules); full suite
 > 255/255; R3 real-browser smoke at `/projects/x/forms/y` (no API needed — App seeds the example
@@ -44,8 +46,8 @@
 | R3 — Decompose App.tsx | ✅ DONE (cefe4fc) | `refactor/r0-safety-net` | 604→388 LOC shell (logic ~240 + JSX layout ~148). 4 hooks + a client extracted into `editor/`: `useFormEditor` (history/selection/clipboard + derived schema/json/selected/fieldNames + applyJson/loadSchema), `useEditorShortcuts` (keydown, dep set `[history,tree,selection,clipboard]` preserved verbatim w/ biome-ignore), `useFormPersistence` (tokens/savedTokens/savedIndex + onSave/onLoad via new `client.ts` + formId load-on-mount), `useNavigationGuard` (dirty + onDirtyChange + latestSave-ref/stableSave/provideSave + beforeunload). `client.ts` = the only `fetch` site (postForm/postTheme/getForm/getTheme + `API` const). barrel updated. typecheck clean, biome clean, builder 255/255 (R0 characterization passes UNCHANGED). reviewer PASS no blockers. **Browser smoke pending owner.** |
 | R4 — react-query workspace/presets | ✅ DONE | `refactor/r0-safety-net` | `@tanstack/react-query` added; `query/` module (queryClient + `qk` keys + barrel + test helpers); `main.tsx` wraps `QueryClientProvider` (+ dev Devtools). `useProjects`/`useProjectTree`/`usePresets` → `useQuery`+`useMutation`; deleted every `alive` flag + manual `loading`/`reload` → `invalidateQueries`. W4 invariant preserved (one cache entry per `qk.presets(projectId)`, App calls `usePresets` once). presets test → stateful fake server + provider wrapper; R0 characterization wrapped in `renderWithQuery`, assertions unchanged. typecheck clean, 255/255, prod build green (3370 modules). reviewer PASS. Browser smoke pending owner. |
 | R5 — react-query form save/load | ✅ DONE | `refactor/r0-safety-net` | `useFormPersistence` save → `useMutation` (snapshot {index,tokens} → POST form→theme via client → onSuccess commits clean baselines + invalidates `qk.form(id)`/`qk.theme(id)` + `onSaved?.()`). `onSave(): Promise<boolean>` preserved (nav-guard ref + Save button). Load stays imperative (resets history). `fetch(` now ONLY in editor/workspace/presets `client.ts`. typecheck clean, 255/255 (R0 characterization 5/5 unchanged), prod build green. reviewer PASS. Browser smoke pending owner. |
-| R6 — api polish | pending | — | |
-| R7 — guardrails | pending | — | |
+| R6 — api polish | ✅ DONE | `refactor/r0-safety-net` | Rewrote stale `apps/api/ARCHITECTURE.md` (Prisma + controller/service/repo layering + RBAC `requireAccess` + the two validation gates). Added `class-validator`/`class-transformer` + global `ValidationPipe({whitelist,transform,exposeUnsetFields:false})`. class-validator DTOs under `modules/*/dto/` for NON-contract bodies (projects/folders/members/form-move); contract bodies (form/theme/preset) stay `@Body() unknown` → schema `migrate()`/parse (no duplication). New `dto-validation.test.ts` proves 400-at-edge + whitelist strip + `parentId` presence invariant. api 47/47 (+6), tsc clean, biome clean. reviewer PASS. |
+| R7 — guardrails | ⏳ next | — | |
 
 ## Structure decision (2026-06-19): keep FLAT feature folders, reject full FSD
 
@@ -249,16 +251,26 @@ smoke pending owner.
 
 ## Phase R6 — Backend polish (api) — independent, branch off `main` any time
 
-- [ ] Update [apps/api/ARCHITECTURE.md](../../apps/api/ARCHITECTURE.md) (currently lies — says
-      "file-backed only"; reflect Prisma + persistence layer + projects/folders/presets/members +
-      `requireAccess`). Cheap, high-value.
-- [ ] Add `class-validator`/`class-transformer` + global
-      `ValidationPipe({ whitelist: true, transform: true })` in `main.ts`.
-- [ ] Request DTOs under `modules/<feature>/dto/` for **non-contract** endpoints (projects,
-      folders, members, preset metadata). Form/theme bodies stay on `migrate()`/`migrateTheme()`.
-- [ ] Confirm no controller imports Prisma; no service reads `req`/`res`.
+- [x] Updated [apps/api/ARCHITECTURE.md](../../apps/api/ARCHITECTURE.md) — now reflects Prisma +
+      the controller/service/repo-interface layering + RBAC `requireAccess` + the two validation
+      gates + every module/endpoint (was stale "file-backed only", forms/themes only).
+- [x] Added `class-validator`/`class-transformer` + global `ValidationPipe({ whitelist: true,
+      transform: true, transformOptions: { exposeUnsetFields: false } })` in `main.ts`.
+      `exposeUnsetFields: false` (with tsconfig `useDefineForClassFields: false`) keeps an absent
+      optional absent → the folder-move path's `"parentId" in dto` check stays correct.
+- [x] Request DTOs under `modules/<feature>/dto/` for **non-contract** bodies: projects
+      (create/update), folders (create/update), members (grant/update-role), forms (move).
+      **Contract bodies (form/theme/preset) stay `@Body() unknown`** → schema `migrate()` /
+      `migrateTheme()` / preset-parse (the pipe skips `Object` metatype — no duplicated validation).
+      DTOs imported as VALUES in controllers (`emitDecoratorMetadata` needs the runtime class ref).
+- [x] Confirmed no controller imports Prisma (only persistence/prisma/* touch it); no service reads
+      `req`/`res`.
 
-**DoD:** `pnpm --filter api test` green; malformed workspace payloads return 400 at the edge.
+**DoD:** `pnpm --filter api test` green (**47/47**, +6 new `dto-validation.test.ts`); malformed
+workspace payloads return **400 at the edge** (pinned by the new test: wrong type → 400, whitelist
+strips unknowns, role narrowing, `parentId` presence). tsc clean, biome clean. reviewer PASS.
+**DONE.** (DTOs for the preset body were intentionally NOT added — the preset is a contract type
+validated by `@org/form-schema`; a class-validator DTO would duplicate the contract.)
 
 > Lower priority than R0–R5 (the stated pain is the frontend). The ARCHITECTURE.md fix is worth
 > doing regardless; the DTO work is optional polish.

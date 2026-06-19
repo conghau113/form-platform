@@ -14,12 +14,10 @@ import {
 import type { FormSchema } from "@org/form-schema";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import type { FormSummary } from "../../persistence/repositories/form.repo.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { MoveFormDto } from "./dto/move-form.dto.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
 import { FormsService } from "./forms.service.js";
-
-interface MoveFormDto {
-  folderId?: string | null;
-}
 
 @Controller("forms")
 export class FormsController {

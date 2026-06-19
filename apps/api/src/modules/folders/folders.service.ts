@@ -12,19 +12,9 @@ import type {
 import { FolderRepo } from "../../persistence/repositories/folder.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
+import type { CreateFolderDto } from "./dto/create-folder.dto.js";
+import type { UpdateFolderDto } from "./dto/update-folder.dto.js";
 import { wouldCreateCycle } from "./folder-tree.js";
-
-export interface CreateFolderDto {
-  projectId: string;
-  parentId?: string | null;
-  name: string;
-}
-
-export interface UpdateFolderDto {
-  name?: string;
-  parentId?: string | null;
-  order?: number;
-}
 
 /**
  * Folder CRUD (Track W, W1; W5 sharing). Access is enforced by resolving the folder's project

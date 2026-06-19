@@ -1,7 +1,10 @@
 import { Body, Controller, Delete, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import type { FolderRecord } from "../../persistence/repositories/folder.repo.js";
-import type { CreateFolderDto, UpdateFolderDto } from "./folders.service.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { CreateFolderDto } from "./dto/create-folder.dto.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { UpdateFolderDto } from "./dto/update-folder.dto.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
 import { FoldersService } from "./folders.service.js";
 

@@ -23,11 +23,7 @@ import {
   type ProjectRole,
   roleSatisfies,
 } from "../../persistence/repositories/project-member.repo.js";
-
-export interface CreateProjectDto {
-  name: string;
-  description?: string | null;
-}
+import type { CreateProjectDto } from "./dto/create-project.dto.js";
 
 /** Single payload the builder (W2) renders as a DirectoryTree: project + flat folders + forms. */
 export interface ProjectTree {

@@ -1,14 +1,13 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import type { ProjectRecord } from "../../persistence/repositories/project.repo.js";
-import type { CreateProjectDto, ProjectTree } from "./projects.service.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { CreateProjectDto } from "./dto/create-project.dto.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { UpdateProjectDto } from "./dto/update-project.dto.js";
+import type { ProjectTree } from "./projects.service.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
 import { ProjectsService } from "./projects.service.js";
-
-interface UpdateProjectDto {
-  name?: string;
-  description?: string | null;
-}
 
 @Controller("projects")
 export class ProjectsController {
