@@ -13,11 +13,14 @@
 
 > **RESUME HERE (next session):** Branch `refactor/r0-safety-net` (off `feat/builder-ux-g3-u1` =
 > main+3; NOT bare main, since G3+U1 is unmerged). R0+R1+R2 done & committed (`1d64574`,
-> `5d44a53`, `1bc12c4`) AND browser-verified. **Next = R3** (decompose `App.tsx`) — the riskiest
-> phase; read its landmine list below before starting. Run `pnpm --filter @app/builder test`
-> (expect 255) + `typecheck` as the gate; R0's `App.characterization.test.tsx` is the safety net.
-> NOTE: `apps/api` build hits a Windows Prisma EPERM (file lock) unrelated to this work — build
-> the builder alone (`pnpm --filter @app/builder build`) to verify FE.
+> `5d44a53`, `1bc12c4`) AND browser-verified. **R3 done & UNCOMMITTED** (owner gates commit;
+> reviewer PASS, no blocking issues) — `App.tsx` decomposed into `editor/` hooks; typecheck clean,
+> biome clean, builder 255/255 with R0's `App.characterization.test.tsx` passing UNCHANGED.
+> **R3 browser smoke still pending owner verification** (undo/redo, copy/paste, keyboard move,
+> delete, save→clean+rail refresh, load→form+theme, import/export, unsaved-changes guard).
+> **Next = R4** (react-query for workspace + presets). NOTE: `apps/api` build hits a Windows Prisma
+> EPERM (file lock) unrelated to this work — build the builder alone
+> (`pnpm --filter @app/builder build`) to verify FE.
 >
 > **Verification (2026-06-19):** builder prod build green (3353 modules); full suite 255/255;
 > real-browser smoke at `/projects/x/forms/y` (no API needed — App seeds the example form):
@@ -30,8 +33,8 @@
 | R0 — Safety net | ✅ DONE (1d64574) | `refactor/r0-safety-net` | baseline typecheck 15/15 + builder 250 green; added `App.characterization.test.tsx` (5 tests) pinning save/load/dirty/keydown wiring → 255 green. No `App.test.tsx` existed before. |
 | R1 — Relocate root files | ✅ DONE | `refactor/r0-safety-net` | 8 feature folders + barrels (`palette/reactions/datasource/theme/templates/workflow/lib/editor`); `app/`→`editor/` (Win casing); cut a palette↔presets barrel cycle. typecheck clean, 253/255 (2 known load-flaky). |
 | R2 — Split DesignCanvas | ✅ DONE | `refactor/r0-safety-net` | 812→~700 LOC component. Pure geometry→`engine/geometry.ts`(+test); `DesignerValue`/context/`useDesigner`→`canvas/DesignerContext.tsx`; component+`useDragon`→`canvas/` + barrel. Context-consumers import `../canvas/DesignerContext` directly (lean/cycle-proof). typecheck clean, 255/255. |
-| R3 — Decompose App.tsx | ⏳ next | — | |
-| R4 — react-query workspace/presets | pending | — | |
+| R3 — Decompose App.tsx | ✅ DONE (uncommitted) | `refactor/r0-safety-net` | 604→388 LOC shell (logic ~240 + JSX layout ~148). 4 hooks + a client extracted into `editor/`: `useFormEditor` (history/selection/clipboard + derived schema/json/selected/fieldNames + applyJson/loadSchema), `useEditorShortcuts` (keydown, dep set `[history,tree,selection,clipboard]` preserved verbatim w/ biome-ignore), `useFormPersistence` (tokens/savedTokens/savedIndex + onSave/onLoad via new `client.ts` + formId load-on-mount), `useNavigationGuard` (dirty + onDirtyChange + latestSave-ref/stableSave/provideSave + beforeunload). `client.ts` = the only `fetch` site (postForm/postTheme/getForm/getTheme + `API` const). barrel updated. typecheck clean, biome clean, builder 255/255 (R0 characterization passes UNCHANGED). reviewer PASS no blockers. **Browser smoke pending owner.** |
+| R4 — react-query workspace/presets | ⏳ next | — | |
 | R5 — react-query form save/load | pending | — | |
 | R6 — api polish | pending | — | |
 | R7 — guardrails | pending | — | |
@@ -170,14 +173,16 @@ each extraction. Known closure/state landmines — get these right or behaviour 
 
 Extraction order:
 
-- [ ] `editor/useFormEditor.ts` — `history` + `selection` + `clipboard` + derived
+- [x] `editor/useFormEditor.ts` — `history` + `selection` + `clipboard` + derived
       `schema`/`json`/`selectedNode`/`fieldNames`. Returns a typed object.
-- [ ] `editor/useEditorShortcuts.ts` — the `window keydown` effect (exact deps preserved).
-- [ ] `editor/useFormPersistence.ts` — save/load form **and** theme; **inline `fetch` moves into a
-      `forms`/`themes` `client.ts`** consumed here. Keep it a plain hook for now (react-query
-      swap is R4) so this stays behaviour-only. Preserve the `latestSave` ref.
-- [ ] `editor/useNavigationGuard.ts` — `dirty`, `beforeunload`, `onDirtyChange`, `provideSave`.
-- [ ] `App.tsx` → wiring + layout only, target <200 LOC.
+- [x] `editor/useEditorShortcuts.ts` — the `window keydown` effect (exact deps preserved).
+- [x] `editor/useFormPersistence.ts` — save/load form **and** theme; inline `fetch` moved into
+      `editor/client.ts` (postForm/postTheme/getForm/getTheme) consumed here. Plain hook for now
+      (react-query swap is R5); the `latestSave` ref lives in `useNavigationGuard` (unchanged).
+- [x] `editor/useNavigationGuard.ts` — `dirty`, `beforeunload`, `onDirtyChange`, `provideSave`.
+- [x] `App.tsx` → wiring + layout only. **604 → 388 LOC** (logic ~240, JSX layout ~148 — the
+      remaining bulk is the irreducible header/3-pane layout; the tangled God-component *logic*
+      is fully extracted, which was the actual goal). All `fetch` now lives in `client.ts`.
 
 **Smoke gate (browser, required):** every R0 behaviour — undo/redo, copy/paste, keyboard move,
 delete, save (marks clean + refreshes rail), load (applies form + theme), import/export, and the
