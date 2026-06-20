@@ -1,4 +1,4 @@
-import { type AccessContext, canView, isVisible } from "@org/form-core";
+import { type AccessContext, canView, isVisible, localizeForm } from "@org/form-core";
 // On a real RN project these come from react-native + a native UI kit such as
 // @ant-design/react-native or react-native-paper. Stubbed here so the package
 // builds in a web-only workspace without native toolchain.
@@ -11,6 +11,13 @@ export interface NativeFormRendererProps {
   schema: unknown;
   access?: AccessContext;
   onSubmit?: (values: Record<string, unknown>) => void;
+  /** Render the form in this locale (i18n — Phase P). The native renderer shares form-core's
+   *  `localizeForm` resolver with the web renderer, so per-node `i18n` override maps collapse to
+   *  plain strings before the leaf components map them. Absent ⇒ the authored default strings. */
+  locale?: string;
+  /** Locale used when `locale` has no translation for a given string (before falling back to the
+   *  authored default). Only meaningful alongside `locale`. */
+  fallbackLocale?: string;
 }
 
 /**
@@ -25,8 +32,18 @@ function orderForMobile(fields: FieldNode[]): FieldNode[] {
     .sort((a, b) => ((a as any).layout?.mobileOrder ?? 0) - ((b as any).layout?.mobileOrder ?? 0));
 }
 
-export function FormRenderer({ schema, access = { roles: [] } }: NativeFormRendererProps) {
-  const form: FormSchema = useMemo(() => migrate(schema), [schema]);
+export function FormRenderer({
+  schema,
+  access = { roles: [] },
+  locale,
+  fallbackLocale,
+}: NativeFormRendererProps) {
+  // Mirrors the web renderer's pipeline: migrate first, then (i18n) localize. No `locale` ⇒
+  // the migrated form is rendered verbatim.
+  const form: FormSchema = useMemo(() => {
+    const migrated = migrate(schema);
+    return locale ? localizeForm(migrated, locale, fallbackLocale) : migrated;
+  }, [schema, locale, fallbackLocale]);
   const [values] = useState<Record<string, unknown>>({});
 
   const renderNode = (node: FieldNode): React.ReactNode => {
