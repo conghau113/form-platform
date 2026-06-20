@@ -1,5 +1,5 @@
 import { validateGraph } from "@org/workflow-core";
-import { migrateWorkflow } from "@org/workflow-schema";
+import type { WorkflowDefinition } from "@org/workflow-schema";
 import {
   addEdge,
   Background,
@@ -12,9 +12,8 @@ import {
   useEdgesState,
   useNodesState,
 } from "@xyflow/react";
-import { Alert, Button, Divider, Input, message, Space, Tag, Typography } from "antd";
-import { useCallback, useMemo, useState } from "react";
-import workflowExample from "../../../../examples/workflow.v1.json";
+import { Alert, Button, Divider, Input, message, Select, Space, Tag, Typography } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type FlowEdge,
   type FlowEdgeData,
@@ -26,6 +25,12 @@ import {
   toFlow,
   type WorkflowMeta,
 } from "./workflow-model";
+
+/** A bindable form for the node panel's "Bound form" picker. */
+export interface WorkflowFormOption {
+  id: string;
+  title: string;
+}
 
 /** Custom state node: shows its status, the bound formId, and a "start" badge. */
 function WorkflowNodeView({ data, selected }: NodeProps<FlowNode>) {
@@ -56,12 +61,30 @@ function WorkflowNodeView({ data, selected }: NodeProps<FlowNode>) {
 const nodeTypes = { workflow: WorkflowNodeView };
 
 export interface WorkflowEditorProps {
-  /** Open the form builder bound to a node's formId (sets form mode + loads it). */
-  onEditForm: (formId: string) => void;
+  /** The persisted workflow contract to seed the canvas from (loaded by the route). */
+  definition: WorkflowDefinition;
+  /** Forms in the workflow's project — the node "Bound form" picker is populated from these. */
+  formOptions: WorkflowFormOption[];
+  /** Persist the current (validated) definition. Throws on failure; the editor surfaces it. */
+  onSave: (def: WorkflowDefinition) => Promise<void>;
+  /** Open the form builder bound to a node's formId (navigates to the form editor route). */
+  onEditForm?: (formId: string) => void;
+  /** Reports whether the editor has unsaved changes (drives the navigation guard). */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Hands a stable save fn up so the guard can "save then proceed". Returns success. */
+  provideSave?: (save: () => Promise<boolean>) => void;
 }
 
-export function WorkflowEditor({ onEditForm }: WorkflowEditorProps) {
-  const seed = useMemo(() => toFlow(migrateWorkflow(workflowExample)), []);
+export function WorkflowEditor({
+  definition,
+  formOptions,
+  onSave,
+  onEditForm,
+  onDirtyChange,
+  provideSave,
+}: WorkflowEditorProps) {
+  // Seed once from the loaded definition; the route remounts (key={workflowId}) to switch workflows.
+  const seed = useMemo(() => toFlow(definition), [definition]);
   const [meta, setMeta] = useState<WorkflowMeta>(seed.meta);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(seed.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(seed.edges);
@@ -71,10 +94,47 @@ export function WorkflowEditor({ onEditForm }: WorkflowEditorProps) {
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId) ?? null;
 
+  // The current definition + dirty signal (vs. the last-saved baseline, compared by JSON).
+  const currentDef = useMemo(() => fromFlow(meta, nodes, edges), [meta, nodes, edges]);
+  const savedJsonRef = useRef(JSON.stringify(definition));
+  const dirty = JSON.stringify(currentDef) !== savedJsonRef.current;
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  // Keep the latest definition in a ref so the stable save fn never reads a stale closure.
+  const defRef = useRef(currentDef);
+  defRef.current = currentDef;
+
+  const save = useCallback(async (): Promise<boolean> => {
+    const def = defRef.current;
+    const errors = validateGraph(def);
+    if (errors.length > 0) {
+      message.error(errors.map((e) => e.message).join(" • "));
+      return false;
+    }
+    try {
+      await onSave(def);
+      savedJsonRef.current = JSON.stringify(def);
+      onDirtyChange?.(false);
+      message.success("Workflow saved");
+      return true;
+    } catch (e) {
+      message.error((e as Error).message);
+      return false;
+    }
+  }, [onSave, onDirtyChange]);
+
+  useEffect(() => {
+    provideSave?.(save);
+  }, [provideSave, save]);
+
   const onConnect = useCallback(
     (c: Connection) => {
-      if (!c.source || !c.target) return;
-      setEdges((eds) => addEdge(newEdge(c.source!, c.target!, "next"), eds));
+      const { source, target } = c;
+      if (!source || !target) return;
+      setEdges((eds) => addEdge(newEdge(source, target, "next"), eds));
     },
     [setEdges],
   );
@@ -118,17 +178,6 @@ export function WorkflowEditor({ onEditForm }: WorkflowEditorProps) {
     }
   }
 
-  function onExport() {
-    const def = fromFlow(meta, nodes, edges);
-    const blob = new Blob([JSON.stringify(def, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${meta.id || "workflow"}.workflow.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
@@ -144,19 +193,13 @@ export function WorkflowEditor({ onEditForm }: WorkflowEditorProps) {
           value={meta.title}
           onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
           placeholder="workflow title"
-          style={{ width: 200 }}
-        />
-        <Input
-          value={meta.id}
-          onChange={(e) => setMeta((m) => ({ ...m, id: e.target.value }))}
-          placeholder="workflow id"
-          style={{ width: 160 }}
+          style={{ width: 240 }}
         />
         <Space>
           <Button onClick={addState}>Add state</Button>
           <Button onClick={onValidate}>Validate</Button>
-          <Button type="primary" onClick={onExport}>
-            Export JSON
+          <Button type="primary" disabled={!dirty} onClick={save}>
+            Save
           </Button>
         </Space>
       </div>
@@ -201,6 +244,7 @@ export function WorkflowEditor({ onEditForm }: WorkflowEditorProps) {
             <NodePanel
               node={selectedNode}
               isStart={meta.start === selectedNode.id}
+              formOptions={formOptions}
               onChange={(patch) => patchNodeData(selectedNode.id, patch)}
               onSetStart={() => setStart(selectedNode.id)}
               onEditForm={onEditForm}
@@ -225,16 +269,24 @@ export function WorkflowEditor({ onEditForm }: WorkflowEditorProps) {
 function NodePanel({
   node,
   isStart,
+  formOptions,
   onChange,
   onSetStart,
   onEditForm,
 }: {
   node: FlowNode;
   isStart: boolean;
+  formOptions: WorkflowFormOption[];
   onChange: (patch: Partial<FlowNodeData>) => void;
   onSetStart: () => void;
-  onEditForm: (formId: string) => void;
+  onEditForm?: (formId: string) => void;
 }) {
+  const boundFormId = node.data.formId;
+  // A bound form that no longer exists in the project still shows as a (dangling) option.
+  const options = formOptions.map((f) => ({ value: f.id, label: f.title }));
+  if (boundFormId && !formOptions.some((f) => f.id === boundFormId)) {
+    options.push({ value: boundFormId, label: `${boundFormId} (missing)` });
+  }
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Title level={5} style={{ margin: 0 }}>
@@ -243,11 +295,17 @@ function NodePanel({
       <Field label="Status">
         <Input value={node.data.status} onChange={(e) => onChange({ status: e.target.value })} />
       </Field>
-      <Field label="Bound form id">
-        <Input
-          value={node.data.formId ?? ""}
-          placeholder="form id"
-          onChange={(e) => onChange({ formId: e.target.value || undefined })}
+      <Field label="Bound form">
+        <Select
+          style={{ width: "100%" }}
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder="Select a form in this project"
+          value={boundFormId}
+          options={options}
+          onChange={(value) => onChange({ formId: value || undefined })}
+          notFoundContent="No forms in this project"
         />
       </Field>
       <Button block disabled={isStart} onClick={onSetStart}>
@@ -256,8 +314,8 @@ function NodePanel({
       <Button
         block
         type="primary"
-        disabled={!node.data.formId}
-        onClick={() => node.data.formId && onEditForm(node.data.formId)}
+        disabled={!boundFormId || !onEditForm}
+        onClick={() => boundFormId && onEditForm?.(boundFormId)}
       >
         Edit form
       </Button>

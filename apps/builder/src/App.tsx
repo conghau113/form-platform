@@ -1,5 +1,5 @@
 import { toAntdTheme } from "@org/form-theme";
-import { Button, message, Segmented, Space, Typography, Upload } from "antd";
+import { Button, message, Space, Typography, Upload } from "antd";
 import { useMemo, useState } from "react";
 import { DesignerProvider, type DesignerValue, useDragon } from "./canvas";
 import {
@@ -31,7 +31,6 @@ import { oneOf, usePersistentState } from "./workbench/persist";
 import { SettingsPanel } from "./workbench/SettingsPanel";
 import { type Device, ToolbarPanel, type ViewMode } from "./workbench/ToolbarPanel";
 import { ViewPanel } from "./workbench/ViewPanel";
-import { WorkflowEditor } from "./workflow";
 import { ExplorerToggle } from "./workspace/ExplorerToggle";
 
 /** Canvas/preview content width per simulated device. */
@@ -117,7 +116,6 @@ export function App({
     "design",
     oneOf("design", "json", "preview"),
   );
-  const [mode, setMode] = useState<"form" | "workflow">("form");
   const [galleryOpen, setGalleryOpen] = useState(false);
   const userTemplates = useUserTemplates();
 
@@ -208,13 +206,6 @@ export function App({
       ),
   };
 
-  // A workflow node "opens the existing form builder to bind its form": switch to
-  // form mode and load that form id from the API.
-  function onEditForm(targetFormId: string) {
-    setMode("form");
-    void onLoad(targetFormId);
-  }
-
   function onExportTheme() {
     const blob = new Blob([JSON.stringify(tokens, null, 2)], {
       type: "application/json",
@@ -269,31 +260,24 @@ export function App({
           <Typography.Title level={4} style={{ margin: 0, whiteSpace: "nowrap" }}>
             Builder
           </Typography.Title>
-          <Segmented
-            options={["form", "workflow"]}
-            value={mode}
-            onChange={(v) => setMode(v as "form" | "workflow")}
-          />
-          {mode === "form" && (
-            <Space style={{ marginLeft: "auto" }}>
-              <Button onClick={() => setGalleryOpen(true)}>Templates</Button>
-              <Button onClick={onExportForm}>Export</Button>
-              <Upload
-                accept=".json,application/json"
-                showUploadList={false}
-                beforeUpload={(file) => {
-                  void onImportForm(file);
-                  return false; // handle locally; never POST
-                }}
-              >
-                <Button>Import</Button>
-              </Upload>
-              <Button type="primary" onClick={onSave}>
-                Save
-              </Button>
-              <Button onClick={() => onLoad()}>Load</Button>
-            </Space>
-          )}
+          <Space style={{ marginLeft: "auto" }}>
+            <Button onClick={() => setGalleryOpen(true)}>Templates</Button>
+            <Button onClick={onExportForm}>Export</Button>
+            <Upload
+              accept=".json,application/json"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                void onImportForm(file);
+                return false; // handle locally; never POST
+              }}
+            >
+              <Button>Import</Button>
+            </Upload>
+            <Button type="primary" onClick={onSave}>
+              Save
+            </Button>
+            <Button onClick={() => onLoad()}>Load</Button>
+          </Space>
         </header>
 
         <TemplateGallery
@@ -305,100 +289,92 @@ export function App({
           onDeleteUser={userTemplates.remove}
         />
 
-        {mode === "workflow" ? (
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <WorkflowEditor onEditForm={onEditForm} />
-          </div>
-        ) : (
-          <HoverProvider>
-            <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-              <aside
-                style={{
-                  width: 260,
-                  borderRight: "1px solid rgba(0,0,0,0.08)",
-                  minHeight: 0,
-                  overflow: "hidden",
-                }}
-              >
-                <CompositePanel
-                  tree={tree}
-                  history={{
-                    entries: history.entries,
-                    index: history.index,
-                    jumpTo: history.jumpTo,
-                  }}
-                  tokens={tokens}
-                  onChangeTokens={setTokens}
-                  onExportTheme={onExportTheme}
-                  selectedField={selected?.field ?? null}
-                  projectId={projectId}
-                  presets={presets}
-                />
-              </aside>
-
-              <section
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: 1,
-                  minWidth: 0,
-                  borderRight: "1px solid rgba(0,0,0,0.08)",
-                  minHeight: 0,
-                }}
-              >
-                <ToolbarPanel
-                  canUndo={history.canUndo}
-                  canRedo={history.canRedo}
-                  onUndo={history.undo}
-                  onRedo={history.redo}
-                  device={device}
-                  onDevice={setDevice}
-                  viewMode={viewMode}
-                  onViewMode={setViewMode}
-                  locales={localeOptions}
-                  locale={activeLocale}
-                  onLocale={setPreviewLocale}
-                />
-                <ViewPanel
-                  mode={viewMode}
-                  schema={schema}
-                  json={json}
-                  tree={tree}
-                  antdTheme={antdTheme}
-                  maxWidth={VIEWPORTS[device]}
-                  onApplyJson={applyJson}
-                  presetResolver={presetResolver}
-                  locale={activeLocale}
-                  fallbackLocale={form.defaultLocale}
-                />
-              </section>
-
-              <SettingsPanel
+        <HoverProvider>
+          <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+            <aside
+              style={{
+                width: 260,
+                borderRight: "1px solid rgba(0,0,0,0.08)",
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
+              <CompositePanel
                 tree={tree}
-                selectedUid={selectedUid}
-                onSelect={(uid) => setSelection(select(emptySelection, uid))}
-              >
-                <PropertyPanel
-                  selected={selected}
-                  form={formSelected ? form : null}
-                  siblingNames={siblingNames}
-                  fieldNames={fieldNames}
-                  presets={allPresets}
-                  locales={form.locales}
-                  onChange={(uid, field) =>
-                    history.set(applyFieldEdit(tree, uid, field), "Edit field")
-                  }
-                  onStepsEdit={(uid, op) =>
-                    history.set(applyStepsOp(tree, uid, op, metaGuard()), "Edit steps")
-                  }
-                  onChangeForm={(patch) =>
-                    history.set(patchNode(tree, tree.uid, patch), "Edit form")
-                  }
-                />
-              </SettingsPanel>
-            </div>
-          </HoverProvider>
-        )}
+                history={{
+                  entries: history.entries,
+                  index: history.index,
+                  jumpTo: history.jumpTo,
+                }}
+                tokens={tokens}
+                onChangeTokens={setTokens}
+                onExportTheme={onExportTheme}
+                selectedField={selected?.field ?? null}
+                projectId={projectId}
+                presets={presets}
+              />
+            </aside>
+
+            <section
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+                minWidth: 0,
+                borderRight: "1px solid rgba(0,0,0,0.08)",
+                minHeight: 0,
+              }}
+            >
+              <ToolbarPanel
+                canUndo={history.canUndo}
+                canRedo={history.canRedo}
+                onUndo={history.undo}
+                onRedo={history.redo}
+                device={device}
+                onDevice={setDevice}
+                viewMode={viewMode}
+                onViewMode={setViewMode}
+                locales={localeOptions}
+                locale={activeLocale}
+                onLocale={setPreviewLocale}
+              />
+              <ViewPanel
+                mode={viewMode}
+                schema={schema}
+                json={json}
+                tree={tree}
+                antdTheme={antdTheme}
+                maxWidth={VIEWPORTS[device]}
+                onApplyJson={applyJson}
+                presetResolver={presetResolver}
+                locale={activeLocale}
+                fallbackLocale={form.defaultLocale}
+              />
+            </section>
+
+            <SettingsPanel
+              tree={tree}
+              selectedUid={selectedUid}
+              onSelect={(uid) => setSelection(select(emptySelection, uid))}
+            >
+              <PropertyPanel
+                selected={selected}
+                form={formSelected ? form : null}
+                siblingNames={siblingNames}
+                fieldNames={fieldNames}
+                presets={allPresets}
+                locales={form.locales}
+                onChange={(uid, field) =>
+                  history.set(applyFieldEdit(tree, uid, field), "Edit field")
+                }
+                onStepsEdit={(uid, op) =>
+                  history.set(applyStepsOp(tree, uid, op, metaGuard()), "Edit steps")
+                }
+                onChangeForm={(patch) => history.set(patchNode(tree, tree.uid, patch), "Edit form")}
+              />
+            </SettingsPanel>
+          </div>
+        </HoverProvider>
       </div>
     </DesignerProvider>
   );

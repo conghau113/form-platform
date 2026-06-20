@@ -9,4 +9,6 @@ export const qk = {
   presets: (projectId?: string) => ["presets", projectId ?? null] as const,
   form: (formId: string) => ["forms", formId] as const,
   theme: (formId: string) => ["themes", formId] as const,
+  workflows: (projectId: string) => ["workflows", "list", projectId] as const,
+  workflow: (id: string) => ["workflows", "item", id] as const,
 } as const;

@@ -32,6 +32,16 @@ export interface FormSummary {
   updatedAt: string;
 }
 
+/** Org-index summary of a workflow (no body) — mirrors the api `WorkflowSummary` repo type. */
+export interface WorkflowSummary {
+  id: string;
+  projectId: string;
+  folderId: string | null;
+  title: string;
+  status: string | null;
+  updatedAt: string;
+}
+
 /** `GET /projects/:id/tree` payload: flat lists the client assembles into a tree. */
 export interface ProjectTree {
   project: ProjectRecord;

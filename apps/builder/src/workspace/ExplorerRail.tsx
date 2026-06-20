@@ -6,17 +6,27 @@ import {
   FolderAddOutlined,
   FormOutlined,
   LeftOutlined,
+  PartitionOutlined,
   ShareAltOutlined,
 } from "@ant-design/icons";
 import type { MenuProps, TreeDataNode, TreeProps } from "antd";
 import { Button, Dropdown, Input, Modal, message, Select, Spin, Tree, Typography } from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import * as wfApi from "../workflow/client";
+import { duplicateWorkflow, newWorkflow } from "../workflow/newWorkflow";
 import * as api from "./client";
 import { duplicateForm, newForm } from "./newForm";
 import { ShareDialog } from "./ShareDialog";
-import { buildTree, dropFolderId, formKey, parseKey, type WorkspaceNode } from "./tree";
-import type { ProjectRecord, ProjectTree } from "./types";
+import {
+  buildTree,
+  dropFolderId,
+  formKey,
+  parseKey,
+  type WorkspaceNode,
+  workflowKey,
+} from "./tree";
+import type { ProjectRecord, ProjectTree, WorkflowSummary } from "./types";
 
 /** A one-field text prompt (create / rename). Resolves the entered value to `onOk`. */
 interface Prompt {
@@ -30,12 +40,16 @@ export interface ExplorerRailProps {
   projectId: string;
   projects: ProjectRecord[];
   tree: ProjectTree | null;
+  /** The project's workflows (Workflow WF1) — shown in the tree alongside forms. */
+  workflows: WorkflowSummary[];
   loading: boolean;
   error: string | null;
-  /** Invalidate the cached tree after a mutation (rename/move/delete/create) → refetch. */
+  /** Invalidate the cached tree + workflow list after a mutation (create/rename/move/delete). */
   invalidate: () => Promise<void>;
   /** Form currently open in the editor pane — highlighted in the tree. */
   activeFormId?: string;
+  /** Workflow currently open in the editor pane — highlighted in the tree. */
+  activeWorkflowId?: string;
   collapsed?: boolean;
 }
 
@@ -50,10 +64,12 @@ export function ExplorerRail({
   projectId,
   projects,
   tree,
+  workflows,
   loading,
   error,
   invalidate,
   activeFormId,
+  activeWorkflowId,
   collapsed = false,
 }: ExplorerRailProps) {
   const navigate = useNavigate();
@@ -63,6 +79,7 @@ export function ExplorerRail({
   const currentProject = projects.find((p) => p.id === projectId) ?? null;
 
   const openForm = (id: string) => navigate(`/projects/${projectId}/forms/${id}`);
+  const openWorkflow = (id: string) => navigate(`/projects/${projectId}/workflows/${id}/edit`);
 
   function ask(p: Prompt) {
     setPromptValue(p.initial);
@@ -147,6 +164,52 @@ export function ExplorerRail({
     });
   }
 
+  // --- workflow actions ---
+  function createWorkflow(folderId: string | null) {
+    ask({
+      title: "New workflow",
+      okText: "Create",
+      initial: "",
+      onOk: async (title) => {
+        try {
+          const saved = await wfApi.saveWorkflow(newWorkflow(title), { projectId, folderId });
+          await invalidate();
+          openWorkflow(saved.id);
+        } catch (e) {
+          message.error((e as Error).message);
+        }
+      },
+    });
+  }
+  function duplicateWf(id: string, folderId: string | null) {
+    wfApi
+      .loadWorkflow(id)
+      .then((src) => wfApi.saveWorkflow(duplicateWorkflow(src), { projectId, folderId }))
+      .then(async (saved) => {
+        await invalidate();
+        openWorkflow(saved.id);
+      })
+      .catch((e) => message.error((e as Error).message));
+  }
+  function renameWorkflow(id: string, current: string) {
+    ask({
+      title: "Rename workflow",
+      okText: "Save",
+      initial: current,
+      // Load the contract, set its title, re-save (no placement → keeps its folder).
+      onOk: (title) =>
+        run(wfApi.loadWorkflow(id).then((src) => wfApi.saveWorkflow({ ...src, title }))),
+    });
+  }
+  function deleteWorkflow(id: string, title: string) {
+    Modal.confirm({
+      title: `Delete workflow "${title}"?`,
+      okText: "Delete",
+      okButtonProps: { danger: true },
+      onOk: () => run(wfApi.deleteWorkflow(id)),
+    });
+  }
+
   // --- drag-to-move ---
   const onDrop: TreeProps["onDrop"] = (info) => {
     const dragged = parseKey(String(info.dragNode.key));
@@ -155,8 +218,10 @@ export function ExplorerRail({
       !info.dropToGap,
       tree?.folders ?? [],
       tree?.forms ?? [],
+      workflows,
     );
     if (dragged.kind === "form") run(api.moveForm(dragged.id, target));
+    else if (dragged.kind === "workflow") run(wfApi.moveWorkflow(dragged.id, target));
     else run(api.updateFolder(dragged.id, { parentId: target }));
   };
 
@@ -167,6 +232,8 @@ export function ExplorerRail({
   } {
     const formFolder = (): string | null =>
       tree?.forms.find((f) => f.id === node.id)?.folderId ?? null;
+    const workflowFolder = (): string | null =>
+      workflows.find((w) => w.id === node.id)?.folderId ?? null;
     const items: MenuProps["items"] =
       node.kind === "folder"
         ? [
@@ -179,6 +246,11 @@ export function ExplorerRail({
               key: "new-form",
               icon: <FileAddOutlined />,
               label: "New form here",
+            },
+            {
+              key: "new-workflow",
+              icon: <PartitionOutlined />,
+              label: "New workflow here",
             },
             { key: "rename", icon: <EditOutlined />, label: "Rename" },
             {
@@ -204,8 +276,14 @@ export function ExplorerRail({
       if (node.kind === "folder") {
         if (key === "new-folder") createFolder(node.id);
         else if (key === "new-form") createForm(node.id);
+        else if (key === "new-workflow") createWorkflow(node.id);
         else if (key === "rename") renameFolder(node.id, node.title);
         else if (key === "delete") deleteFolder(node.id, node.title);
+      } else if (node.kind === "workflow") {
+        if (key === "open") openWorkflow(node.id);
+        else if (key === "rename") renameWorkflow(node.id, node.title);
+        else if (key === "duplicate") duplicateWf(node.id, workflowFolder());
+        else if (key === "delete") deleteWorkflow(node.id, node.title);
       } else if (key === "open") openForm(node.id);
       else if (key === "rename") renameForm(node.id, node.title);
       else if (key === "duplicate") duplicate(node.id, formFolder());
@@ -218,16 +296,30 @@ export function ExplorerRail({
   const titleRender = (data: TreeDataNode) => {
     const node = data as unknown as WorkspaceNode;
     const { items, onClick } = nodeMenu(node);
+    const icon =
+      node.kind === "form" ? (
+        <FormOutlined style={{ marginRight: 6, color: "#1677ff" }} />
+      ) : node.kind === "workflow" ? (
+        <PartitionOutlined style={{ marginRight: 6, color: "#722ed1" }} />
+      ) : null;
     return (
       <Dropdown trigger={["contextMenu"]} menu={{ items, onClick: ({ key }) => onClick(key) }}>
-        <span style={{ userSelect: "none" }}>{node.title}</span>
+        <span style={{ userSelect: "none" }}>
+          {icon}
+          {node.title}
+        </span>
       </Dropdown>
     );
   };
 
   if (collapsed) return null;
 
-  const nodes = tree ? buildTree(tree.folders, tree.forms) : [];
+  const nodes = tree ? buildTree(tree.folders, tree.forms, workflows) : [];
+  const selectedKeys = activeFormId
+    ? [formKey(activeFormId)]
+    : activeWorkflowId
+      ? [workflowKey(activeWorkflowId)]
+      : [];
 
   return (
     <aside
@@ -280,6 +372,9 @@ export function ExplorerRail({
           >
             Form
           </Button>
+          <Button size="small" icon={<PartitionOutlined />} onClick={() => createWorkflow(null)}>
+            Workflow
+          </Button>
           <Button
             size="small"
             icon={<ShareAltOutlined />}
@@ -305,13 +400,14 @@ export function ExplorerRail({
             draggable
             blockNode
             defaultExpandAll
-            selectedKeys={activeFormId ? [formKey(activeFormId)] : []}
+            selectedKeys={selectedKeys}
             treeData={nodes as unknown as TreeDataNode[]}
             titleRender={titleRender}
             onDrop={onDrop}
             onSelect={(_keys, info) => {
               const { kind, id } = parseKey(String(info.node.key));
               if (kind === "form") openForm(id);
+              else if (kind === "workflow") openWorkflow(id);
             }}
           />
         )}
