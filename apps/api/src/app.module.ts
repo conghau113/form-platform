@@ -4,6 +4,7 @@ import { FormsModule } from "./modules/forms/forms.module.js";
 import { PresetsModule } from "./modules/presets/presets.module.js";
 import { ProjectsModule } from "./modules/projects/projects.module.js";
 import { ThemesModule } from "./modules/themes/themes.module.js";
+import { WorkflowsModule } from "./modules/workflows/workflows.module.js";
 import { PersistenceModule } from "./persistence/persistence.module.js";
 
 /** Root module — composes the feature modules. New features (e.g. workflow) are added
@@ -16,6 +17,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     ProjectsModule,
     FoldersModule,
     FormsModule,
+    WorkflowsModule,
     ThemesModule,
     PresetsModule,
   ],

@@ -19,6 +19,7 @@
     "@nestjs/platform-express": "^10.4.0",
     "@org/form-schema": "workspace:*",
     "@org/form-theme": "workspace:*",
+    "@org/workflow-schema": "workspace:*",
     "@prisma/client": "^6.19.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
