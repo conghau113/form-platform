@@ -39,8 +39,15 @@ a project, bind states to **real** forms from that project, and (stretch) run a 
 
 ---
 
-## WF0 — Persistence foundation (api + prisma)  [no UI]
-Mirror the forms module exactly.
+## WF0 — Persistence foundation (api + prisma)  ✅ DONE (commit c4c1fbe, branch feat/workflow-wf0)
+Mirror the forms module exactly. Shipped: `WorkflowRecord` prisma model + migration
+`20260620171441_workflow_records` (table+index only, no backfill, no `workflowVersion` bump);
+`WorkflowRepo` interface + `PrismaWorkflowRepo` (registered global); `modules/workflows/`
+(service with `migrateWorkflow` save gate + Unfiled placement + `ProjectsService.requireAccess`
+viewer-read/editor-write, controller GET/POST/PATCH-move/DELETE `@CurrentOwner`, `MoveWorkflowDto`);
+wired in `app.module`; api gained `@org/workflow-schema` dep. 9 service tests. typecheck 15/15,
+api 55/55, biome clean. Reviewer subagent unavailable (529 overloaded ×3) → reviewed inline instead.
+Original plan below for reference.
 
 - **prisma**: add `WorkflowRecord { id @id, projectId, folderId?, title, status?, body Json,
   updatedAt }` + relations on `Project` (`workflows WorkflowRecord[]`) and `Folder`
