@@ -302,7 +302,14 @@ export function FieldForm({
       : [
           {
             key: "validation" as const,
-            children: <ValidationEditor field={field} siblingNames={condFields} set={set} />,
+            children: (
+              <ValidationEditor
+                field={field}
+                siblingNames={condFields}
+                locales={locales}
+                set={set}
+              />
+            ),
           },
         ]),
     { key: "layout", children: layout },

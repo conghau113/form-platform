@@ -1,5 +1,6 @@
 import type { FormSchema, ValidationRule } from "@org/form-schema";
 import { describe, expect, it } from "vitest";
+import { viMessages } from "./messages.js";
 import { buildZodSchema, collectAsyncFields, collectWarnings } from "./validation.js";
 
 function form(fields: FormSchema["fields"]): FormSchema {
@@ -1114,5 +1115,94 @@ describe("collectAsyncFields", () => {
       { path: "members.0.email", name: "email", validator: { url: "/check-email" } },
       { path: "members.1.email", name: "email", validator: { url: "/check-email" } },
     ]);
+  });
+});
+
+describe("localized default messages (i18n P3)", () => {
+  // The renderer passes the pack's errorMap at parse time; mirror that here (en has none).
+  const firstMsg = (
+    schema: ReturnType<typeof buildZodSchema>,
+    value: unknown,
+    errorMap?: typeof viMessages.errorMap,
+  ) => {
+    const res = schema.safeParse(value, errorMap ? { errorMap } : undefined);
+    return res.success ? undefined : res.error.issues[0]?.message;
+  };
+
+  it("defaults to English (EN parity) when no messages pack is supplied", () => {
+    const schema = buildZodSchema(
+      form([{ type: "text", name: "n", label: "Name", required: true }]),
+    );
+    expect(firstMsg(schema, {})).toBe("Name is required");
+  });
+
+  it("uses the vi pack for required, format, item bounds and bare Zod constraints", () => {
+    const em = viMessages.errorMap;
+    const required = buildZodSchema(
+      form([{ type: "text", name: "n", label: "Tên", required: true }]),
+      { messages: viMessages },
+    );
+    expect(firstMsg(required, {}, em)).toBe("Tên là bắt buộc");
+
+    const format = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "p",
+          label: "Phone",
+          validations: [{ type: "format", format: "phone" }],
+        },
+      ]),
+      { messages: viMessages },
+    );
+    expect(firstMsg(format, { p: "abc" }, em)).toBe("Số điện thoại không hợp lệ");
+
+    const items = buildZodSchema(
+      form([
+        {
+          type: "array",
+          name: "rows",
+          label: "Rows",
+          minItems: 2,
+          itemFields: [{ type: "text", name: "x", label: "X" }],
+        },
+      ]),
+      { messages: viMessages },
+    );
+    expect(firstMsg(items, { rows: [] }, em)).toBe("Rows cần ít nhất 2 mục");
+
+    // A bare `.max(maxLength)` constraint carries no explicit message → localized via errorMap.
+    const bare = buildZodSchema(form([{ type: "text", name: "s", label: "S", maxLength: 3 }]), {
+      messages: viMessages,
+    });
+    expect(firstMsg(bare, { s: "toolong" }, em)).toBe("Tối đa 3 ký tự");
+  });
+
+  it("a custom rule message still wins over the pack default", () => {
+    const schema = buildZodSchema(
+      form([
+        {
+          type: "text",
+          name: "p",
+          label: "Phone",
+          validations: [{ type: "format", format: "phone", message: "Bịa" }],
+        },
+      ]),
+      { messages: viMessages },
+    );
+    expect(firstMsg(schema, { p: "abc" }, viMessages.errorMap)).toBe("Bịa");
+  });
+
+  it("collectWarnings localizes default warning text via the pack", () => {
+    const f = form([
+      {
+        type: "text",
+        name: "u",
+        label: "Tên",
+        validations: [{ type: "min", value: 5, severity: "warning" }],
+      },
+    ]);
+    const warnings = collectWarnings(f, { u: "ab" }, undefined, viMessages);
+    expect(warnings.u).toBe("Phải có ít nhất 5 ký tự");
   });
 });

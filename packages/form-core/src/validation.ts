@@ -9,6 +9,7 @@ import {
 } from "@org/form-schema";
 import { z } from "zod";
 import { evalRule } from "./conditions.js";
+import { enMessages, type FormatCheckName, type ValidationMessages } from "./messages.js";
 import { type AccessContext, canView } from "./rbac.js";
 import {
   computeNodeReactions,
@@ -17,25 +18,23 @@ import {
   effectiveVisible,
 } from "./reactions.js";
 
-/** Fixed `format` checks, compiled from string literals — declarative, NEVER eval. Each
- *  pairs a regex with a default message. `email`/`url` are handled by Zod's built-ins
- *  instead and are intentionally absent here. Mirrors the form-relevant subset of
- *  Formily's `@formily/validator` registry. */
-const FORMAT_CHECKS: Partial<
-  Record<NonNullable<ValidationRule["format"]>, { re: RegExp; msg: string }>
-> = {
+/** Fixed `format` regexes, compiled from string literals — declarative, NEVER eval.
+ *  `email`/`url` are handled by Zod's built-ins instead and are intentionally absent here.
+ *  The default failure MESSAGE for each lives in the locale message pack (`messages.format`),
+ *  not here, so it localizes. Mirrors the form-relevant subset of Formily's validator registry. */
+const FORMAT_PATTERNS: Record<FormatCheckName, RegExp> = {
   // optional leading +, then 7–15 digits, allowing spaces, dashes and parens as separators
-  phone: { re: /^\+?[0-9][0-9\s\-()]{6,18}[0-9]$/, msg: "Invalid phone number" },
-  integer: { re: /^[+-]?\d+$/, msg: "Must be an integer" },
-  number: { re: /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/, msg: "Must be a number" },
+  phone: /^\+?[0-9][0-9\s\-()]{6,18}[0-9]$/,
+  integer: /^[+-]?\d+$/,
+  number: /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
   // optional thousands grouping, up to 2 decimals
-  money: { re: /^(\d+|\d{1,3}(,\d{3})+)(\.\d{1,2})?$/, msg: "Invalid amount" },
+  money: /^(\d+|\d{1,3}(,\d{3})+)(\.\d{1,2})?$/,
   // 15-digit (old) or 18-digit (new; trailing checksum may be X) Chinese ID card
-  idcard: { re: /^\d{15}$|^\d{17}[\dxX]$/, msg: "Invalid ID card number" },
-  zh: { re: /^[一-龥]+$/, msg: "Chinese characters only" },
-  en: { re: /^[A-Za-z]+$/, msg: "Letters only" },
-  qq: { re: /^[1-9][0-9]{4,10}$/, msg: "Invalid QQ number" },
-  zip: { re: /^\d{6}$/, msg: "Invalid postal code" },
+  idcard: /^\d{15}$|^\d{17}[\dxX]$/,
+  zh: /^[一-龥]+$/,
+  en: /^[A-Za-z]+$/,
+  qq: /^[1-9][0-9]{4,10}$/,
+  zip: /^\d{6}$/,
 };
 
 /** Compile a regex from a schema-provided SOURCE string. A malformed pattern must
@@ -49,8 +48,13 @@ function safeRegExp(source: string): RegExp | null {
 }
 
 /** Apply string-oriented validation rules (len/min/max/pattern/format) onto a Zod
- *  string. `required` is handled by the caller (it gates optional vs presence). */
-function applyStringRules(s: z.ZodString, rules: ValidationRule[]): z.ZodString {
+ *  string. `required` is handled by the caller (it gates optional vs presence). `m`
+ *  supplies the localized default message for `format` checks (a custom `r.message` wins). */
+function applyStringRules(
+  s: z.ZodString,
+  rules: ValidationRule[],
+  m: ValidationMessages,
+): z.ZodString {
   let out = s;
   for (const r of rules) {
     switch (r.type) {
@@ -74,8 +78,8 @@ function applyStringRules(s: z.ZodString, rules: ValidationRule[]): z.ZodString 
         if (r.format === "email") out = out.email(r.message);
         else if (r.format === "url") out = out.url(r.message);
         else if (r.format) {
-          const check = FORMAT_CHECKS[r.format];
-          if (check) out = out.regex(check.re, r.message ?? check.msg);
+          const re = FORMAT_PATTERNS[r.format as FormatCheckName];
+          if (re) out = out.regex(re, r.message ?? m.format[r.format as FormatCheckName]);
         }
         break;
       }
@@ -101,6 +105,10 @@ export interface BuildZodOptions {
   /** When provided, fields the role can't view are excluded too (they aren't
    *  rendered, so they must not block submit). */
   access?: AccessContext;
+  /** Localized default messages (i18n P3). Defaults to {@link enMessages} ⇒ today's exact
+   *  English. The renderer resolves this from its `locale` via `resolveMessages`. The pack's
+   *  `errorMap` (for bare Zod constraints) must be applied by the CALLER at parse time. */
+  messages?: ValidationMessages;
 }
 
 function labelOf(node: { label?: string; name: string }): string {
@@ -119,18 +127,19 @@ function ruleSeverity(r: ValidationRule): "error" | "warning" {
  *  non-cross rules — warnings surface via `collectWarnings` and cross assertions
  *  via `withCrossChecks`, both built on the same `leafZodWith` core so the two
  *  paths cannot drift. */
-function leafZod(node: LeafField, requiredOverride?: boolean): z.ZodTypeAny {
+function leafZod(node: LeafField, m: ValidationMessages, requiredOverride?: boolean): z.ZodTypeAny {
   const rules = (node.validations ?? []).filter(
     (r) => r.type !== "cross" && ruleSeverity(r) === "error",
   );
-  return leafZodWith(node, rules, requiredOverride);
+  return leafZodWith(node, rules, m, requiredOverride);
 }
 
 /** The per-type rule compiler shared by the blocking (error) and warning paths;
- *  `rules` is pre-filtered by the caller. */
+ *  `rules` is pre-filtered by the caller. `m` supplies localized default messages. */
 function leafZodWith(
   node: LeafField,
   rules: ValidationRule[],
+  m: ValidationMessages,
   requiredOverride?: boolean,
 ): z.ZodTypeAny {
   const requiredRule = rules.find((r) => r.type === "required");
@@ -141,7 +150,7 @@ function leafZodWith(
     requiredOverride !== undefined
       ? requiredOverride
       : node.required === true || requiredRule != null;
-  const requiredMsg = requiredRule?.message ?? `${labelOf(node)} is required`;
+  const requiredMsg = requiredRule?.message ?? m.required(labelOf(node));
 
   switch (node.type) {
     case "text":
@@ -151,7 +160,7 @@ function leafZodWith(
       // so set the type-error too (z.string() otherwise reports "Required").
       let s = z.string({ required_error: requiredMsg, invalid_type_error: requiredMsg });
       if (node.maxLength != null) s = s.max(node.maxLength);
-      s = applyStringRules(s, rules);
+      s = applyStringRules(s, rules, m);
       if (required) return s.min(1, requiredMsg);
       // Optional + format/pattern rules would reject "" from an untouched input, so
       // treat empty string as "absent" and only validate non-empty values.
@@ -207,14 +216,14 @@ function leafZodWith(
       // bounds the upper end. Element shape is left to the renderer/persistence layer.
       let arr = z.array(z.any());
       if (node.maxCount != null)
-        arr = arr.max(node.maxCount, `${labelOf(node)} allows at most ${node.maxCount} file(s)`);
+        arr = arr.max(node.maxCount, m.maxFiles(labelOf(node), node.maxCount));
       return required ? arr.min(1, requiredMsg) : arr.optional();
     }
     case "color": {
       // A color is a string (hex/rgb); presence is asserted when required, plus any
       // string rules (e.g. a pattern enforcing a hex shape).
       let s = z.string({ required_error: requiredMsg, invalid_type_error: requiredMsg });
-      s = applyStringRules(s, rules);
+      s = applyStringRules(s, rules, m);
       if (required) return s.min(1, requiredMsg);
       return rules.length ? z.union([z.literal(""), s]).optional() : s.optional();
     }
@@ -252,11 +261,12 @@ function rowShape(
   node: ArrayField,
   row: Record<string, unknown>,
   outer: Record<string, unknown>,
+  m: ValidationMessages,
   access?: AccessContext,
 ): z.ZodObject<z.ZodRawShape> {
   const merged = { ...outer, ...row };
   const rowEffects = computeNodeReactions(node.itemFields, merged);
-  return z.object(buildShape(node.itemFields, merged, access, rowEffects));
+  return z.object(buildShape(node.itemFields, merged, m, access, rowEffects));
 }
 
 /** Compile an `array` (Form List) node to a Zod array of row objects. Length bounds
@@ -267,21 +277,20 @@ function rowShape(
 function arrayZod(
   node: ArrayField,
   values: Record<string, unknown>,
+  m: ValidationMessages,
   access?: AccessContext,
 ): z.ZodTypeAny {
   // `required` means ≥1; when both are set the stricter bound wins, so an explicit
   // `minItems: 0` never silently cancels `required: true`.
   const min = node.required ? Math.max(node.minItems ?? 0, 1) : node.minItems;
   let arr = z.array(z.unknown());
-  if (min != null && min > 0)
-    arr = arr.min(min, `${labelOf(node)} requires at least ${min} item(s)`);
-  if (node.maxItems != null)
-    arr = arr.max(node.maxItems, `${labelOf(node)} allows at most ${node.maxItems} item(s)`);
+  if (min != null && min > 0) arr = arr.min(min, m.minItems(labelOf(node), min));
+  if (node.maxItems != null) arr = arr.max(node.maxItems, m.maxItems(labelOf(node), node.maxItems));
 
   const checked = arr.superRefine((rows, ctx) => {
     rows.forEach((row, i) => {
       const rowObj = (row ?? {}) as Record<string, unknown>;
-      const res = rowShape(node, rowObj, values, access).safeParse(rowObj);
+      const res = rowShape(node, rowObj, values, m, access).safeParse(rowObj);
       if (!res.success) {
         for (const issue of res.error.issues) {
           ctx.addIssue({ ...issue, path: [i, ...issue.path] });
@@ -295,7 +304,7 @@ function arrayZod(
   const stripped = checked.transform((rows) =>
     (rows as unknown[]).map((row) => {
       const rowObj = (row ?? {}) as Record<string, unknown>;
-      const res = rowShape(node, rowObj, values, access).safeParse(rowObj);
+      const res = rowShape(node, rowObj, values, m, access).safeParse(rowObj);
       return res.success ? res.data : rowObj;
     }),
   );
@@ -309,6 +318,7 @@ function arrayZod(
 function buildShape(
   nodes: FieldNode[],
   values: Record<string, unknown>,
+  m: ValidationMessages,
   access?: AccessContext,
   effects?: EffectMap,
 ): z.ZodRawShape {
@@ -323,7 +333,7 @@ function buildShape(
       // Layout containers (group/tabs/card/...) are transparent for values:
       // their children hoist into this flat shape. A container hidden above
       // (visibleWhen / RBAC) was already skipped, hiding its whole subtree.
-      Object.assign(shape, buildShape(node.children, values, access, effects));
+      Object.assign(shape, buildShape(node.children, values, m, access, effects));
       continue;
     }
     // A `display-text` node is a value-LESS leaf (static authored content); it is not a
@@ -331,12 +341,17 @@ function buildShape(
     // read `node.name` and add a zod field for it.
     if (node.type === "display-text") continue;
     if (node.type === "array") {
-      shape[node.name] = arrayZod(node, values, access);
+      shape[node.name] = arrayZod(node, values, m, access);
       continue;
     }
     // A reaction `required` effect for this field overrides its static required-ness,
     // staying consistent with what the renderer shows (per-row arrays pass rowEffects).
-    shape[node.name] = withCrossChecks(leafZod(node, effects?.[node.name]?.required), node, values);
+    shape[node.name] = withCrossChecks(
+      leafZod(node, m, effects?.[node.name]?.required),
+      node,
+      values,
+      m,
+    );
   }
   return shape;
 }
@@ -352,6 +367,7 @@ function withCrossChecks(
   schema: z.ZodTypeAny,
   node: LeafField,
   values: Record<string, unknown>,
+  m: ValidationMessages,
 ): z.ZodTypeAny {
   const cross = (node.validations ?? []).filter(
     (r) => r.type === "cross" && r.rule && ruleSeverity(r) === "error",
@@ -362,7 +378,7 @@ function withCrossChecks(
       if (!evalRule(r.rule as Record<string, unknown>, values)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: r.message ?? `${labelOf(node)} is invalid`,
+          message: r.message ?? m.invalid(labelOf(node)),
         });
       }
     }
@@ -382,11 +398,12 @@ export function buildZodSchema(
   opts: BuildZodOptions = {},
 ): z.ZodObject<z.ZodRawShape> {
   const values = opts.values ?? {};
+  const m = opts.messages ?? enMessages;
   // Reactions are computed internally so the signature is unchanged and validation
   // stays automatically consistent with what the renderer shows. Top-level scope only;
   // per-row array effects are applied inside arrayZod in G4.
   const effects = computeReactions(form, values);
-  return z.object(buildShape(form.fields, values, opts.access, effects));
+  return z.object(buildShape(form.fields, values, m, opts.access, effects));
 }
 
 /** Walk every VISIBLE leaf, mirroring `buildShape`'s skip logic exactly (visibility,
@@ -446,8 +463,10 @@ export function collectWarnings(
   form: FormSchema,
   values: Record<string, unknown> = {},
   access?: AccessContext,
+  messages?: ValidationMessages,
 ): Record<string, string> {
   const out: Record<string, string> = {};
+  const m = messages ?? enMessages;
   const effects = computeReactions(form, values);
   walkLeaves(form.fields, values, access, effects, "", (node, path, scope) => {
     const warn = (node.validations ?? []).filter((r) => ruleSeverity(r) === "warning");
@@ -457,9 +476,10 @@ export function collectWarnings(
       const schema = leafZodWith(
         node,
         plain,
+        m,
         plain.some((r) => r.type === "required"),
       );
-      const res = schema.safeParse(scope[node.name]);
+      const res = schema.safeParse(scope[node.name], { errorMap: m.errorMap });
       if (!res.success) {
         const msg = res.error.issues[0]?.message;
         if (msg) out[path] ??= msg;
@@ -468,7 +488,7 @@ export function collectWarnings(
     for (const r of warn) {
       if (r.type !== "cross" || !r.rule) continue;
       if (!evalRule(r.rule as Record<string, unknown>, scope)) {
-        out[path] ??= r.message ?? `${labelOf(node)} is invalid`;
+        out[path] ??= r.message ?? m.invalid(labelOf(node));
       }
     }
   });

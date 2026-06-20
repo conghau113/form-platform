@@ -29,6 +29,7 @@ export function localizeForm(
       const record = node as unknown as Record<string, unknown>;
       applyNodeI18n(record, pick);
       localizeOptions(record, pick);
+      localizeValidations(record, pick);
       // childrenOf descends container `children` AND array `itemFields` (the row template).
       const kids = childrenOf(node);
       if (kids) walk(kids);
@@ -72,4 +73,26 @@ function localizeOption(option: Record<string, unknown>, pick: Pick): void {
         localizeOption(child as Record<string, unknown>, pick);
     }
   }
+}
+
+/** Override the custom `message` of each validation rule and the async validator from their
+ *  per-rule `i18n` map, then strip it. The default (generated) messages are localized later,
+ *  at validation time, from form-core's locale message packs — not here. */
+function localizeValidations(node: Record<string, unknown>, pick: Pick): void {
+  const validations = node.validations;
+  if (Array.isArray(validations)) {
+    for (const rule of validations) {
+      if (rule && typeof rule === "object") localizeMessage(rule as Record<string, unknown>, pick);
+    }
+  }
+  const asyncV = node.asyncValidator;
+  if (asyncV && typeof asyncV === "object")
+    localizeMessage(asyncV as Record<string, unknown>, pick);
+}
+
+/** Override a rule/async object's `message` from its flat `i18n` map, then strip the map. */
+function localizeMessage(holder: Record<string, unknown>, pick: Pick): void {
+  const translated = pick(holder.i18n as Record<string, string> | undefined);
+  if (translated !== undefined) holder.message = translated;
+  delete holder.i18n;
 }

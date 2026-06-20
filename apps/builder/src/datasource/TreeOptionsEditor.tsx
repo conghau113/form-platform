@@ -1,7 +1,7 @@
-import { TranslationOutlined } from "@ant-design/icons";
 import type { TreeOption } from "@org/form-schema";
-import { Button, Input, Popover, Space } from "antd";
+import { Button, Input, Space } from "antd";
 import type { ReactNode } from "react";
+import { TranslatePopover } from "../PropertyPanel/TranslatePopover";
 
 type Path = number[];
 
@@ -38,12 +38,6 @@ export function TreeOptionsEditor({
 }) {
   const patch = (path: Path, p: Partial<TreeOption>) =>
     onChange(updateAt(options, path, (o) => ({ ...o, ...p })));
-  const setI18n = (path: Path, node: TreeOption, locale: string, value: string) => {
-    const next = { ...node.i18n };
-    if (value.trim()) next[locale] = value;
-    else delete next[locale];
-    patch(path, { i18n: Object.keys(next).length ? next : undefined });
-  };
   const remove = (path: Path) => onChange(updateAt(options, path, () => null));
   const addChild = (path: Path) =>
     onChange(
@@ -74,34 +68,12 @@ export function TreeOptionsEditor({
             <Button size="small" onClick={() => addChild(path)}>
               + child
             </Button>
-            {!!locales?.length && (
-              <Popover
-                trigger="click"
-                title={`Translations — ${opt.label || "(option)"}`}
-                content={
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, width: 200 }}>
-                    {locales.map((locale) => (
-                      <Input
-                        key={locale}
-                        size="small"
-                        addonBefore={locale}
-                        placeholder={opt.label}
-                        value={opt.i18n?.[locale] ?? ""}
-                        onChange={(e) => setI18n(path, opt, locale, e.target.value)}
-                      />
-                    ))}
-                  </div>
-                }
-              >
-                <Button
-                  type="text"
-                  size="small"
-                  aria-label="Translate option"
-                  title="Translate option"
-                  icon={<TranslationOutlined />}
-                />
-              </Popover>
-            )}
+            <TranslatePopover
+              value={opt.label}
+              i18n={opt.i18n}
+              locales={locales ?? []}
+              onChange={(next) => patch(path, { i18n: next })}
+            />
             <Button type="text" size="small" danger onClick={() => remove(path)}>
               ✕
             </Button>

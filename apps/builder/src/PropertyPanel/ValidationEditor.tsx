@@ -3,6 +3,7 @@ import { Button, Form, Input, InputNumber, Segmented, Select, Space, Typography 
 import { describeField, type ValidationRuleType } from "../field-registry";
 import { prop } from "./helpers";
 import { CROSS_OPS, type CrossOp, type CrossRight, coerceLiteral, readSimpleRule } from "./rules";
+import { TranslatePopover } from "./TranslatePopover";
 import type { AuthoredField, Patch } from "./types";
 
 const RULE_LABELS: Record<ValidationRuleType, string> = {
@@ -40,11 +41,14 @@ const FORMAT_OPTIONS = [
 export function ValidationEditor({
   field,
   siblingNames,
+  locales,
   set,
 }: {
   field: AuthoredField;
   /** Other field names a cross rule can reference. */
   siblingNames: string[];
+  /** Extra locales configured on the form; enables a 🌐 translate button on custom messages. */
+  locales?: string[];
   set: (patch: Patch) => void;
 }) {
   if (field.type === "array") return null;
@@ -138,6 +142,12 @@ export function ValidationEditor({
                 value={rule.message ?? ""}
                 onChange={(e) => update(i, { message: e.target.value || undefined })}
               />
+              <TranslatePopover
+                value={rule.message}
+                i18n={rule.i18n}
+                locales={locales ?? []}
+                onChange={(next) => update(i, { i18n: next })}
+              />
               <Select
                 style={{ width: 100 }}
                 value={rule.severity ?? "error"}
@@ -172,12 +182,20 @@ export function ValidationEditor({
       {av && (
         <Space>
           <Form.Item label="Message">
-            <Input
-              style={{ width: 160 }}
-              placeholder="server message wins"
-              value={av.message ?? ""}
-              onChange={(e) => setAv({ message: e.target.value || undefined })}
-            />
+            <Space.Compact>
+              <Input
+                style={{ width: 160 }}
+                placeholder="server message wins"
+                value={av.message ?? ""}
+                onChange={(e) => setAv({ message: e.target.value || undefined })}
+              />
+              <TranslatePopover
+                value={av.message}
+                i18n={av.i18n}
+                locales={locales ?? []}
+                onChange={(next) => setAv({ i18n: next })}
+              />
+            </Space.Compact>
           </Form.Item>
           <Form.Item label="Debounce (ms)">
             <InputNumber

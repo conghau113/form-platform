@@ -15,6 +15,7 @@ import {
   localizeForm,
   type PresetResolver,
   resolveLinkedFields,
+  resolveMessages,
 } from "@org/form-core";
 import { type FieldNode, type FormSchema, isLayoutContainer, migrate } from "@org/form-schema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -153,6 +154,12 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     return locale ? localizeForm(linked, locale, fallbackLocale) : linked;
   }, [schema, presetResolver, locale, fallbackLocale]);
 
+  // Locale-aware default validation messages (i18n P3). No `locale` ⇒ the `en` pack (no
+  // errorMap) ⇒ today's exact English. The pack's `errorMap` localizes Zod's own generic
+  // codes (bare `.min/.max/.length/...`) and must be applied at parse time alongside it.
+  const messages = useMemo(() => resolveMessages(locale, fallbackLocale), [locale, fallbackLocale]);
+  const parseParams = messages.errorMap ? { errorMap: messages.errorMap } : undefined;
+
   // Self-contained QueryClient so consumers don't have to provide one. Retries
   // are off so dataSource error states surface immediately. Created once.
   const [queryClient] = useState(
@@ -171,11 +178,12 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
   // errors — handleSubmit awaits the resolver, so an invalid remote check blocks
   // submit. Fields with a Zod error skip the remote call (one error per field).
   const resolver: Resolver<Values> = async (values, context, options) => {
-    const res = await (zodResolver(buildZodSchema(form, { values, access })) as Resolver<Values>)(
-      values,
-      context,
-      options,
-    );
+    const res = await (
+      zodResolver(
+        buildZodSchema(form, { values, access, messages }),
+        parseParams,
+      ) as Resolver<Values>
+    )(values, context, options);
     const targets = collectAsyncFields(form, values, access);
     if (targets.length === 0) return res;
     const errors = { ...(res.errors as Record<string, unknown>) };
@@ -245,7 +253,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
   // as reactions). Keys are dotted react-hook-form paths, so array rows look up by
   // their full fieldName. Warnings show immediately — not gated on touched state —
   // by design: a violated warning is visible before the first submit attempt.
-  const warnings = collectWarnings(form, values, access);
+  const warnings = collectWarnings(form, values, access, messages);
 
   // Reaction `value` effects: while a `when` holds, push its assigned value once.
   // Keyed on the serialized assignments so the effect only runs when they change;
@@ -265,7 +273,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
 
   const submit = handleSubmit((data) => {
     // Parse once more to strip hidden/non-viewable keys -> a clean typed payload.
-    const clean = buildZodSchema(form, { values: data, access }).parse(data);
+    const clean = buildZodSchema(form, { values: data, access, messages }).parse(data, parseParams);
     onSubmit?.(clean);
   });
 

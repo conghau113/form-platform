@@ -97,6 +97,9 @@ export const validationRuleSchema = z.object({
     ])
     .optional(),
   message: z.string().optional(),
+  /** Localized overrides of `message`, keyed by locale code (flat `locale → string`,
+   *  same shape as {@link optionSchema}'s `i18n`). Resolved by `localizeForm`. Additive. */
+  i18n: z.record(z.string(), z.string()).optional(),
   /** Defaults to "error" when absent. */
   severity: validationSeveritySchema.optional(),
   /** `type: "cross"` only — the JSONLogic assertion. */
@@ -113,6 +116,8 @@ export type ValidationRule = z.infer<typeof validationRuleSchema>;
 export const asyncValidatorSchema = z.object({
   url: z.string(),
   message: z.string().optional(),
+  /** Localized overrides of `message`, keyed by locale code. Resolved by `localizeForm`. */
+  i18n: z.record(z.string(), z.string()).optional(),
   /** Debounce window in ms before the request fires (renderer default 400). */
   debounceMs: z.number().optional(),
 });

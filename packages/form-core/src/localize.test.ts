@@ -134,6 +134,33 @@ describe("localizeForm", () => {
     expect(opts[0].children[1].label).toBe("Haiphong");
   });
 
+  it("localizes a validation rule's and async validator's custom message, stripping i18n", () => {
+    const out = localizeForm(
+      form([
+        {
+          type: "text",
+          name: "username",
+          label: "Username",
+          validations: [
+            { type: "min", value: 3, message: "Too short", i18n: { vi: "Quá ngắn" } },
+            { type: "max", value: 20, message: "Too long" }, // no i18n → unchanged
+          ],
+          asyncValidator: { url: "/api/check", message: "Taken", i18n: { vi: "Đã dùng" } },
+        },
+      ]),
+      "vi",
+    );
+    const field = out.fields[0] as {
+      validations: Array<{ message: string; i18n?: unknown }>;
+      asyncValidator: { message: string; i18n?: unknown };
+    };
+    expect(field.validations[0].message).toBe("Quá ngắn");
+    expect(field.validations[0].i18n).toBeUndefined();
+    expect(field.validations[1].message).toBe("Too long");
+    expect(field.asyncValidator.message).toBe("Đã dùng");
+    expect(field.asyncValidator.i18n).toBeUndefined();
+  });
+
   it("round-trips a form with no i18n unchanged", () => {
     const input = form([{ type: "text", name: "n", label: "N" }]);
     const out = localizeForm(input, "vi");

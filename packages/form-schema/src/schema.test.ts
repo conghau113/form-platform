@@ -1207,4 +1207,45 @@ describe("i18n overrides (additive, Phase P)", () => {
       }),
     ).toThrow();
   });
+
+  it("accepts per-rule and async-validator i18n message overrides (P3, additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "rule-i18n",
+      title: "Rules",
+      fields: [
+        {
+          type: "text",
+          name: "username",
+          label: "Username",
+          validations: [{ type: "min", value: 3, message: "Too short", i18n: { vi: "Quá ngắn" } }],
+          asyncValidator: { url: "/api/check", message: "Taken", i18n: { vi: "Đã dùng" } },
+        },
+      ],
+    });
+    const field = out.fields[0] as {
+      validations: Array<{ i18n?: Record<string, string> }>;
+      asyncValidator: { i18n?: Record<string, string> };
+    };
+    expect(field.validations[0].i18n).toEqual({ vi: "Quá ngắn" });
+    expect(field.asyncValidator.i18n).toEqual({ vi: "Đã dùng" });
+  });
+
+  it("rejects a malformed validation-rule i18n (not a locale→string map)", () => {
+    expect(() =>
+      formSchema.parse({
+        formVersion: 3,
+        id: "bad-rule-i18n",
+        title: "Bad",
+        fields: [
+          {
+            type: "text",
+            name: "n",
+            label: "N",
+            validations: [{ type: "min", value: 3, i18n: { vi: { nested: "no" } } }],
+          },
+        ],
+      }),
+    ).toThrow();
+  });
 });

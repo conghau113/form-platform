@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { FormRenderer } from "./FormRenderer.js";
 
@@ -38,5 +39,31 @@ describe("FormRenderer i18n", () => {
     expect(screen.getByText("Nam")).toBeInTheDocument();
     // The English defaults are gone once localized.
     expect(screen.queryByText("Male")).not.toBeInTheDocument();
+  });
+
+  it("localizes the default validation message for the active locale (P3)", async () => {
+    const user = userEvent.setup();
+    const vForm = {
+      formVersion: 3,
+      id: "v",
+      title: "V",
+      fields: [{ type: "text", name: "name", label: "Tên", required: true }],
+    };
+    render(<FormRenderer schema={vForm} locale="vi" />);
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    expect(await screen.findByText("Tên là bắt buộc")).toBeInTheDocument();
+  });
+
+  it("keeps English validation messages when no locale is given (EN parity)", async () => {
+    const user = userEvent.setup();
+    const enForm = {
+      formVersion: 3,
+      id: "v",
+      title: "V",
+      fields: [{ type: "text", name: "name", label: "Name", required: true }],
+    };
+    render(<FormRenderer schema={enForm} />);
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    expect(await screen.findByText("Name is required")).toBeInTheDocument();
   });
 });
