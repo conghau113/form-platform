@@ -1,4 +1,4 @@
-import type { FieldNode, FormLayoutProps, FormSchema } from "@org/form-schema";
+import type { FieldNode, FormLayoutProps, FormSchema, I18nMap } from "@org/form-schema";
 import { uniqueName } from "./names";
 import { makeUid } from "./uid";
 
@@ -28,6 +28,12 @@ export interface FormProps {
   title: string;
   layoutProps?: FormLayoutProps;
   settings?: FormSchema["settings"];
+  /** Localized overrides of the form's own text (currently `title`). */
+  i18n?: I18nMap;
+  /** Locale the authored strings are written in (default for every node's `i18n`). */
+  defaultLocale?: string;
+  /** Extra locales this form offers translations for. */
+  locales?: string[];
 }
 
 export type EngineProps = FormProps | FieldProps;

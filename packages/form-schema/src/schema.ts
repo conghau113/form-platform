@@ -308,6 +308,9 @@ export interface TreeOption {
   label: string;
   value: string | number;
   children?: TreeOption[];
+  /** Localized overrides of this node's `label`, keyed by locale code (same flat
+   *  shape as {@link optionSchema}'s `i18n`). Resolved by `localizeForm`. Additive. */
+  i18n?: Record<string, string>;
 }
 
 export const treeOptionSchema: z.ZodType<TreeOption> = z.lazy(() =>
@@ -315,6 +318,7 @@ export const treeOptionSchema: z.ZodType<TreeOption> = z.lazy(() =>
     label: z.string(),
     value: z.union([z.string(), z.number()]),
     children: z.array(treeOptionSchema).optional(),
+    i18n: z.record(z.string(), z.string()).optional(),
   }),
 );
 
@@ -981,6 +985,14 @@ export const formSchema = z.object({
   /** Localized overrides of the form's own text (currently `title`), e.g.
    *  `{ title: { vi: "…" } }`. See {@link i18nMapSchema}. Additive/optional. */
   i18n: i18nMapSchema.optional(),
+  /** Locale the authored strings are written in (the implicit default for every
+   *  node's `i18n`). Renderers may use it as the default `fallbackLocale`, and the
+   *  builder seeds its language switcher with it. Additive/optional. */
+  defaultLocale: z.string().optional(),
+  /** Extra locales this form offers translations for — drives the builder's
+   *  language switcher and per-node Translations editors. The authored default
+   *  locale is implicit (not listed here). Additive/optional. */
+  locales: z.array(z.string()).optional(),
   fields: z.array(fieldNodeSchema),
   settings: z
     .object({

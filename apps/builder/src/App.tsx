@@ -121,6 +121,17 @@ export function App({
   const [galleryOpen, setGalleryOpen] = useState(false);
   const userTemplates = useUserTemplates();
 
+  // Preview language (i18n P2): the locale the canvas/preview render in. `undefined` ⇒ the
+  // authored default. The switcher offers the form's default + extra locales.
+  const [previewLocale, setPreviewLocale] = useState<string | undefined>(undefined);
+  const localeOptions = useMemo(() => {
+    const all = [...(form.defaultLocale ? [form.defaultLocale] : []), ...(form.locales ?? [])];
+    return [...new Set(all)];
+  }, [form.defaultLocale, form.locales]);
+  // Drop a stale selection if the form no longer offers that locale.
+  const activeLocale =
+    previewLocale && localeOptions.includes(previewLocale) ? previewLocale : undefined;
+
   // Preset library (Track W3/W4), lifted here so the gallery, the "Linked preset" control and
   // the live preview share ONE store — editing a preset then propagates to its linked fields.
   const presets = usePresets(projectId);
@@ -344,6 +355,9 @@ export function App({
                   onDevice={setDevice}
                   viewMode={viewMode}
                   onViewMode={setViewMode}
+                  locales={localeOptions}
+                  locale={activeLocale}
+                  onLocale={setPreviewLocale}
                 />
                 <ViewPanel
                   mode={viewMode}
@@ -354,6 +368,8 @@ export function App({
                   maxWidth={VIEWPORTS[device]}
                   onApplyJson={applyJson}
                   presetResolver={presetResolver}
+                  locale={activeLocale}
+                  fallbackLocale={form.defaultLocale}
                 />
               </section>
 
@@ -368,6 +384,7 @@ export function App({
                   siblingNames={siblingNames}
                   fieldNames={fieldNames}
                   presets={allPresets}
+                  locales={form.locales}
                   onChange={(uid, field) =>
                     history.set(applyFieldEdit(tree, uid, field), "Edit field")
                   }

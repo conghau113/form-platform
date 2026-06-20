@@ -51,16 +51,25 @@ function applyNodeI18n(node: Record<string, unknown>, pick: Pick): void {
   delete node.i18n;
 }
 
-/** Override each static option's `label` from its per-option `i18n` map, then strip it. */
+/** Override each static option's `label` from its per-option `i18n` map, then strip it.
+ *  Recurses into `children` so hierarchical cascader / tree-select option labels localize too. */
 function localizeOptions(node: Record<string, unknown>, pick: Pick): void {
   const options = node.options;
   if (!Array.isArray(options)) return;
   for (const opt of options) {
-    if (opt && typeof opt === "object") {
-      const o = opt as Record<string, unknown>;
-      const translated = pick(o.i18n as Record<string, string> | undefined);
-      if (translated !== undefined) o.label = translated;
-      delete o.i18n;
+    if (opt && typeof opt === "object") localizeOption(opt as Record<string, unknown>, pick);
+  }
+}
+
+function localizeOption(option: Record<string, unknown>, pick: Pick): void {
+  const translated = pick(option.i18n as Record<string, string> | undefined);
+  if (translated !== undefined) option.label = translated;
+  delete option.i18n;
+  const children = option.children;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      if (child && typeof child === "object")
+        localizeOption(child as Record<string, unknown>, pick);
     }
   }
 }

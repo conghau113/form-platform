@@ -10,7 +10,9 @@ import { csv, mergePermissions, parseCsv, prop } from "./helpers";
 import { ItemFieldsEditor } from "./ItemFieldsEditor";
 import { readEquals } from "./rules";
 import { type PanelSectionKey, SECTION_LABELS, sectionMatches } from "./sections";
+import { TranslationsEditor } from "./TranslationsEditor";
 import { TypeSettings } from "./TypeSettings";
+import { translatableAttrs } from "./translatable";
 import { type AuthoredField, COL_KEYS, type ColKey, type Patch } from "./types";
 import { ValidationEditor } from "./ValidationEditor";
 
@@ -25,6 +27,7 @@ export function FieldForm({
   field,
   siblingNames,
   targetNames,
+  locales,
   set,
   onDrill,
 }: {
@@ -32,6 +35,8 @@ export function FieldForm({
   siblingNames: string[];
   /** Candidate reaction target names (top-level scope names, or row siblings when nested). */
   targetNames: string[];
+  /** Extra locales configured on the form; enables the Translations section when non-empty. */
+  locales?: string[];
   set: (patch: Patch) => void;
   onDrill: (index: number) => void;
 }) {
@@ -142,15 +147,25 @@ export function FieldForm({
   const properties = (
     <>
       {/* Type-specific properties, driven by the registry descriptor */}
-      <TypeSettings field={field} set={set} />
+      <TypeSettings field={field} set={set} locales={locales} />
       {/* An option-sourced leaf's options (select / checkbox-group / cascader /
           tree-select) come from the shared static-vs-remote editor (params + cache). */}
       {isOptionSourced(field) && (
-        <DataSourceEditor field={field} sourceNames={condFields} set={set} />
+        <DataSourceEditor field={field} sourceNames={condFields} locales={locales} set={set} />
       )}
       {isArray && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}
       <DefaultValueEditor field={field} set={set} />
     </>
+  );
+
+  // --- Translations (per-locale overrides of this field's text) --------------
+  const translations = (
+    <TranslationsEditor
+      i18n={field.i18n}
+      attrs={translatableAttrs(field as unknown as Record<string, unknown>)}
+      locales={locales ?? []}
+      onChange={(next) => set({ i18n: next } as Patch)}
+    />
   );
 
   // --- Layout (responsive colSpan + mobile visibility) -----------------------
@@ -277,6 +292,9 @@ export function FieldForm({
   const sections: { key: PanelSectionKey; children: ReactNode }[] = [
     { key: "basic", children: basic },
     { key: "props", children: properties },
+    // The Translations section only appears once the form configures extra locales — a
+    // single-locale form has nothing to translate.
+    ...(locales?.length ? [{ key: "translations" as const, children: translations }] : []),
     // ValidationEditor renders nothing for arrays (no field-level rules), so the panel is
     // only offered for leaves.
     ...(isArray

@@ -66,6 +66,8 @@ export function ViewPanel({
   maxWidth,
   onApplyJson,
   presetResolver,
+  locale,
+  fallbackLocale,
 }: {
   mode: ViewMode;
   schema: unknown;
@@ -78,6 +80,10 @@ export function ViewPanel({
   onApplyJson: (schema: FormSchema) => void;
   /** Resolves linked fields (W4) so the canvas + preview show live preset values. */
   presetResolver?: PresetResolver;
+  /** Active preview locale (i18n P2); `undefined` ⇒ authored default. */
+  locale?: string;
+  /** Fallback locale for the renderer (typically the form's default locale). */
+  fallbackLocale?: string;
 }) {
   if (mode === "design") {
     return (
@@ -88,6 +94,8 @@ export function ViewPanel({
         theme={antdTheme}
         maxWidth={maxWidth}
         presetResolver={presetResolver}
+        locale={locale}
+        fallbackLocale={fallbackLocale}
       />
     );
   }
@@ -102,6 +110,8 @@ export function ViewPanel({
                 schema={schema}
                 access={{ roles: ["admin"] }}
                 presetResolver={presetResolver}
+                locale={locale}
+                fallbackLocale={fallbackLocale}
               />
             </PreviewBoundary>
           </PreviewSurface>

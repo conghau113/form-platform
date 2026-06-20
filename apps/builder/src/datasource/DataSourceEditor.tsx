@@ -44,11 +44,14 @@ export function isOptionSourced(field: FieldNode): field is OptionSourcedField {
 export function DataSourceEditor({
   field,
   sourceNames,
+  locales,
   set,
 }: {
   field: OptionSourcedField;
   /** Other field names a param can read its value from. */
   sourceNames: string[];
+  /** Extra locales configured on the form; threaded to the static-option translate UI. */
+  locales?: string[];
   set: (patch: Partial<OptionSourcedField>) => void;
 }) {
   const isTree = field.type === "cascader" || field.type === "tree-select";
@@ -96,6 +99,7 @@ export function DataSourceEditor({
           {field.type === "cascader" || field.type === "tree-select" ? (
             <TreeOptionsEditor
               options={field.options ?? []}
+              locales={locales}
               onChange={(options) =>
                 set({ options, dataSource: undefined } as Partial<OptionSourcedField>)
               }
@@ -103,6 +107,7 @@ export function DataSourceEditor({
           ) : (
             <OptionsEditor
               options={field.options ?? []}
+              locales={locales}
               onChange={(options) =>
                 set({ options, dataSource: undefined } as Partial<OptionSourcedField>)
               }

@@ -1151,4 +1151,60 @@ describe("i18n overrides (additive, Phase P)", () => {
       }),
     ).toThrow();
   });
+
+  it("accepts form-level defaultLocale/locales config (P2, additive)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "loc",
+      title: "Localized",
+      defaultLocale: "en",
+      locales: ["vi", "fr"],
+      fields: [{ type: "text", name: "n", label: "N" }],
+    });
+    expect(out.defaultLocale).toBe("en");
+    expect(out.locales).toEqual(["vi", "fr"]);
+  });
+
+  it("accepts per-node i18n on hierarchical tree options (cascader/tree-select)", () => {
+    const out = formSchema.parse({
+      formVersion: 3,
+      id: "tree-i18n",
+      title: "Tree",
+      fields: [
+        {
+          type: "cascader",
+          name: "region",
+          label: "Region",
+          options: [
+            {
+              label: "North",
+              value: "n",
+              i18n: { vi: "Bắc" },
+              children: [{ label: "Hanoi", value: "hn", i18n: { vi: "Hà Nội" } }],
+            },
+          ],
+        },
+      ],
+    });
+    const cascader = out.fields[0] as {
+      options: Array<{
+        i18n?: Record<string, string>;
+        children?: Array<{ i18n?: Record<string, string> }>;
+      }>;
+    };
+    expect(cascader.options[0].i18n).toEqual({ vi: "Bắc" });
+    expect(cascader.options[0].children?.[0].i18n).toEqual({ vi: "Hà Nội" });
+  });
+
+  it("rejects a malformed locales config (not an array of strings)", () => {
+    expect(() =>
+      formSchema.parse({
+        formVersion: 3,
+        id: "bad-locales",
+        title: "Bad",
+        locales: "vi",
+        fields: [{ type: "text", name: "n", label: "N" }],
+      }),
+    ).toThrow();
+  });
 });

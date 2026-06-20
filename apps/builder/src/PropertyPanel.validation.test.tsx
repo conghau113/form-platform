@@ -1,5 +1,5 @@
 import type { FieldNode } from "@org/form-schema";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { FormProps } from "./engine/tree";
@@ -230,16 +230,16 @@ describe("FormSettingsEditor validateTrigger", () => {
     const user = userEvent.setup();
     const onChangeForm = setupForm();
 
-    // The trigger select is the last combobox (after the FORM_META layout selects).
-    const boxes = screen.getAllByRole("combobox");
-    await user.click(boxes[boxes.length - 1] as HTMLElement);
+    // Target the validateTrigger select by its placeholder (robust to other selects on the
+    // form, e.g. the i18n "Other locales" tags select).
+    const triggerSelect = screen.getByText("On submit (default)").closest(".ant-select");
+    await user.click(within(triggerSelect as HTMLElement).getByRole("combobox"));
     await user.click(await screen.findByText("On blur"));
 
     expect(onChangeForm).toHaveBeenCalledWith({ settings: { validateTrigger: "onBlur" } });
   });
 
   it("clearing the trigger drops the empty settings block", async () => {
-    const user = userEvent.setup();
     const onChangeForm = setupForm({ validateTrigger: "onBlur" });
 
     const clear = document.querySelector(".ant-select-clear");

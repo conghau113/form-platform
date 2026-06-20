@@ -6,7 +6,7 @@ import {
   TabletOutlined,
   UndoOutlined,
 } from "@ant-design/icons";
-import { Button, Segmented, Space, Tooltip } from "antd";
+import { Button, Segmented, Select, Space, Tooltip } from "antd";
 
 /* ----------------------------------------------------------------------------
  * ToolbarPanel — the bar above the center ViewPanel (Designable's Toolbar). Owns
@@ -27,6 +27,9 @@ export function ToolbarPanel({
   onDevice,
   viewMode,
   onViewMode,
+  locales = [],
+  locale,
+  onLocale,
 }: {
   canUndo: boolean;
   canRedo: boolean;
@@ -36,6 +39,11 @@ export function ToolbarPanel({
   onDevice: (device: Device) => void;
   viewMode: ViewMode;
   onViewMode: (mode: ViewMode) => void;
+  /** Locales the form can render in (default + extras); empty ⇒ no language switcher (i18n P2). */
+  locales?: string[];
+  /** The active preview locale; `undefined` ⇒ the authored default. */
+  locale?: string;
+  onLocale?: (locale: string | undefined) => void;
 }) {
   return (
     <div
@@ -70,6 +78,19 @@ export function ToolbarPanel({
       />
 
       <Space>
+        {/* Language switcher — only when the form configures locales (i18n P2). The default
+            locale (clearable) renders the authored strings; picking another localizes live. */}
+        {locales.length > 0 && (
+          <Select<string>
+            allowClear
+            size="small"
+            style={{ width: 120 }}
+            placeholder="Language"
+            value={locale}
+            onChange={(v) => onLocale?.(v)}
+            options={locales.map((l) => ({ label: l, value: l }))}
+          />
+        )}
         <Segmented<ViewMode>
           value={viewMode}
           onChange={onViewMode}

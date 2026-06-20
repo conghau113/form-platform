@@ -1,5 +1,11 @@
-import { childrenOf, type FieldNode, isLayoutContainer, type Preset } from "@org/form-schema";
-import { Button, Empty, Form, Input, Typography } from "antd";
+import {
+  childrenOf,
+  type FieldNode,
+  type I18nMap,
+  isLayoutContainer,
+  type Preset,
+} from "@org/form-schema";
+import { Button, Divider, Empty, Form, Input, Typography } from "antd";
 import { useEffect, useState } from "react";
 import { type NodePath, nodeAtPath, patchNodeAtPath } from "../engine/field-path";
 import type { StepsOp } from "../engine/steps-ops";
@@ -11,7 +17,9 @@ import { FormSettingsEditor } from "./FormSettingsEditor";
 import { nodeLabel, nodeName } from "./helpers";
 import { PresetLink } from "./PresetLink";
 import { StepsEditor } from "./StepsEditor";
+import { TranslationsEditor } from "./TranslationsEditor";
 import { TypeSettings } from "./TypeSettings";
+import { translatableAttrs } from "./translatable";
 import type { AuthoredField, SelectedNode } from "./types";
 
 /** Labels along a drill path, for the breadcrumb (root field + each drilled child). */
@@ -36,6 +44,7 @@ export function PropertyPanel({
   siblingNames: topSiblingNames,
   fieldNames,
   presets = [],
+  locales,
   onChange,
   onChangeForm,
   onStepsEdit,
@@ -45,6 +54,8 @@ export function PropertyPanel({
   form?: FormProps | null;
   /** Top-level field names, candidates for a visibleWhen condition. */
   siblingNames: string[];
+  /** Extra locales configured on the form; enables Translations editing when non-empty. */
+  locales?: string[];
   /** Built-in + user presets (Track W4) — populates the leaf's "Linked preset" control. */
   presets?: Preset[];
   /** Every named field reachable in the top-level value scope (containers descended,
@@ -84,6 +95,23 @@ export function PropertyPanel({
   // swaps it into the tree. (Not a partial patch — it carries every key, so a removed
   // key is reflected because the whole node is re-emitted.)
   const set = (patch: Partial<AuthoredField>) => onChange(uid, patchNodeAtPath(root, path, patch));
+
+  // Value-transparent containers and display-text render a settings-only editor (not the
+  // full FieldForm), so their translatable text (label/title/description/content) gets a
+  // Translations block here. Leaves/arrays get theirs inside FieldForm.
+  const translationsBlock = locales?.length ? (
+    <>
+      <Divider orientation="left" plain>
+        Translations
+      </Divider>
+      <TranslationsEditor
+        i18n={(node as { i18n?: I18nMap }).i18n}
+        attrs={translatableAttrs(node as unknown as Record<string, unknown>)}
+        locales={locales}
+        onChange={(next) => set({ i18n: next } as Partial<AuthoredField>)}
+      />
+    </>
+  ) : null;
 
   const crumbs = pathCrumbs(root, path);
   const breadcrumb = path.length > 0 && (
@@ -133,6 +161,7 @@ export function PropertyPanel({
             </Form.Item>
           )}
           <TypeSettings field={node} set={set} />
+          {translationsBlock}
         </Form>
       </div>
     );
@@ -147,6 +176,7 @@ export function PropertyPanel({
         {breadcrumb}
         <Form layout="vertical" size="small">
           <TypeSettings field={node} set={set} />
+          {translationsBlock}
         </Form>
       </div>
     );
@@ -187,6 +217,7 @@ export function PropertyPanel({
         // Reaction targets: all top-level-scope names for a top-level field; the row's
         // sibling names when editing an array item field (path.length > 0).
         targetNames={path.length ? siblingNames : fieldNames}
+        locales={locales}
         set={fieldSet}
         onDrill={(index) => setDrillPath([...path, index])}
       />

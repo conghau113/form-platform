@@ -5,6 +5,7 @@
 export const PANEL_SECTIONS = [
   "basic",
   "props",
+  "translations",
   "validation",
   "layout",
   "logic",
@@ -16,6 +17,7 @@ export type PanelSectionKey = (typeof PANEL_SECTIONS)[number];
 export const SECTION_LABELS: Record<PanelSectionKey, string> = {
   basic: "Basic",
   props: "Properties",
+  translations: "Translations",
   validation: "Validation",
   layout: "Layout",
   logic: "Logic (visibility & reactions)",
@@ -55,6 +57,7 @@ export const SECTION_KEYWORDS: Record<PanelSectionKey, string[]> = {
     "variant",
     "items",
   ],
+  translations: ["translation", "translate", "locale", "language", "i18n", "localize"],
   validation: ["validation", "rule", "regex", "pattern", "min", "max", "message", "required"],
   layout: ["layout", "colspan", "column", "responsive", "width", "mobile", "hide", "grid"],
   logic: ["logic", "visibility", "visible", "show", "condition", "when", "reaction"],

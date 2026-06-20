@@ -55,6 +55,9 @@ export function schemaToTree(form: FormSchema): TreeNode {
   const node: FormProps = { type: "form", id: form.id, title: form.title };
   if (form.layoutProps !== undefined) node.layoutProps = form.layoutProps;
   if (form.settings !== undefined) node.settings = form.settings;
+  if (form.i18n !== undefined) node.i18n = form.i18n;
+  if (form.defaultLocale !== undefined) node.defaultLocale = form.defaultLocale;
+  if (form.locales !== undefined) node.locales = form.locales;
   return { uid: makeUid(), node, children: form.fields.map(fieldToTree) };
 }
 
@@ -84,6 +87,9 @@ export function treeToSchema(root: TreeNode): FormSchema {
   };
   if (props.layoutProps !== undefined) form.layoutProps = props.layoutProps;
   if (props.settings !== undefined) form.settings = props.settings;
+  if (props.i18n !== undefined) form.i18n = props.i18n;
+  if (props.defaultLocale !== undefined) form.defaultLocale = props.defaultLocale;
+  if (props.locales !== undefined) form.locales = props.locales;
   return form;
 }
 

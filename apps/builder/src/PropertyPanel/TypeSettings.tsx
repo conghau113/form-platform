@@ -20,13 +20,24 @@ import type { Patch } from "./types";
 
 /** Renders the type-specific settings declared by the field's registry descriptor.
  *  Adding a new type/setting needs only a registry entry — no edit here. */
-export function TypeSettings({ field, set }: { field: FieldNode; set: (patch: Patch) => void }) {
+export function TypeSettings({
+  field,
+  set,
+  locales,
+}: {
+  field: FieldNode;
+  set: (patch: Patch) => void;
+  /** Extra locales configured on the form; enables the per-option translate UI for
+   *  static-option leaves (radio/select/...). */
+  locales?: string[];
+}) {
   const { settings } = describeField(field.type);
   return (
     <SettingControls
       settings={settings}
       get={(key) => prop(field, key)}
       set={(key, value) => set({ [key]: value } as Patch)}
+      locales={locales}
     />
   );
 }
@@ -38,10 +49,13 @@ export function SettingControls({
   settings,
   get,
   set,
+  locales,
 }: {
   settings: SettingDescriptor[];
   get: (key: string) => unknown;
   set: (key: string, value: unknown) => void;
+  /** Threaded to the `options` control so static-option leaves get the translate UI. */
+  locales?: string[];
 }) {
   return (
     <>
@@ -208,6 +222,7 @@ export function SettingControls({
               <Form.Item key={s.key} label={s.label}>
                 <OptionsEditor
                   options={(get(s.key) as Option[]) ?? []}
+                  locales={locales}
                   onChange={(options) => setKey(options)}
                 />
               </Form.Item>

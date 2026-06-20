@@ -453,6 +453,8 @@ export function DesignCanvas({
   theme,
   maxWidth = 820,
   presetResolver,
+  locale,
+  fallbackLocale,
 }: {
   schema: unknown;
   /** Stable string key for the schema — resets the error boundary on a valid edit. */
@@ -463,6 +465,10 @@ export function DesignCanvas({
   maxWidth?: number;
   /** Resolves linked fields (W4) so the canvas shows live preset values. */
   presetResolver?: PresetResolver;
+  /** Active preview locale (i18n P2); `undefined` ⇒ authored default. */
+  locale?: string;
+  /** Fallback locale for the renderer (typically the form's default locale). */
+  fallbackLocale?: string;
 }) {
   const d = useDesigner();
   const { setHovered } = useHover();
@@ -548,10 +554,12 @@ export function DesignCanvas({
           access={{ roles: ["admin"] }}
           nodeWrapper={wrapper}
           presetResolver={presetResolver}
+          locale={locale}
+          fallbackLocale={fallbackLocale}
         />
       </CanvasBoundary>
     ),
-    [schema, json, theme, wrapper, presetResolver],
+    [schema, json, theme, wrapper, presetResolver, locale, fallbackLocale],
   );
 
   // D7 marquee select: a rubber-band drag from empty canvas selects every node shell it

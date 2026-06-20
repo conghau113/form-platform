@@ -2,7 +2,9 @@ import type { FormLayoutProps } from "@org/form-schema";
 import { Divider, Form, Input, InputNumber, Select, Space } from "antd";
 import type { FormProps } from "../engine/tree";
 import { FORM_META } from "../field-registry";
+import { TranslationsEditor } from "./TranslationsEditor";
 import { SettingControls } from "./TypeSettings";
+import { translatableAttrs } from "./translatable";
 
 /** The root Form's settings editor: identity (id/title) + the FORM_META layout
  *  descriptors mapped onto `form.layoutProps`, plus labelCol/wrapperCol spans.
@@ -32,6 +34,7 @@ export function FormSettingsEditor({
       settings: Object.keys(next).length ? (next as FormProps["settings"]) : undefined,
     });
   };
+  const locales = form.locales ?? [];
   const colSpan = (col: "labelCol" | "wrapperCol") => layout[col]?.span ?? null;
   // Merge over the existing col object so an authored `offset` survives span edits.
   const setColSpan = (col: "labelCol" | "wrapperCol", span: number | null) =>
@@ -96,6 +99,43 @@ export function FormSettingsEditor({
             onChange={(v) => setSettingKey("validateTrigger", v)}
           />
         </Form.Item>
+
+        <Divider orientation="left" plain>
+          Localization
+        </Divider>
+        <Form.Item
+          label="Default locale"
+          tooltip="The language the authored strings are written in (the implicit default)."
+        >
+          <Input
+            placeholder="e.g. en"
+            style={{ width: 200 }}
+            value={form.defaultLocale ?? ""}
+            onChange={(e) => onChange({ defaultLocale: e.target.value || undefined })}
+          />
+        </Form.Item>
+        <Form.Item
+          label="Other locales"
+          tooltip="Extra languages this form offers translations for. Type a code (e.g. vi) and press Enter."
+        >
+          <Select
+            mode="tags"
+            placeholder="vi, fr, …"
+            style={{ width: "100%" }}
+            value={locales}
+            tokenSeparators={[",", " "]}
+            onChange={(next: string[]) => onChange({ locales: next.length ? next : undefined })}
+          />
+        </Form.Item>
+        {/* Title translations appear once at least one other locale is configured. */}
+        {locales.length > 0 && (
+          <TranslationsEditor
+            i18n={form.i18n}
+            attrs={translatableAttrs(form as unknown as Record<string, unknown>)}
+            locales={locales}
+            onChange={(next) => onChange({ i18n: next })}
+          />
+        )}
       </Form>
     </div>
   );

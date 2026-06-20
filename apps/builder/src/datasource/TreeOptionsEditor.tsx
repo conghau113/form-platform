@@ -1,5 +1,6 @@
+import { TranslationOutlined } from "@ant-design/icons";
 import type { TreeOption } from "@org/form-schema";
-import { Button, Input, Space } from "antd";
+import { Button, Input, Popover, Space } from "antd";
 import type { ReactNode } from "react";
 
 type Path = number[];
@@ -27,13 +28,22 @@ function updateAt(
  *  level and ✕ removing the node and its subtree. Mirrors OptionsEditor's flat UI. */
 export function TreeOptionsEditor({
   options,
+  locales,
   onChange,
 }: {
   options: TreeOption[];
+  /** Extra locales configured on the form; when non-empty each node gets a translate button. */
+  locales?: string[];
   onChange: (options: TreeOption[]) => void;
 }) {
   const patch = (path: Path, p: Partial<TreeOption>) =>
     onChange(updateAt(options, path, (o) => ({ ...o, ...p })));
+  const setI18n = (path: Path, node: TreeOption, locale: string, value: string) => {
+    const next = { ...node.i18n };
+    if (value.trim()) next[locale] = value;
+    else delete next[locale];
+    patch(path, { i18n: Object.keys(next).length ? next : undefined });
+  };
   const remove = (path: Path) => onChange(updateAt(options, path, () => null));
   const addChild = (path: Path) =>
     onChange(
@@ -64,6 +74,34 @@ export function TreeOptionsEditor({
             <Button size="small" onClick={() => addChild(path)}>
               + child
             </Button>
+            {!!locales?.length && (
+              <Popover
+                trigger="click"
+                title={`Translations — ${opt.label || "(option)"}`}
+                content={
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, width: 200 }}>
+                    {locales.map((locale) => (
+                      <Input
+                        key={locale}
+                        size="small"
+                        addonBefore={locale}
+                        placeholder={opt.label}
+                        value={opt.i18n?.[locale] ?? ""}
+                        onChange={(e) => setI18n(path, opt, locale, e.target.value)}
+                      />
+                    ))}
+                  </div>
+                }
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label="Translate option"
+                  title="Translate option"
+                  icon={<TranslationOutlined />}
+                />
+              </Popover>
+            )}
             <Button type="text" size="small" danger onClick={() => remove(path)}>
               ✕
             </Button>

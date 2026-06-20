@@ -96,6 +96,44 @@ describe("localizeForm", () => {
     expect(arr.itemFields[0].label).toBe("Bê");
   });
 
+  it("localizes hierarchical (cascader/tree-select) option labels, recursing into children", () => {
+    const out = localizeForm(
+      form([
+        {
+          type: "cascader",
+          name: "region",
+          label: "Region",
+          options: [
+            {
+              label: "North",
+              value: "n",
+              i18n: { vi: "Bắc" },
+              children: [
+                { label: "Hanoi", value: "hn", i18n: { vi: "Hà Nội" } },
+                { label: "Haiphong", value: "hp" }, // no translation → keeps default
+              ],
+            },
+          ],
+        },
+      ]),
+      "vi",
+    );
+    const opts = (
+      out.fields[0] as {
+        options: Array<{
+          label: string;
+          i18n?: unknown;
+          children: Array<{ label: string; i18n?: unknown }>;
+        }>;
+      }
+    ).options;
+    expect(opts[0].label).toBe("Bắc");
+    expect(opts[0].i18n).toBeUndefined();
+    expect(opts[0].children[0].label).toBe("Hà Nội");
+    expect(opts[0].children[0].i18n).toBeUndefined();
+    expect(opts[0].children[1].label).toBe("Haiphong");
+  });
+
   it("round-trips a form with no i18n unchanged", () => {
     const input = form([{ type: "text", name: "n", label: "N" }]);
     const out = localizeForm(input, "vi");
