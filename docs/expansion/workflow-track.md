@@ -70,7 +70,19 @@ Original plan below for reference.
   list by project/folder, access 404/403, invalid body 400, move within project).
 - changeset for `@app/api`. (No package contract change.)
 
-## WF1 — Builder workspace integration  [the part that makes it real]
+## WF1 — Builder workspace integration  ✅ DONE (commit a99a91d, branch feat/workflow-wf0)
+Shipped exactly as planned below. New `apps/builder/src/workflow/{client.ts,useWorkflows.ts,
+newWorkflow.ts,WorkflowRoute.tsx}` + refactored `WorkflowEditor.tsx`; Explorer (`workspace/
+{tree.ts,types.ts,ExplorerRail.tsx,ProjectWorkspace.tsx}`) surfaces workflows alongside forms
+(new `"workflow"` NodeKind, `buildTree`/`dropFolderId` optional `workflows` param); route
+`/projects/:projectId/workflows/:workflowId/edit` in `main.tsx`; legacy App `mode` Segmented toggle
+retired. Real-form binding = a `Select` over the project's forms (dangling bound form shows
+"(missing)"). Save runs `validateGraph` first (blocks on errors), dirty-tracks vs a saved-JSON
+baseline, unsaved-changes guard mirrors the form `EditorRoute`. Additive, builder-only, NO contract/
+`workflowVersion` change, no changeset. typecheck 15/15, new `tree`/`newWorkflow` unit tests + builder
+suite green (2 known-flaky validation tests pass in isolation), biome clean. Reviewer subagent PASS
+(only LOW notes, all mirrored from the forms module). Original plan below for reference.
+
 - **data layer** (house style: `fetch` only in `client.ts`, react-query hooks):
   - `workflow/client.ts` — typed calls to the WF0 endpoints (ownerHeaders like presets/workspace).
   - `workflow/useWorkflows.ts` — `useWorkflows(projectId)` list query, `useSaveWorkflow` mutation
