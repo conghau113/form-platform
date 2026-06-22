@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AiModule } from "./modules/ai/ai.module.js";
 import { FoldersModule } from "./modules/folders/folders.module.js";
 import { FormsModule } from "./modules/forms/forms.module.js";
 import { PresetsModule } from "./modules/presets/presets.module.js";
@@ -18,6 +19,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     FormsModule,
     ThemesModule,
     PresetsModule,
+    AiModule,
   ],
 })
 export class AppModule {}
