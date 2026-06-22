@@ -100,20 +100,54 @@ suite green (2 known-flaky validation tests pass in isolation), biome clean. Rev
 - **tests**: pure-unit for any new helper; hook/render tests for save/load + form-picker; keep
   builder suite green. Builder is private → no changeset.
 
-## WF2 — Runtime / instances (STRETCH, separate plan)  [end-to-end value]
+## WF2 — Editor UX (make the builder usable for non-experts)  [reprioritised ahead of runtime]
+Owner review found the editing experience — not persistence — is the real barrier: binding a node to
+a form was disjointed (a Select over existing forms + an "Edit form" that *navigates away*; no preview,
+no quick create/edit), and canvas interaction was rigid (handles fixed Left/Right so edges only flow
+L→R; no visible delete affordance and no `onNodesDelete`, so deleting the start node silently stranded
+`meta.start`; new states stacked in a fixed column). So **runtime moved to WF3** and WF2 is now the
+editor-UX track. Builder-only, additive, NO contract change / `workflowVersion` bump / changeset.
+Plan: `C:\Users\ASUS\.claude\plans\twinkly-hatching-cherny.md`.
+
+### WF2a — Canvas interaction  ✅ DONE (branch feat/workflow-wf2-editor-ux, off main @ 95d4e03 via feat/workflow-wf0)
+Safe delete + any-direction edges + faster authoring + auto-layout. Shipped:
+- **Floating edges** (`workflow/floating-edge.tsx`): pure `getEdgeParams` border-intersection geometry
+  (unit-tested) + a `FloatingEdge` xyflow custom edge; nodes gained 4-side connect handles +
+  `connectionMode="loose"`, so transitions route to the nearest border in any direction. Contract-safe
+  — edges carry editor-only `type:"floating"`/`markerEnd` via `EDGE_PRESENTATION`; `fromFlow` still
+  reads only `source`/`target`.
+- **Safe deletion**: `onBeforeDelete` blocks deleting the start node (while others remain) and the last
+  node; `onNodesDelete`/`onEdgesDelete` clean up selection + defensively re-point `meta.start`; Delete
+  buttons in the node/edge panels route through `deleteElements` so they hit the guard.
+- **Faster authoring**: new state lands beside the selected node / double-click empty pane adds one at
+  the pointer (`screenToFlowPosition`); double-click a node → inline-rename `<Input>` (context-fed).
+- **Tidy auto-layout** (`workflow/layout.ts`): pure `tidyLayout` via `@dagrejs/dagre` (new builder dep)
+  behind a "Tidy" toolbar button (unit-tested). Editor wrapped in `ReactFlowProvider`.
+- Green: root typecheck 15/15, builder 272/272 (+12: floating-edge 3 + layout 3 + suite), biome clean.
+  Reviewer subagent PASS (no blocking; nits: `react-flow__pane` is an internal class (commented),
+  `state${n+1}` can repeat a label after deletes — cosmetic).
+
+### WF2b — Inline form integration  ▶ NEXT (own commit)
+The headline win: in the node panel, render a read-only `FormRenderer` **preview** of the bound form;
+a **"Tạo form mới"** button (blank → bind → open editor); and **"Sửa form"** that opens the full form
+builder (`App`, already standalone) in a **Drawer** over the canvas — preview/create/edit without ever
+leaving the workflow. New `workflow/useFormDefinition.ts` (getForm + migrate, cached on `qk.form(id)`);
+WorkflowEditor hosts the Drawer; replace the navigate-away `onEditForm` with it. Builder-only.
+
+## WF3 — Runtime / instances (DEFERRED; was "WF2")  [end-to-end value]
 The engine already runs; this is persistence + a thin UI.
 - prisma `WorkflowInstanceRecord` (or reuse) + `WorkflowInstanceRepo`; api `createInstance` +
-  `advance` endpoints (engine does the logic; api just loads def+instance, calls `advance`, persists).
+  `advance` endpoints inside `modules/workflows/` (engine does the logic; api loads def+instance, calls
+  `advance`, persists; access via `ProjectsService.requireAccess`/`resolveRole`).
 - A "Run" view: render the bound form (via `@org/form-renderer-web`) at the current state, show
-  available actions, fire one, persist the advanced instance, show history. This is where forms +
-  workflow finally meet at runtime.
-- Likely its own multi-phase plan; do NOT bundle into WF0/WF1.
+  available actions, fire one, persist the advanced instance, show history.
+- Its own multi-phase plan; a full draft exists from the planning pass. Revive after WF2 ships.
 
-## WF3 — Parity polish (later)
+## WF4 — Parity polish (later)
 Sharing/roles already come free via `ProjectMember` (WF0 reuses `requireAccess`). Possible later:
 i18n of status/action labels (reuse the i18n pattern), workflow templates, native parity. Defer.
 
 ## Recommended slice order
-**WF0 → WF1**, each its own commit + reviewer + STOP. WF2 (runtime) is the high-value follow-up but
-deserves its own plan. WF0 is low-risk (pure clone of a proven module); WF1 is where the design
-judgement (workspace routing, form picker) lives.
+**WF0 → WF1 → WF2a → WF2b → WF3**, each its own commit + reviewer + STOP. WF0/WF1 (persistence +
+workspace integration) shipped; WF2 (editor UX) is the current track because the editing experience was
+the user-facing blocker; runtime (WF3) is the high-value follow-up and deserves its own plan.
