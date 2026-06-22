@@ -127,12 +127,22 @@ Safe delete + any-direction edges + faster authoring + auto-layout. Shipped:
   Reviewer subagent PASS (no blocking; nits: `react-flow__pane` is an internal class (commented),
   `state${n+1}` can repeat a label after deletes — cosmetic).
 
-### WF2b — Inline form integration  ▶ NEXT (own commit)
+### WF2b — Inline form integration  ✅ DONE (commit 504c8a7, branch feat/workflow-wf2-editor-ux)
 The headline win: in the node panel, render a read-only `FormRenderer` **preview** of the bound form;
 a **"Tạo form mới"** button (blank → bind → open editor); and **"Sửa form"** that opens the full form
 builder (`App`, already standalone) in a **Drawer** over the canvas — preview/create/edit without ever
 leaving the workflow. New `workflow/useFormDefinition.ts` (getForm + migrate, cached on `qk.form(id)`);
-WorkflowEditor hosts the Drawer; replace the navigate-away `onEditForm` with it. Builder-only.
+WorkflowEditor hosts the Drawer; replaced the navigate-away `onEditForm` with it. Builder-only.
+
+Shipped exactly as planned: `useFormDefinition.ts` (+3 tests); NodePanel→`BoundFormPreview`
+(`<FormRenderer designMode readPretty/>` scroll-capped + missing/loading/error states);
+"Tạo form mới" = `saveForm(newForm(title), {projectId})` → bind → `onFormsChanged` (project-tree
+invalidate) → open Drawer; Drawer embeds `<App key={formId} formId projectId onSaved onDirtyChange/>`
+with an unsaved-close confirm; new props `projectId`/`onFormsChanged`, dropped `onEditForm`. App's
+100vh is clipped to the drawer body (`overflow:hidden`). Reviewer PASS, no required fixes
+(nits: 100vh clip [accepted], getForm omits x-owner-id [pre-existing, SEED_OWNER_ID==local], static
+App import could be lazy [optional]). typecheck 15/15, builder 275/275, biome clean. **Owner owes
+browser smoke** of WF2b (preview shows, create+bind+Drawer, edit→save→preview refresh).
 
 ## WF3 — Runtime / instances (DEFERRED; was "WF2")  [end-to-end value]
 The engine already runs; this is persistence + a thin UI.
