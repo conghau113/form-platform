@@ -1,6 +1,6 @@
 import { Alert, Button, Modal, Spin } from "antd";
 import { useCallback, useMemo, useRef } from "react";
-import { useBlocker, useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { useBlocker, useOutletContext, useParams } from "react-router-dom";
 import type { WorkspaceOutletContext } from "../workspace/ProjectWorkspace";
 import { useProjectTree } from "../workspace/useWorkspace";
 import { useSaveWorkflow, useWorkflow } from "./useWorkflows";
@@ -11,16 +11,15 @@ import { WorkflowEditor } from "./WorkflowEditor";
  * Mirrors {@link EditorRoute}: loads the contract by id, embeds {@link WorkflowEditor}, and owns the
  * unsaved-changes guard — a single `useBlocker` intercepts every in-app navigation away while dirty,
  * offering Save / Discard / Cancel. The editor reports dirtiness and a stable save fn up through refs.
- * Node "Edit form" jumps to that form's editor route. Form binding is a Select over the project's
- * real forms (from the shared `useProjectTree` cache).
+ * Form binding is a Select over the project's real forms (from the shared `useProjectTree` cache);
+ * creating/editing a bound form happens in-place in the editor's Drawer (WF2b) — no navigation away.
  */
 export function WorkflowRoute() {
   const { workflowId, projectId } = useParams<{ workflowId: string; projectId: string }>();
   const { onWorkflowSaved } = useOutletContext<WorkspaceOutletContext>();
-  const navigate = useNavigate();
 
   const { workflow, loading, error } = useWorkflow(workflowId);
-  const { tree } = useProjectTree(projectId);
+  const { tree, invalidate: refreshForms } = useProjectTree(projectId);
   const saveWorkflow = useSaveWorkflow(projectId);
 
   const formOptions = useMemo(
@@ -44,11 +43,6 @@ export function WorkflowRoute() {
       onWorkflowSaved();
     },
     [saveWorkflow, onWorkflowSaved],
-  );
-
-  const onEditForm = useCallback(
-    (formId: string) => navigate(`/projects/${projectId}/forms/${formId}`),
-    [navigate, projectId],
   );
 
   const blocker = useBlocker(
@@ -78,8 +72,9 @@ export function WorkflowRoute() {
         key={workflowId}
         definition={workflow}
         formOptions={formOptions}
+        projectId={projectId}
         onSave={onSave}
-        onEditForm={onEditForm}
+        onFormsChanged={refreshForms}
         onDirtyChange={onDirtyChange}
         provideSave={provideSave}
       />

@@ -1,3 +1,4 @@
+import { FormRenderer } from "@org/form-renderer-web";
 import { validateGraph } from "@org/workflow-core";
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import {
@@ -16,7 +17,21 @@ import {
   useNodesState,
   useReactFlow,
 } from "@xyflow/react";
-import { Alert, Button, Divider, Input, message, Select, Space, Tag, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Divider,
+  Drawer,
+  Empty,
+  Input,
+  Modal,
+  message,
+  Select,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from "antd";
 import {
   createContext,
   useCallback,
@@ -26,8 +41,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { App } from "../App";
+import { saveForm } from "../workspace/client";
+import { newForm } from "../workspace/newForm";
 import { FloatingEdge } from "./floating-edge";
 import { tidyLayout } from "./layout";
+import { useFormDefinition } from "./useFormDefinition";
 import {
   type FlowEdge,
   type FlowEdgeData,
@@ -123,10 +142,14 @@ export interface WorkflowEditorProps {
   definition: WorkflowDefinition;
   /** Forms in the workflow's project — the node "Bound form" picker is populated from these. */
   formOptions: WorkflowFormOption[];
+  /** Project the workflow lives in. Scopes "Tạo form mới" (new forms land here) + the embedded
+   *  form builder's preset library. Absent ⇒ create/edit-in-place is disabled. */
+  projectId?: string;
   /** Persist the current (validated) definition. Throws on failure; the editor surfaces it. */
   onSave: (def: WorkflowDefinition) => Promise<void>;
-  /** Open the form builder bound to a node's formId (navigates to the form editor route). */
-  onEditForm?: (formId: string) => void;
+  /** Refresh the project's forms cache after a form is created or saved in-place, so the bound-form
+   *  picker (and titles) pick up the change. Wired to the project tree invalidation by the route. */
+  onFormsChanged?: () => void;
   /** Reports whether the editor has unsaved changes (drives the navigation guard). */
   onDirtyChange?: (dirty: boolean) => void;
   /** Hands a stable save fn up so the guard can "save then proceed". Returns success. */
@@ -146,8 +169,9 @@ export function WorkflowEditor(props: WorkflowEditorProps) {
 function WorkflowEditorInner({
   definition,
   formOptions,
+  projectId,
   onSave,
-  onEditForm,
+  onFormsChanged,
   onDirtyChange,
   provideSave,
 }: WorkflowEditorProps) {
@@ -332,6 +356,59 @@ function WorkflowEditorInner({
     }
   }
 
+  // --- Inline form integration (WF2b) ---------------------------------------
+  // Editing/creating a node's bound form happens in a Drawer over the canvas (the full `App`
+  // builder) — never navigating away from the workflow.
+  const [editingFormId, setEditingFormId] = useState<string | null>(null);
+  const [formDirty, setFormDirty] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const canManageForms = !!projectId;
+
+  // Create a blank form in the workflow's project, bind it to the node, and open it in the Drawer.
+  const createFormForNode = useCallback(
+    async (nodeId: string, title: string) => {
+      if (!projectId) return;
+      setCreating(true);
+      try {
+        const saved = await saveForm(newForm(title), { projectId });
+        patchNodeData(nodeId, { formId: saved.id });
+        onFormsChanged?.(); // refresh the picker so the new form is a real option
+        setFormDirty(false);
+        setEditingFormId(saved.id);
+      } catch (e) {
+        message.error((e as Error).message);
+      } finally {
+        setCreating(false);
+      }
+    },
+    [projectId, patchNodeData, onFormsChanged],
+  );
+
+  // After a save inside the Drawer, App's own persistence already invalidated `qk.form(id)` (so the
+  // node preview refetches); we only refresh the project tree so titles stay in sync.
+  const onEmbeddedFormSaved = useCallback(() => {
+    setFormDirty(false);
+    onFormsChanged?.();
+  }, [onFormsChanged]);
+
+  function closeFormDrawer() {
+    if (formDirty) {
+      Modal.confirm({
+        title: "Form chưa lưu",
+        content: "Đóng trình chỉnh sửa form? Các thay đổi chưa lưu sẽ mất.",
+        okText: "Đóng",
+        okButtonProps: { danger: true },
+        cancelText: "Tiếp tục sửa",
+        onOk: () => {
+          setFormDirty(false);
+          setEditingFormId(null);
+        },
+      });
+      return;
+    }
+    setEditingFormId(null);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
@@ -410,9 +487,15 @@ function WorkflowEditorInner({
               node={selectedNode}
               isStart={meta.start === selectedNode.id}
               formOptions={formOptions}
+              canManageForms={canManageForms}
+              creating={creating}
               onChange={(patch) => patchNodeData(selectedNode.id, patch)}
               onSetStart={() => setStart(selectedNode.id)}
-              onEditForm={onEditForm}
+              onEditForm={(formId) => {
+                setFormDirty(false);
+                setEditingFormId(formId);
+              }}
+              onCreateForm={(title) => createFormForNode(selectedNode.id, title)}
               onDelete={() => deleteElements({ nodes: [{ id: selectedNode.id }] })}
             />
           ) : selectedEdge ? (
@@ -430,6 +513,28 @@ function WorkflowEditorInner({
           )}
         </aside>
       </div>
+
+      {/* Edit/create a node's bound form in place — the full builder, no navigation away. App is
+          standalone-renderable and uses callback-based guards (no competing `useBlocker`); we clip
+          its 100vh layout to the drawer body and confirm on close when the form has unsaved edits. */}
+      <Drawer
+        open={!!editingFormId}
+        onClose={closeFormDrawer}
+        title="Chỉnh sửa form"
+        width="70vw"
+        destroyOnClose
+        styles={{ body: { padding: 0, overflow: "hidden" } }}
+      >
+        {editingFormId && (
+          <App
+            key={editingFormId}
+            formId={editingFormId}
+            projectId={projectId}
+            onSaved={onEmbeddedFormSaved}
+            onDirtyChange={setFormDirty}
+          />
+        )}
+      </Drawer>
     </div>
   );
 }
@@ -438,23 +543,34 @@ function NodePanel({
   node,
   isStart,
   formOptions,
+  canManageForms,
+  creating,
   onChange,
   onSetStart,
   onEditForm,
+  onCreateForm,
   onDelete,
 }: {
   node: FlowNode;
   isStart: boolean;
   formOptions: WorkflowFormOption[];
+  /** Project context present ⇒ create/edit-in-place is available. */
+  canManageForms: boolean;
+  /** A new form is being created + bound (disables the create action). */
+  creating: boolean;
   onChange: (patch: Partial<FlowNodeData>) => void;
   onSetStart: () => void;
-  onEditForm?: (formId: string) => void;
+  /** Open the bound form in the in-canvas edit Drawer. */
+  onEditForm: (formId: string) => void;
+  /** Create a blank form titled after the state, bind it, and open the Drawer. */
+  onCreateForm: (title: string) => void;
   onDelete: () => void;
 }) {
   const boundFormId = node.data.formId;
+  const formExists = !boundFormId || formOptions.some((f) => f.id === boundFormId);
   // A bound form that no longer exists in the project still shows as a (dangling) option.
   const options = formOptions.map((f) => ({ value: f.id, label: f.title }));
-  if (boundFormId && !formOptions.some((f) => f.id === boundFormId)) {
+  if (boundFormId && !formExists) {
     options.push({ value: boundFormId, label: `${boundFormId} (missing)` });
   }
   return (
@@ -471,28 +587,108 @@ function NodePanel({
           allowClear
           showSearch
           optionFilterProp="label"
-          placeholder="Select a form in this project"
+          placeholder="Chọn form trong dự án"
           value={boundFormId}
           options={options}
           onChange={(value) => onChange({ formId: value || undefined })}
-          notFoundContent="No forms in this project"
+          notFoundContent="Dự án chưa có form nào"
         />
       </Field>
+
+      <BoundFormPreview
+        formId={boundFormId}
+        missing={!!boundFormId && !formExists}
+        canManageForms={canManageForms}
+        creating={creating}
+        onEditForm={onEditForm}
+        onCreateForm={() => onCreateForm(node.data.status || "Form")}
+      />
+
       <Button block disabled={isStart} onClick={onSetStart}>
         {isStart ? "This is the start state" : "Set as start"}
-      </Button>
-      <Button
-        block
-        type="primary"
-        disabled={!boundFormId || !onEditForm}
-        onClick={() => boundFormId && onEditForm?.(boundFormId)}
-      >
-        Edit form
       </Button>
       <Button block danger disabled={isStart} onClick={onDelete}>
         Delete state
       </Button>
     </Space>
+  );
+}
+
+/** Read-only preview of a node's bound form + the create/edit actions. When a form is bound it
+ *  renders the real `FormRenderer` (review mode) in a scroll-capped box; otherwise it offers
+ *  "Tạo form mới" (the picker above already covers selecting an existing one). */
+function BoundFormPreview({
+  formId,
+  missing,
+  canManageForms,
+  creating,
+  onEditForm,
+  onCreateForm,
+}: {
+  formId?: string;
+  missing: boolean;
+  canManageForms: boolean;
+  creating: boolean;
+  onEditForm: (formId: string) => void;
+  onCreateForm: () => void;
+}) {
+  const { definition, loading, error } = useFormDefinition(missing ? undefined : formId);
+
+  if (!formId) {
+    return (
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description="Chưa gắn form"
+        style={{ margin: "8px 0" }}
+      >
+        {canManageForms && (
+          <Button type="primary" loading={creating} onClick={onCreateForm}>
+            Tạo form mới
+          </Button>
+        )}
+      </Empty>
+    );
+  }
+
+  return (
+    <Field label="Xem trước form">
+      <div
+        style={{
+          maxHeight: 280,
+          overflow: "auto",
+          border: "1px solid rgba(0,0,0,0.1)",
+          borderRadius: 8,
+          padding: 12,
+          background: "#fafafa",
+        }}
+      >
+        {missing ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="Form không còn tồn tại"
+            description="Form được gắn đã bị xoá khỏi dự án. Hãy chọn hoặc tạo form khác."
+          />
+        ) : loading ? (
+          <div style={{ display: "grid", placeItems: "center", padding: 24 }}>
+            <Spin />
+          </div>
+        ) : error ? (
+          <Alert type="error" showIcon message="Không tải được form" description={error} />
+        ) : definition ? (
+          <FormRenderer schema={definition} designMode readPretty />
+        ) : null}
+      </div>
+      <Button
+        block
+        type="primary"
+        style={{ marginTop: 8 }}
+        disabled={missing || !canManageForms}
+        onClick={() => onEditForm(formId)}
+      >
+        Sửa form
+      </Button>
+    </Field>
   );
 }
 
