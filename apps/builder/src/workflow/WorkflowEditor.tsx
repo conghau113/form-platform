@@ -4,16 +4,30 @@ import {
   addEdge,
   Background,
   type Connection,
+  ConnectionMode,
   Controls,
   Handle,
   type NodeProps,
+  type OnBeforeDelete,
   Position,
   ReactFlow,
+  ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useReactFlow,
 } from "@xyflow/react";
 import { Alert, Button, Divider, Input, message, Select, Space, Tag, Typography } from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { FloatingEdge } from "./floating-edge";
+import { tidyLayout } from "./layout";
 import {
   type FlowEdge,
   type FlowEdgeData,
@@ -32,12 +46,36 @@ export interface WorkflowFormOption {
   title: string;
 }
 
-/** Custom state node: shows its status, the bound formId, and a "start" badge. */
-function WorkflowNodeView({ data, selected }: NodeProps<FlowNode>) {
+/** Lets the custom node render an inline-rename input when its id is the one being renamed. */
+interface NodeViewCtx {
+  renamingNodeId: string | null;
+  commitRename: (id: string, status: string) => void;
+  cancelRename: () => void;
+}
+const NodeViewContext = createContext<NodeViewCtx>({
+  renamingNodeId: null,
+  commitRename: () => {},
+  cancelRename: () => {},
+});
+
+const HANDLE_STYLE = {
+  width: 9,
+  height: 9,
+  background: "#1677ff",
+  border: "2px solid #fff",
+} as const;
+const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left] as const;
+
+/** Custom state node: status + bound form + a "start" badge, with connect handles on all four
+ *  sides (floating edges route to the nearest border) and double-click-to-rename. */
+function WorkflowNodeView({ id, data, selected }: NodeProps<FlowNode>) {
+  const ctx = useContext(NodeViewContext);
+  const renaming = ctx.renamingNodeId === id;
+
   return (
     <div
       style={{
-        minWidth: 140,
+        minWidth: 150,
         padding: "8px 12px",
         borderRadius: 8,
         border: `2px solid ${selected ? "#1677ff" : "#d9d9d9"}`,
@@ -45,20 +83,40 @@ function WorkflowNodeView({ data, selected }: NodeProps<FlowNode>) {
         boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
       }}
     >
-      <Handle type="target" position={Position.Left} />
+      {SIDES.map((pos) => (
+        // Loose connection mode lets each source handle also accept a drop, so a transition can be
+        // drawn from any side to any side.
+        <Handle key={pos} id={pos} type="source" position={pos} style={HANDLE_STYLE} />
+      ))}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <Typography.Text strong>{data.status || "(unnamed)"}</Typography.Text>
+        {renaming ? (
+          <Input
+            className="nodrag"
+            size="small"
+            autoFocus
+            defaultValue={data.status}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={(e) => ctx.commitRename(id, e.target.value)}
+            onPressEnter={(e) => ctx.commitRename(id, (e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") ctx.cancelRename();
+            }}
+            style={{ width: 130 }}
+          />
+        ) : (
+          <Typography.Text strong>{data.status || "(unnamed)"}</Typography.Text>
+        )}
         {data.isStart && <Tag color="green">start</Tag>}
       </div>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {data.formId ? `form: ${data.formId}` : "no form bound"}
       </Typography.Text>
-      <Handle type="source" position={Position.Right} />
     </div>
   );
 }
 
 const nodeTypes = { workflow: WorkflowNodeView };
+const edgeTypes = { floating: FloatingEdge };
 
 export interface WorkflowEditorProps {
   /** The persisted workflow contract to seed the canvas from (loaded by the route). */
@@ -75,7 +133,17 @@ export interface WorkflowEditorProps {
   provideSave?: (save: () => Promise<boolean>) => void;
 }
 
-export function WorkflowEditor({
+/** Wrapped in a provider so the toolbar + delete buttons can use `useReactFlow`, and floating
+ *  edges can read internal node geometry via `useInternalNode`. */
+export function WorkflowEditor(props: WorkflowEditorProps) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowEditorInner {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function WorkflowEditorInner({
   definition,
   formOptions,
   onSave,
@@ -90,6 +158,8 @@ export function WorkflowEditor({
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(seed.edges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
+  const { deleteElements, screenToFlowPosition, fitView } = useReactFlow();
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId) ?? null;
@@ -139,16 +209,31 @@ export function WorkflowEditor({
     [setEdges],
   );
 
-  function addState() {
-    const node = newNode(`state${nodes.length + 1}`, { x: 80, y: 40 + nodes.length * 90 });
+  function addStateAt(position: { x: number; y: number }) {
+    const node = newNode(`state${nodes.length + 1}`, position);
     setNodes((ns) => [...ns, node]);
     setSelectedNodeId(node.id);
     setSelectedEdgeId(null);
   }
 
-  function patchNodeData(id: string, patch: Partial<FlowNodeData>) {
-    setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)));
+  function addState() {
+    // Drop the new state beside the selected one, else step it out so it never lands on another.
+    const base = selectedNode?.position ?? { x: 40, y: 40 };
+    addStateAt({ x: base.x + 220, y: base.y + (selectedNode ? 0 : nodes.length * 30) });
   }
+
+  function onPaneDoubleClick(e: React.MouseEvent) {
+    // Only the empty canvas — a node's own double-click is handled as inline-rename below.
+    if (!(e.target as HTMLElement).classList.contains("react-flow__pane")) return;
+    addStateAt(screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+  }
+
+  const patchNodeData = useCallback(
+    (id: string, patch: Partial<FlowNodeData>) => {
+      setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)));
+    },
+    [setNodes],
+  );
 
   function patchEdge(id: string, patch: Partial<FlowEdgeData>) {
     setEdges((es) =>
@@ -164,9 +249,71 @@ export function WorkflowEditor({
     );
   }
 
-  function setStart(id: string) {
-    setMeta((m) => ({ ...m, start: id }));
-    setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, isStart: n.id === id } })));
+  const setStart = useCallback(
+    (id: string) => {
+      setMeta((m) => ({ ...m, start: id }));
+      setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, isStart: n.id === id } })));
+    },
+    [setNodes],
+  );
+
+  // Inline rename — commit writes back through the same channel as the panel's Status field.
+  const commitRename = useCallback(
+    (id: string, status: string) => {
+      const next = status.trim();
+      if (next) patchNodeData(id, { status: next });
+      setRenamingNodeId(null);
+    },
+    [patchNodeData],
+  );
+  const cancelRename = useCallback(() => setRenamingNodeId(null), []);
+  const nodeViewCtx = useMemo<NodeViewCtx>(
+    () => ({ renamingNodeId, commitRename, cancelRename }),
+    [renamingNodeId, commitRename, cancelRename],
+  );
+
+  // Guard destructive deletes: never strand the graph or orphan the start node.
+  const onBeforeDelete = useCallback<OnBeforeDelete<FlowNode, FlowEdge>>(
+    async ({ nodes: del }) => {
+      if (del.length === 0) return true;
+      const remaining = nodes.filter((n) => !del.some((d) => d.id === n.id));
+      if (remaining.length === 0) {
+        message.warning("Workflow cần ít nhất một state.");
+        return false;
+      }
+      if (del.some((d) => d.id === meta.start)) {
+        message.warning("Hãy đặt một state khác làm 'start' trước khi xoá state bắt đầu.");
+        return false;
+      }
+      return true;
+    },
+    [nodes, meta.start],
+  );
+
+  const onNodesDelete = useCallback(
+    (deleted: FlowNode[]) => {
+      const ids = new Set(deleted.map((n) => n.id));
+      if (selectedNodeId && ids.has(selectedNodeId)) setSelectedNodeId(null);
+      if (renamingNodeId && ids.has(renamingNodeId)) setRenamingNodeId(null);
+      // start is protected by onBeforeDelete, but re-point defensively if it ever slips through.
+      if (ids.has(meta.start)) {
+        const fallback = nodes.find((n) => !ids.has(n.id));
+        if (fallback) setStart(fallback.id);
+      }
+    },
+    [selectedNodeId, renamingNodeId, meta.start, nodes, setStart],
+  );
+
+  const onEdgesDelete = useCallback(
+    (deleted: FlowEdge[]) => {
+      if (selectedEdgeId && deleted.some((e) => e.id === selectedEdgeId)) setSelectedEdgeId(null);
+    },
+    [selectedEdgeId],
+  );
+
+  function onTidy() {
+    setNodes((ns) => tidyLayout(ns, edges));
+    window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
   }
 
   function onValidate() {
@@ -197,6 +344,7 @@ export function WorkflowEditor({
         />
         <Space>
           <Button onClick={addState}>Add state</Button>
+          <Button onClick={onTidy}>Tidy</Button>
           <Button onClick={onValidate}>Validate</Button>
           <Button type="primary" disabled={!dirty} onClick={save}>
             Save
@@ -205,31 +353,40 @@ export function WorkflowEditor({
       </div>
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={(_, n) => {
-              setSelectedNodeId(n.id);
-              setSelectedEdgeId(null);
-            }}
-            onEdgeClick={(_, e) => {
-              setSelectedEdgeId(e.id);
-              setSelectedNodeId(null);
-            }}
-            onPaneClick={() => {
-              setSelectedNodeId(null);
-              setSelectedEdgeId(null);
-            }}
-            fitView
-          >
-            <Background />
-            <Controls />
-          </ReactFlow>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: pane double-click is a canvas affordance. */}
+        <div style={{ flex: 1, minWidth: 0 }} onDoubleClick={onPaneDoubleClick}>
+          <NodeViewContext.Provider value={nodeViewCtx}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              connectionMode={ConnectionMode.Loose}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onBeforeDelete={onBeforeDelete}
+              onNodesDelete={onNodesDelete}
+              onEdgesDelete={onEdgesDelete}
+              onNodeClick={(_, n) => {
+                setSelectedNodeId(n.id);
+                setSelectedEdgeId(null);
+              }}
+              onNodeDoubleClick={(_, n) => setRenamingNodeId(n.id)}
+              onEdgeClick={(_, e) => {
+                setSelectedEdgeId(e.id);
+                setSelectedNodeId(null);
+              }}
+              onPaneClick={() => {
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+              }}
+              fitView
+            >
+              <Background />
+              <Controls />
+            </ReactFlow>
+          </NodeViewContext.Provider>
         </div>
 
         <aside
@@ -248,16 +405,19 @@ export function WorkflowEditor({
               onChange={(patch) => patchNodeData(selectedNode.id, patch)}
               onSetStart={() => setStart(selectedNode.id)}
               onEditForm={onEditForm}
+              onDelete={() => deleteElements({ nodes: [{ id: selectedNode.id }] })}
             />
           ) : selectedEdge ? (
             <EdgePanel
               edge={selectedEdge}
               onChange={(patch) => patchEdge(selectedEdge.id, patch)}
+              onDelete={() => deleteElements({ edges: [{ id: selectedEdge.id }] })}
             />
           ) : (
             <Typography.Paragraph type="secondary">
-              Select a state or transition to edit it. Drag from a node's right handle to another
-              node's left handle to create a transition.
+              Select a state or transition to edit it. Drag from any handle to another node to
+              create a transition. Double-click the canvas to add a state, or a node to rename it.
+              Press Delete/Backspace to remove the selection.
             </Typography.Paragraph>
           )}
         </aside>
@@ -273,6 +433,7 @@ function NodePanel({
   onChange,
   onSetStart,
   onEditForm,
+  onDelete,
 }: {
   node: FlowNode;
   isStart: boolean;
@@ -280,6 +441,7 @@ function NodePanel({
   onChange: (patch: Partial<FlowNodeData>) => void;
   onSetStart: () => void;
   onEditForm?: (formId: string) => void;
+  onDelete: () => void;
 }) {
   const boundFormId = node.data.formId;
   // A bound form that no longer exists in the project still shows as a (dangling) option.
@@ -319,6 +481,9 @@ function NodePanel({
       >
         Edit form
       </Button>
+      <Button block danger disabled={isStart} onClick={onDelete}>
+        Delete state
+      </Button>
     </Space>
   );
 }
@@ -326,9 +491,11 @@ function NodePanel({
 function EdgePanel({
   edge,
   onChange,
+  onDelete,
 }: {
   edge: FlowEdge;
   onChange: (patch: Partial<FlowEdgeData>) => void;
+  onDelete: () => void;
 }) {
   const [guardText, setGuardText] = useState(() =>
     edge.data?.guard ? JSON.stringify(edge.data.guard.rule, null, 2) : "",
@@ -382,6 +549,9 @@ function EdgePanel({
       {guardError && (
         <Alert type="error" showIcon message="Invalid JSON" description={guardError} />
       )}
+      <Button block danger onClick={onDelete}>
+        Delete transition
+      </Button>
       <Divider style={{ margin: 0 }} />
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {edge.source} → {edge.target}

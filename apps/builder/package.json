@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^5.4.0",
+    "@dagrejs/dagre": "^1.1.4",
     "@org/form-core": "workspace:*",
     "@org/form-renderer-web": "workspace:*",
     "@org/form-schema": "workspace:*",
