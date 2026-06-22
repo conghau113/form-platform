@@ -72,10 +72,12 @@ KHÔNG có nghĩa là loại bỏ tính năng.
 - [x] pipeline `generateForm` = `generate → extractJsonObject → normalize (migrate+Zod) →
   repair (≤N vòng, feed Zod errors lại) → postprocess` + `dedupeFieldNames` (dedupe name).
 - [x] ingest: prompt + image(vision qua AiImageInput); test với provider mock (CI không tốn token).
-- [ ] API headless `POST /ai/forms:generate` với header BYOK; allowlist URL trong output **(slice 2)**
-- [x] changeset cho form-ai (`form-ai-core-p1.md`).
-- **Nghiệm thu:** parse-rate ≥95% trên golden set; output luôn render được; không có fetch hardcode.
-  (slice 1: pipeline + dedupe + 2 provider có test 18/18; golden-set eval + endpoint ở slice 2.)
+- [x] API headless `POST /ai/forms/generate` với header BYOK (`x-ai-*`); allowlist URL trong output
+  (`AI_URL_ALLOWLIST` + `stripDisallowedUrls`). **Dùng `/forms/generate` thay vì AIP colon
+  `forms:generate`** (colon cũng khớp `/ai/formsX` dưới express path-to-regexp 0.1.13).
+- [x] changeset cho form-ai (`form-ai-core-p1.md` + `form-ai-url-sanitize-p1.md`); api private → no changeset.
+- **Nghiệm thu:** ⏳ golden-set eval (parse-rate ≥95%) CÒN LẠI (slice 3). Endpoint + safety: api 54/54,
+  form-ai 23/23, không có fetch hardcode (provider seam inject). Output luôn parse-valid (Zod) hoặc 422.
 
 ### P2 — Builder thành bề mặt human-in-the-loop  ⏳
 - [ ] Nút "Tạo bằng AI" cạnh palette (prompt / kéo ảnh)
