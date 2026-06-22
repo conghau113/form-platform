@@ -223,8 +223,15 @@ function WorkflowEditorInner({
   }
 
   function onPaneDoubleClick(e: React.MouseEvent) {
-    // Only the empty canvas — a node's own double-click is handled as inline-rename below.
-    if (!(e.target as HTMLElement).classList.contains("react-flow__pane")) return;
+    // Add a state where the user double-clicks the empty canvas. Ignore double-clicks that land on
+    // a node (handled as inline-rename), an edge, a handle, or the controls. `zoomOnDoubleClick` is
+    // disabled on <ReactFlow> so d3-zoom no longer swallows this event before it bubbles here.
+    const el = e.target as HTMLElement;
+    if (
+      el.closest(".react-flow__node, .react-flow__edge, .react-flow__handle, .react-flow__controls")
+    ) {
+      return;
+    }
     addStateAt(screenToFlowPosition({ x: e.clientX, y: e.clientY }));
   }
 
@@ -362,6 +369,7 @@ function WorkflowEditorInner({
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               connectionMode={ConnectionMode.Loose}
+              zoomOnDoubleClick={false}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
