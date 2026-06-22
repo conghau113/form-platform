@@ -64,14 +64,18 @@ KHÔNG có nghĩa là loại bỏ tính năng.
 - **Nghiệm thu:** ✅ `apps/mcp/src/server.test.ts` — agent client gọi MCP `create_form` →
   nhận `FormSchema` parse-pass Zod (formVersion=3). Demo/quay video + publish URL còn lại cho owner.
 
-### P1 — AI core (BYOK, guaranteed-valid)  ⏳
-- [ ] `@org/form-ai`: `AiProvider` interface (OpenAI-compatible shape, vision)
-- [ ] `providers/openai-compatible.ts` (phủ 9router + OpenAI + Azure) + `providers/anthropic.ts`
-- [ ] pipeline `generate → safeParse(migrate) → repair (≤3 vòng)` + `postprocess` (dedupe name)
-- [ ] ingest: prompt + image(vision); test với provider mock (CI không tốn token)
-- [ ] API headless `POST /ai/forms:generate` với header BYOK; allowlist URL trong output
-- [ ] changeset cho form-ai
+### P1 — AI core (BYOK, guaranteed-valid)  ⏳ (slice 1 done; endpoint + eval còn lại)
+- [x] `@org/form-ai`: `AiProvider` interface (OpenAI-compatible shape, vision) — package mới,
+  deps chỉ `@org/form-schema` + `zod` (KHÔNG react/antd, chạy server+browser).
+- [x] `providers/openai-compatible.ts` (phủ 9router + OpenAI + Azure) + `providers/anthropic.ts` —
+  fetch-wrapper mỏng, `fetchImpl` inject (default global fetch), test offline.
+- [x] pipeline `generateForm` = `generate → extractJsonObject → normalize (migrate+Zod) →
+  repair (≤N vòng, feed Zod errors lại) → postprocess` + `dedupeFieldNames` (dedupe name).
+- [x] ingest: prompt + image(vision qua AiImageInput); test với provider mock (CI không tốn token).
+- [ ] API headless `POST /ai/forms:generate` với header BYOK; allowlist URL trong output **(slice 2)**
+- [x] changeset cho form-ai (`form-ai-core-p1.md`).
 - **Nghiệm thu:** parse-rate ≥95% trên golden set; output luôn render được; không có fetch hardcode.
+  (slice 1: pipeline + dedupe + 2 provider có test 18/18; golden-set eval + endpoint ở slice 2.)
 
 ### P2 — Builder thành bề mặt human-in-the-loop  ⏳
 - [ ] Nút "Tạo bằng AI" cạnh palette (prompt / kéo ảnh)
