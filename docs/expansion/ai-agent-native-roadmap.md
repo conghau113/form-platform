@@ -64,7 +64,7 @@ KHÔNG có nghĩa là loại bỏ tính năng.
 - **Nghiệm thu:** ✅ `apps/mcp/src/server.test.ts` — agent client gọi MCP `create_form` →
   nhận `FormSchema` parse-pass Zod (formVersion=3). Demo/quay video + publish URL còn lại cho owner.
 
-### P1 — AI core (BYOK, guaranteed-valid)  ⏳ (slice 1 done; endpoint + eval còn lại)
+### P1 — AI core (BYOK, guaranteed-valid)  ✅ (slice 1 core + slice 2 endpoint + slice 3 eval done)
 - [x] `@org/form-ai`: `AiProvider` interface (OpenAI-compatible shape, vision) — package mới,
   deps chỉ `@org/form-schema` + `zod` (KHÔNG react/antd, chạy server+browser).
 - [x] `providers/openai-compatible.ts` (phủ 9router + OpenAI + Azure) + `providers/anthropic.ts` —
@@ -76,8 +76,15 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   (`AI_URL_ALLOWLIST` + `stripDisallowedUrls`). **Dùng `/forms/generate` thay vì AIP colon
   `forms:generate`** (colon cũng khớp `/ai/formsX` dưới express path-to-regexp 0.1.13).
 - [x] changeset cho form-ai (`form-ai-core-p1.md` + `form-ai-url-sanitize-p1.md`); api private → no changeset.
-- **Nghiệm thu:** ⏳ golden-set eval (parse-rate ≥95%) CÒN LẠI (slice 3). Endpoint + safety: api 54/54,
-  form-ai 23/23, không có fetch hardcode (provider seam inject). Output luôn parse-valid (Zod) hoặc 422.
+- [x] golden-set eval harness (slice 3): `eval/{golden,score,run}.ts` — labeled EN+VI golden set
+  (input + machine-checkable `expect`: minFields/expectTypes/expectFields + `referenceDraft`),
+  pure scoring (`scoreCase`/`summarizeEval`: parse-rate, pass-rate, type/field coverage),
+  `runFormEval(provider)` drives the real pipeline; `fixtureProvider` = zero-token CI run,
+  `providerFromEnv`/`formatEvalReport` = opt-in BYOK live run (`describe.skipIf` gated on
+  `FORM_AI_EVAL_*`). changeset `form-ai-eval-harness-p1.md`.
+- **Nghiệm thu:** ✅ slice 1 core + slice 2 endpoint + slice 3 eval. form-ai 39/39 (+16, 1 live test
+  skipped in CI), api 54/54, không có fetch hardcode (provider seam inject). Output luôn parse-valid
+  (Zod) hoặc 422. Fixture parse-rate = 100% (golden set self-achievable); live ≥95% bar = owner BYOK run.
 
 ### P2 — Builder thành bề mặt human-in-the-loop  ⏳
 - [ ] Nút "Tạo bằng AI" cạnh palette (prompt / kéo ảnh)
