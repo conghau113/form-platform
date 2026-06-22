@@ -46,18 +46,23 @@ KHÔNG có nghĩa là loại bỏ tính năng.
 
 ## 4. Lộ trình theo phase
 
-### P0 — Nền compile-target + MCP (khe hở, làm TRƯỚC)  ⏳
+### P0 — Nền compile-target + MCP (khe hở, làm TRƯỚC)  ✅ (trừ publish URL)
 - [x] `packages/form-schema/json-schema.ts`: export JSON Schema (draft-07) từ Zod **form**
   (`buildFormJsonSchema()`/`FORM_JSON_SCHEMA` + `FORM_SCHEMA_ID`, qua `zod-to-json-schema`).
-  Workflow JSON Schema để sang `packages/workflow-schema` ở slice MCP (tránh form→workflow dep).
 - [x] `packages/form-schema/capabilities.ts`: field catalog máy-đọc (`FIELD_CAPABILITIES`/
   `formCapabilities()`), drift-test suy ra type set thẳng từ Zod union.
-- [ ] Publish JSON Schema tại URL ổn định (đổi `FORM_SCHEMA_URI_BASE` urn → HTTP khi host)
-- [ ] MCP server tối thiểu: tool `create_form` / `create_workflow` trả contract hợp lệ
-      (+ workflow json-schema/capabilities ở `workflow-schema`)
-- [x] changeset cho form-schema (`form-json-schema-capabilities-p0.md`)
-- **Nghiệm thu:** một agent (Claude/VSCode) gọi MCP → nhận `FormSchema` parse-pass Zod →
-  render được trong `<FormRenderer>`; demo quay video được.
+- [x] `packages/workflow-schema/{json-schema,capabilities}.ts`: mirror cho workflow
+  (`WORKFLOW_JSON_SCHEMA`/`WORKFLOW_SCHEMA_ID` + `WORKFLOW_PRIMITIVES`/`workflowCapabilities()`),
+  để ở workflow-schema tránh form→workflow dep.
+- [ ] Publish JSON Schema tại URL ổn định (đổi `*_URI_BASE` urn → HTTP khi host — ops, để sau)
+- [x] MCP server tối thiểu (`apps/mcp`, stdio): tools `list_capabilities` / `get_form_schema` /
+  `get_workflow_schema` / `create_form` / `create_workflow`. `create_*` = migrate+Zod parse →
+  contract hợp lệ hoặc `{ok:false,errors}` (KHÔNG gọi LLM — đó là P1). Pure `tools.ts` +
+  integration test qua MCP protocol thật (InMemoryTransport).
+- [x] changeset cho form-schema (`form-json-schema-capabilities-p0.md`) + workflow-schema
+  (`workflow-json-schema-capabilities-p0.md`); `apps/mcp` private → no changeset.
+- **Nghiệm thu:** ✅ `apps/mcp/src/server.test.ts` — agent client gọi MCP `create_form` →
+  nhận `FormSchema` parse-pass Zod (formVersion=3). Demo/quay video + publish URL còn lại cho owner.
 
 ### P1 — AI core (BYOK, guaranteed-valid)  ⏳
 - [ ] `@org/form-ai`: `AiProvider` interface (OpenAI-compatible shape, vision)
