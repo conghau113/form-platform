@@ -115,8 +115,11 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   stamp version → migrate → Zod → **`validateGraph`** trong CÙNG error channel ⇒ lỗi graph
   feed lại model y như lỗi Zod, no special-casing. No-eval, guards JSONLogic, additive
   (KHÔNG bump workflowVersion). Tests 12/12, reviewer PASS. Commit `987548d`. Changeset có.
-- [ ] **C2 — api `POST /ai/workflows/generate`** (BYOK, mở rộng module `ai` sẵn có; reuse
-  `AiProviderFactory` + boundary 502/422). Live smoke vs 9router.
+- [x] **C2 — api `POST /ai/workflows/{generate,refine}`** (BYOK, mở rộng module `ai` sẵn có;
+  reuse `AiProviderFactory` + `@AiCreds`; boundary 502 provider-fail / 422 unrecoverable; KHÔNG
+  strip URL — workflow contract không mang URL). `GenerateWorkflowDto`/`RefineWorkflowDto` chỉ
+  validate envelope, `currentWorkflow` truyền model dạng text, never eval. Additive, KHÔNG bump
+  workflowVersion. api 61/61 (+4), reviewer PASS. Commit `bfdf686`. Live smoke vs 9router: owner.
 - [ ] **C3 — builder "Generate workflow with AI"** vào xyflow (diff/apply qua WF1 `definition`
   prop + bind `formId` qua Select forms dự án sẵn có) + empty-workflow CTA.
 - [ ] **C5 — eval** (golden set workflow + parse-rate/graph-valid-rate) ; **C4 — MCP**
