@@ -87,8 +87,8 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   (Zod) hoặc 422. Fixture parse-rate = 100% (golden set self-achievable); live ≥95% bar = owner BYOK run.
 
 ### P2 — Builder thành bề mặt human-in-the-loop  ⏳
-- [ ] Nút "Tạo bằng AI" cạnh palette (prompt / kéo ảnh)
-- [ ] Diff AI-đề-xuất vào canvas trước khi nhận (tái dùng patch/history + useBlocker)
+- [x] Nút "Tạo bằng AI" cạnh palette (prompt / kéo ảnh) — `e254b34` (slice 1)
+- [x] Diff AI-đề-xuất vào canvas trước khi nhận (tái dùng patch/history + useBlocker) — `e254b34`
 - [ ] "Apply skill/pattern": AI sinh preset library → apply nhiều form (dùng preset + W4 + i18n)
 - **Nghiệm thu:** sửa-rồi-nhận mượt; demo "1 câu lệnh đồng bộ field chuẩn khắp project".
 
