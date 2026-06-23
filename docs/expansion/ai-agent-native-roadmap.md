@@ -103,15 +103,25 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   `~/.claude/plans/gleaming-charting-compass.md` (Track B). Ưu tiên SAU P3 (moat).
 - **Nghiệm thu:** sửa-rồi-nhận mượt ✅; demo "1 câu lệnh đồng bộ field chuẩn khắp project" (slice 2).
 
-### P3 — AI sinh Workflow (khe hở Form+Workflow)  ⏳ ← **NEXT (moat); plan đã viết**
+### P3 — AI sinh Workflow (khe hở Form+Workflow)  ⏳ ← **ĐANG LÀM (moat)**
 > Plan thực thi chi tiết: `~/.claude/plans/luminous-charting-cartographer.md` (C0 tách
 > `@org/ai-core` → C1 `@org/workflow-ai` generateWorkflow → C2 api → C3 builder → C4 MCP → C5 eval).
-> Quyết định owner còn mở: DC1 (tách ai-core [rec] vs workflow-ai→form-ai), DC2, DC3.
-- [ ] ingest mô tả tiếng Việt → `WorkflowDefinition` (tận dụng WF editor đã có)
-- [ ] MCP tool `create_workflow` hoàn chỉnh + diff vào xyflow canvas
-- [ ] validate graph well-formed (reachable / không deadlock / edge hợp lệ) trước khi nhận
-      (tái dùng `workflow-core/graph.ts` `validateGraph` làm repair-signal)
-- **Nghiệm thu:** "tạo quy trình duyệt nghỉ phép 3 cấp" → graph hợp lệ render được.
+> Quyết định owner đã chốt (deferred to rec 2026-06-23): DC1=A (tách `@org/ai-core`),
+> DC2=mở rộng module `ai` sẵn có, DC3=C0–C3 trước → C5 → C4.
+- [x] **C0 — tách `@org/ai-core`** (provider seam + 2 provider impl + generic
+  `runValidationLoop`/`extractJsonObject`; form-ai re-export back-compat). Commit `02bf933`.
+- [x] **C1 — `@org/workflow-ai`** (`generateWorkflow`/`refineWorkflow`): prompt nhúng
+  `workflowCapabilities()` → `runValidationLoop` (ai-core) → `normalizeWorkflowDraft` =
+  stamp version → migrate → Zod → **`validateGraph`** trong CÙNG error channel ⇒ lỗi graph
+  feed lại model y như lỗi Zod, no special-casing. No-eval, guards JSONLogic, additive
+  (KHÔNG bump workflowVersion). Tests 12/12, reviewer PASS. Commit `987548d`. Changeset có.
+- [ ] **C2 — api `POST /ai/workflows/generate`** (BYOK, mở rộng module `ai` sẵn có; reuse
+  `AiProviderFactory` + boundary 502/422). Live smoke vs 9router.
+- [ ] **C3 — builder "Generate workflow with AI"** vào xyflow (diff/apply qua WF1 `definition`
+  prop + bind `formId` qua Select forms dự án sẵn có) + empty-workflow CTA.
+- [ ] **C5 — eval** (golden set workflow + parse-rate/graph-valid-rate) ; **C4 — MCP**
+  `create_workflow`→LLM (agent-native polish, làm sau C5).
+- **Nghiệm thu:** "tạo quy trình duyệt nghỉ phép 3 cấp" → graph hợp lệ render được trong editor.
 
 ### P4 — Lớp service production (chỉ khi host hộ khách)  ⏳
 - [ ] DB thật (Postgres), auth/tenant, submission storage, file storage, audit, rate-limit
