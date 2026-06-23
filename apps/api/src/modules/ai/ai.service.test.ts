@@ -80,6 +80,25 @@ describe("AiService", () => {
     expect(res.strippedUrls).toEqual(["https://evil.test/collect"]);
   });
 
+  it("refines an existing form into a contract-valid result", async () => {
+    const service = new AiService(factoryFor(fixedProvider(validForm)));
+    const res = await service.refine(creds, {
+      baseForm: { id: "contact", title: "Contact", fields: [] },
+      instruction: "add an email field",
+    });
+
+    expect(res.form.formVersion).toBe(3);
+    expect(res.form.fields).toHaveLength(1);
+    expect(res.attempts).toBe(1);
+  });
+
+  it("throws 422 when a refine never yields valid JSON", async () => {
+    const service = new AiService(factoryFor(fixedProvider("not json")));
+    await expect(
+      service.refine(creds, { baseForm: {}, instruction: "x", maxRepairs: 1 }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
   it("keeps a submitUrl whose host is on the allowlist", async () => {
     process.env.AI_URL_ALLOWLIST = "myco.com";
     const withUrl = JSON.stringify({

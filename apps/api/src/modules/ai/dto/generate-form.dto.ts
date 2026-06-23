@@ -1,5 +1,18 @@
 import { Type } from "class-transformer";
-import { IsArray, IsInt, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
+import {
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateNested,
+} from "class-validator";
+
+/** How a reference image is turned into a form (mirrors form-ai `ImageStrategy`). */
+export const IMAGE_STRATEGIES = ["single", "two-pass"] as const;
+export type ImageStrategyDto = (typeof IMAGE_STRATEGIES)[number];
 
 /** A reference image for vision-capable providers (URL or base64). */
 export class AiImageDto {
@@ -39,4 +52,9 @@ export class GenerateFormDto {
   @Min(0)
   @Max(5)
   maxRepairs?: number;
+
+  /** Image handling: `"single"` (default) or `"two-pass"` (transcribe then build). */
+  @IsOptional()
+  @IsIn(IMAGE_STRATEGIES)
+  imageStrategy?: ImageStrategyDto;
 }

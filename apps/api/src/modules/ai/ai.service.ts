@@ -1,11 +1,17 @@
 import { BadGatewayException, Injectable, UnprocessableEntityException } from "@nestjs/common";
-import { generateForm, stripDisallowedUrls } from "@org/form-ai";
+import {
+  type GenerateFormResult,
+  generateForm,
+  refineForm,
+  stripDisallowedUrls,
+} from "@org/form-ai";
 import type { FormSchema } from "@org/form-schema";
 import { type AiServerConfig, loadAiConfig } from "./ai.config.js";
 import type { AiCredentials } from "./ai-credentials.decorator.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AiProviderFactory } from "./ai-provider.factory.js";
 import type { GenerateFormDto } from "./dto/generate-form.dto.js";
+import type { RefineFormDto } from "./dto/refine-form.dto.js";
 
 export interface GenerateFormResponse {
   form: FormSchema;
@@ -28,19 +34,46 @@ export class AiService {
 
   constructor(private readonly providers: AiProviderFactory) {}
 
+  /** Generate a brand-new form from a prompt (and optional reference images). */
   async generate(creds: AiCredentials, dto: GenerateFormDto): Promise<GenerateFormResponse> {
     const provider = this.providers.create(creds);
-    let result: Awaited<ReturnType<typeof generateForm>>;
-    try {
-      result = await generateForm(
+    return this.run(() =>
+      generateForm(
         provider,
         { prompt: dto.prompt, guidance: dto.guidance, images: dto.images },
-        { maxRepairs: dto.maxRepairs },
-      );
+        { maxRepairs: dto.maxRepairs, imageStrategy: dto.imageStrategy },
+      ),
+    );
+  }
+
+  /** Apply a natural-language edit to an existing form, returning a valid result. */
+  async refine(creds: AiCredentials, dto: RefineFormDto): Promise<GenerateFormResponse> {
+    const provider = this.providers.create(creds);
+    return this.run(() =>
+      refineForm(
+        provider,
+        {
+          currentForm: dto.baseForm,
+          instruction: dto.instruction,
+          guidance: dto.guidance,
+          images: dto.images,
+        },
+        { maxRepairs: dto.maxRepairs, imageStrategy: dto.imageStrategy },
+      ),
+    );
+  }
+
+  /**
+   * Shared pipeline boundary for generate + refine: a provider/upstream failure
+   * surfaces as 502 (the caller sees what to fix — bad key, unconfigured model),
+   * an unrecoverable model output as 422 with the structured errors, and a valid
+   * form has its off-allowlist URLs stripped before it is returned.
+   */
+  private async run(call: () => Promise<GenerateFormResult>): Promise<GenerateFormResponse> {
+    let result: GenerateFormResult;
+    try {
+      result = await call();
     } catch (err) {
-      // The provider/upstream itself failed (bad key or model, network, an
-      // incompatible response). Surface the reason as 502 instead of a generic
-      // 500 so the caller sees what to fix (e.g. an unconfigured 9router model).
       throw new BadGatewayException({
         message: `AI provider request failed: ${(err as Error).message}`,
       });
