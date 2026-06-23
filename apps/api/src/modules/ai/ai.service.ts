@@ -1,4 +1,4 @@
-import { Injectable, UnprocessableEntityException } from "@nestjs/common";
+import { BadGatewayException, Injectable, UnprocessableEntityException } from "@nestjs/common";
 import { generateForm, stripDisallowedUrls } from "@org/form-ai";
 import type { FormSchema } from "@org/form-schema";
 import { type AiServerConfig, loadAiConfig } from "./ai.config.js";
@@ -30,11 +30,21 @@ export class AiService {
 
   async generate(creds: AiCredentials, dto: GenerateFormDto): Promise<GenerateFormResponse> {
     const provider = this.providers.create(creds);
-    const result = await generateForm(
-      provider,
-      { prompt: dto.prompt, guidance: dto.guidance, images: dto.images },
-      { maxRepairs: dto.maxRepairs },
-    );
+    let result: Awaited<ReturnType<typeof generateForm>>;
+    try {
+      result = await generateForm(
+        provider,
+        { prompt: dto.prompt, guidance: dto.guidance, images: dto.images },
+        { maxRepairs: dto.maxRepairs },
+      );
+    } catch (err) {
+      // The provider/upstream itself failed (bad key or model, network, an
+      // incompatible response). Surface the reason as 502 instead of a generic
+      // 500 so the caller sees what to fix (e.g. an unconfigured 9router model).
+      throw new BadGatewayException({
+        message: `AI provider request failed: ${(err as Error).message}`,
+      });
+    }
     if (!result.ok) {
       throw new UnprocessableEntityException({
         message: "The AI could not produce a valid form.",

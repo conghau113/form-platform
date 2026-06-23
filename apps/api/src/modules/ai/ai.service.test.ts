@@ -1,4 +1,4 @@
-import { UnprocessableEntityException } from "@nestjs/common";
+import { BadGatewayException, UnprocessableEntityException } from "@nestjs/common";
 import type { AiProvider } from "@org/form-ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AiService } from "./ai.service.js";
@@ -51,6 +51,18 @@ describe("AiService", () => {
     const service = new AiService(factoryFor(fixedProvider("not json")));
     await expect(service.generate(creds, { prompt: "x", maxRepairs: 1 })).rejects.toBeInstanceOf(
       UnprocessableEntityException,
+    );
+  });
+
+  it("throws 502 when the AI provider itself fails", async () => {
+    const failing: AiProvider = {
+      async complete() {
+        throw new Error("No active credentials for provider: openai");
+      },
+    };
+    const service = new AiService(factoryFor(failing));
+    await expect(service.generate(creds, { prompt: "x" })).rejects.toBeInstanceOf(
+      BadGatewayException,
     );
   });
 

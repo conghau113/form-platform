@@ -10,8 +10,8 @@ function fakeFetch(responseContent: string) {
     return {
       ok: true,
       status: 200,
-      async json() {
-        return { choices: [{ message: { content: responseContent } }] };
+      async text() {
+        return JSON.stringify({ choices: [{ message: { content: responseContent } }] });
       },
     } as Response;
   }) as unknown as typeof fetch;
@@ -43,6 +43,27 @@ describe("createOpenAiCompatibleProvider", () => {
     expect(body.temperature).toBe(0.2);
     expect(body.messages[0]).toEqual({ role: "user", content: [{ type: "text", text: "hi" }] });
     expect(body.response_format.type).toBe("json_schema");
+    expect(body.stream).toBe(false);
+  });
+
+  it("throws a helpful error when the endpoint streams an SSE body", async () => {
+    const impl = (async () =>
+      ({
+        ok: true,
+        status: 200,
+        async text() {
+          return 'data: {"id":"x","choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n\n';
+        },
+      }) as Response) as unknown as typeof fetch;
+    const provider = createOpenAiCompatibleProvider({
+      baseUrl: "https://x/v1",
+      apiKey: "k",
+      model: "m",
+      fetchImpl: impl,
+    });
+    await expect(
+      provider.complete({ messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] }),
+    ).rejects.toThrow(/streaming response/);
   });
 
   it("maps image content to image_url and skips response_format without a schema", async () => {

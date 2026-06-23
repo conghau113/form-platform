@@ -51,6 +51,10 @@ export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): A
       const body: Record<string, unknown> = {
         model: opts.model,
         messages: toOpenAiMessages(req.messages),
+        // Force a single JSON response. Some OpenAI-compatible proxies (e.g.
+        // 9router) stream by default, which would arrive as `data: …` SSE chunks
+        // and break the JSON parse below.
+        stream: false,
       };
       if (req.temperature != null) body.temperature = req.temperature;
       if (req.maxTokens != null) body.max_tokens = req.maxTokens;
@@ -73,9 +77,16 @@ export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): A
         throw new Error(`OpenAI-compatible request failed: ${resp.status} ${await readBody(resp)}`);
       }
 
-      const json = (await resp.json()) as {
-        choices?: { message?: { content?: unknown } }[];
-      };
+      const raw = await readBody(resp);
+      let json: { choices?: { message?: { content?: unknown } }[] };
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        const hint = raw.startsWith("data:")
+          ? " (the endpoint returned a streaming response; this provider expects a single JSON body)"
+          : "";
+        throw new Error(`OpenAI-compatible response was not JSON${hint}: ${raw.slice(0, 200)}`);
+      }
       const content = json.choices?.[0]?.message?.content ?? "";
       return { text: typeof content === "string" ? content : JSON.stringify(content) };
     },
