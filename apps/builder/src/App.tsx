@@ -1,7 +1,7 @@
 import { toAntdTheme } from "@org/form-theme";
 import { Button, message, Segmented, Space, Typography, Upload } from "antd";
 import { useMemo, useState } from "react";
-import { AiGenerateModal } from "./ai";
+import { AiAssistantDrawer } from "./ai";
 import { DesignerProvider, type DesignerValue, useDragon } from "./canvas";
 import {
   useEditorShortcuts,
@@ -300,7 +300,7 @@ export function App({
           )}
         </header>
 
-        <AiGenerateModal
+        <AiAssistantDrawer
           open={aiOpen}
           onClose={() => setAiOpen(false)}
           currentSchema={schema}
@@ -381,6 +381,7 @@ export function App({
                   presetResolver={presetResolver}
                   locale={activeLocale}
                   fallbackLocale={form.defaultLocale}
+                  onGenerateWithAi={() => setAiOpen(true)}
                 />
               </section>
 

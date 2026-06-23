@@ -3,6 +3,7 @@ import type { PresetResolver } from "@org/form-core";
 import { FormRenderer } from "@org/form-renderer-web";
 import { childrenOf, type FieldNode, isLayoutContainer } from "@org/form-schema";
 import type { ThemeConfig } from "antd";
+import { Button } from "antd";
 import {
   Component,
   type ReactNode,
@@ -455,6 +456,7 @@ export function DesignCanvas({
   presetResolver,
   locale,
   fallbackLocale,
+  onGenerateWithAi,
 }: {
   schema: unknown;
   /** Stable string key for the schema — resets the error boundary on a valid edit. */
@@ -469,6 +471,8 @@ export function DesignCanvas({
   locale?: string;
   /** Fallback locale for the renderer (typically the form's default locale). */
   fallbackLocale?: string;
+  /** Opens the AI assistant from the empty-canvas call-to-action. */
+  onGenerateWithAi?: () => void;
 }) {
   const d = useDesigner();
   const { setHovered } = useHover();
@@ -639,8 +643,18 @@ export function DesignCanvas({
           }}
         >
           {isEmpty ? (
-            <div style={{ textAlign: "center", color: "rgba(0,0,0,0.35)", padding: "64px 0" }}>
-              {LEGEND}
+            <div style={{ textAlign: "center", padding: "56px 0" }}>
+              {onGenerateWithAi && (
+                <div style={{ marginBottom: 24 }}>
+                  <Button type="primary" size="large" onClick={onGenerateWithAi}>
+                    ✨ Generate with AI
+                  </Button>
+                  <div style={{ marginTop: 8, color: "rgba(0,0,0,0.45)" }}>
+                    Describe your form or paste a screenshot — or drag a field to start by hand.
+                  </div>
+                </div>
+              )}
+              <div style={{ color: "rgba(0,0,0,0.35)" }}>{LEGEND}</div>
             </div>
           ) : (
             formEl

@@ -68,6 +68,7 @@ export function ViewPanel({
   presetResolver,
   locale,
   fallbackLocale,
+  onGenerateWithAi,
 }: {
   mode: ViewMode;
   schema: unknown;
@@ -84,6 +85,8 @@ export function ViewPanel({
   locale?: string;
   /** Fallback locale for the renderer (typically the form's default locale). */
   fallbackLocale?: string;
+  /** Opens the AI assistant from the empty-canvas call-to-action. */
+  onGenerateWithAi?: () => void;
 }) {
   if (mode === "design") {
     return (
@@ -96,6 +99,7 @@ export function ViewPanel({
         presetResolver={presetResolver}
         locale={locale}
         fallbackLocale={fallbackLocale}
+        onGenerateWithAi={onGenerateWithAi}
       />
     );
   }
