@@ -78,10 +78,18 @@ describe("providerFromEnv", () => {
  */
 const liveProvider = providerFromEnv();
 describe.skipIf(!liveProvider)("runFormEval (live BYOK)", () => {
-  it("meets the P1 parse-rate bar (≥95%) on a real model", async () => {
-    if (!liveProvider) return;
-    const run = await runFormEval(liveProvider);
-    console.log(formatEvalReport(run));
-    expect(run.summary.parseRate).toBeGreaterThanOrEqual(0.95);
-  }, 120_000);
+  // The runner is sequential (one case after another) and a BYOK call can be slow —
+  // a dev proxy like 9router runs ~50s/call, so the whole golden set is ~10 min. The
+  // timeout must clear that with headroom for the odd repair round; it only ever runs
+  // opt-in (env-gated), never in CI, so a long ceiling costs nothing.
+  it(
+    "meets the P1 parse-rate bar (≥95%) on a real model",
+    async () => {
+      if (!liveProvider) return;
+      const run = await runFormEval(liveProvider);
+      console.log(formatEvalReport(run));
+      expect(run.summary.parseRate).toBeGreaterThanOrEqual(0.95);
+    },
+    1_200_000,
+  );
 });

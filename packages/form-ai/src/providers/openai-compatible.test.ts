@@ -84,7 +84,7 @@ describe("createOpenAiCompatibleProvider", () => {
     const body = JSON.parse(seen.init.body as string);
     expect(body.messages[0].content[0]).toEqual({
       type: "image_url",
-      image_url: { url: "data:image/png;base64,AAA" },
+      image_url: { url: "data:image/png;base64,AAA", detail: "high" },
     });
     expect(body.response_format).toBeUndefined();
   });

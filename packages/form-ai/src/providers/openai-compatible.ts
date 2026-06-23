@@ -25,6 +25,9 @@ function toOpenAiContent(content: AiContent[]): unknown[] {
           type: "image_url",
           image_url: {
             url: part.url ?? `data:${part.mediaType ?? "image/png"};base64,${part.base64}`,
+            // Reference images are forms whose small label/control text must stay
+            // legible, so always request full-resolution vision.
+            detail: "high",
           },
         },
   );

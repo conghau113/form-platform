@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { extractJsonObject, generateForm } from "./pipeline.js";
-import type { AiCompletionRequest, AiProvider } from "./provider.js";
+import { extractJsonObject, generateForm, refineForm } from "./pipeline.js";
+import type { AiCompletionRequest, AiMessage, AiProvider } from "./provider.js";
+
+/** Concatenate every text part of a message for substring assertions. */
+function messageText(messages: AiMessage[], role: AiMessage["role"]): string {
+  return messages
+    .filter((m) => m.role === role)
+    .flatMap((m) => m.content)
+    .map((c) => (c.type === "text" ? c.text : ""))
+    .join("\n");
+}
+
+const tinyImage = { base64: "AAAA", mediaType: "image/png" };
 
 /** A provider that replays scripted responses and records the requests it saw. */
 function scriptedProvider(responses: string[]): AiProvider & { calls: AiCompletionRequest[] } {
@@ -94,6 +105,64 @@ describe("generateForm", () => {
     const provider = scriptedProvider([validForm]);
     await generateForm(provider, { prompt: "x" });
     expect(provider.calls[0].jsonSchema).toBeDefined();
+  });
+
+  it("includes the vision instructions in the system prompt when images are attached", async () => {
+    const provider = scriptedProvider([validForm]);
+    await generateForm(provider, { prompt: "make this", images: [tinyImage] });
+    expect(messageText(provider.calls[0].messages, "system")).toContain("REFERENCE IMAGE");
+  });
+
+  it("two-pass transcribes first (no json_schema) then builds from the spec", async () => {
+    const spec = "1. Email — text — required";
+    const provider = scriptedProvider([spec, validForm]);
+    const result = await generateForm(
+      provider,
+      { prompt: "from the screenshot", images: [tinyImage] },
+      { imageStrategy: "two-pass" },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(provider.calls).toHaveLength(2);
+    // Pass 1 is a free-text transcription — never constrained to the form schema.
+    expect(provider.calls[0].jsonSchema).toBeUndefined();
+    // Pass 2 is the normal build (schema applied) and carries the spec as guidance.
+    expect(provider.calls[1].jsonSchema).toBeDefined();
+    expect(messageText(provider.calls[1].messages, "system")).toContain(spec);
+  });
+
+  it("single-pass (the default) never makes a transcription call", async () => {
+    const provider = scriptedProvider([validForm]);
+    await generateForm(provider, { prompt: "x", images: [tinyImage] });
+    expect(provider.calls).toHaveLength(1);
+  });
+});
+
+describe("refineForm", () => {
+  it("carries the current form and the instruction into the request", async () => {
+    const provider = scriptedProvider([validForm]);
+    const current = { id: "c", title: "C", fields: [{ type: "text", name: "email", label: "E" }] };
+    const result = await refineForm(provider, {
+      currentForm: current,
+      instruction: "make email required",
+    });
+
+    expect(result.ok).toBe(true);
+    const userText = messageText(provider.calls[0].messages, "user");
+    expect(userText).toContain("make email required");
+    expect(userText).toContain('"email"');
+    // The system prompt switches into edit mode (preserve names, apply only the change).
+    expect(messageText(provider.calls[0].messages, "system")).toContain("EDITING");
+  });
+
+  it("re-validates and repairs a bad edit just like generate", async () => {
+    const invalid = JSON.stringify({ id: "x" }); // missing title + fields
+    const provider = scriptedProvider([invalid, validForm]);
+    const result = await refineForm(provider, { currentForm: {}, instruction: "x" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.attempts).toBe(2);
   });
 });
 
