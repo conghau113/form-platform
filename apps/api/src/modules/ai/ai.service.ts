@@ -6,11 +6,14 @@ import {
   stripDisallowedUrls,
 } from "@org/form-ai";
 import type { FormSchema } from "@org/form-schema";
+import { type GenerateWorkflowResult, generateWorkflow, refineWorkflow } from "@org/workflow-ai";
+import type { WorkflowDefinition } from "@org/workflow-schema";
 import { type AiServerConfig, loadAiConfig } from "./ai.config.js";
 import type { AiCredentials } from "./ai-credentials.decorator.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AiProviderFactory } from "./ai-provider.factory.js";
 import type { GenerateFormDto } from "./dto/generate-form.dto.js";
+import type { GenerateWorkflowDto, RefineWorkflowDto } from "./dto/generate-workflow.dto.js";
 import type { RefineFormDto } from "./dto/refine-form.dto.js";
 
 export interface GenerateFormResponse {
@@ -19,6 +22,13 @@ export interface GenerateFormResponse {
   attempts: number;
   /** URLs removed from the form by the output allowlist (see `AI_URL_ALLOWLIST`). */
   strippedUrls: string[];
+}
+
+export interface GenerateWorkflowResponse {
+  /** A definition that is parse-valid AND graph-valid (reachable, no dangling edges). */
+  workflow: WorkflowDefinition;
+  /** Model calls it took (1 = valid on the first try). */
+  attempts: number;
 }
 
 /**
@@ -63,6 +73,40 @@ export class AiService {
     );
   }
 
+  /** Generate a workflow (state machine) from a natural-language description. */
+  async generateWorkflow(
+    creds: AiCredentials,
+    dto: GenerateWorkflowDto,
+  ): Promise<GenerateWorkflowResponse> {
+    const provider = this.providers.create(creds);
+    return this.runWorkflow(() =>
+      generateWorkflow(
+        provider,
+        { prompt: dto.prompt, guidance: dto.guidance },
+        { maxRepairs: dto.maxRepairs },
+      ),
+    );
+  }
+
+  /** Apply a natural-language edit to an existing workflow, returning a valid result. */
+  async refineWorkflow(
+    creds: AiCredentials,
+    dto: RefineWorkflowDto,
+  ): Promise<GenerateWorkflowResponse> {
+    const provider = this.providers.create(creds);
+    return this.runWorkflow(() =>
+      refineWorkflow(
+        provider,
+        {
+          currentWorkflow: dto.currentWorkflow,
+          instruction: dto.instruction,
+          guidance: dto.guidance,
+        },
+        { maxRepairs: dto.maxRepairs },
+      ),
+    );
+  }
+
   /**
    * Shared pipeline boundary for generate + refine: a provider/upstream failure
    * surfaces as 502 (the caller sees what to fix — bad key, unconfigured model),
@@ -87,5 +131,32 @@ export class AiService {
     }
     const { form, stripped } = stripDisallowedUrls(result.form, this.config.urlAllowlist);
     return { form, attempts: result.attempts, strippedUrls: stripped };
+  }
+
+  /**
+   * Boundary for workflow generate + refine: same 502 (provider failure) / 422
+   * (unrecoverable output) mapping as {@link run}. No URL stripping — the workflow
+   * contract carries no URLs (nodes bind forms by id; guards are JSONLogic). The
+   * pipeline already guarantees the result is parse- AND graph-valid.
+   */
+  private async runWorkflow(
+    call: () => Promise<GenerateWorkflowResult>,
+  ): Promise<GenerateWorkflowResponse> {
+    let result: GenerateWorkflowResult;
+    try {
+      result = await call();
+    } catch (err) {
+      throw new BadGatewayException({
+        message: `AI provider request failed: ${(err as Error).message}`,
+      });
+    }
+    if (!result.ok) {
+      throw new UnprocessableEntityException({
+        message: "The AI could not produce a valid workflow.",
+        errors: result.errors,
+        attempts: result.attempts,
+      });
+    }
+    return { workflow: result.workflow, attempts: result.attempts };
   }
 }

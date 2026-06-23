@@ -4,9 +4,10 @@ import { AiService } from "./ai.service.js";
 import { AiProviderFactory } from "./ai-provider.factory.js";
 
 /**
- * Feature module: headless AI form generation. Stateless (no persistence) — it
- * builds a provider from BYOK headers, runs the `@org/form-ai` pipeline, and
- * returns a contract-valid form. The caller persists it via the forms module.
+ * Feature module: headless AI generation for forms and workflows. Stateless (no
+ * persistence) — it builds a provider from BYOK headers, runs the `@org/form-ai`
+ * / `@org/workflow-ai` pipelines, and returns a contract-valid artifact. The
+ * caller persists it via the forms / workflows module.
  */
 @Module({
   controllers: [AiController],

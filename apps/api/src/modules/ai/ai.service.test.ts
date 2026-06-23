@@ -27,6 +27,17 @@ const validForm = JSON.stringify({
   fields: [{ type: "text", name: "email", label: "Email" }],
 });
 
+const validWorkflow = JSON.stringify({
+  id: "leave-approval",
+  title: "Leave Approval",
+  start: "draft",
+  nodes: [
+    { id: "draft", status: "Draft" },
+    { id: "approved", status: "Approved" },
+  ],
+  transitions: [{ id: "submit", from: "draft", to: "approved", action: "submit" }],
+});
+
 describe("AiService", () => {
   const prevAllowlist = process.env.AI_URL_ALLOWLIST;
 
@@ -112,5 +123,44 @@ describe("AiService", () => {
 
     expect(res.form.settings?.submitUrl).toBe("https://api.myco.com/submit");
     expect(res.strippedUrls).toEqual([]);
+  });
+
+  it("returns a contract- and graph-valid workflow for a good draft", async () => {
+    const service = new AiService(factoryFor(fixedProvider(validWorkflow)));
+    const res = await service.generateWorkflow(creds, { prompt: "a leave approval flow" });
+
+    expect(res.workflow.workflowVersion).toBe(1);
+    expect(res.workflow.start).toBe("draft");
+    expect(res.attempts).toBe(1);
+  });
+
+  it("throws 422 when the model never produces a valid workflow", async () => {
+    const service = new AiService(factoryFor(fixedProvider("not json")));
+    await expect(
+      service.generateWorkflow(creds, { prompt: "x", maxRepairs: 1 }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it("throws 502 when the provider fails during workflow generation", async () => {
+    const failing: AiProvider = {
+      async complete() {
+        throw new Error("No active credentials for provider: openai");
+      },
+    };
+    const service = new AiService(factoryFor(failing));
+    await expect(service.generateWorkflow(creds, { prompt: "x" })).rejects.toBeInstanceOf(
+      BadGatewayException,
+    );
+  });
+
+  it("refines an existing workflow into a contract-valid result", async () => {
+    const service = new AiService(factoryFor(fixedProvider(validWorkflow)));
+    const res = await service.refineWorkflow(creds, {
+      currentWorkflow: JSON.parse(validWorkflow),
+      instruction: "add a rejection branch",
+    });
+
+    expect(res.workflow.workflowVersion).toBe(1);
+    expect(res.attempts).toBe(1);
   });
 });
