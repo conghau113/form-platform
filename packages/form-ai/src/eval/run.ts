@@ -1,6 +1,9 @@
+import {
+  type AiCompletionRequest,
+  type AiProvider,
+  createOpenAiCompatibleProvider,
+} from "@org/ai-core";
 import { type GenerateFormOptions, type GenerateFormResult, generateForm } from "../pipeline.js";
-import type { AiCompletionRequest, AiProvider } from "../provider.js";
-import { createOpenAiCompatibleProvider } from "../providers/openai-compatible.js";
 import { GOLDEN_FORMS } from "./golden.js";
 import {
   type CaseScore,

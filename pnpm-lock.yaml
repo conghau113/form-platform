@@ -183,8 +183,20 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1(@types/node@20.19.42)(jsdom@24.1.3)(terser@5.48.0)
 
+  packages/ai-core:
+    devDependencies:
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.6.1
+        version: 1.6.1(@types/node@20.19.42)(jsdom@24.1.3)(terser@5.48.0)
+
   packages/form-ai:
     dependencies:
+      '@org/ai-core':
+        specifier: workspace:*
+        version: link:../ai-core
       '@org/form-schema':
         specifier: workspace:*
         version: link:../form-schema

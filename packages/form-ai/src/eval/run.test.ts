@@ -1,6 +1,6 @@
+import type { AiProvider } from "@org/ai-core";
 import { describe, expect, it } from "vitest";
 import { normalizeFormDraft } from "../normalize.js";
-import type { AiProvider } from "../provider.js";
 import { GOLDEN_FORMS } from "./golden.js";
 import { fixtureProvider, formatEvalReport, providerFromEnv, runFormEval } from "./run.js";
 

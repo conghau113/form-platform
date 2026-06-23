@@ -1,5 +1,5 @@
 {
-  "name": "@org/form-ai",
+  "name": "@org/ai-core",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,11 +17,6 @@
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "@org/ai-core": "workspace:*",
-    "@org/form-schema": "workspace:*",
-    "zod": "^3.25.76"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

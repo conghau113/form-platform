@@ -1,6 +1,6 @@
+import type { AiCompletionRequest, AiMessage, AiProvider } from "@org/ai-core";
 import { describe, expect, it } from "vitest";
-import { extractJsonObject, generateForm, refineForm } from "./pipeline.js";
-import type { AiCompletionRequest, AiMessage, AiProvider } from "./provider.js";
+import { generateForm, refineForm } from "./pipeline.js";
 
 /** Concatenate every text part of a message for substring assertions. */
 function messageText(messages: AiMessage[], role: AiMessage["role"]): string {
@@ -163,24 +163,5 @@ describe("refineForm", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.attempts).toBe(2);
-  });
-});
-
-describe("extractJsonObject", () => {
-  it("parses plain JSON", () => {
-    expect(extractJsonObject('{"a":1}')).toEqual({ ok: true, value: { a: 1 } });
-  });
-
-  it("strips ```json fences", () => {
-    expect(extractJsonObject('```json\n{"a":1}\n```')).toEqual({ ok: true, value: { a: 1 } });
-  });
-
-  it("recovers JSON embedded in prose", () => {
-    expect(extractJsonObject('Here you go: {"a":1} done')).toEqual({ ok: true, value: { a: 1 } });
-  });
-
-  it("reports an error for non-JSON", () => {
-    const r = extractJsonObject("nope");
-    expect(r.ok).toBe(false);
   });
 });

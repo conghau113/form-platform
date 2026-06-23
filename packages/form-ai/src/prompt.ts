@@ -1,5 +1,5 @@
+import type { AiContent, AiImageContent, AiMessage } from "@org/ai-core";
 import { formCapabilities } from "@org/form-schema";
-import type { AiContent, AiImageContent, AiMessage } from "./provider.js";
 
 /** A reference image for vision models (screenshot, photo of a paper form…). */
 export interface AiImageInput {

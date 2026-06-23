@@ -1,3 +1,4 @@
+import { type AiMessage, type AiProvider, runValidationLoop } from "@org/ai-core";
 import { FORM_JSON_SCHEMA, type FormSchema } from "@org/form-schema";
 import { normalizeFormDraft } from "./normalize.js";
 import { dedupeFieldNames } from "./postprocess.js";
@@ -9,16 +10,17 @@ import {
   type GenerateFormInput,
   type RefineFormInput,
 } from "./prompt.js";
-import type { AiMessage, AiProvider } from "./provider.js";
 
 /**
- * P1 — the guaranteed-valid generation pipeline.
+ * P1 — the guaranteed-valid form generation pipeline.
  *
- * `generate → extract JSON → normalize (migrate + Zod) → repair (≤N) → postprocess`.
- * The model is never trusted: its output is re-validated against the contract,
- * and on failure the Zod errors are fed back for a bounded number of repair
- * rounds. The result is either a parse-valid `FormSchema` or structured errors —
- * no eval, no fetch, nothing platform-specific.
+ * The shared `generate → extract → normalize → repair` machinery now lives in
+ * `@org/ai-core` (`runValidationLoop`); this module supplies the form-specific
+ * pieces: the prompts, the normalizer (migrate + Zod + dedupe), and the form
+ * JSON Schema. The model is never trusted: its output is re-validated against the
+ * contract, and on failure the Zod errors are fed back for a bounded number of
+ * repair rounds. The result is either a parse-valid `FormSchema` or structured
+ * errors — no eval, no fetch, nothing platform-specific.
  */
 
 /** Low temperature keeps generation faithful/deterministic (esp. image transcription). */
@@ -62,91 +64,30 @@ export interface GenerateFormFailure {
 
 export type GenerateFormResult = GenerateFormSuccess | GenerateFormFailure;
 
-type ExtractResult = { ok: true; value: unknown } | { ok: false; errors: string[] };
-
-/**
- * Pull a JSON object out of raw model text. Tolerates ```json fences and
- * surrounding prose by falling back to the outermost `{ … }` span.
- */
-export function extractJsonObject(text: string): ExtractResult {
-  const trimmed = text.trim();
-  const unfenced = trimmed
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  const tryParse = (s: string): ExtractResult | null => {
-    try {
-      return { ok: true, value: JSON.parse(s) };
-    } catch {
-      return null;
-    }
-  };
-
-  const direct = tryParse(unfenced);
-  if (direct) return direct;
-
-  const start = unfenced.indexOf("{");
-  const end = unfenced.lastIndexOf("}");
-  if (start !== -1 && end > start) {
-    const span = tryParse(unfenced.slice(start, end + 1));
-    if (span) return span;
-  }
-  return { ok: false, errors: ["Response was not valid JSON."] };
+/** Normalize a draft into a contract-valid form, deduping field names on success. */
+function normalizeForm(
+  draft: unknown,
+): { ok: true; value: FormSchema } | { ok: false; errors: string[] } {
+  const normalized = normalizeFormDraft(draft);
+  return normalized.ok ? { ok: true, value: dedupeFieldNames(normalized.value) } : normalized;
 }
 
-/**
- * Shared generate→validate→repair loop. Both `generateForm` and `refineForm`
- * seed it with their own messages; everything past the first call (JSON extract,
- * Zod normalize, bounded repair) is identical.
- */
-async function runValidationLoop(
+/** Drive the shared loop with the form normalizer and map its result to the public shape. */
+async function runFormLoop(
   provider: AiProvider,
   messages: AiMessage[],
   options: GenerateFormOptions,
 ): Promise<GenerateFormResult> {
-  const totalAttempts = (options.maxRepairs ?? 3) + 1;
-  const temperature = options.temperature ?? DEFAULT_TEMPERATURE;
-  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
-
-  let lastRaw: string | undefined;
-  let lastErrors: string[] = ["No response from provider."];
-
-  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
-    const res = await provider.complete({
-      messages,
-      jsonSchema: options.useJsonSchema === false ? undefined : FORM_JSON_SCHEMA,
-      temperature,
-      maxTokens,
-    });
-    lastRaw = res.text;
-
-    const extracted = extractJsonObject(res.text);
-    if (extracted.ok) {
-      const normalized = normalizeFormDraft(extracted.value);
-      if (normalized.ok) {
-        return {
-          ok: true,
-          form: dedupeFieldNames(normalized.value),
-          attempts: attempt,
-          raw: res.text,
-        };
-      }
-      lastErrors = normalized.errors;
-    } else {
-      lastErrors = extracted.errors;
-    }
-
-    if (attempt < totalAttempts) {
-      messages.push({ role: "assistant", content: [{ type: "text", text: res.text }] });
-      messages.push({
-        role: "user",
-        content: [{ type: "text", text: buildRepairMessage(lastErrors) }],
-      });
-    }
-  }
-
-  return { ok: false, errors: lastErrors, attempts: totalAttempts, raw: lastRaw };
+  const result = await runValidationLoop<FormSchema>(provider, messages, normalizeForm, {
+    maxRepairs: options.maxRepairs,
+    temperature: options.temperature ?? DEFAULT_TEMPERATURE,
+    maxTokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
+    jsonSchema: options.useJsonSchema === false ? undefined : FORM_JSON_SCHEMA,
+    buildRepairMessage,
+  });
+  return result.ok
+    ? { ok: true, form: result.value, attempts: result.attempts, raw: result.raw }
+    : { ok: false, errors: result.errors, attempts: result.attempts, raw: result.raw };
 }
 
 /** Generate a contract-valid form from a prompt (and optional images). */
@@ -177,7 +118,7 @@ export async function generateForm(
     }
   }
 
-  return runValidationLoop(provider, messages, options);
+  return runFormLoop(provider, messages, options);
 }
 
 /** Apply a natural-language edit to an existing form, returning a contract-valid result. */
@@ -186,5 +127,5 @@ export async function refineForm(
   input: RefineFormInput,
   options: GenerateFormOptions = {},
 ): Promise<GenerateFormResult> {
-  return runValidationLoop(provider, buildRefineMessages(input), options);
+  return runFormLoop(provider, buildRefineMessages(input), options);
 }
