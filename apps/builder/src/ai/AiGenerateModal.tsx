@@ -7,7 +7,9 @@ import {
   Input,
   Modal,
   message,
+  Segmented,
   Space,
+  Spin,
   Tag,
   Typography,
   Upload,
@@ -26,6 +28,13 @@ export interface AiGenerateModalProps {
   /** Accept the (possibly merged) form into the canvas as one undoable step. */
   onApply: (next: FormSchema) => void;
 }
+
+/** Starter prompts so the user never faces a blank box (EN + VI, the product's two locales). */
+const EXAMPLE_PROMPTS = [
+  "A job application: full name, email, phone, résumé upload and a cover letter.",
+  "Đăng ký sự kiện: họ tên, email, số điện thoại, số người tham dự, ghi chú.",
+  "A customer feedback survey with a 1–5 rating, what we did well and what to improve.",
+];
 
 /** Read an uploaded image into the `{ base64, mediaType }` shape the endpoint wants. */
 function readImage(file: File): Promise<{ base64: string; mediaType: string }> {
@@ -48,6 +57,11 @@ function readImage(file: File): Promise<{ base64: string; mediaType: string }> {
  * BEFORE it touches the canvas. Accepting applies it as a single undoable step
  * (Replace) or appends its fields (Append), so the existing history/undo and the
  * unsaved-changes guard cover it for free.
+ *
+ * The modal has three visible states: the input form, an in-place "generating…"
+ * state (the call can take several seconds), and the proposal review. Failures
+ * surface as a persistent inline error (not a vanishing toast) so the user can
+ * read the reason — most often a missing API key — and fix it without retyping.
  */
 export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGenerateModalProps) {
   const [prompt, setPrompt] = useState("");
@@ -56,6 +70,7 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
     null,
   );
   const [creds, setCreds] = useState<AiCreds>(() => loadAiCreds());
+  const [byokKeys, setByokKeys] = useState<string[]>([]);
   const [proposed, setProposed] = useState<GenerateFormResult | null>(null);
   const generate = useGenerateForm();
 
@@ -63,6 +78,7 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
     () => (proposed ? diffForms(currentSchema, proposed.form) : null),
     [proposed, currentSchema],
   );
+  const currentHasFields = (diff?.currentCount ?? 0) > 0;
 
   function reset() {
     setProposed(null);
@@ -91,8 +107,10 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
       if (result.strippedUrls.length) {
         message.warning(`Removed ${result.strippedUrls.length} off-allowlist URL(s) for safety.`);
       }
-    } catch (e) {
-      message.error((e as Error).message);
+    } catch {
+      // The reason is shown inline via `generate.error`; open the key section so
+      // the most common cause (a missing/invalid key) is one click away.
+      setByokKeys(["byok"]);
     }
   }
 
@@ -101,7 +119,7 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
     close();
   }
 
-  const credBag = (key: keyof AiCreds, placeholder: string, isSecret = false) => {
+  const credField = (key: keyof AiCreds, placeholder: string, isSecret = false) => {
     const Field = isSecret ? Input.Password : Input;
     return (
       <Field
@@ -112,34 +130,80 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
     );
   };
 
-  const footer = proposed
-    ? [
-        <Button key="cancel" onClick={close}>
-          Cancel
-        </Button>,
-        <Button key="regen" onClick={reset}>
-          Start over
-        </Button>,
-        <Button key="append" onClick={() => apply(appendForms(currentSchema, proposed.form))}>
-          Append fields
-        </Button>,
-        <Button key="replace" type="primary" onClick={() => apply(proposed.form)}>
-          Replace form
-        </Button>,
-      ]
-    : [
-        <Button key="cancel" onClick={close}>
-          Cancel
-        </Button>,
-        <Button key="gen" type="primary" loading={generate.isPending} onClick={onGenerate}>
-          Generate
-        </Button>,
-      ];
+  const cancelBtn = (
+    <Button key="cancel" onClick={close}>
+      Cancel
+    </Button>
+  );
+
+  let footer: React.ReactNode[];
+  if (generate.isPending) {
+    footer = [cancelBtn];
+  } else if (proposed) {
+    const back = (
+      <Button key="back" onClick={reset}>
+        ← Edit request
+      </Button>
+    );
+    const append = (
+      <Button
+        key="append"
+        type={currentHasFields ? "primary" : "default"}
+        onClick={() => proposed && apply(appendForms(currentSchema, proposed.form))}
+      >
+        Append fields
+      </Button>
+    );
+    const replace = (
+      <Button
+        key="replace"
+        type={currentHasFields ? "default" : "primary"}
+        danger={currentHasFields}
+        onClick={() => proposed && apply(proposed.form)}
+      >
+        {currentHasFields ? "Replace form" : "Use this form"}
+      </Button>
+    );
+    // Keep the safer action as the rightmost primary: Append when the canvas
+    // already has fields, otherwise Use/Replace (nothing to lose on an empty form).
+    footer = currentHasFields ? [back, replace, append] : [back, append, replace];
+  } else {
+    footer = [
+      cancelBtn,
+      <Button key="gen" type="primary" loading={generate.isPending} onClick={onGenerate}>
+        Generate
+      </Button>,
+    ];
+  }
 
   return (
     <Modal open={open} onCancel={close} title="Generate with AI" width={720} footer={footer}>
-      {!proposed && (
+      {generate.isPending && (
+        <div style={{ padding: "48px 0", textAlign: "center" }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 20 }}>
+            <Typography.Text strong>Generating your form…</Typography.Text>
+          </div>
+          <Typography.Paragraph
+            type="secondary"
+            style={{ marginTop: 8, maxWidth: 420, margin: "8px auto 0" }}
+          >
+            The model drafts a schema, then it’s validated against the form contract and repaired if
+            needed. This usually takes a few seconds.
+          </Typography.Paragraph>
+        </div>
+      )}
+
+      {!generate.isPending && !proposed && (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          {generate.isError && (
+            <Alert
+              type="error"
+              showIcon
+              message="Couldn’t generate the form"
+              description={(generate.error as Error)?.message}
+            />
+          )}
           <Input.TextArea
             autoFocus
             rows={4}
@@ -147,12 +211,20 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
           />
+          <Space size={[8, 8]} wrap>
+            <Typography.Text type="secondary">Try:</Typography.Text>
+            {EXAMPLE_PROMPTS.map((ex) => (
+              <Button key={ex} size="small" type="dashed" onClick={() => setPrompt(ex)}>
+                {ex.length > 42 ? `${ex.slice(0, 42)}…` : ex}
+              </Button>
+            ))}
+          </Space>
           <Input
             placeholder="Optional house-style guidance (tone, required fields, language…)"
             value={guidance}
             onChange={(e) => setGuidance(e.target.value)}
           />
-          <Space>
+          <Space align="start">
             <Upload
               accept="image/*"
               showUploadList={false}
@@ -166,22 +238,52 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
               <Button>Attach reference image</Button>
             </Upload>
             {image && (
-              <Tag closable onClose={() => setImage(null)}>
-                {image.name}
-              </Tag>
+              <Space>
+                <img
+                  src={`data:${image.mediaType};base64,${image.base64}`}
+                  alt={image.name}
+                  style={{
+                    height: 32,
+                    width: 32,
+                    objectFit: "cover",
+                    borderRadius: 4,
+                    border: "1px solid rgba(0,0,0,0.1)",
+                  }}
+                />
+                <Tag closable onClose={() => setImage(null)}>
+                  {image.name}
+                </Tag>
+              </Space>
             )}
           </Space>
           <Collapse
             ghost
+            activeKey={byokKeys}
+            onChange={(k) => setByokKeys(k as string[])}
             items={[
               {
                 key: "byok",
                 label: "API key (optional — uses the server default if blank)",
                 children: (
                   <Space direction="vertical" size="small" style={{ width: "100%" }}>
-                    {credBag("apiKey", "x-ai-api-key (your key)", true)}
-                    {credBag("baseUrl", "Base URL — OpenAI-compatible (e.g. 9router/Azure)")}
-                    {credBag("model", "Model id (e.g. gpt-4o-mini, claude-sonnet-4-6)")}
+                    <Segmented
+                      block
+                      value={creds.provider ?? ""}
+                      onChange={(v) =>
+                        setCreds((c) => ({
+                          ...c,
+                          provider: (v || undefined) as AiCreds["provider"],
+                        }))
+                      }
+                      options={[
+                        { label: "Server default", value: "" },
+                        { label: "OpenAI-compatible", value: "openai" },
+                        { label: "Anthropic", value: "anthropic" },
+                      ]}
+                    />
+                    {credField("apiKey", "API key (kept in your browser, sent per request)", true)}
+                    {credField("baseUrl", "Base URL — OpenAI-compatible only (e.g. 9router/Azure)")}
+                    {credField("model", "Model id (e.g. gpt-4o-mini, claude-sonnet-4-6)")}
                   </Space>
                 ),
               },
@@ -190,22 +292,27 @@ export function AiGenerateModal({ open, onClose, currentSchema, onApply }: AiGen
         </Space>
       )}
 
-      {proposed && diff && (
+      {!generate.isPending && proposed && diff && (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Alert
-            type={diff.removed.length ? "warning" : "info"}
+            type={currentHasFields && diff.removed.length ? "warning" : "info"}
             message={
               <Space size={[4, 4]} wrap>
                 <Typography.Text strong>{proposed.form.title || proposed.form.id}</Typography.Text>
                 <Tag color="blue">{diff.proposedCount} fields</Tag>
                 {diff.added.length > 0 && <Tag color="green">+{diff.added.length} new</Tag>}
                 {diff.kept.length > 0 && <Tag>{diff.kept.length} shared</Tag>}
-                {diff.removed.length > 0 && (
+                {currentHasFields && diff.removed.length > 0 && (
                   <Tag color="red">Replace drops {diff.removed.length} current</Tag>
                 )}
+                {proposed.attempts > 1 && <Tag color="gold">repaired ×{proposed.attempts - 1}</Tag>}
               </Space>
             }
-            description="Review the proposal below. Replace swaps in the new form; Append adds its fields to your current one (colliding names are renamed)."
+            description={
+              currentHasFields
+                ? "Append adds these fields to your current form (colliding names are renamed). Replace swaps your whole form for this one."
+                : "Review the proposal below, then use it as your form."
+            }
           />
           <div
             style={{
