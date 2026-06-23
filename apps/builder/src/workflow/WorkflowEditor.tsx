@@ -44,6 +44,7 @@ import {
 import { App } from "../App";
 import { saveForm } from "../workspace/client";
 import { newForm } from "../workspace/newForm";
+import { WorkflowAiDrawer } from "./ai";
 import { FloatingEdge } from "./floating-edge";
 import { tidyLayout } from "./layout";
 import { useFormDefinition } from "./useFormDefinition";
@@ -183,6 +184,7 @@ function WorkflowEditorInner({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const { deleteElements, screenToFlowPosition, fitView } = useReactFlow();
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
@@ -356,6 +358,22 @@ function WorkflowEditorInner({
     }
   }
 
+  // Apply an AI proposal (C3): replace the whole graph with the generated definition. We KEEP the
+  // current persisted workflow id (the upsert key) and take structure/title/start from the proposal.
+  // The model emits no node positions, so tidy-layout the seeded graph and fit it into view.
+  const applyGenerated = useCallback(
+    (def: WorkflowDefinition) => {
+      const seed = toFlow(def);
+      setMeta((m) => ({ ...seed.meta, id: m.id }));
+      setNodes(tidyLayout(seed.nodes, seed.edges));
+      setEdges(seed.edges);
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+      window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
+    },
+    [setNodes, setEdges, fitView],
+  );
+
   // --- Inline form integration (WF2b) ---------------------------------------
   // Editing/creating a node's bound form happens in a Drawer over the canvas (the full `App`
   // builder) — never navigating away from the workflow.
@@ -426,7 +444,8 @@ function WorkflowEditorInner({
           placeholder="workflow title"
           style={{ width: 240 }}
         />
-        <Space>
+        <Space style={{ marginLeft: "auto" }}>
+          <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
           <Button onClick={addState}>Add state</Button>
           <Button onClick={onTidy}>Tidy</Button>
           <Button onClick={onValidate}>Validate</Button>
@@ -435,6 +454,13 @@ function WorkflowEditorInner({
           </Button>
         </Space>
       </div>
+
+      <WorkflowAiDrawer
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        currentWorkflow={currentDef}
+        onApply={applyGenerated}
+      />
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* biome-ignore lint/a11y/noStaticElementInteractions: pane double-click is a canvas affordance. */}
