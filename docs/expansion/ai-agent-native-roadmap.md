@@ -86,16 +86,31 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   skipped in CI), api 54/54, không có fetch hardcode (provider seam inject). Output luôn parse-valid
   (Zod) hoặc 422. Fixture parse-rate = 100% (golden set self-achievable); live ≥95% bar = owner BYOK run.
 
-### P2 — Builder thành bề mặt human-in-the-loop  ⏳
+### P2 — Builder thành bề mặt human-in-the-loop  ⏳ (slice 1 + overhaul done; slice 2 còn lại)
 - [x] Nút "Tạo bằng AI" cạnh palette (prompt / kéo ảnh) — `e254b34` (slice 1)
 - [x] Diff AI-đề-xuất vào canvas trước khi nhận (tái dùng patch/history + useBlocker) — `e254b34`
-- [ ] "Apply skill/pattern": AI sinh preset library → apply nhiều form (dùng preset + W4 + i18n)
-- **Nghiệm thu:** sửa-rồi-nhận mượt; demo "1 câu lệnh đồng bộ field chuẩn khắp project".
+- [x] **Overhaul Generate/Refine (slice 1.5, 2026-06-23):** Modal→**Drawer phải `mask=false`**
+  (canvas vẫn thấy + tương tác khi lặp), **conversational refine** (`POST /ai/forms/refine`,
+  giữ field `name` ổn định), **vision prompt + image 2-pass** (`imageStrategy`,
+  `image_url.detail:"high"`), temp 0.3/maxTokens 8192, empty-canvas CTA. Live-verified vs
+  9router (refine giữ tên + chỉ đổi field được yêu cầu). Commits `2f0c1c1` (form-ai+changeset)
+  / `ec5fc59` (api) / `40e8f0f` (builder) / `d400d00` (eval resilience) trên
+  `feat/ai-p0-json-schema` (CHƯA merge main). Reviewer PASS. Plan
+  `~/.claude/plans/swirling-bubbling-bonbon.md`.
+  - [ ] (owner) browser smoke Drawer (cần restart Claude Code để nạp MCP browser tools) + merge.
+- [ ] **(slice 2 = Track B)** "Apply skill/pattern": AI sinh preset library → apply nhiều form
+  (dùng preset W3 + linked-fields W4 + i18n). Hạ tầng đã sẵn; plan
+  `~/.claude/plans/gleaming-charting-compass.md` (Track B). Ưu tiên SAU P3 (moat).
+- **Nghiệm thu:** sửa-rồi-nhận mượt ✅; demo "1 câu lệnh đồng bộ field chuẩn khắp project" (slice 2).
 
-### P3 — AI sinh Workflow (khe hở Form+Workflow)  ⏳
+### P3 — AI sinh Workflow (khe hở Form+Workflow)  ⏳ ← **NEXT (moat); plan đã viết**
+> Plan thực thi chi tiết: `~/.claude/plans/luminous-charting-cartographer.md` (C0 tách
+> `@org/ai-core` → C1 `@org/workflow-ai` generateWorkflow → C2 api → C3 builder → C4 MCP → C5 eval).
+> Quyết định owner còn mở: DC1 (tách ai-core [rec] vs workflow-ai→form-ai), DC2, DC3.
 - [ ] ingest mô tả tiếng Việt → `WorkflowDefinition` (tận dụng WF editor đã có)
 - [ ] MCP tool `create_workflow` hoàn chỉnh + diff vào xyflow canvas
 - [ ] validate graph well-formed (reachable / không deadlock / edge hợp lệ) trước khi nhận
+      (tái dùng `workflow-core/graph.ts` `validateGraph` làm repair-signal)
 - **Nghiệm thu:** "tạo quy trình duyệt nghỉ phép 3 cấp" → graph hợp lệ render được.
 
 ### P4 — Lớp service production (chỉ khi host hộ khách)  ⏳
@@ -103,8 +118,14 @@ KHÔNG có nghĩa là loại bỏ tính năng.
 - [ ] Embed SDK + docs công khai (`<FormRenderer>` + headless API + JSON Schema public)
 - **Nghiệm thu:** một khách pilot nhúng & chạy end-to-end trên hạ tầng của họ.
 
-### Eval & chất lượng (xuyên suốt P1–P3)  ⏳
-- [ ] Golden set (input → kỳ vọng) + đo parse-rate / render-rate / field-coverage / logic-correctness
+### Eval & chất lượng (xuyên suốt P1–P3)  ⏳ (harness done; live gate pending 9router)
+- [x] Golden set (10 ca EN+VI) + scoring thuần (`packages/form-ai/src/eval/`) — parse/pass-rate,
+  type/field-coverage. Fixture (zero-token) = 100% self-achievable.
+- [x] **Hardened (2026-06-23):** test live timeout 120s→20m (10 ca tuần tự ~9 phút), và
+  `runFormEval` cô lập từng case + retry khi *throw* (1 blip 9router không còn văng cả run).
+- [ ] **Chốt cổng P1 live ≥95%:** chạy `runFormEval` thật vs model — **đang chờ 9router
+  (localhost:20128) bật lại** (lần đo cuối fail vì proxy DOWN/ECONNREFUSED, không phải code).
+  Lệnh: `FORM_AI_EVAL_BASE_URL=http://localhost:20128/v1 FORM_AI_EVAL_API_KEY=… FORM_AI_EVAL_MODEL=ag/claude-sonnet-4-6 pnpm --filter @org/form-ai test -- run.test`
 - [ ] Chạy eval mỗi lần đổi prompt/model
 
 ## 5. Rủi ro & cách giảm
