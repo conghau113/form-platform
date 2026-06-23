@@ -19,6 +19,7 @@ model Project {
   description String?
   folders     Folder[]
   forms       FormRecord[]
+  workflows   WorkflowRecord[]
   presets     Preset[]
   members     ProjectMember[]
   createdAt   DateTime        @default(now())
@@ -54,6 +55,7 @@ model Folder {
   parent    Folder?      @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  Folder[]     @relation("FolderTree")
   forms     FormRecord[]
+  workflows WorkflowRecord[]
   createdAt DateTime     @default(now())
 
   @@index([projectId, parentId])
@@ -62,6 +64,23 @@ model Folder {
 /// Org index for a form. `id` == form.id; `body` is the migrated contract (source of truth
 /// stays `migrate()` in FormsService). Listing a folder never has to parse a form body.
 model FormRecord {
+  id        String   @id
+  projectId String
+  folderId  String?
+  title     String
+  status    String?
+  body      Json
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder    Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, folderId])
+}
+
+/// Org index for a workflow (Workflow track WF0). Mirrors {@link FormRecord}: `id` == the
+/// definition id; `body` is the migrated workflow contract (source of truth stays
+/// `migrateWorkflow()` in WorkflowsService). Listing a folder never has to parse a body.
+model WorkflowRecord {
   id        String   @id
   projectId String
   folderId  String?

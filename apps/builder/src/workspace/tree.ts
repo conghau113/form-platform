@@ -1,12 +1,13 @@
-import type { FolderRecord, FormSummary } from "./types";
+import type { FolderRecord, FormSummary, WorkflowSummary } from "./types";
 
 /**
- * Pure tree assembly for the Explorer (Track W, W2). The api returns flat folder + form lists
- * (`GET /projects/:id/tree`); this builds the nested node array antd `Tree` renders, and resolves
- * the destination folder for a drag-drop. Kept antd-free so it is cheap to unit-test.
+ * Pure tree assembly for the Explorer (Track W, W2; workflows added in Workflow WF1). The api returns
+ * flat folder + form lists (`GET /projects/:id/tree`) plus a separate workflow list; this builds the
+ * nested node array antd `Tree` renders, and resolves the destination folder for a drag-drop. Kept
+ * antd-free so it is cheap to unit-test.
  */
 
-export type NodeKind = "folder" | "form";
+export type NodeKind = "folder" | "form" | "workflow";
 
 export interface WorkspaceNode {
   /** Encoded key, `"<kind>:<id>"`, so a node's kind+id survive antd's string-key API. */
@@ -20,6 +21,7 @@ export interface WorkspaceNode {
 
 export const folderKey = (id: string): string => `folder:${id}`;
 export const formKey = (id: string): string => `form:${id}`;
+export const workflowKey = (id: string): string => `workflow:${id}`;
 
 /** Decode a tree key back into its kind + record id. */
 export function parseKey(key: string): { kind: NodeKind; id: string } {
@@ -39,12 +41,17 @@ const byOrderThenName = <T extends { order?: number; name?: string; title?: stri
 };
 
 /**
- * Assemble `folders` + `forms` into a nested node array. Folders nest by `parentId` and sort by
- * `order` then name; forms attach under their `folderId` (sorted by title). At each level folders
- * are listed before forms. Root level holds `parentId === null` folders and `folderId === null`
- * forms.
+ * Assemble `folders` + `forms` + `workflows` into a nested node array. Folders nest by `parentId`
+ * and sort by `order` then name; forms and workflows attach under their `folderId` (each sorted by
+ * title). At each level the order is folders, then forms, then workflows. Root level holds
+ * `parentId === null` folders and `folderId === null` forms/workflows. `workflows` is optional so
+ * existing callers/tests (forms-only) keep working.
  */
-export function buildTree(folders: FolderRecord[], forms: FormSummary[]): WorkspaceNode[] {
+export function buildTree(
+  folders: FolderRecord[],
+  forms: FormSummary[],
+  workflows: WorkflowSummary[] = [],
+): WorkspaceNode[] {
   const childFolders = new Map<string | null, FolderRecord[]>();
   for (const f of folders) {
     const list = childFolders.get(f.parentId) ?? [];
@@ -59,6 +66,13 @@ export function buildTree(folders: FolderRecord[], forms: FormSummary[]): Worksp
     folderForms.set(form.folderId, list);
   }
 
+  const folderWorkflows = new Map<string | null, WorkflowSummary[]>();
+  for (const wf of workflows) {
+    const list = folderWorkflows.get(wf.folderId) ?? [];
+    list.push(wf);
+    folderWorkflows.set(wf.folderId, list);
+  }
+
   const formNodes = (parentId: string | null): WorkspaceNode[] =>
     [...(folderForms.get(parentId) ?? [])]
       .sort((a, b) => a.title.localeCompare(b.title))
@@ -70,6 +84,17 @@ export function buildTree(folders: FolderRecord[], forms: FormSummary[]): Worksp
         isLeaf: true,
       }));
 
+  const workflowNodes = (parentId: string | null): WorkspaceNode[] =>
+    [...(folderWorkflows.get(parentId) ?? [])]
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .map((wf) => ({
+        key: workflowKey(wf.id),
+        kind: "workflow" as const,
+        id: wf.id,
+        title: wf.title,
+        isLeaf: true,
+      }));
+
   const folderNodes = (parentId: string | null): WorkspaceNode[] =>
     [...(childFolders.get(parentId) ?? [])].sort(byOrderThenName).map((folder) => ({
       key: folderKey(folder.id),
@@ -77,10 +102,10 @@ export function buildTree(folders: FolderRecord[], forms: FormSummary[]): Worksp
       id: folder.id,
       title: folder.name,
       isLeaf: false,
-      children: [...folderNodes(folder.id), ...formNodes(folder.id)],
+      children: [...folderNodes(folder.id), ...formNodes(folder.id), ...workflowNodes(folder.id)],
     }));
 
-  return [...folderNodes(null), ...formNodes(null)];
+  return [...folderNodes(null), ...formNodes(null), ...workflowNodes(null)];
 }
 
 /**
@@ -93,9 +118,11 @@ export function dropFolderId(
   into: boolean,
   folders: FolderRecord[],
   forms: FormSummary[],
+  workflows: WorkflowSummary[] = [],
 ): string | null {
   const { kind, id } = parseKey(targetKey);
   if (kind === "folder" && into) return id;
   if (kind === "folder") return folders.find((f) => f.id === id)?.parentId ?? null;
+  if (kind === "workflow") return workflows.find((w) => w.id === id)?.folderId ?? null;
   return forms.find((f) => f.id === id)?.folderId ?? null;
 }

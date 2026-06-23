@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, dropFolderId, folderKey, formKey, parseKey } from "./tree";
-import type { FolderRecord, FormSummary } from "./types";
+import { buildTree, dropFolderId, folderKey, formKey, parseKey, workflowKey } from "./tree";
+import type { FolderRecord, FormSummary, WorkflowSummary } from "./types";
 
 const folder = (id: string, parentId: string | null, name: string, order = 0): FolderRecord => ({
   id,
@@ -20,6 +20,15 @@ const form = (id: string, folderId: string | null, title: string): FormSummary =
   updatedAt: "2026-01-01T00:00:00.000Z",
 });
 
+const workflow = (id: string, folderId: string | null, title: string): WorkflowSummary => ({
+  id,
+  projectId: "p1",
+  folderId,
+  title,
+  status: null,
+  updatedAt: "2026-01-01T00:00:00.000Z",
+});
+
 describe("parseKey / key encoders", () => {
   it("round-trips folder and form keys", () => {
     expect(parseKey(folderKey("a"))).toEqual({ kind: "folder", id: "a" });
@@ -28,6 +37,10 @@ describe("parseKey / key encoders", () => {
 
   it("keeps ids containing a colon intact", () => {
     expect(parseKey(formKey("ns:id"))).toEqual({ kind: "form", id: "ns:id" });
+  });
+
+  it("round-trips workflow keys", () => {
+    expect(parseKey(workflowKey("w1"))).toEqual({ kind: "workflow", id: "w1" });
   });
 });
 
@@ -58,6 +71,19 @@ describe("buildTree", () => {
     const tree = buildTree(folders, []);
     expect(tree.map((n) => n.title)).toEqual(["Zeta", "Alpha", "Beta"]);
   });
+
+  it("attaches workflows under their folder, listed after forms at each level", () => {
+    const folders = [folder("root", null, "Root")];
+    const forms = [form("f1", "root", "A form"), form("f2", null, "Top form")];
+    const workflows = [workflow("w1", "root", "A workflow"), workflow("w2", null, "Top workflow")];
+    const tree = buildTree(folders, forms, workflows);
+
+    // Root level order: folder, then form, then workflow.
+    expect(tree.map((n) => n.key)).toEqual([folderKey("root"), formKey("f2"), workflowKey("w2")]);
+    // Inside the folder: form before workflow.
+    expect(tree[0].children?.map((n) => n.key)).toEqual([formKey("f1"), workflowKey("w1")]);
+    expect(tree[0].children?.[1].kind).toBe("workflow");
+  });
 });
 
 describe("dropFolderId", () => {
@@ -75,5 +101,11 @@ describe("dropFolderId", () => {
   it("targets a form's parent folder when dropped onto/next to a form", () => {
     expect(dropFolderId(formKey("f1"), true, folders, forms)).toBe("child");
     expect(dropFolderId(formKey("f2"), false, folders, forms)).toBeNull();
+  });
+
+  it("targets a workflow's parent folder when dropped onto/next to a workflow", () => {
+    const workflows = [workflow("w1", "child", "WF"), workflow("w2", null, "Top WF")];
+    expect(dropFolderId(workflowKey("w1"), true, folders, forms, workflows)).toBe("child");
+    expect(dropFolderId(workflowKey("w2"), false, folders, forms, workflows)).toBeNull();
   });
 });

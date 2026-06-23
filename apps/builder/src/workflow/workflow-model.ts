@@ -5,7 +5,7 @@ import {
   type WorkflowNode,
   type WorkflowTransition,
 } from "@org/workflow-schema";
-import type { Edge, Node } from "@xyflow/react";
+import { type Edge, MarkerType, type Node } from "@xyflow/react";
 
 /**
  * The ONLY xyflow <-> workflow-schema boundary (analogous to model.ts's
@@ -34,6 +34,13 @@ export interface FlowEdgeData {
 export type FlowNode = Node<FlowNodeData, "workflow">;
 export type FlowEdge = Edge<FlowEdgeData>;
 
+/** Presentation shared by every transition edge: float to the nearest border + an arrowhead.
+ *  Editor-only — `fromFlow` never reads it, so it stays out of the workflow contract. */
+const EDGE_PRESENTATION = {
+  type: "floating",
+  markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+} as const;
+
 /** Definition-level metadata held alongside the xyflow nodes/edges in the editor. */
 export interface WorkflowMeta {
   id: string;
@@ -60,6 +67,7 @@ export function toFlow(def: WorkflowDefinition): {
     target: t.to,
     label: t.action,
     data: { action: t.action, role: t.role, guard: t.guard },
+    ...EDGE_PRESENTATION,
   }));
   return { meta: { id: def.id, title: def.title, start: def.start }, nodes, edges };
 }
@@ -115,5 +123,6 @@ export function newEdge(source: string, target: string, action: string): FlowEdg
     target,
     label: action,
     data: { action },
+    ...EDGE_PRESENTATION,
   };
 }
