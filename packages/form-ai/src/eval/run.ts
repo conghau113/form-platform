@@ -1,4 +1,4 @@
-import { type GenerateFormOptions, generateForm } from "../pipeline.js";
+import { type GenerateFormOptions, type GenerateFormResult, generateForm } from "../pipeline.js";
 import type { AiCompletionRequest, AiProvider } from "../provider.js";
 import { createOpenAiCompatibleProvider } from "../providers/openai-compatible.js";
 import { GOLDEN_FORMS } from "./golden.js";
@@ -22,11 +22,38 @@ import {
 export interface RunFormEvalOptions {
   cases?: GoldenCase[];
   generate?: GenerateFormOptions;
+  /**
+   * Retries when `generateForm` *throws* (a provider/network error, not a model
+   * parse failure — that returns `ok:false`). A throw is an infra blip; retrying
+   * it keeps the metric a measure of MODEL quality, not proxy flakiness, and
+   * stops one dropped connection from aborting the whole sequential run. Default 2.
+   */
+  retries?: number;
 }
 
 export interface EvalRun {
   scores: CaseScore[];
   summary: EvalSummary;
+}
+
+/** Run one case, retrying transient provider *throws*; a model failure (`ok:false`)
+ *  is returned as-is, and an exhausted throw becomes a scored parse failure so the
+ *  run always completes with a number instead of aborting. */
+async function generateCase(
+  provider: AiProvider,
+  input: GoldenCase["input"],
+  generate: GenerateFormOptions | undefined,
+  retries: number,
+): Promise<GenerateFormResult> {
+  let lastError = "provider error";
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await generateForm(provider, input, generate);
+    } catch (err) {
+      lastError = (err as Error).message;
+    }
+  }
+  return { ok: false, errors: [`provider error: ${lastError}`], attempts: 0 };
 }
 
 /** Run every golden case through the pipeline and aggregate the scores. */
@@ -35,9 +62,10 @@ export async function runFormEval(
   options: RunFormEvalOptions = {},
 ): Promise<EvalRun> {
   const cases = options.cases ?? GOLDEN_FORMS;
+  const retries = options.retries ?? 2;
   const scores: CaseScore[] = [];
   for (const c of cases) {
-    const result = await generateForm(provider, c.input, options.generate);
+    const result = await generateCase(provider, c.input, options.generate, retries);
     scores.push(scoreCase(c.id, result, c.expect));
   }
   return { scores, summary: summarizeEval(scores) };

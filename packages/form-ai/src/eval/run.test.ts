@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeFormDraft } from "../normalize.js";
+import type { AiProvider } from "../provider.js";
 import { GOLDEN_FORMS } from "./golden.js";
 import { fixtureProvider, formatEvalReport, providerFromEnv, runFormEval } from "./run.js";
 
@@ -42,6 +43,32 @@ describe("runFormEval (fixture provider)", () => {
     });
     expect(run.summary.parseRate).toBe(0);
   });
+
+  it("retries a transient provider throw instead of aborting the run", async () => {
+    let calls = 0;
+    const fixture = fixtureProvider([GOLDEN_FORMS[0]]);
+    const flaky: AiProvider = {
+      async complete(req) {
+        calls++;
+        if (calls === 1) throw new TypeError("fetch failed"); // one transient blip
+        return fixture.complete(req);
+      },
+    };
+    const run = await runFormEval(flaky, { cases: [GOLDEN_FORMS[0]], retries: 2 });
+    expect(run.summary.parseRate).toBe(1); // recovered on retry, not aborted
+  });
+
+  it("scores an exhausted provider throw as a failure (run still completes)", async () => {
+    const dead: AiProvider = {
+      async complete() {
+        throw new TypeError("fetch failed");
+      },
+    };
+    const run = await runFormEval(dead, { cases: [GOLDEN_FORMS[0], GOLDEN_FORMS[1]], retries: 1 });
+    expect(run.scores).toHaveLength(2); // every case scored — no whole-run abort
+    expect(run.summary.parseRate).toBe(0);
+    expect(run.scores[0].errors?.[0]).toContain("provider error");
+  });
 });
 
 describe("formatEvalReport", () => {
@@ -82,14 +109,10 @@ describe.skipIf(!liveProvider)("runFormEval (live BYOK)", () => {
   // a dev proxy like 9router runs ~50s/call, so the whole golden set is ~10 min. The
   // timeout must clear that with headroom for the odd repair round; it only ever runs
   // opt-in (env-gated), never in CI, so a long ceiling costs nothing.
-  it(
-    "meets the P1 parse-rate bar (≥95%) on a real model",
-    async () => {
-      if (!liveProvider) return;
-      const run = await runFormEval(liveProvider);
-      console.log(formatEvalReport(run));
-      expect(run.summary.parseRate).toBeGreaterThanOrEqual(0.95);
-    },
-    1_200_000,
-  );
+  it("meets the P1 parse-rate bar (≥95%) on a real model", async () => {
+    if (!liveProvider) return;
+    const run = await runFormEval(liveProvider);
+    console.log(formatEvalReport(run));
+    expect(run.summary.parseRate).toBeGreaterThanOrEqual(0.95);
+  }, 1_200_000);
 });
