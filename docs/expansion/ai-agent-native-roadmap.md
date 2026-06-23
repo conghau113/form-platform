@@ -120,8 +120,15 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   strip URL — workflow contract không mang URL). `GenerateWorkflowDto`/`RefineWorkflowDto` chỉ
   validate envelope, `currentWorkflow` truyền model dạng text, never eval. Additive, KHÔNG bump
   workflowVersion. api 61/61 (+4), reviewer PASS. Commit `bfdf686`. Live smoke vs 9router: owner.
-- [ ] **C3 — builder "Generate workflow with AI"** vào xyflow (diff/apply qua WF1 `definition`
-  prop + bind `formId` qua Select forms dự án sẵn có) + empty-workflow CTA.
+- [x] **C3 — builder "Generate workflow with AI"** vào xyflow WF2 `WorkflowEditor` (mirror form
+  `AiAssistantDrawer`): Drawer non-blocking `mask=false`, prompt→`POST /ai/workflows/generate`→
+  preview cấu trúc + diff state→apply REPLACE cả graph (GIỮ `meta.id` persisted = upsert key, AI
+  không emit position→`tidyLayout`+fitView) + refine hội thoại qua `/ai/workflows/refine`. NEW
+  `apps/builder/src/workflow/ai/` (client fetch-only reuse BYOK `src/ai/creds` + react-query
+  mutations + pure `diffWorkflows`+3 tests + Drawer + barrel). Builder-only additive, NO
+  contract/changeset. builder 286/286, typecheck+biome clean, reviewer PASS. Commit `318da1f`.
+  **Tiền đề:** merge WF0→WF2 (workflow track) vào nhánh AI trước (`0fe185a`, owner-approved
+  Option A) để có WF2 editor + api workflows module. Owner owes live smoke vs 9router.
 - [ ] **C5 — eval** (golden set workflow + parse-rate/graph-valid-rate) ; **C4 — MCP**
   `create_workflow`→LLM (agent-native polish, làm sau C5).
 - **Nghiệm thu:** "tạo quy trình duyệt nghỉ phép 3 cấp" → graph hợp lệ render được trong editor.
