@@ -129,8 +129,15 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   contract/changeset. builder 286/286, typecheck+biome clean, reviewer PASS. Commit `318da1f`.
   **Tiền đề:** merge WF0→WF2 (workflow track) vào nhánh AI trước (`0fe185a`, owner-approved
   Option A) để có WF2 editor + api workflows module. Owner owes live smoke vs 9router.
-- [ ] **C5 — eval** (golden set workflow + parse-rate/graph-valid-rate) ; **C4 — MCP**
-  `create_workflow`→LLM (agent-native polish, làm sau C5).
+- [x] **C5 — eval** (golden-set workflow harness, mirror form-ai `src/eval/`): `scoreWorkflowCase`/
+  `summarizeWorkflowEval` pure (parseRate = graph-valid-rate vì pipeline chỉ `ok` sau Zod+
+  `validateGraph`), `GOLDEN_WORKFLOWS` 9 EN+VI (incl moat leave-approval-3-level, mọi referenceDraft
+  graph-valid self-tested), `runWorkflowEval`+`fixtureProvider`(0-token CI)+`providerFromEnv`
+  (`WORKFLOW_AI_EVAL_*` opt-in live)+report. Additive tooling, changeset. workflow-ai 22/1, reviewer
+  PASS. Commit `<C5>`. **★ LIVE vs 9router (gc/gemini-2.5-flash): graph-valid-rate 100% (9/9, avg
+  attempts 1.00) — GATE ĐẠT ≥95%.** pass-rate 44% (expectActions ascii brittle + model drift ngôn ngữ
+  → cơ hội tinh chỉnh prompt C1 ghim output language; KHÔNG phải lỗi pipeline).
+- [ ] **C4 — MCP** `create_workflow`→LLM (agent-native polish, làm sau C5).
 - **Nghiệm thu:** "tạo quy trình duyệt nghỉ phép 3 cấp" → graph hợp lệ render được trong editor.
 
 ### P4 — Lớp service production (chỉ khi host hộ khách)  ⏳
