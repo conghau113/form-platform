@@ -56,6 +56,8 @@ export interface FormEditor {
   fieldNames: string[];
   /** A valid JSON-editor edit replaces the tree as one history step. */
   applyJson: (next: FormSchema) => void;
+  /** Accept an AI-generated form as one undoable step (keeps history, unlike `loadSchema`). */
+  applyGeneratedForm: (next: FormSchema) => void;
   /** Replace the whole form (import / template / backend load): reset history + drop selection. */
   loadSchema: (next: FormSchema) => void;
 }
@@ -82,6 +84,14 @@ export function useFormEditor(): FormEditor {
   // A valid JSON-editor edit replaces the tree as one history step.
   const applyJson = useCallback(
     (next: FormSchema) => history.set(schemaToTree(next), "Edit JSON"),
+    [history.set],
+  );
+
+  // Accept an AI proposal as a single, undoable step — reuses the same history
+  // machinery as any edit, so the user can undo it and the unsaved-changes guard
+  // sees it as a change. Unlike `loadSchema`, history (and undo) is preserved.
+  const applyGeneratedForm = useCallback(
+    (next: FormSchema) => history.set(schemaToTree(next), "Generate with AI"),
     [history.set],
   );
 
@@ -127,6 +137,7 @@ export function useFormEditor(): FormEditor {
     siblingNames,
     fieldNames,
     applyJson,
+    applyGeneratedForm,
     loadSchema,
   };
 }

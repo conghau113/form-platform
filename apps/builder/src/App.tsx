@@ -1,6 +1,7 @@
 import { toAntdTheme } from "@org/form-theme";
 import { Button, message, Segmented, Space, Typography, Upload } from "antd";
 import { useMemo, useState } from "react";
+import { AiGenerateModal } from "./ai";
 import { DesignerProvider, type DesignerValue, useDragon } from "./canvas";
 import {
   useEditorShortcuts,
@@ -80,6 +81,7 @@ export function App({
     siblingNames,
     fieldNames,
     applyJson,
+    applyGeneratedForm,
     loadSchema,
   } = editor;
 
@@ -119,6 +121,7 @@ export function App({
   );
   const [mode, setMode] = useState<"form" | "workflow">("form");
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const userTemplates = useUserTemplates();
 
   // Preview language (i18n P2): the locale the canvas/preview render in. `undefined` ⇒ the
@@ -276,6 +279,7 @@ export function App({
           />
           {mode === "form" && (
             <Space style={{ marginLeft: "auto" }}>
+              <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
               <Button onClick={() => setGalleryOpen(true)}>Templates</Button>
               <Button onClick={onExportForm}>Export</Button>
               <Upload
@@ -295,6 +299,13 @@ export function App({
             </Space>
           )}
         </header>
+
+        <AiGenerateModal
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          currentSchema={schema}
+          onApply={applyGeneratedForm}
+        />
 
         <TemplateGallery
           open={galleryOpen}
