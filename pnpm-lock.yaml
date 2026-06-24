@@ -169,9 +169,15 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.29.0(zod@3.25.76)
+      '@org/form-ai':
+        specifier: workspace:*
+        version: link:../../packages/form-ai
       '@org/form-schema':
         specifier: workspace:*
         version: link:../../packages/form-schema
+      '@org/workflow-ai':
+        specifier: workspace:*
+        version: link:../../packages/workflow-ai
       '@org/workflow-schema':
         specifier: workspace:*
         version: link:../../packages/workflow-schema

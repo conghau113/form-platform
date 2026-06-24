@@ -1,17 +1,29 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { generateForm } from "@org/form-ai";
 import { FORM_JSON_SCHEMA, formCapabilities } from "@org/form-schema";
+import { generateWorkflow } from "@org/workflow-ai";
 import { WORKFLOW_JSON_SCHEMA, workflowCapabilities } from "@org/workflow-schema";
 import { z } from "zod";
+import { type ResolveProvider, resolveProviderFromEnv } from "./provider.js";
 import { normalizeForm, normalizeWorkflow } from "./tools.js";
 
 /**
- * The minimal AI-agent-native MCP server (P0). It exposes the form + workflow
- * contracts as the open compile target an agent talks to:
+ * The AI-agent-native MCP server. It exposes the form + workflow contracts as
+ * the open compile target an agent talks to:
  *   - discovery: `list_capabilities`, `get_form_schema`, `get_workflow_schema`
- *   - authoring: `create_form`, `create_workflow` — return a contract-VALID
- *     document (Zod-checked, migrated) or structured errors. No LLM call here
- *     (that is P1's `@org/form-ai`); this layer only guarantees validity.
+ *   - authoring (no LLM): `create_form`, `create_workflow` — validate & migrate
+ *     a draft the agent already authored into a contract-VALID document or
+ *     structured errors. Zero-token path for agents that compose the JSON.
+ *   - generation (LLM, P3/C4): `generate_form`, `generate_workflow` — turn a
+ *     natural-language prompt into the same guaranteed-valid document via the
+ *     `@org/{form,workflow}-ai` pipeline (Zod + graph repair loop). Needs server
+ *     credentials (see {@link resolveProviderFromEnv}); never eval.
  */
+
+export interface ServerDeps {
+  /** Resolve the LLM provider for the generate_* tools. Injectable for tests. */
+  resolveProvider?: ResolveProvider;
+}
 
 /** Wrap any JSON payload as an MCP text tool result. */
 function jsonResult(data: unknown, isError = false) {
@@ -21,7 +33,8 @@ function jsonResult(data: unknown, isError = false) {
   };
 }
 
-export function createServer(): McpServer {
+export function createServer(deps: ServerDeps = {}): McpServer {
+  const resolveProvider = deps.resolveProvider ?? resolveProviderFromEnv;
   const server = new McpServer({ name: "form-platform", version: "0.1.0" });
 
   server.registerTool(
@@ -78,6 +91,57 @@ export function createServer(): McpServer {
     },
     async ({ workflow }) => {
       const result = normalizeWorkflow(workflow);
+      return jsonResult(result, !result.ok);
+    },
+  );
+
+  const generateInput = {
+    prompt: z.string().min(1).describe("Natural-language description of what to build."),
+    guidance: z
+      .string()
+      .optional()
+      .describe("Optional extra house-style guidance appended to the system prompt."),
+    maxRepairs: z
+      .number()
+      .int()
+      .min(0)
+      .max(5)
+      .optional()
+      .describe("Validation-repair rounds after the first attempt (default 3)."),
+  };
+
+  server.registerTool(
+    "generate_form",
+    {
+      title: "Generate form with AI",
+      description:
+        "Turn a natural-language prompt into a guaranteed-valid FormSchema using the LLM pipeline (generates → Zod-validates → repairs up to `maxRepairs` times). Requires server AI credentials. Returns { ok:true, form, attempts } or { ok:false, errors, attempts }.",
+      inputSchema: generateInput,
+    },
+    async ({ prompt, guidance, maxRepairs }) => {
+      const resolution = resolveProvider();
+      if (!resolution.ok) return jsonResult({ ok: false, errors: [resolution.error] }, true);
+      const result = await generateForm(resolution.provider, { prompt, guidance }, { maxRepairs });
+      return jsonResult(result, !result.ok);
+    },
+  );
+
+  server.registerTool(
+    "generate_workflow",
+    {
+      title: "Generate workflow with AI",
+      description:
+        "Turn a natural-language prompt into a guaranteed-valid WorkflowDefinition using the LLM pipeline (generates → Zod + graph-validates → repairs up to `maxRepairs` times). Requires server AI credentials. Returns { ok:true, workflow, attempts } or { ok:false, errors, attempts }.",
+      inputSchema: generateInput,
+    },
+    async ({ prompt, guidance, maxRepairs }) => {
+      const resolution = resolveProvider();
+      if (!resolution.ok) return jsonResult({ ok: false, errors: [resolution.error] }, true);
+      const result = await generateWorkflow(
+        resolution.provider,
+        { prompt, guidance },
+        { maxRepairs },
+      );
       return jsonResult(result, !result.ok);
     },
   );

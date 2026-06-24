@@ -15,7 +15,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@org/form-ai": "workspace:*",
     "@org/form-schema": "workspace:*",
+    "@org/workflow-ai": "workspace:*",
     "@org/workflow-schema": "workspace:*",
     "zod": "^3.25.76"
   },

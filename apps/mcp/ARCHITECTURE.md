@@ -14,14 +14,23 @@ fetch the JSON Schema, and turn a draft into a **guaranteed-valid** document.
 | `get_workflow_schema` | The workflow contract as JSON Schema (draft-07). |
 | `create_form` | Validate & normalize a form draft → valid `FormSchema` or `{ok:false, errors}`. |
 | `create_workflow` | Validate & normalize a workflow draft → valid `WorkflowDefinition` or errors. |
+| `generate_form` | Prompt → valid `FormSchema` via the LLM pipeline (`@org/form-ai`). Needs server creds. |
+| `generate_workflow` | Prompt → valid `WorkflowDefinition` via the LLM pipeline (`@org/workflow-ai`). Needs server creds. |
 
 ## Boundaries (non-negotiable)
 
 - **The contract stays the source of truth.** This app only *projects* and
   *validates* it — it never re-implements field rules. Capabilities/JSON Schema
   come straight from `@org/form-schema` + `@org/workflow-schema`.
-- **No LLM here.** `create_*` only guarantees validity (`migrate` + Zod parse).
-  Prompt → form generation is P1 (`@org/form-ai`), injected, BYOK.
+- **Two authoring paths, one guarantee.** `create_*` is the **no-LLM, zero-token**
+  path (an agent composes the draft, we `migrate` + Zod-parse it). `generate_*`
+  (P3/C4) adds the LLM path via `@org/{form,workflow}-ai` — the *same* validate +
+  repair loop, so the output is contract- (and for workflows, graph-) valid either
+  way. Credentials come from the server **environment** (`AI_API_KEY`, optional
+  `AI_PROVIDER`/`AI_BASE_URL`/`AI_MODEL`) since stdio has no per-request headers; a
+  missing key is reported as a tool error, never a crash. The provider is injected
+  via `createServer({ resolveProvider })` (default reads env) — the same seam the
+  api uses, so tests run with a scripted provider and zero network.
 - **No eval.** JSONLogic guards/conditions are data, evaluated safely downstream.
 - **stdout is the JSON-RPC channel** — logs go to stderr only.
 
@@ -30,12 +39,14 @@ fetch the JSON Schema, and turn a draft into a **guaranteed-valid** document.
 ```
 src/
   tools.ts      pure normalizeForm / normalizeWorkflow (draft -> valid | errors)
-  server.ts     createServer(): registers the 5 tools (SDK wiring, no logic)
+  provider.ts   resolveProviderFromEnv(): env -> AiProvider for the generate_* tools
+  server.ts     createServer(deps): registers the 7 tools (SDK wiring, no logic)
   index.ts      stdio entry point (bin: form-platform-mcp)
 ```
 
 Pure logic (`tools.ts`) is unit-tested directly; `server.test.ts` drives the real
-MCP protocol over an in-memory transport (the P0 acceptance check).
+MCP protocol over an in-memory transport (the acceptance check) — including the
+`generate_*` tools with a scripted provider (no tokens, real Zod validation).
 
 ## Run
 

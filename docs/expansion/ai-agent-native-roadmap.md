@@ -103,7 +103,7 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   `~/.claude/plans/gleaming-charting-compass.md` (Track B). Ưu tiên SAU P3 (moat).
 - **Nghiệm thu:** sửa-rồi-nhận mượt ✅; demo "1 câu lệnh đồng bộ field chuẩn khắp project" (slice 2).
 
-### P3 — AI sinh Workflow (khe hở Form+Workflow)  ⏳ ← **ĐANG LÀM (moat)**
+### P3 — AI sinh Workflow (khe hở Form+Workflow)  ✅ **COMPLETE (moat) — C0→C5 done**
 > Plan thực thi chi tiết: `~/.claude/plans/luminous-charting-cartographer.md` (C0 tách
 > `@org/ai-core` → C1 `@org/workflow-ai` generateWorkflow → C2 api → C3 builder → C4 MCP → C5 eval).
 > Quyết định owner đã chốt (deferred to rec 2026-06-23): DC1=A (tách `@org/ai-core`),
@@ -137,8 +137,15 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   PASS. Commit `<C5>`. **★ LIVE vs 9router (gc/gemini-2.5-flash): graph-valid-rate 100% (9/9, avg
   attempts 1.00) — GATE ĐẠT ≥95%.** pass-rate 44% (expectActions ascii brittle + model drift ngôn ngữ
   → cơ hội tinh chỉnh prompt C1 ghim output language; KHÔNG phải lỗi pipeline).
-- [ ] **C4 — MCP** `create_workflow`→LLM (agent-native polish, làm sau C5).
-- **Nghiệm thu:** "tạo quy trình duyệt nghỉ phép 3 cấp" → graph hợp lệ render được trong editor.
+- [x] **C4 — MCP generate path** (`apps/mcp`): NEW LLM tools `generate_form` + `generate_workflow`
+  (prompt → `@org/{form,workflow}-ai` pipeline → guaranteed-valid doc, cùng Zod+graph repair loop
+  như api/builder). No-LLM `create_*` giữ nguyên (zero-token path). Provider build từ **env** (stdio
+  không có header per-request): `AI_API_KEY` + optional `AI_PROVIDER`/`AI_BASE_URL`/`AI_MODEL`; thiếu
+  key → tool error (KHÔNG crash, discovery + create_* vẫn chạy). `createServer({resolveProvider})`
+  injectable = test bằng scripted provider, zero network. NEW `src/provider.ts` + 2 tool + ARCHITECTURE
+  cập nhật. mcp 14/14 (advertise 7 tools + generate_form/workflow valid + missing-creds error),
+  typecheck+biome clean. apps private = no changeset. **★★ Track C (P3) COMPLETE.**
+- **Nghiệm thu:** "tạo quy trình duyệt nghỉ phép 3 cấp" → graph hợp lệ render được trong editor. ✅
 
 ### P4 — Lớp service production (chỉ khi host hộ khách)  ⏳
 - [ ] DB thật (Postgres), auth/tenant, submission storage, file storage, audit, rate-limit
