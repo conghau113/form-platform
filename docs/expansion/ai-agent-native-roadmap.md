@@ -86,7 +86,7 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   skipped in CI), api 54/54, không có fetch hardcode (provider seam inject). Output luôn parse-valid
   (Zod) hoặc 422. Fixture parse-rate = 100% (golden set self-achievable); live ≥95% bar = owner BYOK run.
 
-### P2 — Builder thành bề mặt human-in-the-loop  ⏳ (slice 1 + overhaul done; slice 2 còn lại)
+### P2 — Builder thành bề mặt human-in-the-loop  ✅ (slice 1 + overhaul + slice 2 done)
 - [x] Nút "Tạo bằng AI" cạnh palette (prompt / kéo ảnh) — `e254b34` (slice 1)
 - [x] Diff AI-đề-xuất vào canvas trước khi nhận (tái dùng patch/history + useBlocker) — `e254b34`
 - [x] **Overhaul Generate/Refine (slice 1.5, 2026-06-23):** Modal→**Drawer phải `mask=false`**
@@ -98,10 +98,23 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   `feat/ai-p0-json-schema` (CHƯA merge main). Reviewer PASS. Plan
   `~/.claude/plans/swirling-bubbling-bonbon.md`.
   - [ ] (owner) browser smoke Drawer (cần restart Claude Code để nạp MCP browser tools) + merge.
-- [ ] **(slice 2 = Track B)** "Apply skill/pattern": AI sinh preset library → apply nhiều form
-  (dùng preset W3 + linked-fields W4 + i18n). Hạ tầng đã sẵn; plan
-  `~/.claude/plans/gleaming-charting-compass.md` (Track B). Ưu tiên SAU P3 (moat).
-- **Nghiệm thu:** sửa-rồi-nhận mượt ✅; demo "1 câu lệnh đồng bộ field chuẩn khắp project" (slice 2).
+- [x] **(slice 2 = Track B)** "Apply skill/pattern": AI sinh preset library → apply nhiều form
+  (dùng preset W3 + linked-fields W4). Plan `~/.claude/plans/trackb-ai-preset-library.md`.
+  - form-ai: `generatePreset`/`normalizePresetDraft` (`preset.ts`) — patch chứng minh bằng dựng
+    field tổng hợp rồi parse `fieldNodeSchema`, accept patch tái suy từ node đã-parse (clean,
+    leaf-only) + `preset-prompt.ts` (catalog leaf + shape validation thật: regex ở `value`) +
+    `stripPresetUrls` (sanitize.ts). changeset `form-ai-preset-generation-p2.md`. form-ai 50/51.
+  - api: `POST /ai/presets/generate` (BYOK) — `GeneratePresetDto` + `AiService.generatePreset` +
+    `runPreset` boundary (502/422 + URL strip), KHÔNG persist. api ai.service 15/15.
+  - builder: `presets/ai/` (client fetch-only + react-query mutation + `AiPresetModal` preview
+    single-field qua FormRenderer + `presetFromDraft`/`previewFormFromDraft`) + nút ✨ trong
+    PresetSection; `apply.ts` PURE `appendLinkedField` (W4 linked field, name unique/form) +
+    `useApplyPreset` batch (load→append→save **KHÔNG placement** để giữ folder) +
+    `ApplyPresetModal` (checklist forms từ project tree) + action "apply across project" trên
+    chip. builder 295/295. reviewer PASS no required fixes.
+- **Nghiệm thu:** sửa-rồi-nhận mượt ✅; "1 câu lệnh đồng bộ field chuẩn khắp project" = code-complete
+  (generate preset → apply linked vào N form → edit preset re-propagate qua `resolveLinkedFields`).
+  Owner nợ: browser smoke + live model run (cắm key 9router).
 
 ### P3 — AI sinh Workflow (khe hở Form+Workflow)  ✅ **COMPLETE (moat) — C0→C5 done**
 > Plan thực thi chi tiết: `~/.claude/plans/luminous-charting-cartographer.md` (C0 tách
