@@ -345,7 +345,8 @@ export function ExplorerRail({
     const { items, onClick } = nodeMenu(node);
     return (
       <Dropdown trigger={["contextMenu"]} menu={{ items, onClick: ({ key }) => onClick(key) }}>
-        <span style={{ userSelect: "none" }}>
+        {/* Full-width so the context menu fires anywhere on the row, not just over the text. */}
+        <span style={{ userSelect: "none", display: "block", width: "100%" }}>
           {kindIcon(node.kind)}
           {node.title}
         </span>
