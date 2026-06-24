@@ -27,6 +27,13 @@ const validForm = JSON.stringify({
   fields: [{ type: "text", name: "email", label: "Email" }],
 });
 
+const validPreset = JSON.stringify({
+  name: "Vietnam phone number",
+  fieldType: "text",
+  icon: "antd:PhoneOutlined",
+  patch: { label: "Số điện thoại", required: true },
+});
+
 const validWorkflow = JSON.stringify({
   id: "leave-approval",
   title: "Leave Approval",
@@ -123,6 +130,52 @@ describe("AiService", () => {
 
     expect(res.form.settings?.submitUrl).toBe("https://api.myco.com/submit");
     expect(res.strippedUrls).toEqual([]);
+  });
+
+  it("returns a contract-valid preset for a good draft", async () => {
+    const service = new AiService(factoryFor(fixedProvider(validPreset)));
+    const res = await service.generatePreset(creds, { prompt: "a VN phone field" });
+
+    expect(res.preset.fieldType).toBe("text");
+    expect(res.preset.name).toBe("Vietnam phone number");
+    expect(res.preset.patch.label).toBe("Số điện thoại");
+    expect(res.attempts).toBe(1);
+    expect(res.strippedUrls).toEqual([]);
+  });
+
+  it("throws 422 when the model never produces a valid preset", async () => {
+    const service = new AiService(factoryFor(fixedProvider("not json")));
+    await expect(
+      service.generatePreset(creds, { prompt: "x", maxRepairs: 1 }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it("throws 502 when the provider fails during preset generation", async () => {
+    const failing: AiProvider = {
+      async complete() {
+        throw new Error("No active credentials for provider: openai");
+      },
+    };
+    const service = new AiService(factoryFor(failing));
+    await expect(service.generatePreset(creds, { prompt: "x" })).rejects.toBeInstanceOf(
+      BadGatewayException,
+    );
+  });
+
+  it("strips an off-allowlist dataSource url from the generated preset patch", async () => {
+    const withUrl = JSON.stringify({
+      name: "Country",
+      fieldType: "select",
+      patch: {
+        label: "Country",
+        dataSource: { url: "https://evil.test/options", labelKey: "name", valueKey: "id" },
+      },
+    });
+    const service = new AiService(factoryFor(fixedProvider(withUrl)));
+    const res = await service.generatePreset(creds, { prompt: "x" });
+
+    expect(res.preset.patch.dataSource).toBeUndefined();
+    expect(res.strippedUrls).toEqual(["https://evil.test/options"]);
   });
 
   it("returns a contract- and graph-valid workflow for a good draft", async () => {

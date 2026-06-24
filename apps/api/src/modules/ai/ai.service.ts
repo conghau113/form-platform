@@ -1,9 +1,13 @@
 import { BadGatewayException, Injectable, UnprocessableEntityException } from "@nestjs/common";
 import {
   type GenerateFormResult,
+  type GeneratePresetResult,
   generateForm,
+  generatePreset,
+  type PresetDraft,
   refineForm,
   stripDisallowedUrls,
+  stripPresetUrls,
 } from "@org/form-ai";
 import type { FormSchema } from "@org/form-schema";
 import { type GenerateWorkflowResult, generateWorkflow, refineWorkflow } from "@org/workflow-ai";
@@ -13,6 +17,7 @@ import type { AiCredentials } from "./ai-credentials.decorator.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AiProviderFactory } from "./ai-provider.factory.js";
 import type { GenerateFormDto } from "./dto/generate-form.dto.js";
+import type { GeneratePresetDto } from "./dto/generate-preset.dto.js";
 import type { GenerateWorkflowDto, RefineWorkflowDto } from "./dto/generate-workflow.dto.js";
 import type { RefineFormDto } from "./dto/refine-form.dto.js";
 
@@ -29,6 +34,16 @@ export interface GenerateWorkflowResponse {
   workflow: WorkflowDefinition;
   /** Model calls it took (1 = valid on the first try). */
   attempts: number;
+}
+
+export interface GeneratePresetResponse {
+  /** A reusable field preset whose `patch` builds a contract-valid field. Not persisted —
+   *  the caller saves it via `POST /presets`. */
+  preset: PresetDraft;
+  /** Model calls it took (1 = valid on the first try). */
+  attempts: number;
+  /** URLs removed from the preset patch by the output allowlist (see `AI_URL_ALLOWLIST`). */
+  strippedUrls: string[];
 }
 
 /**
@@ -69,6 +84,21 @@ export class AiService {
           images: dto.images,
         },
         { maxRepairs: dto.maxRepairs, imageStrategy: dto.imageStrategy },
+      ),
+    );
+  }
+
+  /** Design a single reusable field preset from a natural-language description. */
+  async generatePreset(
+    creds: AiCredentials,
+    dto: GeneratePresetDto,
+  ): Promise<GeneratePresetResponse> {
+    const provider = this.providers.create(creds);
+    return this.runPreset(() =>
+      generatePreset(
+        provider,
+        { prompt: dto.prompt, fieldType: dto.fieldType, guidance: dto.guidance },
+        { maxRepairs: dto.maxRepairs },
       ),
     );
   }
@@ -158,5 +188,32 @@ export class AiService {
       });
     }
     return { workflow: result.workflow, attempts: result.attempts };
+  }
+
+  /**
+   * Boundary for preset generation: same 502 (provider failure) / 422 (unrecoverable
+   * output) mapping as {@link run}, then strip any off-allowlist URL baked into the
+   * preset patch before it is returned.
+   */
+  private async runPreset(
+    call: () => Promise<GeneratePresetResult>,
+  ): Promise<GeneratePresetResponse> {
+    let result: GeneratePresetResult;
+    try {
+      result = await call();
+    } catch (err) {
+      throw new BadGatewayException({
+        message: `AI provider request failed: ${(err as Error).message}`,
+      });
+    }
+    if (!result.ok) {
+      throw new UnprocessableEntityException({
+        message: "The AI could not produce a valid preset.",
+        errors: result.errors,
+        attempts: result.attempts,
+      });
+    }
+    const { preset, stripped } = stripPresetUrls(result.preset, this.config.urlAllowlist);
+    return { preset, attempts: result.attempts, strippedUrls: stripped };
   }
 }
