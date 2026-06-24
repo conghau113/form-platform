@@ -163,5 +163,5 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   workflow (8 file) xanh · biome chỉ còn diff CRLF (artifact working-tree, git lưu LF — bỏ qua).
   Reviewer subagent PASS (không vi phạm golden rule; `fromFlow` chỉ đọc id/position/data; editor xài
   `validateGraph` của engine). Live smoke MCP PASS (xem checklist mục WE1). Owner chốt giữ auto-tidy
-  on-load. Commit: `e924fa8` trên `feat/workflow-editor-v2` (owner gate push/merge).
+  on-load. Commit WE1: `875c8f1` trên `feat/workflow-editor-v2` (owner gate push/merge).
   NEXT = WE2 (inline create/rename ở ExplorerRail) — /clear rồi vào session mới.
