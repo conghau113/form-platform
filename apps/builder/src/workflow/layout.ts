@@ -14,7 +14,9 @@ export function tidyLayout(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
   if (nodes.length === 0) return nodes;
 
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", nodesep: 48, ranksep: 96 });
+  // Looser spacing than the original 48/96 so a multi-level approval graph reads without
+  // edges and labels colliding (ranksep is the gap between LR columns; nodesep within a column).
+  g.setGraph({ rankdir: "LR", nodesep: 72, ranksep: 140 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const n of nodes) {

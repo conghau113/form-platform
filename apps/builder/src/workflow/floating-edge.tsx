@@ -2,7 +2,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   type EdgeProps,
-  getBezierPath,
+  getSmoothStepPath,
   type InternalNode,
   type Node,
   Position,
@@ -13,8 +13,9 @@ import {
  * Floating edges: a transition attaches to the nearest border of each state node instead of a
  * fixed Left/Right handle, so the graph reads cleanly no matter which way the user lays it out.
  * The geometry (`getEdgeParams`) is a PURE function of two node boxes — unit-tested, no React —
- * while {@link FloatingEdge} only adapts xyflow's `InternalNode` into those boxes. Nothing here
- * touches the workflow contract: edges still persist by `source`/`target` node id only.
+ * while {@link FloatingEdge} only adapts xyflow's `InternalNode` into those boxes, then routes
+ * them as an orthogonal smooth-step path (clearer than a bezier for a state machine). Nothing
+ * here touches the workflow contract: edges still persist by `source`/`target` node id only.
  */
 
 /** A node's absolute box in flow coordinates (top-left origin + size), the input geometry needs. */
@@ -98,13 +99,14 @@ export function FloatingEdge({ id, source, target, markerEnd, style, label, sele
     boxOf(sourceNode),
     boxOf(targetNode),
   );
-  const [path, labelX, labelY] = getBezierPath({
+  const [path, labelX, labelY] = getSmoothStepPath({
     sourceX: sx,
     sourceY: sy,
     sourcePosition: sourcePos,
     targetX: tx,
     targetY: ty,
     targetPosition: targetPos,
+    borderRadius: 8,
   });
 
   return (

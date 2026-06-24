@@ -48,6 +48,33 @@ export interface WorkflowMeta {
   start: string;
 }
 
+/** A committed editor state for undo/redo (the value carried by the History<T> primitive). */
+export interface WorkflowSnapshot {
+  meta: WorkflowMeta;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+}
+
+/** Normalize the live editor state into an undo snapshot, dropping xyflow's volatile runtime
+ *  fields (selected/dragging/measured) so a restored snapshot never re-applies stale interaction
+ *  state. Keeps each edge's presentation (type/markerEnd/label) so restored edges still float. */
+export function snapshot(
+  meta: WorkflowMeta,
+  nodes: FlowNode[],
+  edges: FlowEdge[],
+): WorkflowSnapshot {
+  return {
+    meta: { ...meta },
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      position: { ...n.position },
+      data: { ...n.data },
+    })),
+    edges: edges.map((e) => ({ ...e, selected: false })),
+  };
+}
+
 /** Definition -> xyflow graph. Falls back to a left-to-right layout when a node
  *  has no stored position. */
 export function toFlow(def: WorkflowDefinition): {

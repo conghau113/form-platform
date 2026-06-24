@@ -1,13 +1,18 @@
 import { FormRenderer } from "@org/form-renderer-web";
-import { validateGraph } from "@org/workflow-core";
+import { type GraphError, validateGraph } from "@org/workflow-core";
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import {
   addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
   Background,
   type Connection,
   ConnectionMode,
   Controls,
+  type EdgeChange,
   Handle,
+  MiniMap,
+  type NodeChange,
   type NodeProps,
   type OnBeforeDelete,
   Position,
@@ -34,6 +39,7 @@ import {
 } from "antd";
 import {
   createContext,
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -42,11 +48,13 @@ import {
   useState,
 } from "react";
 import { App } from "../App";
+import { useHistory } from "../editor/history";
 import { saveForm } from "../workspace/client";
 import { newForm } from "../workspace/newForm";
 import { WorkflowAiDrawer } from "./ai";
 import { FloatingEdge } from "./floating-edge";
 import { tidyLayout } from "./layout";
+import { traceUpstream } from "./path";
 import { useFormDefinition } from "./useFormDefinition";
 import {
   type FlowEdge,
@@ -56,8 +64,10 @@ import {
   fromFlow,
   newEdge,
   newNode,
+  snapshot,
   toFlow,
   type WorkflowMeta,
+  type WorkflowSnapshot,
 } from "./workflow-model";
 
 /** A bindable form for the node panel's "Bound form" picker. */
@@ -87,8 +97,13 @@ const HANDLE_STYLE = {
 const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left] as const;
 
 /** Custom state node: status + bound form + a "start" badge, with connect handles on all four
- *  sides (floating edges route to the nearest border) and double-click-to-rename. */
-function WorkflowNodeView({ id, data, selected }: NodeProps<FlowNode>) {
+ *  sides (floating edges route to the nearest border) and double-click-to-rename. Memoized per
+ *  React Flow's perf guidance so a node only re-renders when its own props/context change. */
+const WorkflowNodeView = memo(function WorkflowNodeView({
+  id,
+  data,
+  selected,
+}: NodeProps<FlowNode>) {
   const ctx = useContext(NodeViewContext);
   const renaming = ctx.renamingNodeId === id;
 
@@ -96,6 +111,9 @@ function WorkflowNodeView({ id, data, selected }: NodeProps<FlowNode>) {
     <div
       style={{
         minWidth: 150,
+        // Cap the width so a long status / form id ellipsizes instead of stretching the node
+        // (and the whole graph) out of shape.
+        maxWidth: 220,
         padding: "8px 12px",
         borderRadius: 8,
         border: `2px solid ${selected ? "#1677ff" : "#d9d9d9"}`,
@@ -124,16 +142,18 @@ function WorkflowNodeView({ id, data, selected }: NodeProps<FlowNode>) {
             style={{ width: 130 }}
           />
         ) : (
-          <Typography.Text strong>{data.status || "(unnamed)"}</Typography.Text>
+          <Typography.Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
+            {data.status || "(unnamed)"}
+          </Typography.Text>
         )}
         {data.isStart && <Tag color="green">start</Tag>}
       </div>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
         {data.formId ? `form: ${data.formId}` : "no form bound"}
       </Typography.Text>
     </div>
   );
-}
+});
 
 const nodeTypes = { workflow: WorkflowNodeView };
 const edgeTypes = { floating: FloatingEdge };
@@ -177,15 +197,115 @@ function WorkflowEditorInner({
   provideSave,
 }: WorkflowEditorProps) {
   // Seed once from the loaded definition; the route remounts (key={workflowId}) to switch workflows.
-  const seed = useMemo(() => toFlow(definition), [definition]);
+  // Auto-tidy on load ONLY when no node carries a saved position (a fresh / AI-generated graph),
+  // so a layout the user already arranged and saved is never overridden.
+  const seed = useMemo(() => {
+    const flow = toFlow(definition);
+    const needsTidy = flow.nodes.length > 0 && definition.nodes.every((n) => !n.position);
+    return needsTidy ? { ...flow, nodes: tidyLayout(flow.nodes, flow.edges) } : flow;
+  }, [definition]);
   const [meta, setMeta] = useState<WorkflowMeta>(seed.meta);
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(seed.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(seed.edges);
+  const [nodes, setNodes] = useNodesState<FlowNode>(seed.nodes);
+  const [edges, setEdges] = useEdgesState<FlowEdge>(seed.edges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
+  const [highlightNodeId, setHighlightNodeId] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const { deleteElements, screenToFlowPosition, fitView } = useReactFlow();
+
+  // --- Undo/redo over committed {meta,nodes,edges} snapshots (reuses the value-generic History<T>).
+  // The live xyflow state above stays the rendering source of truth; history records/restores it.
+  const history = useHistory<WorkflowSnapshot>(() => snapshot(seed.meta, seed.nodes, seed.edges));
+  const metaRef = useRef(meta);
+  metaRef.current = meta;
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
+
+  // Record the current (or an explicitly-provided) editor state as one undo step. Callers that
+  // mutate one dimension pass just that slice; the others are read from the live refs.
+  const commit = useCallback(
+    (
+      label: string,
+      next?: { meta?: WorkflowMeta; nodes?: FlowNode[]; edges?: FlowEdge[] },
+      coalesce?: string,
+    ) => {
+      history.set(
+        snapshot(
+          next?.meta ?? metaRef.current,
+          next?.nodes ?? nodesRef.current,
+          next?.edges ?? edgesRef.current,
+        ),
+        label,
+        coalesce,
+      );
+    },
+    [history],
+  );
+
+  // Collapse the burst of change events from one gesture (a drag, a cascading delete that emits
+  // both node and edge removals) into a SINGLE undo step: schedule one commit after the frame
+  // settles, reading the freshest live state. Re-entrant calls just update the pending label.
+  const pendingCommit = useRef<string | null>(null);
+  const scheduleCommit = useCallback(
+    (label: string) => {
+      if (pendingCommit.current !== null) {
+        pendingCommit.current = label;
+        return;
+      }
+      pendingCommit.current = label;
+      requestAnimationFrame(() => {
+        const pending = pendingCommit.current;
+        pendingCommit.current = null;
+        if (pending !== null) commit(pending);
+      });
+    },
+    [commit],
+  );
+
+  // Apply xyflow's own change pipeline to the live state, committing only on the changes that
+  // matter for undo: a finished drag and any removal (selection / measurement noise is silent).
+  const onNodesChange = useCallback(
+    (changes: NodeChange<FlowNode>[]) => {
+      const next = applyNodeChanges(changes, nodesRef.current);
+      setNodes(next);
+      const removed = changes.some((c) => c.type === "remove");
+      const dragEnded = changes.some((c) => c.type === "position" && c.dragging === false);
+      if (removed || dragEnded) scheduleCommit(removed ? "Delete" : "Move state");
+    },
+    [setNodes, scheduleCommit],
+  );
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange<FlowEdge>[]) => {
+      setEdges((es) => applyEdgeChanges(changes, es));
+      if (changes.some((c) => c.type === "remove")) scheduleCommit("Delete");
+    },
+    [setEdges, scheduleCommit],
+  );
+
+  // Restore a recorded snapshot into the live state (undo/redo). Fresh object copies so xyflow
+  // re-measures cleanly; in-flight rename is cancelled because the node may no longer exist.
+  const restore = useCallback(
+    (snap: WorkflowSnapshot) => {
+      setMeta(snap.meta);
+      setNodes(snap.nodes.map((n) => ({ ...n })));
+      setEdges(snap.edges.map((e) => ({ ...e })));
+      setRenamingNodeId(null);
+    },
+    [setNodes, setEdges],
+  );
+  const undo = useCallback(() => {
+    if (!history.canUndo) return;
+    restore(history.entries[history.index - 1].value);
+    history.undo();
+  }, [history, restore]);
+  const redo = useCallback(() => {
+    if (!history.canRedo) return;
+    restore(history.entries[history.index + 1].value);
+    history.redo();
+  }, [history, restore]);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((e) => e.id === selectedEdgeId) ?? null;
@@ -226,18 +346,52 @@ function WorkflowEditorInner({
     provideSave?.(save);
   }, [provideSave, save]);
 
+  // Drop selection / highlight that point at a node or edge which no longer exists (after a
+  // delete or an undo/redo restore). Functional updates no-op when nothing changed.
+  useEffect(() => {
+    setSelectedNodeId((id) => (id && nodes.some((n) => n.id === id) ? id : null));
+    setHighlightNodeId((id) => (id && nodes.some((n) => n.id === id) ? id : null));
+  }, [nodes]);
+  useEffect(() => {
+    setSelectedEdgeId((id) => (id && edges.some((e) => e.id === id) ? id : null));
+  }, [edges]);
+
+  // Undo/redo keyboard shortcuts, suppressed while typing in a real control (panel/title inputs).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   const onConnect = useCallback(
     (c: Connection) => {
       const { source, target } = c;
       if (!source || !target) return;
-      setEdges((eds) => addEdge(newEdge(source, target, "next"), eds));
+      const next = addEdge(newEdge(source, target, "next"), edgesRef.current);
+      setEdges(next);
+      commit("Add transition", { edges: next });
     },
-    [setEdges],
+    [setEdges, commit],
   );
 
   function addStateAt(position: { x: number; y: number }) {
     const node = newNode(`state${nodes.length + 1}`, position);
-    setNodes((ns) => [...ns, node]);
+    const next = [...nodes, node];
+    setNodes(next);
+    commit("Add state", { nodes: next });
     setSelectedNodeId(node.id);
     setSelectedEdgeId(null);
   }
@@ -263,31 +417,42 @@ function WorkflowEditorInner({
 
   const patchNodeData = useCallback(
     (id: string, patch: Partial<FlowNodeData>) => {
-      setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)));
+      const next = nodesRef.current.map((n) =>
+        n.id === id ? { ...n, data: { ...n.data, ...patch } } : n,
+      );
+      setNodes(next);
+      // Coalesce a run of edits to the same node (e.g. typing a status) into one undo step.
+      commit("Edit state", { nodes: next }, `node:${id}`);
     },
-    [setNodes],
+    [setNodes, commit],
   );
 
   function patchEdge(id: string, patch: Partial<FlowEdgeData>) {
-    setEdges((es) =>
-      es.map((e) =>
-        e.id === id
-          ? {
-              ...e,
-              data: { ...e.data, ...patch } as FlowEdgeData,
-              label: patch.action ?? e.data?.action ?? e.label,
-            }
-          : e,
-      ),
+    const next = edgesRef.current.map((e) =>
+      e.id === id
+        ? {
+            ...e,
+            data: { ...e.data, ...patch } as FlowEdgeData,
+            label: patch.action ?? e.data?.action ?? e.label,
+          }
+        : e,
     );
+    setEdges(next);
+    commit("Edit transition", { edges: next }, `edge:${id}`);
   }
 
   const setStart = useCallback(
     (id: string) => {
-      setMeta((m) => ({ ...m, start: id }));
-      setNodes((ns) => ns.map((n) => ({ ...n, data: { ...n.data, isStart: n.id === id } })));
+      const nextMeta = { ...metaRef.current, start: id };
+      const nextNodes = nodesRef.current.map((n) => ({
+        ...n,
+        data: { ...n.data, isStart: n.id === id },
+      }));
+      setMeta(nextMeta);
+      setNodes(nextNodes);
+      commit("Set start", { meta: nextMeta, nodes: nextNodes });
     },
-    [setNodes],
+    [setNodes, commit],
   );
 
   // Inline rename — commit writes back through the same channel as the panel's Status field.
@@ -345,17 +510,19 @@ function WorkflowEditorInner({
   );
 
   function onTidy() {
-    setNodes((ns) => tidyLayout(ns, edges));
+    const next = tidyLayout(nodesRef.current, edgesRef.current);
+    setNodes(next);
+    commit("Tidy layout", { nodes: next });
     window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
   }
 
   function onValidate() {
-    const errors = validateGraph(fromFlow(meta, nodes, edges));
-    if (errors.length === 0) {
+    if (issues.length === 0) {
       message.success("Workflow graph is valid");
-    } else {
-      message.error(errors.map((e) => e.message).join(" • "));
+      return;
     }
+    message.warning(`${issues.length} vấn đề cần xử lý — xem danh sách ở panel bên phải.`);
+    if (issues[0].ref) focusRef(issues[0].ref);
   }
 
   // Apply an AI proposal (C3): replace the whole graph with the generated definition. We KEEP the
@@ -363,15 +530,96 @@ function WorkflowEditorInner({
   // The model emits no node positions, so tidy-layout the seeded graph and fit it into view.
   const applyGenerated = useCallback(
     (def: WorkflowDefinition) => {
-      const seed = toFlow(def);
-      setMeta((m) => ({ ...seed.meta, id: m.id }));
-      setNodes(tidyLayout(seed.nodes, seed.edges));
-      setEdges(seed.edges);
+      const gen = toFlow(def);
+      const nextMeta = { ...gen.meta, id: metaRef.current.id };
+      const nextNodes = tidyLayout(gen.nodes, gen.edges);
+      setMeta(nextMeta);
+      setNodes(nextNodes);
+      setEdges(gen.edges);
+      commit("Generate with AI", { meta: nextMeta, nodes: nextNodes, edges: gen.edges });
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
     },
-    [setNodes, setEdges, fitView],
+    [setNodes, setEdges, commit, fitView],
+  );
+
+  // --- Validation issue mapping --------------------------------------------
+  // Run the engine's structural checks (validateGraph → GraphError.ref) live, so a flagged node/
+  // edge is ringed in red and listed in an errors panel the user can click to focus. This is the
+  // production pattern for graph editors (highlight + errors list before publish) and reuses the
+  // SAME validation the engine runs — no second source of truth.
+  const issues = useMemo(() => validateGraph(currentDef), [currentDef]);
+  const errorRefs = useMemo(() => {
+    const nodeIds = new Set<string>();
+    const edgeIds = new Set<string>();
+    for (const issue of issues) {
+      if (!issue.ref) continue;
+      if (issue.code === "dangling-transition") edgeIds.add(issue.ref);
+      else nodeIds.add(issue.ref);
+    }
+    return { nodeIds, edgeIds };
+  }, [issues]);
+
+  // --- Highlight path -------------------------------------------------------
+  // Clicking a state lights every transition that can reach it (back to the start) and dims the
+  // rest, so a reviewer can follow one approval path through a busy graph. Pure derivation — the
+  // emphasis lives only in the rendered copies, never in the live state or the saved contract.
+  const highlight = useMemo(
+    () => (highlightNodeId ? traceUpstream(highlightNodeId, edges) : null),
+    [highlightNodeId, edges],
+  );
+  const displayNodes = useMemo(() => {
+    if (!highlight && errorRefs.nodeIds.size === 0) return nodes;
+    return nodes.map((n) => {
+      const isError = errorRefs.nodeIds.has(n.id);
+      const dimmed = highlight ? !highlight.nodeIds.has(n.id) : false;
+      if (!isError && !dimmed) return n;
+      return {
+        ...n,
+        style: {
+          ...n.style,
+          ...(dimmed ? { opacity: 0.25 } : {}),
+          // Red ring = the validator flagged this node (duplicate / unreachable / missing start).
+          ...(isError ? { boxShadow: "0 0 0 2px #ff4d4f", borderRadius: 8 } : {}),
+        },
+      };
+    });
+  }, [nodes, highlight, errorRefs]);
+  const displayEdges = useMemo(() => {
+    if (!highlight && errorRefs.edgeIds.size === 0) return edges;
+    return edges.map((e) => {
+      const isError = errorRefs.edgeIds.has(e.id);
+      const onPath = highlight ? highlight.edgeIds.has(e.id) : false;
+      const dimmed = highlight ? !onPath : false;
+      if (!isError && !dimmed && !onPath) return e;
+      return {
+        ...e,
+        style: {
+          ...e.style,
+          ...(onPath ? { stroke: "#1677ff", strokeWidth: 2 } : {}),
+          ...(dimmed ? { opacity: 0.2 } : {}),
+          ...(isError ? { stroke: "#ff4d4f", strokeWidth: 2 } : {}),
+        },
+      };
+    });
+  }, [edges, highlight, errorRefs]);
+
+  // Select + center a flagged node/edge when its issue is clicked in the errors panel.
+  const focusRef = useCallback(
+    (ref: string) => {
+      if (nodes.some((n) => n.id === ref)) {
+        setSelectedNodeId(ref);
+        setSelectedEdgeId(null);
+        setHighlightNodeId(null);
+        fitView({ nodes: [{ id: ref }], duration: 300, padding: 0.6, maxZoom: 1.2 });
+      } else if (edges.some((e) => e.id === ref)) {
+        setSelectedEdgeId(ref);
+        setSelectedNodeId(null);
+        setHighlightNodeId(null);
+      }
+    },
+    [nodes, edges, fitView],
   );
 
   // --- Inline form integration (WF2b) ---------------------------------------
@@ -446,9 +694,17 @@ function WorkflowEditorInner({
         />
         <Space style={{ marginLeft: "auto" }}>
           <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
+          <Button onClick={undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">
+            Undo
+          </Button>
+          <Button onClick={redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">
+            Redo
+          </Button>
           <Button onClick={addState}>Add state</Button>
           <Button onClick={onTidy}>Tidy</Button>
-          <Button onClick={onValidate}>Validate</Button>
+          <Button danger={issues.length > 0} onClick={onValidate}>
+            {issues.length > 0 ? `Validate (${issues.length})` : "Validate"}
+          </Button>
           <Button type="primary" disabled={!dirty} onClick={save}>
             Save
           </Button>
@@ -467,8 +723,8 @@ function WorkflowEditorInner({
         <div style={{ flex: 1, minWidth: 0 }} onDoubleClick={onPaneDoubleClick}>
           <NodeViewContext.Provider value={nodeViewCtx}>
             <ReactFlow
-              nodes={nodes}
-              edges={edges}
+              nodes={displayNodes}
+              edges={displayEdges}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               connectionMode={ConnectionMode.Loose}
@@ -482,19 +738,23 @@ function WorkflowEditorInner({
               onNodeClick={(_, n) => {
                 setSelectedNodeId(n.id);
                 setSelectedEdgeId(null);
+                setHighlightNodeId(n.id);
               }}
               onNodeDoubleClick={(_, n) => setRenamingNodeId(n.id)}
               onEdgeClick={(_, e) => {
                 setSelectedEdgeId(e.id);
                 setSelectedNodeId(null);
+                setHighlightNodeId(null);
               }}
               onPaneClick={() => {
                 setSelectedNodeId(null);
                 setSelectedEdgeId(null);
+                setHighlightNodeId(null);
               }}
               fitView
             >
               <Background />
+              <MiniMap pannable zoomable />
               <Controls />
             </ReactFlow>
           </NodeViewContext.Provider>
@@ -530,11 +790,13 @@ function WorkflowEditorInner({
               onChange={(patch) => patchEdge(selectedEdge.id, patch)}
               onDelete={() => deleteElements({ edges: [{ id: selectedEdge.id }] })}
             />
+          ) : issues.length > 0 ? (
+            <IssuesPanel issues={issues} onFocus={focusRef} />
           ) : (
             <Typography.Paragraph type="secondary">
               Select a state or transition to edit it. Drag from any handle to another node to
               create a transition. Double-click the canvas to add a state, or a node to rename it.
-              Press Delete/Backspace to remove the selection.
+              Press Delete/Backspace to remove the selection. Undo/redo with Ctrl+Z / Ctrl+Shift+Z.
             </Typography.Paragraph>
           )}
         </aside>
@@ -786,6 +1048,44 @@ function EdgePanel({
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {edge.source} → {edge.target}
       </Typography.Text>
+    </Space>
+  );
+}
+
+/** Errors panel: the live `validateGraph` issues, each a click-to-focus row (the production
+ *  "highlight node + list errors before publish" pattern). Shown when nothing is selected. */
+function IssuesPanel({
+  issues,
+  onFocus,
+}: {
+  issues: GraphError[];
+  onFocus: (ref: string) => void;
+}) {
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Typography.Title level={5} style={{ margin: 0, color: "#cf1322" }}>
+        {issues.length} vấn đề cần xử lý
+      </Typography.Title>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        Sửa các lỗi sau trước khi lưu/publish. Bấm một mục để nhảy tới node/transition liên quan.
+      </Typography.Text>
+      {issues.map((issue, i) => (
+        <Button
+          key={`${issue.code}-${issue.ref ?? i}`}
+          block
+          danger
+          disabled={!issue.ref}
+          onClick={() => issue.ref && onFocus(issue.ref)}
+          style={{
+            height: "auto",
+            whiteSpace: "normal",
+            textAlign: "left",
+            padding: "8px 12px",
+          }}
+        >
+          {issue.message}
+        </Button>
+      ))}
     </Space>
   );
 }
