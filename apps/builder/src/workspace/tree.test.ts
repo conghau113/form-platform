@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, dropFolderId, folderKey, formKey, parseKey, workflowKey } from "./tree";
+import {
+  allFolderKeys,
+  buildTree,
+  dropFolderId,
+  folderKey,
+  formKey,
+  insertDraft,
+  parseKey,
+  workflowKey,
+} from "./tree";
 import type { FolderRecord, FormSummary, WorkflowSummary } from "./types";
 
 const folder = (id: string, parentId: string | null, name: string, order = 0): FolderRecord => ({
@@ -83,6 +92,41 @@ describe("buildTree", () => {
     // Inside the folder: form before workflow.
     expect(tree[0].children?.map((n) => n.key)).toEqual([formKey("f1"), workflowKey("w1")]);
     expect(tree[0].children?.[1].kind).toBe("workflow");
+  });
+});
+
+describe("allFolderKeys", () => {
+  it("collects folder keys recursively, skipping forms and workflows", () => {
+    const folders = [folder("root", null, "Root"), folder("child", "root", "Child")];
+    const forms = [form("f1", "child", "Leaf form")];
+    const workflows = [workflow("w1", "root", "WF")];
+    const keys = allFolderKeys(buildTree(folders, forms, workflows));
+    expect(keys).toEqual([folderKey("root"), folderKey("child")]);
+  });
+});
+
+describe("insertDraft", () => {
+  const draft = { key: "__draft__", kind: "form" as const, id: "", title: "", isLeaf: true };
+
+  it("appends the draft at root when parentId is null", () => {
+    const tree = buildTree([folder("root", null, "Root")], []);
+    const next = insertDraft(tree, null, draft);
+    expect(next.map((n) => n.key)).toEqual([folderKey("root"), "__draft__"]);
+  });
+
+  it("appends the draft inside the matching folder and leaves siblings untouched", () => {
+    const folders = [folder("a", null, "A"), folder("b", null, "B")];
+    const tree = buildTree(folders, [form("f1", "a", "Form")]);
+    const next = insertDraft(tree, "a", draft);
+    const a = next.find((n) => n.id === "a");
+    expect(a?.children?.map((n) => n.key)).toEqual([formKey("f1"), "__draft__"]);
+    expect(next.find((n) => n.id === "b")?.children).toEqual([]);
+  });
+
+  it("does not mutate the input tree", () => {
+    const tree = buildTree([folder("root", null, "Root")], []);
+    insertDraft(tree, null, draft);
+    expect(tree.map((n) => n.key)).toEqual([folderKey("root")]);
   });
 });
 

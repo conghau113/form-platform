@@ -109,6 +109,42 @@ export function buildTree(
 }
 
 /**
+ * Collect the keys of every folder node (recursively). Used to seed the Explorer's expanded set so
+ * the tree opens fully by default while expansion stays controllable (e.g. force-open a folder when
+ * inline-creating inside it). Pure so it is cheap to unit-test.
+ */
+export function allFolderKeys(nodes: WorkspaceNode[]): string[] {
+  const keys: string[] = [];
+  for (const n of nodes) {
+    if (n.kind === "folder") {
+      keys.push(n.key);
+      if (n.children) keys.push(...allFolderKeys(n.children));
+    }
+  }
+  return keys;
+}
+
+/**
+ * Insert a draft node (the inline "Untitled" placeholder for VS Code-style create) into the tree at
+ * `parentId` (`null` → root, appended last). Returns a new tree; the original is not mutated. The
+ * draft renders an inline rename input via the Explorer's `titleRender`.
+ */
+export function insertDraft(
+  nodes: WorkspaceNode[],
+  parentId: string | null,
+  draft: WorkspaceNode,
+): WorkspaceNode[] {
+  if (parentId === null) return [...nodes, draft];
+  return nodes.map((n) => {
+    if (n.kind === "folder" && n.id === parentId) {
+      return { ...n, children: [...(n.children ?? []), draft] };
+    }
+    if (n.children) return { ...n, children: insertDraft(n.children, parentId, draft) };
+    return n;
+  });
+}
+
+/**
  * Destination folder id for a drop. Dropping **onto** a folder targets that folder; dropping onto
  * a form leaf, or into a gap between nodes, targets the target's parent folder (a root-level drop
  * → `null`). `into` is antd's `!info.dropToGap` — true when the cursor is over the node body.

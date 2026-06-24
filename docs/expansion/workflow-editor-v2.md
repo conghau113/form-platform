@@ -85,12 +85,23 @@ Mức ưu tiên đã chắt lọc lại theo review production (codex) + researc
 - Acceptance: graph 3-cấp approval đọc rõ; undo/redo đúng trên add/del/rename/move/connect; click
   node sáng đúng đường từ start; node/edge lỗi ring đỏ + bấm issue nhảy tới đúng chỗ.
 
-### WE2 — Inline create/rename ở Explorer (KHÔNG đụng contract)
-- [ ] Bỏ `Modal` prompt cho New form/workflow/folder + Rename; thay bằng **tạo item "Untitled"
-  inline trong cây + rename tại chỗ** (Enter commit / Esc huỷ), kiểu VS Code. Giữ delete =
-  confirm modal (đúng cho hành động phá huỷ).
-- Files: `ExplorerRail.tsx` (+ có thể tách `useInlineRename`). Test: cập nhật tree tests.
-- Acceptance: tạo 3 thứ liên tiếp không bật modal nào; rename tại chỗ; live smoke.
+### WE2 — Inline create/rename ở Explorer (KHÔNG đụng contract)  ✅ DONE (reviewer PASS + live smoke PASS)
+- [x] Bỏ `Modal` prompt cho New form/workflow/folder + Rename; thay bằng **tạo item "Untitled"
+  inline trong cây + rename tại chỗ** (Enter commit / Esc huỷ / blur commit), kiểu VS Code. Giữ
+  delete = confirm modal (đúng cho hành động phá huỷ).
+- [x] Helper thuần tách vào `tree.ts`: `insertDraft` (chèn node nháp `__draft__` đúng vị trí, không
+  mutate) + `allFolderKeys` (seed expanded set, đệ quy). Có test (gồm test non-mutation).
+- [x] `expandedKeys` controlled (`null` = default expand-all): inline-create bên trong folder tự
+  bung folder cha qua `ensureExpanded`. Esc→blur race xử lý bằng `skipBlur` ref (Esc huỷ, không
+  để blur commit nhầm). Rename: input điền sẵn tên cũ + select-all on focus.
+- Files đã sửa: `ExplorerRail.tsx` (inline edit state máy thay `ask`/Modal prompt; `kindIcon` tách),
+  `tree.ts` (+`insertDraft`/`allFolderKeys`), `tree.test.ts` (+6 test).
+- Acceptance ✅: tạo folder/form/workflow inline không bật modal nào; rename tại chỗ; Esc huỷ sạch;
+  delete vẫn confirm modal. Live smoke MCP PASS: create folder (persist) · Esc-cancel · rename
+  folder (persist) · create form (mở editor) · delete form + folder (confirm modal). typecheck
+  22/22 · tree.test 14/14 · biome sạch (3 file). ⚠️ Lưu ý ngoài phạm vi: `App.characterization.test.tsx`
+  fail 1 test (`provideSave...theme write`) — **pre-existing trên branch** (đã chứng minh fail y hệt
+  khi stash thay đổi WE2); cần xử lý riêng, không phải regression WE2.
 
 ### WE3 — Quản lý đa-form theo workflow (KHÔNG đụng contract)
 - [ ] Góc nhìn workflow-scoped: từ `nodes[].formId` suy ra danh sách "Form dùng trong workflow",
@@ -165,3 +176,11 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   `validateGraph` của engine). Live smoke MCP PASS (xem checklist mục WE1). Owner chốt giữ auto-tidy
   on-load. Commit WE1: `875c8f1` trên `feat/workflow-editor-v2` (owner gate push/merge).
   NEXT = WE2 (inline create/rename ở ExplorerRail) — /clear rồi vào session mới.
+- 2026-06-25 (đóng phase): **WE2 DONE.** Inline create/rename kiểu VS Code thay Modal `ask` ở
+  `ExplorerRail`; helper thuần `insertDraft`/`allFolderKeys` ở `tree.ts` (+test). Self-verify:
+  typecheck 22/22 · tree.test 14/14 · biome sạch 3 file đổi. Reviewer subagent PASS (no golden-rule
+  blocker; packages/ không đụng; delete vẫn confirm modal). Live smoke MCP PASS (create folder/form
+  inline + persist, Esc-cancel, rename folder persist, create form mở editor, delete confirm modal).
+  ⚠️ Full builder suite có **1 fail pre-existing** `App.characterization` (`provideSave...theme write`,
+  fail y hệt khi stash WE2 ⇒ không phải regression); fail PropertyPanel.validation lần đầu là
+  load-flaky (xanh khi chạy riêng). NEXT = WE3 (quản lý đa-form theo workflow) — /clear rồi session mới.
