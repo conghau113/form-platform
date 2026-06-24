@@ -1,3 +1,4 @@
+import { foldedIncludes } from "@org/ai-core";
 import type { FieldNode, FormSchema } from "@org/form-schema";
 import type { GenerateFormResult } from "../pipeline.js";
 import type { GenerateFormInput } from "../prompt.js";
@@ -103,14 +104,14 @@ export function scoreCase(
   const named = nodes.filter((n) => typeof n.name === "string");
   const haystack = nodes
     .flatMap((n) => [n.name, n.label])
-    .filter((s): s is string => typeof s === "string")
-    .map((s) => s.toLowerCase());
+    .filter((s): s is string => typeof s === "string");
 
   const expectTypes = expect.expectTypes ?? [];
   const expectFields = expect.expectFields ?? [];
   const typesMatched = expectTypes.filter((t) => types.has(t)).length;
+  // Diacritic-/case-/separator-insensitive so VI labels match ascii needles.
   const fieldsMatched = expectFields.filter((needle) =>
-    haystack.some((h) => h.includes(needle.toLowerCase())),
+    haystack.some((h) => foldedIncludes(h, needle)),
   ).length;
 
   const typeCoverage = fraction(typesMatched, expectTypes.length);

@@ -46,7 +46,7 @@ Rules:
 - "transitions" is an array of directed edges. Every transition needs a unique "id", a "from" and "to" that are existing node ids, and an "action" (the event that fires it).
 - Build a CONNECTED graph: every node must be reachable from "start" via transitions. No orphan states; model the real path to every terminal state.
 - A "guard" is a JSONLogic object ({ "rule": { ... } }), and "role" is a string — never write code or expressions as plain strings.
-- Write "title", "status", and "action" text in the SAME language as the user's request.
+- LANGUAGE: detect the language of the user's request and write EVERY human-readable string — the "title", every node "status", and every transition "action" — in that SAME language. Do not default to English when the request is in another language. Only the "id" fields stay short lowercase ascii identifiers.
 
 Model the process completely: include the approval/rejection branches, not just the happy path, and give terminal states (approved, rejected, cancelled) where the process ends.
 

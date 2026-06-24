@@ -170,6 +170,12 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   type/field-coverage. Fixture (zero-token) = 100% self-achievable.
 - [x] **Hardened (2026-06-23):** test live timeout 120s→20m (10 ca tuần tự ~9 phút), và
   `runFormEval` cô lập từng case + retry khi *throw* (1 blip 9router không còn văng cả run).
+- [x] **De-brittle scoring + pin output language (2026-06-24):** form-ai & workflow-ai scorer giờ
+  khớp `expect*` qua `@org/ai-core` `foldedIncludes` (bỏ qua hoa/thường + dấu + dấu ngăn cách) → needle
+  ascii `"tu_choi"` khớp model `"Từ chối"`; và prompt sinh form/workflow ghim "viết MỌI chuỗi người-đọc
+  bằng đúng ngôn ngữ của request, không mặc định English". Khắc phục pass-rate thấp giả tạo (C5 graph-valid
+  100% nhưng pass 44% do assertion ascii giòn). ai-core 21/21, form-ai 50/50, workflow-ai 22/22, biome clean.
+  Live re-measure vẫn chờ proxy/quota (xem mục dưới).
 - [ ] **Chốt cổng P1 live ≥95%:** chạy `runFormEval` thật vs model — **đang chờ 9router
   (localhost:20128) bật lại** (lần đo cuối fail vì proxy DOWN/ECONNREFUSED, không phải code).
   Lệnh: `FORM_AI_EVAL_BASE_URL=http://localhost:20128/v1 FORM_AI_EVAL_API_KEY=… FORM_AI_EVAL_MODEL=ag/claude-sonnet-4-6 pnpm --filter @org/form-ai test -- run.test`

@@ -1,3 +1,4 @@
+import { foldedIncludes } from "@org/ai-core";
 import type { GenerateWorkflowResult } from "../pipeline.js";
 import type { GenerateWorkflowInput } from "../prompt.js";
 
@@ -87,16 +88,18 @@ export function scoreWorkflowCase(
   }
 
   const { nodes, transitions } = result.workflow;
-  const statuses = nodes.map((n) => n.status.toLowerCase());
-  const actions = transitions.map((t) => t.action.toLowerCase());
+  const statuses = nodes.map((n) => n.status);
+  const actions = transitions.map((t) => t.action);
 
   const expectStates = expect.expectStates ?? [];
   const expectActions = expect.expectActions ?? [];
+  // Match diacritic-/case-/separator-insensitively so a needle authored ascii
+  // (e.g. "tu_choi") still matches a model emitting "Từ chối", and vice versa.
   const statesMatched = expectStates.filter((needle) =>
-    statuses.some((s) => s.includes(needle.toLowerCase())),
+    statuses.some((s) => foldedIncludes(s, needle)),
   ).length;
   const actionsMatched = expectActions.filter((needle) =>
-    actions.some((a) => a.includes(needle.toLowerCase())),
+    actions.some((a) => foldedIncludes(a, needle)),
   ).length;
 
   const stateCoverage = fraction(statesMatched, expectStates.length);

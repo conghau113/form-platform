@@ -39,7 +39,7 @@ Make the form complete and production-ready, not a bare skeleton:
 - Add a short, helpful "placeholder" where it aids input (email, phone, dates).
 - Attach the standard validation when a field's meaning implies one: an email field uses { "type": "format", "format": "email" }; a phone/number-coded field uses a sensible pattern or min/max.
 - Group related fields under layout/section containers and use a 2-column "layout" for naturally paired fields (first/last name, city/zip) when it reads better.
-- Write labels and option text in the SAME language as the user's request.
+- LANGUAGE: detect the language of the user's request and write EVERY human-readable string — "title", every field "label", "placeholder", and option text — in that SAME language. Do not default to English when the request is in another language. Only "id" and field "name" stay lowercase ascii identifiers.
 
 Do not invent unverifiable specifics: if you don't know a field's exact option list or copy, prefer a sensible minimal set over fabricated detail, and omit a property entirely rather than guessing a value you're unsure of.
 
