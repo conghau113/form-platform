@@ -1,20 +1,24 @@
 import {
   AppstoreOutlined,
   DeleteOutlined,
+  DeploymentUnitOutlined,
   GlobalOutlined,
   PlusOutlined,
   PushpinFilled,
   PushpinOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import { Icon } from "@org/form-renderer-web";
 import type { FieldNode, Preset } from "@org/form-schema";
-import { Button, Input, Modal, message, Segmented, Tooltip, Typography } from "antd";
+import { Button, Input, Modal, message, Segmented, Space, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useDesigner } from "../canvas/DesignerContext";
 import { usePins } from "../lib";
 // Reach the chip file directly (not the `../palette` barrel) — the barrel pulls in Palette,
 // which imports this preset module, so the barrel would form an import cycle.
 import { DraggableChip } from "../palette/PaletteChip";
+import { ApplyPresetModal } from "./ApplyPresetModal";
+import { AiPresetModal } from "./ai";
 import { presetFromField } from "./patch";
 import type { PresetStore } from "./usePresets";
 
@@ -27,12 +31,14 @@ function PresetChip({
   preset,
   pinned,
   onTogglePin,
+  onApply,
   onDelete,
   onPromote,
 }: {
   preset: Preset;
   pinned: boolean;
   onTogglePin: (id: string) => void;
+  onApply?: () => void;
   onDelete?: () => void;
   onPromote?: () => void;
 }) {
@@ -57,6 +63,18 @@ function PresetChip({
             onPointerDown={stop}
             onClick={() => onTogglePin(preset.id)}
           />
+          {onApply && (
+            <Tooltip title="Apply across project forms" placement="top">
+              <Button
+                type="text"
+                size="small"
+                aria-label={`Apply ${preset.name} across project forms`}
+                icon={<DeploymentUnitOutlined />}
+                onPointerDown={stop}
+                onClick={onApply}
+              />
+            </Tooltip>
+          )}
           {onPromote && (
             <Tooltip title="Promote to global" placement="top">
               <Button
@@ -166,6 +184,37 @@ function SaveButton({
   );
 }
 
+/** "Generate a preset with AI" — opens the AI modal; the accepted preset is saved into
+ *  the library via the shared store, so it appears in the gallery immediately. */
+function GenerateButton({
+  projectId,
+  onSave,
+}: {
+  projectId?: string;
+  onSave: (p: Preset) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Tooltip title="Generate a reusable field preset with AI" placement="top">
+        <Button
+          type="text"
+          size="small"
+          aria-label="Generate a preset with AI"
+          icon={<ThunderboltOutlined />}
+          onClick={() => setOpen(true)}
+        />
+      </Tooltip>
+      <AiPresetModal
+        open={open}
+        onClose={() => setOpen(false)}
+        projectId={projectId}
+        onSave={onSave}
+      />
+    </>
+  );
+}
+
 /** Presets group at the top of the palette: built-in + user presets as draggable chips,
  *  filtered by the palette's search `query`, plus a "save current field" action. */
 export function PresetSection({
@@ -183,6 +232,8 @@ export function PresetSection({
 }) {
   const { builtin, user, save, remove, promote } = presets;
   const { order, pinned, isPinned, toggle } = usePins(PINNED_PRESETS_KEY);
+  // The preset currently being applied across the project (drives ApplyPresetModal).
+  const [applying, setApplying] = useState<Preset | null>(null);
 
   const onDelete = (id: string) => {
     remove(id).catch((e: Error) => message.error(`Delete preset failed: ${e.message}`));
@@ -218,6 +269,8 @@ export function PresetSection({
       preset={p}
       pinned={isPinned(p.id)}
       onTogglePin={toggle}
+      // Apply across the project's forms — only meaningful when a project is open.
+      onApply={projectId ? () => setApplying(p) : undefined}
       onDelete={matches.isUser(p.id) ? () => onDelete(p.id) : undefined}
       // Only project-scoped presets can be promoted (and only when a project is open).
       onPromote={
@@ -246,7 +299,12 @@ export function PresetSection({
         >
           Presets
         </Typography.Text>
-        {selectedField && <SaveButton field={selectedField} projectId={projectId} onSave={save} />}
+        <Space size={0}>
+          <GenerateButton projectId={projectId} onSave={save} />
+          {selectedField && (
+            <SaveButton field={selectedField} projectId={projectId} onSave={save} />
+          )}
+        </Space>
       </div>
       {matches.pinned.length > 0 && (
         <Typography.Text type="secondary" style={{ fontSize: 11, opacity: 0.7 }}>
@@ -256,6 +314,14 @@ export function PresetSection({
       {matches.pinned.map(chip)}
       {matches.builtin.map(chip)}
       {matches.user.map(chip)}
+      {applying && projectId && (
+        <ApplyPresetModal
+          open={!!applying}
+          onClose={() => setApplying(null)}
+          preset={applying}
+          projectId={projectId}
+        />
+      )}
     </div>
   );
 }
