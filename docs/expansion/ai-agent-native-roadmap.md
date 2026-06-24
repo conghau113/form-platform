@@ -176,8 +176,13 @@ KHÔNG có nghĩa là loại bỏ tính năng.
   bằng đúng ngôn ngữ của request, không mặc định English". Khắc phục pass-rate thấp giả tạo (C5 graph-valid
   100% nhưng pass 44% do assertion ascii giòn). ai-core 21/21, form-ai 50/50, workflow-ai 22/22, biome clean.
   Live re-measure vẫn chờ proxy/quota (xem mục dưới).
-- [ ] **Chốt cổng P1 live ≥95%:** chạy `runFormEval` thật vs model — **đang chờ 9router
-  (localhost:20128) bật lại** (lần đo cuối fail vì proxy DOWN/ECONNREFUSED, không phải code).
+- [ ] **Chốt cổng P1 live ≥95%:** chạy `runFormEval` thật vs model — **vẫn bị chặn bởi
+  quota 9router, KHÔNG phải code.** Re-measure 2026-06-24: proxy UP (HTTP 200) nhưng cả 10/10 ca
+  fail với `429 "Individual quota reached. Please upgrade"` trên `ag/claude-sonnet-4-6` (free
+  tier cạn quota cá nhân); các model khác trong `/v1/models` (gc/gemini-*, ag/gemini-*,
+  ag/gpt-oss-*) **hang/không phản hồi** → chỉ đường Claude thực sự nối được nhưng đã hết quota.
+  Test hạ tầng vẫn xanh (10/11 pass; chỉ assertion `parseRate ≥ 0.95` fail vì parse-rate 0% do 429).
+  → Cần: quota Claude hồi lại / key BYOK trả phí / provider khác. Lúc đó chạy lại lệnh dưới.
   Lệnh: `FORM_AI_EVAL_BASE_URL=http://localhost:20128/v1 FORM_AI_EVAL_API_KEY=… FORM_AI_EVAL_MODEL=ag/claude-sonnet-4-6 pnpm --filter @org/form-ai test -- run.test`
 - [ ] Chạy eval mỗi lần đổi prompt/model
 
