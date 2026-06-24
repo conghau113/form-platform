@@ -1,4 +1,5 @@
 import type { FormSchema } from "@org/form-schema";
+import type { PresetDraft } from "./preset.js";
 
 /**
  * P1 — output URL safety.
@@ -20,7 +21,7 @@ export interface SanitizeResult {
 }
 
 /** True when `rawUrl`'s host matches an allowlist entry (exact or subdomain). */
-function hostAllowed(rawUrl: string, allowlist: string[]): boolean {
+export function hostAllowed(rawUrl: string, allowlist: string[]): boolean {
   let host: string;
   try {
     host = new URL(rawUrl).hostname.toLowerCase();
@@ -64,4 +65,27 @@ export function stripDisallowedUrls(form: FormSchema, allowlist: string[]): Sani
   walk(clone.fields);
 
   return { form: clone, stripped };
+}
+
+export interface SanitizePresetResult {
+  preset: PresetDraft;
+  /** URLs that were removed from the preset patch. */
+  stripped: string[];
+}
+
+/**
+ * Same output URL safety as {@link stripDisallowedUrls}, for a generated preset.
+ * A preset is a single field, so the only baked-in URL vector is its `patch.dataSource.url`
+ * (a select/cascader/etc. remote option source) — drop the whole `dataSource` when its host
+ * is off-allowlist (a `dataSource` without a url would fail re-validation). Pure: clones.
+ */
+export function stripPresetUrls(draft: PresetDraft, allowlist: string[]): SanitizePresetResult {
+  const clone = structuredClone(draft);
+  const stripped: string[] = [];
+  const ds = clone.patch.dataSource as { url?: string } | undefined;
+  if (ds?.url && !hostAllowed(ds.url, allowlist)) {
+    stripped.push(ds.url);
+    clone.patch.dataSource = undefined;
+  }
+  return { preset: clone, stripped };
 }
