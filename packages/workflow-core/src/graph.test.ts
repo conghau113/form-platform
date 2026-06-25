@@ -1,6 +1,6 @@
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import { describe, expect, it } from "vitest";
-import { validateGraph } from "./index.js";
+import { lintGraph, validateGraph } from "./index.js";
 
 const base: WorkflowDefinition = {
   workflowVersion: 1,
@@ -45,5 +45,60 @@ describe("validateGraph", () => {
   it("flags duplicate node ids", () => {
     const def = { ...base, nodes: [base.nodes[0], base.nodes[0], base.nodes[1]] };
     expect(validateGraph(def).some((e) => e.code === "duplicate-node")).toBe(true);
+  });
+});
+
+describe("lintGraph", () => {
+  it("returns no warnings for a sound graph", () => {
+    expect(lintGraph(base)).toEqual([]);
+  });
+
+  it("does not nag a single-node draft", () => {
+    const def: WorkflowDefinition = {
+      ...base,
+      start: "draft",
+      nodes: [{ id: "draft", status: "draft" }],
+      transitions: [],
+    };
+    expect(lintGraph(def)).toEqual([]);
+  });
+
+  it("flags the start node when it has no outgoing transition (multi-node)", () => {
+    const def = { ...base, transitions: [] };
+    const warnings = lintGraph(def);
+    expect(warnings.some((w) => w.code === "dead-end" && w.ref === "a")).toBe(true);
+  });
+
+  it("flags a kind:normal node that goes nowhere", () => {
+    const def: WorkflowDefinition = {
+      ...base,
+      nodes: [base.nodes[0], { id: "b", status: "b", kind: "normal" }],
+    };
+    expect(lintGraph(def).some((w) => w.code === "dead-end" && w.ref === "b")).toBe(true);
+  });
+
+  it("does not flag a kind:end node with no outgoing", () => {
+    const def: WorkflowDefinition = {
+      ...base,
+      nodes: [base.nodes[0], { id: "b", status: "b", kind: "end" }],
+    };
+    expect(lintGraph(def)).toEqual([]);
+  });
+
+  it("does not flag a legacy (kind-less) terminal node", () => {
+    // base.b has no kind and no outgoing — left alone so old definitions don't get nagged.
+    expect(lintGraph(base)).toEqual([]);
+  });
+
+  it("flags a kind:end node that still has an outgoing transition", () => {
+    const def: WorkflowDefinition = {
+      ...base,
+      nodes: [base.nodes[0], { id: "b", status: "b", kind: "end" }],
+      transitions: [
+        { id: "t1", from: "a", to: "b", action: "next" },
+        { id: "t2", from: "b", to: "a", action: "back" },
+      ],
+    };
+    expect(lintGraph(def).some((w) => w.code === "end-has-outgoing" && w.ref === "b")).toBe(true);
   });
 });

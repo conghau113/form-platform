@@ -86,3 +86,59 @@ export function validateGraph(def: WorkflowDefinition): GraphError[] {
 
   return errors;
 }
+
+/** Advisory (non-blocking) lint codes. Unlike {@link GraphErrorCode}, these never gate save or the
+ *  AI normalize/repair loop — they flag a graph that parses and runs but is probably a mistake. */
+export type GraphWarningCode = "dead-end" | "end-has-outgoing";
+
+export interface GraphWarning {
+  code: GraphWarningCode;
+  message: string;
+  /** The offending node id. */
+  ref?: string;
+}
+
+/**
+ * Advisory structural checks, kept SEPARATE from {@link validateGraph} on purpose: the editor's save
+ * gate and the AI moat (`normalizeWorkflowDraft` → repair loop) treat every `validateGraph` error as
+ * fatal, so these "suspicious but runnable" findings must NOT live there. Returns [] for a clean
+ * graph. Uses the WE4 `kind` snapshot (start/normal/end); old definitions without `kind` are left
+ * alone so a kind-less terminal never gets nagged.
+ *
+ *   - `dead-end`: a node expected to continue (the start node, or `kind` start/normal) has no
+ *     outgoing transition. Suppressed for a single-node draft (nothing to flag yet).
+ *   - `end-has-outgoing`: a `kind: "end"` node still has an outgoing transition.
+ */
+export function lintGraph(def: WorkflowDefinition): GraphWarning[] {
+  const warnings: GraphWarning[] = [];
+  // A trivial one-node draft is incomplete by construction — don't nag.
+  if (def.nodes.length <= 1) return warnings;
+
+  const hasOutgoing = new Set(def.transitions.map((t) => t.from));
+
+  for (const node of def.nodes) {
+    const out = hasOutgoing.has(node.id);
+
+    // dead-end: expected to continue but goes nowhere.
+    const expectedToContinue =
+      node.id === def.start || node.kind === "start" || node.kind === "normal";
+    if (!out && expectedToContinue) {
+      warnings.push({
+        code: "dead-end",
+        message: `Node "${node.id}" has no outgoing transition, so the workflow cannot continue past it.`,
+        ref: node.id,
+      });
+    }
+
+    // end-has-outgoing: a terminal state that still leads somewhere.
+    if (out && node.kind === "end") {
+      warnings.push({
+        code: "end-has-outgoing",
+        message: `End node "${node.id}" still has an outgoing transition.`,
+        ref: node.id,
+      });
+    }
+  }
+
+  return warnings;
+}

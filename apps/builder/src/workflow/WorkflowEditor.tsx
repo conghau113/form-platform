@@ -1,5 +1,5 @@
 import { FormRenderer } from "@org/form-renderer-web";
-import { type GraphError, validateGraph } from "@org/workflow-core";
+import { type GraphError, type GraphWarning, lintGraph, validateGraph } from "@org/workflow-core";
 import {
   STATUS_KINDS,
   type StatusCatalogEntry,
@@ -557,7 +557,11 @@ function WorkflowEditorInner({
 
   function onValidate() {
     if (issues.length === 0) {
-      message.success("Workflow graph is valid");
+      if (warnings.length > 0) {
+        message.info(`Hợp lệ — ${warnings.length} cảnh báo (không chặn lưu), xem panel bên phải.`);
+      } else {
+        message.success("Workflow graph is valid");
+      }
       return;
     }
     message.warning(`${issues.length} vấn đề cần xử lý — xem danh sách ở panel bên phải.`);
@@ -600,6 +604,19 @@ function WorkflowEditorInner({
     return { nodeIds, edgeIds };
   }, [issues]);
 
+  // Advisory lint (non-blocking): `lintGraph` flags "runnable but probably a mistake" graphs. Kept
+  // separate from the blocking `validateGraph` errors above — warnings get an amber ring and a panel
+  // section but NEVER gate save. Both new codes reference a node, so an amber node-id set suffices.
+  const warnings = useMemo(() => lintGraph(currentDef), [currentDef]);
+  const warnNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const w of warnings) {
+      // Errors win the colour — don't amber-ring a node already ringed red.
+      if (w.ref && !errorRefs.nodeIds.has(w.ref)) ids.add(w.ref);
+    }
+    return ids;
+  }, [warnings, errorRefs]);
+
   // --- Highlight path -------------------------------------------------------
   // Clicking a state lights every transition that can reach it (back to the start) and dims the
   // rest, so a reviewer can follow one approval path through a busy graph. Pure derivation — the
@@ -609,22 +626,28 @@ function WorkflowEditorInner({
     [highlightNodeId, edges],
   );
   const displayNodes = useMemo(() => {
-    if (!highlight && errorRefs.nodeIds.size === 0) return nodes;
+    if (!highlight && errorRefs.nodeIds.size === 0 && warnNodeIds.size === 0) return nodes;
     return nodes.map((n) => {
       const isError = errorRefs.nodeIds.has(n.id);
+      const isWarn = !isError && warnNodeIds.has(n.id);
       const dimmed = highlight ? !highlight.nodeIds.has(n.id) : false;
-      if (!isError && !dimmed) return n;
+      if (!isError && !isWarn && !dimmed) return n;
       return {
         ...n,
         style: {
           ...n.style,
           ...(dimmed ? { opacity: 0.25 } : {}),
-          // Red ring = the validator flagged this node (duplicate / unreachable / missing start).
-          ...(isError ? { boxShadow: "0 0 0 2px #ff4d4f", borderRadius: 8 } : {}),
+          // Red ring = blocking validator error (duplicate / unreachable / missing start).
+          // Amber ring = advisory lint warning (dead-end / end-has-outgoing) — does NOT block save.
+          ...(isError
+            ? { boxShadow: "0 0 0 2px #ff4d4f", borderRadius: 8 }
+            : isWarn
+              ? { boxShadow: "0 0 0 2px #faad14", borderRadius: 8 }
+              : {}),
         },
       };
     });
-  }, [nodes, highlight, errorRefs]);
+  }, [nodes, highlight, errorRefs, warnNodeIds]);
   const displayEdges = useMemo(() => {
     if (!highlight && errorRefs.edgeIds.size === 0) return edges;
     return edges.map((e) => {
@@ -834,8 +857,8 @@ function WorkflowEditorInner({
               onChange={(patch) => patchEdge(selectedEdge.id, patch)}
               onDelete={() => deleteElements({ edges: [{ id: selectedEdge.id }] })}
             />
-          ) : issues.length > 0 ? (
-            <IssuesPanel issues={issues} onFocus={focusRef} />
+          ) : issues.length > 0 || warnings.length > 0 ? (
+            <IssuesPanel issues={issues} warnings={warnings} onFocus={focusRef} />
           ) : (
             <Typography.Paragraph type="secondary">
               Select a state or transition to edit it. Drag from any handle to another node to
@@ -1214,40 +1237,76 @@ function EdgePanel({
   );
 }
 
-/** Errors panel: the live `validateGraph` issues, each a click-to-focus row (the production
- *  "highlight node + list errors before publish" pattern). Shown when nothing is selected. */
+/** Errors panel: the live `validateGraph` issues (blocking, red) plus `lintGraph` warnings
+ *  (advisory, amber — never block save), each a click-to-focus row (the production "highlight node +
+ *  list errors before publish" pattern). Shown when nothing is selected. */
 function IssuesPanel({
   issues,
+  warnings,
   onFocus,
 }: {
   issues: GraphError[];
+  warnings: GraphWarning[];
   onFocus: (ref: string) => void;
 }) {
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
-      <Typography.Title level={5} style={{ margin: 0, color: "#cf1322" }}>
-        {issues.length} vấn đề cần xử lý
-      </Typography.Title>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        Sửa các lỗi sau trước khi lưu/publish. Bấm một mục để nhảy tới node/transition liên quan.
-      </Typography.Text>
-      {issues.map((issue, i) => (
-        <Button
-          key={`${issue.code}-${issue.ref ?? i}`}
-          block
-          danger
-          disabled={!issue.ref}
-          onClick={() => issue.ref && onFocus(issue.ref)}
-          style={{
-            height: "auto",
-            whiteSpace: "normal",
-            textAlign: "left",
-            padding: "8px 12px",
-          }}
-        >
-          {issue.message}
-        </Button>
-      ))}
+      {issues.length > 0 && (
+        <>
+          <Typography.Title level={5} style={{ margin: 0, color: "#cf1322" }}>
+            {issues.length} vấn đề cần xử lý
+          </Typography.Title>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Sửa các lỗi sau trước khi lưu/publish. Bấm một mục để nhảy tới node/transition liên
+            quan.
+          </Typography.Text>
+          {issues.map((issue, i) => (
+            <Button
+              key={`${issue.code}-${issue.ref ?? i}`}
+              block
+              danger
+              disabled={!issue.ref}
+              onClick={() => issue.ref && onFocus(issue.ref)}
+              style={{
+                height: "auto",
+                whiteSpace: "normal",
+                textAlign: "left",
+                padding: "8px 12px",
+              }}
+            >
+              {issue.message}
+            </Button>
+          ))}
+        </>
+      )}
+      {warnings.length > 0 && (
+        <>
+          <Typography.Title level={5} style={{ margin: 0, color: "#d48806" }}>
+            {warnings.length} cảnh báo (không chặn lưu)
+          </Typography.Title>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Gợi ý cải thiện luồng. Bấm một mục để nhảy tới node liên quan.
+          </Typography.Text>
+          {warnings.map((warn, i) => (
+            <Button
+              key={`${warn.code}-${warn.ref ?? i}`}
+              block
+              disabled={!warn.ref}
+              onClick={() => warn.ref && onFocus(warn.ref)}
+              style={{
+                height: "auto",
+                whiteSpace: "normal",
+                textAlign: "left",
+                padding: "8px 12px",
+                borderColor: "#faad14",
+                color: "#d48806",
+              }}
+            >
+              {warn.message}
+            </Button>
+          ))}
+        </>
+      )}
     </Space>
   );
 }
