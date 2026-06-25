@@ -174,10 +174,17 @@ API + builder UI).
   round-trip qua contract · clean-on-load sau fix · xoá entry → node giữ snapshot + tag "?").
 
 ### (Sau) WE5 — View modes (4 hướng thiết kế) + keyboard-first
-- ~~Validation tô đỏ node/edge lỗi~~ → **ĐÃ kéo sớm vào WE1** (validation issue mapping). Còn lại
-  của WE5 nếu mở rộng `GraphError`: thêm code mới (missing-bound-form, no-outgoing-from-non-end,
-  missing-role) ở `workflow-core/graph.ts` — UI WE1 tự nhặt theo `ref`, không cần sửa editor.
-- Keyboard-first đầy đủ (điều hướng node bằng phím, thêm/xoá/đặt-start bằng phím).
+- ~~Validation tô đỏ node/edge lỗi~~ → **ĐÃ kéo sớm vào WE1** (validation issue mapping).
+- [x] **WE5a — Advisory graph lint (DONE `e6e7c6f`).** ⚠️ KHÔNG mở rộng `validateGraph` (đó là gate
+  CỨNG: editor `save()` chặn lưu + AI `normalizeWorkflowDraft` coi mọi error là invalid → repair loop
+  + eval parseRate = graph-valid-rate). Thay vào đó thêm hàm RIÊNG `lintGraph(def): GraphWarning[]` ở
+  `workflow-core/graph.ts` (codes `dead-end`, `end-has-outgoing`, dùng `kind` từ WE4) — cảnh báo KHÔNG
+  chặn lưu. Editor compose cả hai: error đỏ + chặn save (cũ); warning hổ phách + panel advisory +
+  KHÔNG block save. Legacy kind-less terminal & draft 1-node KHÔNG bị nag. `workflow-ai`/eval/mcp
+  không đụng. (Phán đoán ban đầu "sửa thẳng validateGraph, zero editor change" SAI — xem plan
+  `jaunty-churning-kay.md` để biết vì sao.) `missing-bound-form` (trùng WE3) & `missing-role`
+  (ref-transition) để sau nếu cần.
+- [ ] Keyboard-first đầy đủ (điều hướng node bằng phím, thêm/xoá/đặt-start bằng phím) — phase sau.
 - View modes (timeline-cột → kanban stage board → swimlane theo `transition.role` → tree; cần
   optional `stage` trên node, additive): **nice-to-have, HOÃN tới khi có runtime/task** — theo review
   production, view "đẹp" như kanban chỉ có giá trị vận hành khi đã có case/task thật để xếp, nếu
@@ -255,3 +262,15 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   live smoke MCP PASS (create/persist/picker/round-trip/clean-on-load/missing-fallback). Commit WE4:
   `4797bd3` (owner gate push). NEXT đề xuất = WE5 (view modes + keyboard-first — nice-to-have, HOÃN tới
   khi có runtime/task) HOẶC chuyển sang track vận hành/AI-native (ngã ba chiến lược chưa chốt).
+- 2026-06-25 (đóng phase): **WE5a DONE — advisory graph lint.** Owner chốt làm mảnh validation của WE5
+  trước. Đọc-sâu-source phát hiện `validateGraph` là gate CỨNG dùng 3 nơi (save-block + AI moat repair
+  loop + eval parseRate) ⇒ thêm code vào đó sẽ chặn-lưu workflow mặc định mới (`newWorkflow` seed 1-node
+  draft) + tụt success-rate moat AI + vỡ eval. Thiết kế đúng: hàm RIÊNG `lintGraph` (advisory, không
+  chặn lưu), `validateGraph` bất biến. Editor compose: error đỏ + warning hổ phách (KHÔNG block save).
+  Self-verify: typecheck builder+core sạch (api EPERM prisma-DLL môi trường, không liên quan) · core 20
+  test (7 lintGraph) · workflow-ai 22 test (moat/eval KHÔNG regress) · builder 32 test workflow · biome
+  sạch file đổi (2 warning noNonNullAssertion là code cũ trong validateGraph, không đụng) · reviewer
+  PASS · live smoke MCP PASS (amber ring + toast "1 cảnh báo (không chặn lưu)" + 0 error + Save bật
+  không bị chặn + revert→ring mất; KHÔNG false-positive trên wf thật kind-unset). Commit `e6e7c6f`
+  (owner gate push). NEXT = keyboard-first (phase sau) HOẶC view-modes (HOÃN tới runtime) HOẶC chuyển
+  track vận hành/AI-native — ngã ba chiến lược vẫn chưa chốt.
