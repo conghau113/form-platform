@@ -24,6 +24,23 @@ export const KIND_LABEL: Record<StatusKind, string> = {
   end: "Kết thúc",
 };
 
+/** A curated palette of common status colours (antd's vivid preset hues) the catalog manager offers
+ *  as one-click swatches, so most users never need the raw colour picker. */
+export const STATUS_PALETTE: readonly string[] = [
+  "#f5222d", // red
+  "#fa541c", // volcano
+  "#fa8c16", // orange
+  "#faad14", // gold
+  "#a0d911", // lime
+  "#52c41a", // green
+  "#13c2c2", // cyan
+  "#1677ff", // blue
+  "#2f54eb", // geekblue
+  "#722ed1", // purple
+  "#eb2f96", // magenta
+  "#8c8c8c", // grey
+];
+
 export interface ResolvedStatusStyle {
   /** Display label: the catalog entry's label, else the node's frozen `status` snapshot. */
   label: string;

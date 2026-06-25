@@ -66,6 +66,7 @@ import {
   KIND_COLOR,
   KIND_LABEL,
   resolveStatusStyle,
+  STATUS_PALETTE,
   useStatusCatalog,
 } from "./status-catalog";
 import { type UsedForm, usedForms } from "./used-forms";
@@ -1352,6 +1353,39 @@ function ColorDot({ color }: { color: string }) {
   );
 }
 
+/** A clickable palette swatch (a colour square that rings when selected). */
+function Swatch({
+  color,
+  selected,
+  title,
+  onClick,
+}: {
+  color: string;
+  selected: boolean;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-pressed={selected}
+      onClick={onClick}
+      style={{
+        width: 22,
+        height: 22,
+        padding: 0,
+        borderRadius: 6,
+        background: color,
+        cursor: "pointer",
+        border: selected ? "2px solid #1677ff" : "1px solid rgba(0,0,0,0.15)",
+        boxShadow: selected ? "0 0 0 2px rgba(22,119,255,0.2)" : "none",
+      }}
+    />
+  );
+}
+
 /** Local draft for the catalog create/edit form. */
 interface StatusDraft {
   code: string;
@@ -1504,37 +1538,49 @@ function StatusCatalogPanel({
             />
           </Field>
           <Field label="Màu">
-            <Space>
-              {draft.color != null ? (
-                <>
-                  <input
-                    type="color"
-                    value={draft.color}
-                    onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))}
-                    style={{
-                      width: 40,
-                      height: 28,
-                      padding: 0,
-                      border: "none",
-                      background: "none",
-                    }}
-                  />
-                  <Button size="small" onClick={() => setDraft((d) => ({ ...d, color: null }))}>
-                    Dùng màu mặc định
-                  </Button>
-                </>
-              ) : (
-                <Space>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+              {/* Auto = use the kind default; the active choice when no custom colour is set. */}
+              <Button
+                size="small"
+                type={draft.color == null ? "primary" : "default"}
+                onClick={() => setDraft((d) => ({ ...d, color: null }))}
+              >
+                <Space size={4}>
                   <ColorDot color={KIND_COLOR[draft.kind]} />
-                  <Button
-                    size="small"
-                    onClick={() => setDraft((d) => ({ ...d, color: KIND_COLOR[d.kind] }))}
-                  >
-                    Đặt màu tùy chỉnh
-                  </Button>
+                  Mặc định
                 </Space>
-              )}
-            </Space>
+              </Button>
+              {STATUS_PALETTE.map((c) => (
+                <Swatch
+                  key={c}
+                  color={c}
+                  title={c}
+                  selected={draft.color === c}
+                  onClick={() => setDraft((d) => ({ ...d, color: c }))}
+                />
+              ))}
+              {/* Escape hatch for a colour outside the palette. */}
+              <input
+                type="color"
+                title="Màu tuỳ chỉnh"
+                value={draft.color ?? KIND_COLOR[draft.kind]}
+                onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))}
+                style={{
+                  width: 28,
+                  height: 24,
+                  padding: 0,
+                  border: "1px solid rgba(0,0,0,0.15)",
+                  borderRadius: 6,
+                  background: "none",
+                  cursor: "pointer",
+                }}
+              />
+            </div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {draft.color == null
+                ? "Dùng màu mặc định theo loại"
+                : `Màu tuỳ chỉnh: ${draft.color}`}
+            </Typography.Text>
           </Field>
           {projectId && (
             <Field label="Phạm vi">
@@ -1571,52 +1617,59 @@ function StatusCatalogPanel({
           size="small"
           dataSource={entries}
           renderItem={(e) => (
-            <List.Item
-              key={e.code}
-              actions={[
-                <Button key="edit" type="link" size="small" onClick={() => startEdit(e)}>
-                  Sửa
-                </Button>,
-                ...(e.scope === "project"
-                  ? [
-                      <Button
-                        key="promote"
-                        type="link"
-                        size="small"
-                        disabled={busy}
-                        onClick={() => promote(e.code)}
-                      >
-                        Dùng chung
-                      </Button>,
-                    ]
-                  : []),
+            // Block layout (not the `actions` prop) so the narrow drawer never squeezes the title /
+            // wraps it: row 1 = swatch + label + tags, row 2 = code + actions.
+            <List.Item key={e.code} style={{ display: "block", padding: "10px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <ColorDot color={e.color ?? KIND_COLOR[e.kind]} />
+                <Typography.Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
+                  {e.label}
+                </Typography.Text>
+                <Tag style={{ marginInlineEnd: 0 }}>{KIND_LABEL[e.kind]}</Tag>
+                {e.scope === "project" ? (
+                  <Tag color="blue" style={{ marginInlineEnd: 0 }}>
+                    dự án
+                  </Tag>
+                ) : (
+                  <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+                    chung
+                  </Tag>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 2 }}>
+                <Typography.Text type="secondary" style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
+                  {e.code}
+                </Typography.Text>
                 <Button
-                  key="del"
+                  type="link"
+                  size="small"
+                  style={{ padding: 0, height: "auto" }}
+                  onClick={() => startEdit(e)}
+                >
+                  Sửa
+                </Button>
+                {e.scope === "project" && (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: "auto" }}
+                    disabled={busy}
+                    onClick={() => promote(e.code)}
+                  >
+                    Dùng chung
+                  </Button>
+                )}
+                <Button
                   type="link"
                   size="small"
                   danger
+                  style={{ padding: 0, height: "auto" }}
                   disabled={busy || !canManage}
                   onClick={() => remove(e.code)}
                 >
                   Xoá
-                </Button>,
-              ]}
-            >
-              <List.Item.Meta
-                avatar={<ColorDot color={e.color ?? KIND_COLOR[e.kind]} />}
-                title={
-                  <Space size={4}>
-                    <span>{e.label}</span>
-                    <Tag>{KIND_LABEL[e.kind]}</Tag>
-                    {e.scope === "project" ? (
-                      <Tag color="blue">dự án</Tag>
-                    ) : (
-                      <Tag color="gold">chung</Tag>
-                    )}
-                  </Space>
-                }
-                description={<Typography.Text type="secondary">{e.code}</Typography.Text>}
-              />
+                </Button>
+              </div>
             </List.Item>
           )}
         />
