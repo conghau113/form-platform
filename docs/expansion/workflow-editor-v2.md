@@ -253,5 +253,5 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   routing/runtime, KHÔNG nhét vào status. Build Full xuyên 3 package (contract+API+builder) — chi tiết
   ở §WE4. Phát hiện+sửa dirty-giả-sau-reload do thứ tự key `fromFlow` lệch schema. Reviewer PASS +
   live smoke MCP PASS (create/persist/picker/round-trip/clean-on-load/missing-fallback). Commit WE4:
-  `<hash>` (owner gate push). NEXT đề xuất = WE5 (view modes + keyboard-first — nice-to-have, HOÃN tới
+  `4797bd3` (owner gate push). NEXT đề xuất = WE5 (view modes + keyboard-first — nice-to-have, HOÃN tới
   khi có runtime/task) HOẶC chuyển sang track vận hành/AI-native (ngã ba chiến lược chưa chốt).
