@@ -103,12 +103,21 @@ Mức ưu tiên đã chắt lọc lại theo review production (codex) + researc
   fail 1 test (`provideSave...theme write`) — **pre-existing trên branch** (đã chứng minh fail y hệt
   khi stash thay đổi WE2); cần xử lý riêng, không phải regression WE2.
 
-### WE3 — Quản lý đa-form theo workflow (KHÔNG đụng contract)
-- [ ] Góc nhìn workflow-scoped: từ `nodes[].formId` suy ra danh sách "Form dùng trong workflow",
-  hiển thị + sửa nhanh (mở Drawer builder đã có). Cân nhắc badge/nhóm trong cây Explorer cho form
-  thuộc workflow. Quan hệ node→formId đã có ⇒ thuần presentation/aggregation.
-- Files: WorkflowEditor (panel overview) hoặc ProjectWorkspace; pure `usedForms(def)`.
-- Acceptance: mở 1 workflow thấy ngay nó gồm form nào; live smoke.
+### WE3 — Quản lý đa-form theo workflow (KHÔNG đụng contract)  ✅ DONE (reviewer PASS + live smoke PASS)
+- [x] Góc nhìn workflow-scoped: từ `nodes[].formId` suy ra danh sách "Form dùng trong workflow",
+  hiển thị + sửa nhanh (mở Drawer builder đã có). Quan hệ node→formId đã có ⇒ thuần
+  presentation/aggregation. (Bỏ qua badge cây Explorer — overview panel đủ; thêm sau nếu cần.)
+- [x] Pure helper `usedForms(nodes, options)` ở `used-forms.ts` (KHÔNG import React/xyflow): nhóm
+  state theo formId (thứ tự first-appearance), resolve title + cờ `missing` từ form list dự án, và
+  liệt kê `unbound` (state chưa gắn form). +5 unit test.
+- [x] UI: nút toolbar **"Forms (N)"** mở Drawer `UsedFormsPanel` — mỗi form: title (hoặc id +
+  tag "đã xoá" nếu bị xoá khỏi dự án), tag số state, các state bấm-để-focus (`focusRef` + đóng
+  drawer), nút "Sửa form" (disabled khi missing/no-project) mở Drawer builder sẵn có. Section
+  "N state chưa gắn form" liệt kê các state thiếu form. Đếm cập nhật LIVE theo binding.
+- Files đã sửa: `WorkflowEditor.tsx` (formsView memo + nút + Drawer + `UsedFormsPanel`); new
+  `used-forms.ts` + `used-forms.test.ts`.
+- Acceptance ✅: mở 1 workflow thấy ngay nó gồm form nào + state nào chưa gắn; bấm state nhảy tới
+  node; "Sửa form" mở builder. Live smoke MCP PASS (xem §Trạng thái).
 
 ### WE4 — Status catalog (ĐỤNG CONTRACT, additive)  ★ cần quyết scope
 - [ ] node_type (START/NORMAL/OPTIONAL/END) + status_code + label + màu, **dùng chung** dạng
@@ -184,3 +193,13 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   ⚠️ Full builder suite có **1 fail pre-existing** `App.characterization` (`provideSave...theme write`,
   fail y hệt khi stash WE2 ⇒ không phải regression); fail PropertyPanel.validation lần đầu là
   load-flaky (xanh khi chạy riêng). NEXT = WE3 (quản lý đa-form theo workflow) — /clear rồi session mới.
+- 2026-06-25 (đóng phase): **WE3 DONE.** Pure `usedForms(nodes, options)` ở `used-forms.ts` (nhóm
+  state theo formId + resolve title/missing + liệt kê unbound) + nút toolbar "Forms (N)" mở Drawer
+  `UsedFormsPanel` (state bấm-để-focus, "Sửa form" mở builder Drawer). Self-verify: typecheck 22/22 ·
+  27 test workflow (gồm 5 test `used-forms` mới) · biome sạch 3 file đổi (chỉ còn artifact CRLF của
+  WorkflowEditor.tsx — git lưu LF). Reviewer subagent PASS (packages/ không đụng; `used-forms.ts`
+  zero-import thuần; no `any`). Live smoke MCP PASS trên wf "3-Level Leave Approval": "Forms (N)"
+  đếm đúng + cập nhật LIVE (1→2 khi bind form) · form bị xoá hiện tag "đã xoá" + "Sửa form" disabled ·
+  section "N state chưa gắn form" (6→5) · bấm state → select+center node + đóng drawer · "Sửa form"
+  form hợp lệ → mở builder Drawer ("Loaded ..."). Không lưu binding thử (transient). NEXT = WE4
+  (status catalog, ĐỤNG CONTRACT additive — cần chốt scope project-shared trước khi code) — /clear.

@@ -29,6 +29,7 @@ import {
   Drawer,
   Empty,
   Input,
+  List,
   Modal,
   message,
   Select,
@@ -55,6 +56,7 @@ import { WorkflowAiDrawer } from "./ai";
 import { FloatingEdge } from "./floating-edge";
 import { tidyLayout } from "./layout";
 import { traceUpstream } from "./path";
+import { type UsedForm, usedForms } from "./used-forms";
 import { useFormDefinition } from "./useFormDefinition";
 import {
   type FlowEdge,
@@ -312,6 +314,13 @@ function WorkflowEditorInner({
 
   // The current definition + dirty signal (vs. the last-saved baseline, compared by JSON).
   const currentDef = useMemo(() => fromFlow(meta, nodes, edges), [meta, nodes, edges]);
+
+  // Workflow-scoped multi-form view (WE3): which forms this workflow uses, grouped by state, plus
+  // the states still missing a form. Pure derivation from the live nodes + project form list.
+  const formsView = useMemo(
+    () => usedForms(currentDef.nodes, formOptions),
+    [currentDef.nodes, formOptions],
+  );
   const savedJsonRef = useRef(JSON.stringify(definition));
   const dirty = JSON.stringify(currentDef) !== savedJsonRef.current;
 
@@ -628,6 +637,7 @@ function WorkflowEditorInner({
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [formDirty, setFormDirty] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [formsOpen, setFormsOpen] = useState(false);
   const canManageForms = !!projectId;
 
   // Create a blank form in the workflow's project, bind it to the node, and open it in the Drawer.
@@ -694,6 +704,7 @@ function WorkflowEditorInner({
         />
         <Space style={{ marginLeft: "auto" }}>
           <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
+          <Button onClick={() => setFormsOpen(true)}>Forms ({formsView.forms.length})</Button>
           <Button onClick={undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">
             Undo
           </Button>
@@ -801,6 +812,31 @@ function WorkflowEditorInner({
           )}
         </aside>
       </div>
+
+      {/* Workflow-scoped multi-form overview (WE3): every form this workflow uses, grouped by the
+          states that bind it, plus the states still missing a form. Jump to a state or open the
+          builder Drawer for a form without leaving the workflow. */}
+      <Drawer
+        open={formsOpen}
+        onClose={() => setFormsOpen(false)}
+        title="Forms trong workflow"
+        width={380}
+      >
+        <UsedFormsPanel
+          forms={formsView.forms}
+          unbound={formsView.unbound}
+          canManageForms={canManageForms}
+          onFocusState={(id) => {
+            setFormsOpen(false);
+            focusRef(id);
+          }}
+          onEditForm={(formId) => {
+            setFormsOpen(false);
+            setFormDirty(false);
+            setEditingFormId(formId);
+          }}
+        />
+      </Drawer>
 
       {/* Edit/create a node's bound form in place — the full builder, no navigation away. App is
           standalone-renderable and uses callback-based guards (no competing `useBlocker`); we clip
@@ -1086,6 +1122,96 @@ function IssuesPanel({
           {issue.message}
         </Button>
       ))}
+    </Space>
+  );
+}
+
+/** Workflow-scoped multi-form overview body: forms grouped by the states that bind them, plus a
+ *  "states with no form" section. Each form row links to its states and (in a project) opens the
+ *  builder Drawer. Pure presentation over the `usedForms` aggregation. */
+function UsedFormsPanel({
+  forms,
+  unbound,
+  canManageForms,
+  onFocusState,
+  onEditForm,
+}: {
+  forms: UsedForm[];
+  unbound: { id: string; status: string }[];
+  /** Project context present ⇒ "Sửa form" is available. */
+  canManageForms: boolean;
+  /** Select + center the given state node (and close this panel). */
+  onFocusState: (nodeId: string) => void;
+  /** Open the bound form in the builder Drawer. */
+  onEditForm: (formId: string) => void;
+}) {
+  if (forms.length === 0 && unbound.length === 0) {
+    return (
+      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Workflow chưa có state nào" />
+    );
+  }
+
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="large">
+      {forms.length === 0 ? (
+        <Typography.Text type="secondary">Chưa có state nào gắn form.</Typography.Text>
+      ) : (
+        <List
+          size="small"
+          dataSource={forms}
+          renderItem={(f) => (
+            <List.Item
+              key={f.formId}
+              style={{ display: "block", padding: "12px 0" }}
+              actions={[]}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Typography.Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
+                  {f.title}
+                </Typography.Text>
+                {f.missing ? (
+                  <Tag color="red">đã xoá</Tag>
+                ) : (
+                  <Tag>
+                    {f.states.length} state{f.states.length > 1 ? "s" : ""}
+                  </Tag>
+                )}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                {f.states.map((s) => (
+                  <Button key={s.id} size="small" onClick={() => onFocusState(s.id)}>
+                    {s.status || "(unnamed)"}
+                  </Button>
+                ))}
+              </div>
+              <Button
+                block
+                size="small"
+                style={{ marginTop: 8 }}
+                disabled={f.missing || !canManageForms}
+                onClick={() => onEditForm(f.formId)}
+              >
+                Sửa form
+              </Button>
+            </List.Item>
+          )}
+        />
+      )}
+
+      {unbound.length > 0 && (
+        <div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {unbound.length} state chưa gắn form
+          </Typography.Text>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {unbound.map((s) => (
+              <Button key={s.id} size="small" onClick={() => onFocusState(s.id)}>
+                {s.status || "(unnamed)"}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
     </Space>
   );
 }
