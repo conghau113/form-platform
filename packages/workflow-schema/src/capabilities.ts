@@ -25,9 +25,9 @@ export const WORKFLOW_PRIMITIVES: readonly WorkflowPrimitive[] = [
   {
     kind: "node",
     required: ["id", "status"],
-    optional: ["formId", "position"],
+    optional: ["formId", "kind", "position", "statusCode"],
     summary:
-      "A state in the workflow. `status` is the human label; `formId` binds a form (by id) shown in that state.",
+      "A state in the workflow. `status` is the human label; `formId` binds a form (by id) shown in that state. `statusCode` references a project status catalog entry; `kind` (start|normal|end) is a frozen category snapshot for colour fallback.",
   },
   {
     kind: "transition",

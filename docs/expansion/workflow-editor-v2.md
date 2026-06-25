@@ -119,16 +119,59 @@ Mức ưu tiên đã chắt lọc lại theo review production (codex) + researc
 - Acceptance ✅: mở 1 workflow thấy ngay nó gồm form nào + state nào chưa gắn; bấm state nhảy tới
   node; "Sửa form" mở builder. Live smoke MCP PASS (xem §Trạng thái).
 
-### WE4 — Status catalog (ĐỤNG CONTRACT, additive)  ★ cần quyết scope
-- [ ] node_type (START/NORMAL/OPTIONAL/END) + status_code + label + màu, **dùng chung** dạng
-  master data. Theo tiền lệ preset/W3 (project-scoped, ngoài contract) + linked-field/W4
-  (node giữ snapshot + tham chiếu `statusCode`). node có optional `kind` + optional `statusCode`;
-  màu/label resolve từ catalog (KHÔNG lưu màu thô trong contract). Parse-compat test thay migration.
-- **QUYẾT ĐỊNH owner (đang nghiêng "dùng chung"):** catalog project-scoped (master, nhiều workflow
-  xài lại) — xác nhận lại trước khi code.
-- Files: `workflow-schema/src/schema.ts` (+changeset), api module status-catalog (kiểu presets),
-  builder status setter + node màu theo kind. Test: schema parse-compat, api, builder.
-- Acceptance: định nghĩa cũ vẫn load; node tô màu theo type; chọn status từ master; live smoke.
+### WE4 — Status catalog (ĐỤNG CONTRACT, additive)  ✅ DONE (reviewer PASS + live smoke PASS)
+**Thiết kế đã KHÓA** (sau phân tích sâu + tra cứu Jira status-category / workflowbuilder.io +
+đối chiếu tiền lệ repo W3 preset + W4 linked-field). Build scope owner chọn = **Full** (contract +
+API + builder UI).
+- **Mô hình 2 tầng (chuẩn ngành — Jira: 3 category cứng + status custom vô hạn):**
+  - `kind` = enum **CỐ ĐỊNH** mà ENGINE reasoning được: **START / NORMAL / END** (3 loại). Drive
+    validation + màu mặc định. KHÔNG cho user tự chế kind. *(OPTIONAL bỏ — "bước tùy chọn/bỏ qua"
+    là chuyện ROUTING, mô hình bằng transition-bypass + guard hôm nay; khi WF3 runtime có "skip"
+    thật thì thêm `optional?: boolean` additive — không nhét vào status.)*
+  - `statusCode` + catalog entry = tầng **CUSTOM không giới hạn**: user tạo bao nhiêu status tùy ý,
+    mỗi cái có `label` + `color?` riêng + map về 1 `kind`.
+- **Lưu trữ = project-scoped master data + optional global** (y hệt W3 preset): catalog ngoài
+  contract, decoupled khỏi `CURRENT_WORKFLOW_VERSION`; project entry lưu dưới project owner ⇒ shared
+  cho mọi collaborator; `list(user, projectId)` = `globals ∪ project`. Có `promote` project→global.
+- **Màu:** mặc định theo `kind`; catalog entry có `color?` **custom override** (lưu trong master data,
+  NGOÀI contract). Renderer resolve: catalog.color → kind-default → neutral.
+- **Node ref (additive vào contract, theo W4):** `workflowNodeSchema` thêm optional `statusCode`
+  (ref) + optional `kind` (snapshot category để màu sống sót khi catalog bị xoá); GIỮ `status` làm
+  label snapshot. Catalog là nguồn sự thật khi resolve được; node tự giữ `kind`/`status` làm frozen
+  fallback. **KHÔNG bump `CURRENT_WORKFLOW_VERSION`** → parse-compat test thay migration.
+- **Files (3 lớp):**
+  - Contract: `workflow-schema/src/status-catalog.ts` (mới: `StatusKind`,
+    `statusCatalogEntrySchema`, `parseStatusCatalogEntry`, scope global/project như preset),
+    `schema.ts` (+`kind?`/`statusCode?` optional vào node), `index.ts` (export), `schema.test.ts`
+    (parse-compat) + `status-catalog.test.ts`. **+changeset** (package published).
+  - API: prisma model `StatusCatalogEntry` (mirror `Preset`) + migration; `persistence/repositories/
+    status-catalog.repo.ts` (abstract) + `persistence/prisma/prisma-status-catalog.repo.ts`; wire
+    `persistence.module.ts`; `modules/status-catalog/` (controller/service/module mirror presets) +
+    wire `app.module.ts`; service test (scope/owner gating).
+  - Builder: `client.ts` endpoints + react-query `useStatusCatalog` (+ mutations, fetch chỉ ở
+    client.ts); **pure resolver** `resolveStatusStyle(node, catalog)` (test không DOM) → màu/label;
+    NodePanel status picker (set statusCode + denorm kind/label snapshot); node tô màu theo resolve;
+    catalog manager UI (CRUD drawer, kiểu UsedFormsPanel).
+- Acceptance: định nghĩa cũ KHÔNG có `kind`/`statusCode` vẫn load; node tô màu theo kind/catalog;
+  chọn status từ master project-shared; xoá catalog entry → node fallback snapshot (không vỡ); live
+  smoke MCP. DoD: typecheck + test + biome + changeset + reviewer PASS + live smoke.
+- ✅ **ĐÃ LÀM:** Contract `status-catalog.ts` (`StatusKind` start/normal/end + `statusCatalogEntrySchema`
+  scope global/project như preset; decoupled khỏi version) + node `kind?`/`statusCode?` optional;
+  parse-compat test (cũ vẫn load, kind lạ bị reject) + `capabilities.ts` cập nhật; changeset
+  `@org/workflow-schema` minor. API: prisma `StatusCatalogEntry` (mirror Preset, code=PK) + migration
+  `20260625072716_status_catalog` + repo abstract/prisma + module status-catalog (controller/service,
+  owner+scope gating qua ProjectsService, 409 cross-owner, promote) + 10 service test. Builder: client
+  `/status-catalog` + `useStatusCatalog` + pure `resolveStatusStyle` (màu từ kind/catalog, KHÔNG vào
+  contract) + 5 test; node tô `borderLeft` theo resolve + label resolved + tag "?" khi missing;
+  NodePanel picker (denorm statusCode+kind+label snapshot) + ô "Loại (màu)" cho node ad-hoc; toolbar
+  "Statuses (N)" + Drawer `StatusCatalogPanel` (CRUD + scope + màu custom + promote).
+  **Round-trip:** `workflow-model` toFlow/fromFlow tải/ghi kind/statusCode; **sửa luôn dirty-giả**:
+  `fromFlow` phải emit key đúng thứ tự schema (id,status,formId,position,kind,statusCode) vì
+  `migrateWorkflow` (Zod parse) reorder → JSON.stringify khớp lại ⇒ reload SẠCH.
+  Self-verify: typecheck (schema/api/builder) sạch · workflow-schema 20 test · api 83 test (status 10) ·
+  builder workflow 32 test (resolve 5) · workflow-core/ai xanh · biome sạch file đổi · reviewer PASS ·
+  live smoke MCP PASS (tạo status persist + count LIVE · picker đổi label/màu node · Save→reload
+  round-trip qua contract · clean-on-load sau fix · xoá entry → node giữ snapshot + tag "?").
 
 ### (Sau) WE5 — View modes (4 hướng thiết kế) + keyboard-first
 - ~~Validation tô đỏ node/edge lỗi~~ → **ĐÃ kéo sớm vào WE1** (validation issue mapping). Còn lại
@@ -203,3 +246,12 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   section "N state chưa gắn form" (6→5) · bấm state → select+center node + đóng drawer · "Sửa form"
   form hợp lệ → mở builder Drawer ("Loaded ..."). Không lưu binding thử (transient). NEXT = WE4
   (status catalog, ĐỤNG CONTRACT additive — cần chốt scope project-shared trước khi code) — /clear.
+- 2026-06-25 (đóng phase): **WE4 DONE — toàn bộ WE1→WE4 XONG.** Scope owner chốt: catalog
+  project-scoped + optional global (như preset W3); kind cố định START/NORMAL/END (custom vô hạn qua
+  catalog, mỗi entry map 1 kind — mô hình 2 tầng kiểu Jira); màu mặc-định-theo-kind + custom override
+  (ngoài contract); node ref `statusCode`+`kind` snapshot (W4 fallback); "bước tùy chọn/bỏ qua" để cho
+  routing/runtime, KHÔNG nhét vào status. Build Full xuyên 3 package (contract+API+builder) — chi tiết
+  ở §WE4. Phát hiện+sửa dirty-giả-sau-reload do thứ tự key `fromFlow` lệch schema. Reviewer PASS +
+  live smoke MCP PASS (create/persist/picker/round-trip/clean-on-load/missing-fallback). Commit WE4:
+  `<hash>` (owner gate push). NEXT đề xuất = WE5 (view modes + keyboard-first — nice-to-have, HOÃN tới
+  khi có runtime/task) HOẶC chuyển sang track vận hành/AI-native (ngã ba chiến lược chưa chốt).

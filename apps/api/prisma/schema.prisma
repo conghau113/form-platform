@@ -21,6 +21,7 @@ model Project {
   forms       FormRecord[]
   workflows   WorkflowRecord[]
   presets     Preset[]
+  statusCatalog StatusCatalogEntry[]
   members     ProjectMember[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
@@ -104,6 +105,24 @@ model Preset {
   fieldType String
   icon      String?
   patch     Json
+  updatedAt DateTime @updatedAt
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([scope, projectId])
+}
+
+/// Reusable workflow status (WE4). Master data mirroring {@link Preset}: `code` is the global PK
+/// + the value a workflow node references via `statusCode`; `kind` is the engine category
+/// (start|normal|end); `color` is an optional custom override. Global entries (scope="global") are
+/// owned by their user; project entries are stored under the project owner (shared library).
+model StatusCatalogEntry {
+  code      String   @id
+  scope     String
+  projectId String?
+  ownerId   String
+  label     String
+  kind      String
+  color     String?
   updatedAt DateTime @updatedAt
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 

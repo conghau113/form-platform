@@ -5,6 +5,7 @@ import { PrismaFormRepo } from "./prisma/prisma-form.repo.js";
 import { PrismaPresetRepo } from "./prisma/prisma-preset.repo.js";
 import { PrismaProjectRepo } from "./prisma/prisma-project.repo.js";
 import { PrismaProjectMemberRepo } from "./prisma/prisma-project-member.repo.js";
+import { PrismaStatusCatalogRepo } from "./prisma/prisma-status-catalog.repo.js";
 import { PrismaThemeRepo } from "./prisma/prisma-theme.repo.js";
 import { PrismaWorkflowRepo } from "./prisma/prisma-workflow.repo.js";
 import { FolderRepo } from "./repositories/folder.repo.js";
@@ -12,6 +13,7 @@ import { FormRepo } from "./repositories/form.repo.js";
 import { PresetRepo } from "./repositories/preset.repo.js";
 import { ProjectRepo } from "./repositories/project.repo.js";
 import { ProjectMemberRepo } from "./repositories/project-member.repo.js";
+import { StatusCatalogRepo } from "./repositories/status-catalog.repo.js";
 import { ThemeRepo } from "./repositories/theme.repo.js";
 import { WorkflowRepo } from "./repositories/workflow.repo.js";
 
@@ -31,6 +33,7 @@ import { WorkflowRepo } from "./repositories/workflow.repo.js";
     { provide: ProjectRepo, useClass: PrismaProjectRepo },
     { provide: FolderRepo, useClass: PrismaFolderRepo },
     { provide: ProjectMemberRepo, useClass: PrismaProjectMemberRepo },
+    { provide: StatusCatalogRepo, useClass: PrismaStatusCatalogRepo },
   ],
   exports: [
     FormRepo,
@@ -40,6 +43,7 @@ import { WorkflowRepo } from "./repositories/workflow.repo.js";
     ProjectRepo,
     FolderRepo,
     ProjectMemberRepo,
+    StatusCatalogRepo,
   ],
 })
 export class PersistenceModule {}

@@ -1,6 +1,7 @@
 import {
   CURRENT_WORKFLOW_VERSION,
   type Guard,
+  type StatusKind,
   type WorkflowDefinition,
   type WorkflowNode,
   type WorkflowTransition,
@@ -20,6 +21,10 @@ export interface FlowNodeData {
   formId?: string;
   /** True for the definition's start node — drives the "start" badge. */
   isStart: boolean;
+  /** WE4 status catalog: a referenced catalog entry's code, and a frozen `kind` snapshot for the
+   *  node's colour (resolved against the project catalog; both round-trip to the contract). */
+  statusCode?: string;
+  kind?: StatusKind;
   [key: string]: unknown;
 }
 
@@ -86,7 +91,13 @@ export function toFlow(def: WorkflowDefinition): {
     id: n.id,
     type: "workflow",
     position: n.position ?? { x: i * 260, y: 0 },
-    data: { status: n.status, formId: n.formId, isStart: n.id === def.start },
+    data: {
+      status: n.status,
+      formId: n.formId,
+      isStart: n.id === def.start,
+      statusCode: n.statusCode,
+      kind: n.kind,
+    },
   }));
   const edges: FlowEdge[] = def.transitions.map((t) => ({
     id: t.id,
@@ -105,11 +116,16 @@ export function fromFlow(
   nodes: FlowNode[],
   edges: FlowEdge[],
 ): WorkflowDefinition {
+  // Emit keys in the SAME order as workflowNodeSchema (id, status, formId, position, kind,
+  // statusCode) so a round-trip through the server's `migrateWorkflow` (Zod parse → schema key
+  // order) byte-matches `JSON.stringify`, keeping the dirty check clean on load.
   const wfNodes: WorkflowNode[] = nodes.map((n) => ({
     id: n.id,
     status: n.data.status,
     ...(n.data.formId ? { formId: n.data.formId } : {}),
     position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+    ...(n.data.kind ? { kind: n.data.kind } : {}),
+    ...(n.data.statusCode ? { statusCode: n.data.statusCode } : {}),
   }));
   const transitions: WorkflowTransition[] = edges.map((e) => ({
     id: e.id,

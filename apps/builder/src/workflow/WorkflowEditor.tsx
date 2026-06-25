@@ -1,6 +1,11 @@
 import { FormRenderer } from "@org/form-renderer-web";
 import { type GraphError, validateGraph } from "@org/workflow-core";
-import type { WorkflowDefinition } from "@org/workflow-schema";
+import {
+  STATUS_KINDS,
+  type StatusCatalogEntry,
+  type StatusKind,
+  type WorkflowDefinition,
+} from "@org/workflow-schema";
 import {
   addEdge,
   applyEdgeChanges,
@@ -56,6 +61,13 @@ import { WorkflowAiDrawer } from "./ai";
 import { FloatingEdge } from "./floating-edge";
 import { tidyLayout } from "./layout";
 import { traceUpstream } from "./path";
+import {
+  indexStatusCatalog,
+  KIND_COLOR,
+  KIND_LABEL,
+  resolveStatusStyle,
+  useStatusCatalog,
+} from "./status-catalog";
 import { type UsedForm, usedForms } from "./used-forms";
 import { useFormDefinition } from "./useFormDefinition";
 import {
@@ -78,16 +90,20 @@ export interface WorkflowFormOption {
   title: string;
 }
 
-/** Lets the custom node render an inline-rename input when its id is the one being renamed. */
+/** Lets the custom node render an inline-rename input when its id is the one being renamed, and
+ *  resolve its colour/label against the project status catalog (WE4). */
 interface NodeViewCtx {
   renamingNodeId: string | null;
   commitRename: (id: string, status: string) => void;
   cancelRename: () => void;
+  /** Project status catalog indexed by code — the node resolves its colour/label from this. */
+  byCode: ReadonlyMap<string, StatusCatalogEntry>;
 }
 const NodeViewContext = createContext<NodeViewCtx>({
   renamingNodeId: null,
   commitRename: () => {},
   cancelRename: () => {},
+  byCode: new Map(),
 });
 
 const HANDLE_STYLE = {
@@ -108,6 +124,9 @@ const WorkflowNodeView = memo(function WorkflowNodeView({
 }: NodeProps<FlowNode>) {
   const ctx = useContext(NodeViewContext);
   const renaming = ctx.renamingNodeId === id;
+  // WE4: resolve label/colour/kind from the project status catalog (falls back to the node's own
+  // snapshot when no `statusCode` or the entry was deleted).
+  const resolved = resolveStatusStyle(data, ctx.byCode);
 
   return (
     <div
@@ -119,6 +138,9 @@ const WorkflowNodeView = memo(function WorkflowNodeView({
         padding: "8px 12px",
         borderRadius: 8,
         border: `2px solid ${selected ? "#1677ff" : "#d9d9d9"}`,
+        // Colour accent driven by the resolved status kind/catalog colour — never stored raw in
+        // the contract, so it stays a presentation concern at the editor boundary.
+        borderLeft: `6px solid ${resolved.color}`,
         background: "#fff",
         boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
       }}
@@ -145,9 +167,10 @@ const WorkflowNodeView = memo(function WorkflowNodeView({
           />
         ) : (
           <Typography.Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
-            {data.status || "(unnamed)"}
+            {resolved.label || "(unnamed)"}
           </Typography.Text>
         )}
+        {resolved.missing && <Tag color="orange">?</Tag>}
         {data.isStart && <Tag color="green">start</Tag>}
       </div>
       <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
@@ -214,7 +237,13 @@ function WorkflowEditorInner({
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [highlightNodeId, setHighlightNodeId] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const { deleteElements, screenToFlowPosition, fitView } = useReactFlow();
+
+  // WE4 status catalog: project-scoped master data (`global ∪ thisProject`). Nodes resolve their
+  // colour/label from this; the picker + manager read/write it. Indexed by code for O(1) lookups.
+  const catalog = useStatusCatalog(projectId);
+  const byCode = useMemo(() => indexStatusCatalog(catalog.entries), [catalog.entries]);
 
   // --- Undo/redo over committed {meta,nodes,edges} snapshots (reuses the value-generic History<T>).
   // The live xyflow state above stays the rendering source of truth; history records/restores it.
@@ -475,8 +504,8 @@ function WorkflowEditorInner({
   );
   const cancelRename = useCallback(() => setRenamingNodeId(null), []);
   const nodeViewCtx = useMemo<NodeViewCtx>(
-    () => ({ renamingNodeId, commitRename, cancelRename }),
-    [renamingNodeId, commitRename, cancelRename],
+    () => ({ renamingNodeId, commitRename, cancelRename, byCode }),
+    [renamingNodeId, commitRename, cancelRename, byCode],
   );
 
   // Guard destructive deletes: never strand the graph or orphan the start node.
@@ -705,6 +734,7 @@ function WorkflowEditorInner({
         <Space style={{ marginLeft: "auto" }}>
           <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
           <Button onClick={() => setFormsOpen(true)}>Forms ({formsView.forms.length})</Button>
+          <Button onClick={() => setStatusOpen(true)}>Statuses ({catalog.entries.length})</Button>
           <Button onClick={undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">
             Undo
           </Button>
@@ -784,6 +814,8 @@ function WorkflowEditorInner({
               node={selectedNode}
               isStart={meta.start === selectedNode.id}
               formOptions={formOptions}
+              statusEntries={catalog.entries}
+              onManageStatuses={() => setStatusOpen(true)}
               canManageForms={canManageForms}
               creating={creating}
               onChange={(patch) => patchNodeData(selectedNode.id, patch)}
@@ -838,6 +870,26 @@ function WorkflowEditorInner({
         />
       </Drawer>
 
+      {/* Status catalog manager (WE4): project-scoped master data the editor resolves node colours
+          against. Create/edit/delete custom statuses (label + kind + optional colour) and promote a
+          project status to global. Reused live by every node + the picker. */}
+      <Drawer
+        open={statusOpen}
+        onClose={() => setStatusOpen(false)}
+        title="Status catalog"
+        width={420}
+      >
+        <StatusCatalogPanel
+          entries={catalog.entries}
+          loading={catalog.loading}
+          canManage={canManageForms}
+          projectId={projectId}
+          onSave={catalog.save}
+          onRemove={catalog.remove}
+          onPromote={catalog.promote}
+        />
+      </Drawer>
+
       {/* Edit/create a node's bound form in place — the full builder, no navigation away. App is
           standalone-renderable and uses callback-based guards (no competing `useBlocker`); we clip
           its 100vh layout to the drawer body and confirm on close when the form has unsaved edits. */}
@@ -867,6 +919,8 @@ function NodePanel({
   node,
   isStart,
   formOptions,
+  statusEntries,
+  onManageStatuses,
   canManageForms,
   creating,
   onChange,
@@ -878,6 +932,10 @@ function NodePanel({
   node: FlowNode;
   isStart: boolean;
   formOptions: WorkflowFormOption[];
+  /** The project status catalog (`global ∪ thisProject`) the "Status" picker chooses from. */
+  statusEntries: StatusCatalogEntry[];
+  /** Open the status catalog manager Drawer. */
+  onManageStatuses: () => void;
   /** Project context present ⇒ create/edit-in-place is available. */
   canManageForms: boolean;
   /** A new form is being created + bound (disables the create action). */
@@ -897,14 +955,81 @@ function NodePanel({
   if (boundFormId && !formExists) {
     options.push({ value: boundFormId, label: `${boundFormId} (missing)` });
   }
+
+  const statusCode = node.data.statusCode;
+  const linked = statusCode ? statusEntries.find((e) => e.code === statusCode) : undefined;
+  const linkedMissing = statusCode != null && linked === undefined;
+  // Picking a catalog status denormalizes a frozen snapshot onto the node (label + kind), so a later
+  // catalog deletion leaves the node coloured + labelled (the W4 linked-field fallback).
+  function pickStatus(code: string | undefined) {
+    const entry = code ? statusEntries.find((e) => e.code === code) : undefined;
+    if (entry) onChange({ statusCode: entry.code, kind: entry.kind, status: entry.label });
+    else onChange({ statusCode: undefined });
+  }
+
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Title level={5} style={{ margin: 0 }}>
         State
       </Typography.Title>
-      <Field label="Status">
+      <Field label="Trạng thái (catalog)">
+        <Select
+          style={{ width: "100%" }}
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder="Chọn trạng thái dùng chung"
+          value={statusCode}
+          onChange={(value) => pickStatus(value || undefined)}
+          options={statusEntries.map((e) => ({
+            value: e.code,
+            label: e.label,
+            kind: e.kind,
+            color: e.color ?? KIND_COLOR[e.kind],
+          }))}
+          optionRender={(opt) => (
+            <Space>
+              <ColorDot color={(opt.data as { color: string }).color} />
+              <span>{opt.data.label}</span>
+              <Tag style={{ marginInlineEnd: 0 }}>
+                {KIND_LABEL[(opt.data as { kind: StatusKind }).kind]}
+              </Tag>
+            </Space>
+          )}
+          notFoundContent="Chưa có trạng thái nào trong catalog"
+        />
+        <div style={{ marginTop: 6 }}>
+          {linkedMissing && (
+            <Tag color="orange" style={{ marginInlineEnd: 8 }}>
+              trạng thái đã bị xoá khỏi catalog
+            </Tag>
+          )}
+          <Button type="link" size="small" style={{ padding: 0 }} onClick={onManageStatuses}>
+            Quản lý catalog…
+          </Button>
+        </div>
+      </Field>
+      <Field label={statusCode ? "Nhãn (snapshot dự phòng)" : "Nhãn trạng thái"}>
         <Input value={node.data.status} onChange={(e) => onChange({ status: e.target.value })} />
       </Field>
+      {!statusCode && (
+        <Field label="Loại (màu)">
+          <Select
+            style={{ width: "100%" }}
+            allowClear
+            placeholder="Mặc định (Thường)"
+            value={node.data.kind}
+            onChange={(value) => onChange({ kind: (value as StatusKind) || undefined })}
+            options={STATUS_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+            optionRender={(opt) => (
+              <Space>
+                <ColorDot color={KIND_COLOR[opt.value as StatusKind]} />
+                <span>{opt.data.label}</span>
+              </Space>
+            )}
+          />
+        </Field>
+      )}
       <Field label="Bound form">
         <Select
           style={{ width: "100%" }}
@@ -1146,9 +1271,7 @@ function UsedFormsPanel({
   onEditForm: (formId: string) => void;
 }) {
   if (forms.length === 0 && unbound.length === 0) {
-    return (
-      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Workflow chưa có state nào" />
-    );
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Workflow chưa có state nào" />;
   }
 
   return (
@@ -1160,11 +1283,7 @@ function UsedFormsPanel({
           size="small"
           dataSource={forms}
           renderItem={(f) => (
-            <List.Item
-              key={f.formId}
-              style={{ display: "block", padding: "12px 0" }}
-              actions={[]}
-            >
+            <List.Item key={f.formId} style={{ display: "block", padding: "12px 0" }} actions={[]}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Typography.Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
                   {f.title}
@@ -1211,6 +1330,296 @@ function UsedFormsPanel({
             ))}
           </div>
         </div>
+      )}
+    </Space>
+  );
+}
+
+/** A small colour swatch used in status pickers and the catalog list. */
+function ColorDot({ color }: { color: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: 12,
+        height: 12,
+        borderRadius: "50%",
+        background: color,
+        border: "1px solid rgba(0,0,0,0.15)",
+        flex: "none",
+      }}
+    />
+  );
+}
+
+/** Local draft for the catalog create/edit form. */
+interface StatusDraft {
+  code: string;
+  label: string;
+  kind: StatusKind;
+  /** Custom colour, or `null` to use the kind default. */
+  color: string | null;
+  global: boolean;
+}
+const EMPTY_DRAFT: StatusDraft = {
+  code: "",
+  label: "",
+  kind: "normal",
+  color: null,
+  global: false,
+};
+
+/** Status catalog manager (WE4): create/edit/delete project + global statuses, and promote a
+ *  project status to global. Master data the editor resolves node colours against — never the
+ *  workflow contract. A global-only context (no project) forces `global` scope. */
+function StatusCatalogPanel({
+  entries,
+  loading,
+  canManage,
+  projectId,
+  onSave,
+  onRemove,
+  onPromote,
+}: {
+  entries: StatusCatalogEntry[];
+  loading: boolean;
+  /** Project context present ⇒ project-scoped statuses can be created (else global only). */
+  canManage: boolean;
+  projectId?: string;
+  onSave: (entry: StatusCatalogEntry) => Promise<void>;
+  onRemove: (code: string) => Promise<void>;
+  onPromote: (code: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<StatusDraft>(EMPTY_DRAFT);
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const codeValid = /^[a-zA-Z0-9_-]+$/.test(draft.code);
+  const canSubmit = codeValid && draft.label.trim().length > 0 && !busy;
+
+  function reset() {
+    setDraft(EMPTY_DRAFT);
+    setEditingCode(null);
+  }
+
+  function startEdit(entry: StatusCatalogEntry) {
+    setEditingCode(entry.code);
+    setDraft({
+      code: entry.code,
+      label: entry.label,
+      kind: entry.kind,
+      color: entry.color ?? null,
+      global: entry.scope !== "project",
+    });
+  }
+
+  async function submit() {
+    if (!canSubmit) return;
+    // Global scope (or a project-less context) stores no projectId; project scope pins it.
+    const useGlobal = draft.global || !projectId;
+    const entry: StatusCatalogEntry = {
+      code: draft.code.trim(),
+      label: draft.label.trim(),
+      kind: draft.kind,
+      ...(draft.color ? { color: draft.color } : {}),
+      scope: useGlobal ? "global" : "project",
+      ...(useGlobal ? {} : { projectId }),
+    };
+    setBusy(true);
+    try {
+      await onSave(entry);
+      message.success(editingCode ? "Đã cập nhật trạng thái" : "Đã tạo trạng thái");
+      reset();
+    } catch (e) {
+      message.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(code: string) {
+    setBusy(true);
+    try {
+      await onRemove(code);
+      if (editingCode === code) reset();
+    } catch (e) {
+      message.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function promote(code: string) {
+    setBusy(true);
+    try {
+      await onPromote(code);
+    } catch (e) {
+      message.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        Trạng thái dùng chung cho mọi workflow {projectId ? "trong dự án" : ""}. Màu node lấy từ đây
+        (hoặc màu mặc định theo loại). Mỗi trạng thái custom map về một loại engine (Bắt đầu /
+        Thường / Kết thúc).
+      </Typography.Text>
+
+      <div style={{ border: "1px solid rgba(0,0,0,0.1)", borderRadius: 8, padding: 12 }}>
+        <Typography.Text strong>
+          {editingCode ? `Sửa: ${editingCode}` : "Tạo trạng thái mới"}
+        </Typography.Text>
+        <Space direction="vertical" style={{ width: "100%", marginTop: 8 }} size="small">
+          <Field label="Code (định danh)">
+            <Input
+              value={draft.code}
+              disabled={!!editingCode}
+              placeholder="vd: pending"
+              status={draft.code && !codeValid ? "error" : undefined}
+              onChange={(e) => setDraft((d) => ({ ...d, code: e.target.value }))}
+            />
+          </Field>
+          <Field label="Nhãn">
+            <Input
+              value={draft.label}
+              placeholder="vd: Chờ duyệt"
+              onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
+            />
+          </Field>
+          <Field label="Loại (engine)">
+            <Select
+              style={{ width: "100%" }}
+              value={draft.kind}
+              onChange={(value) => setDraft((d) => ({ ...d, kind: value }))}
+              options={STATUS_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+              optionRender={(opt) => (
+                <Space>
+                  <ColorDot color={KIND_COLOR[opt.value as StatusKind]} />
+                  <span>{opt.data.label}</span>
+                </Space>
+              )}
+            />
+          </Field>
+          <Field label="Màu">
+            <Space>
+              {draft.color != null ? (
+                <>
+                  <input
+                    type="color"
+                    value={draft.color}
+                    onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))}
+                    style={{
+                      width: 40,
+                      height: 28,
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                    }}
+                  />
+                  <Button size="small" onClick={() => setDraft((d) => ({ ...d, color: null }))}>
+                    Dùng màu mặc định
+                  </Button>
+                </>
+              ) : (
+                <Space>
+                  <ColorDot color={KIND_COLOR[draft.kind]} />
+                  <Button
+                    size="small"
+                    onClick={() => setDraft((d) => ({ ...d, color: KIND_COLOR[d.kind] }))}
+                  >
+                    Đặt màu tùy chỉnh
+                  </Button>
+                </Space>
+              )}
+            </Space>
+          </Field>
+          {projectId && (
+            <Field label="Phạm vi">
+              <Select
+                style={{ width: "100%" }}
+                value={draft.global ? "global" : "project"}
+                onChange={(value) => setDraft((d) => ({ ...d, global: value === "global" }))}
+                options={[
+                  { value: "project", label: "Chỉ dự án này" },
+                  { value: "global", label: "Dùng chung (mọi dự án)" },
+                ]}
+              />
+            </Field>
+          )}
+          <Space>
+            <Button type="primary" disabled={!canSubmit} loading={busy} onClick={submit}>
+              {editingCode ? "Lưu" : "Tạo"}
+            </Button>
+            {editingCode && <Button onClick={reset}>Huỷ</Button>}
+          </Space>
+        </Space>
+      </div>
+
+      <Divider style={{ margin: 0 }} />
+
+      {loading ? (
+        <div style={{ display: "grid", placeItems: "center", padding: 24 }}>
+          <Spin />
+        </div>
+      ) : entries.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có trạng thái nào" />
+      ) : (
+        <List
+          size="small"
+          dataSource={entries}
+          renderItem={(e) => (
+            <List.Item
+              key={e.code}
+              actions={[
+                <Button key="edit" type="link" size="small" onClick={() => startEdit(e)}>
+                  Sửa
+                </Button>,
+                ...(e.scope === "project"
+                  ? [
+                      <Button
+                        key="promote"
+                        type="link"
+                        size="small"
+                        disabled={busy}
+                        onClick={() => promote(e.code)}
+                      >
+                        Dùng chung
+                      </Button>,
+                    ]
+                  : []),
+                <Button
+                  key="del"
+                  type="link"
+                  size="small"
+                  danger
+                  disabled={busy || !canManage}
+                  onClick={() => remove(e.code)}
+                >
+                  Xoá
+                </Button>,
+              ]}
+            >
+              <List.Item.Meta
+                avatar={<ColorDot color={e.color ?? KIND_COLOR[e.kind]} />}
+                title={
+                  <Space size={4}>
+                    <span>{e.label}</span>
+                    <Tag>{KIND_LABEL[e.kind]}</Tag>
+                    {e.scope === "project" ? (
+                      <Tag color="blue">dự án</Tag>
+                    ) : (
+                      <Tag color="gold">chung</Tag>
+                    )}
+                  </Space>
+                }
+                description={<Typography.Text type="secondary">{e.code}</Typography.Text>}
+              />
+            </List.Item>
+          )}
+        />
       )}
     </Space>
   );

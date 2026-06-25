@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STATUS_KINDS } from "./status-catalog.js";
 
 /**
  * The CURRENT workflow format version.
@@ -27,12 +28,22 @@ export const positionSchema = z.object({
 });
 
 /** A state in the workflow. `status` is the human state label (e.g. "created");
- *  `formId` references a form (by id) bound to this state. */
+ *  `formId` references a form (by id) bound to this state.
+ *
+ *  WE4 status catalog (additive — old definitions without these keys keep parsing, so NO
+ *  workflowVersion bump): `statusCode` references a {@link StatusCatalogEntry} in the project's
+ *  status catalog (master data, OUTSIDE this contract). `kind` is a frozen snapshot of that
+ *  entry's engine category, so the node's colour survives a deleted catalog entry — `status`
+ *  likewise stays as the frozen label snapshot (same denorm fallback as form-schema linked
+ *  fields). The catalog is the source of truth when resolvable; these node fields are the
+ *  fallback. NEVER store a raw colour here — colour resolves from `kind`/the catalog entry. */
 export const workflowNodeSchema = z.object({
   id: z.string().min(1),
   status: z.string().min(1),
   formId: z.string().optional(),
   position: positionSchema.optional(),
+  kind: z.enum(STATUS_KINDS).optional(),
+  statusCode: z.string().min(1).optional(),
 });
 
 /** A directed edge between states. `action` is the event that triggers it; an
