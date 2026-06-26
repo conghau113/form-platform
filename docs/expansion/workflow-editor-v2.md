@@ -184,7 +184,15 @@ API + builder UI).
   không đụng. (Phán đoán ban đầu "sửa thẳng validateGraph, zero editor change" SAI — xem plan
   `jaunty-churning-kay.md` để biết vì sao.) `missing-bound-form` (trùng WE3) & `missing-role`
   (ref-transition) để sau nếu cần.
-- [ ] Keyboard-first đầy đủ (điều hướng node bằng phím, thêm/xoá/đặt-start bằng phím) — phase sau.
+- [x] **WE5b — Keyboard-first (DONE).** Module thuần `apps/builder/src/workflow/navigate.ts`
+  (`pickNeighbor` chọn node gần nhất trong "nón" hướng 45°, test không-DOM như `path.ts`). Editor
+  `WorkflowEditor.tsx`: helper `selectNode` (sync panel + highlight + cờ react-flow `selected` →
+  ĐÓNG quirk WE1 keyboard-Delete) + handler keydown (ref-pattern, fresh closure, subscribe-once):
+  Arrow ←↑→↓ điều hướng (chưa chọn → nhảy `start`), Enter/F2 rename, n/Insert add, s set-start,
+  Esc clear, ? mở overlay phím tắt (Modal). `disableKeyboardA11y` để arrow keys thuộc điều-hướng
+  (không nhích node) + `deleteKeyCode` Delete/Backspace. `selected` KHÔNG vào contract (`fromFlow`
+  đọc lại chỉ id/position/data) → không dirty-giả, không undo-entry. Builder-only, không bump version,
+  không changeset.
 - View modes (timeline-cột → kanban stage board → swimlane theo `transition.role` → tree; cần
   optional `stage` trên node, additive): **nice-to-have, HOÃN tới khi có runtime/task** — theo review
   production, view "đẹp" như kanban chỉ có giá trị vận hành khi đã có case/task thật để xếp, nếu
@@ -274,3 +282,16 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   không bị chặn + revert→ring mất; KHÔNG false-positive trên wf thật kind-unset). Commit `e6e7c6f`
   (owner gate push). NEXT = keyboard-first (phase sau) HOẶC view-modes (HOÃN tới runtime) HOẶC chuyển
   track vận hành/AI-native — ngã ba chiến lược vẫn chưa chốt.
+- 2026-06-26 (đóng phase): **WE5b DONE — keyboard-first navigation.** Owner giao tự-quyết bước kế;
+  chọn WE5b vì builder-only, rủi ro thấp, hợp lệ cho cả hai nhánh ngã-ba (không ép chốt infra-vs-app).
+  Module thuần `navigate.ts` (`pickNeighbor`, nón 45°, 6 test) + wiring `WorkflowEditor.tsx`
+  (`selectNode` sync cờ `selected` → đóng quirk WE1; handler ref-pattern Arrow/n/s/Enter/F2/Esc/?;
+  `disableKeyboardA11y`+`deleteKeyCode`; Modal cheat-sheet). `selected` không vào contract → không
+  dirty-giả/undo-entry. Self-verify: typecheck builder sạch · 38 test workflow (6 navigate) xanh ·
+  biome sạch 3 file đổi · reviewer PASS (no blocking; xác nhận `fromFlow` không leak `selected`, undo
+  không bẩn, ref-handler không stale/double-handle). ⚠️ **Live smoke MCP KHÔNG chạy session này**
+  (MCP chrome-devtools không kết nối); thêm nữa MCP synthetic key-events vốn KHÔNG tới react-flow
+  (đã biết từ WE1 — Delete qua MCP không kích hoạt) ⇒ **keyboard-first cần owner xác nhận TAY bằng
+  phím thật** (như WE1 từng xác nhận Delete bằng chuột thật). Commit code `2c20e26` (owner gate push).
+  NEXT = view-modes (HOÃN tới runtime) HOẶC chuyển track vận hành/AI-native — ngã ba chiến lược
+  infra-vs-app VẪN chưa chốt (cần owner).
