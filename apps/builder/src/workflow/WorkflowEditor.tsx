@@ -60,6 +60,7 @@ import { newForm } from "../workspace/newForm";
 import { WorkflowAiDrawer } from "./ai";
 import { FloatingEdge } from "./floating-edge";
 import { tidyLayout } from "./layout";
+import { type Direction, pickNeighbor } from "./navigate";
 import { traceUpstream } from "./path";
 import {
   indexStatusCatalog,
@@ -69,6 +70,27 @@ import {
   STATUS_PALETTE,
   useStatusCatalog,
 } from "./status-catalog";
+
+/** WE5b: arrow keys → spatial navigation direction. */
+const ARROW: Record<string, Direction | undefined> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+};
+
+/** WE5b: rows for the "?" keyboard-shortcut cheat sheet. */
+const KEY_HELP: [string[], string][] = [
+  [["←", "↑", "→", "↓"], "Move selection to the nearest state"],
+  [["Enter", "F2"], "Rename the selected state"],
+  [["n", "Insert"], "Add a state"],
+  [["s"], "Make the selected state the start"],
+  [["Delete", "Backspace"], "Delete the selection"],
+  [["Esc"], "Clear the selection"],
+  [["Ctrl+Z", "Ctrl+Shift+Z"], "Undo / redo"],
+  [["?"], "Toggle this help"],
+];
+
 import { type UsedForm, usedForms } from "./used-forms";
 import { useFormDefinition } from "./useFormDefinition";
 import {
@@ -239,7 +261,9 @@ function WorkflowEditorInner({
   const [highlightNodeId, setHighlightNodeId] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const { deleteElements, screenToFlowPosition, fitView } = useReactFlow();
+  // WE5b keyboard-first: the "?" shortcut overlay.
+  const [showKeyHelp, setShowKeyHelp] = useState(false);
+  const { deleteElements, screenToFlowPosition, fitView, setCenter, getZoom } = useReactFlow();
 
   // WE4 status catalog: project-scoped master data (`global ∪ thisProject`). Nodes resolve their
   // colour/label from this; the picker + manager read/write it. Indexed by code for O(1) lookups.
@@ -415,6 +439,66 @@ function WorkflowEditorInner({
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  // WE5b keyboard-first: arrow-navigate selection + add/start/rename/help WITHOUT Ctrl/Meta (those
+  // stay with undo/redo above). A ref carries the freshest closure so the window listener subscribes
+  // once yet always sees the current nodes/selection. Suppressed while typing in a real control.
+  const onNavKeyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  onNavKeyRef.current = (e: KeyboardEvent) => {
+    const el = e.target as HTMLElement | null;
+    const tag = el?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    const dir = ARROW[e.key];
+    if (dir) {
+      e.preventDefault();
+      // From a node: nearest neighbour in that direction. From nothing selected: jump to the start.
+      const next = pickNeighbor(nodes, selectedNodeId, dir) ?? (selectedNodeId ? null : meta.start);
+      if (next) selectNode(next);
+      return;
+    }
+    switch (e.key) {
+      case "Enter":
+      case "F2":
+        if (selectedNodeId) {
+          e.preventDefault();
+          setRenamingNodeId(selectedNodeId);
+        }
+        break;
+      case "n":
+      case "N":
+      case "Insert":
+        e.preventDefault();
+        addState();
+        break;
+      case "s":
+      case "S":
+        if (selectedNodeId) {
+          e.preventDefault();
+          setStart(selectedNodeId);
+        }
+        break;
+      case "Escape":
+        // Inline rename owns its own Esc; only clear selection when not renaming.
+        if (renamingNodeId === null) {
+          setSelectedNodeId(null);
+          setSelectedEdgeId(null);
+          setHighlightNodeId(null);
+          setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+        }
+        break;
+      case "?":
+        e.preventDefault();
+        setShowKeyHelp((v) => !v);
+        break;
+    }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => onNavKeyRef.current(e);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
   const onConnect = useCallback(
     (c: Connection) => {
       const { source, target } = c;
@@ -493,6 +577,28 @@ function WorkflowEditorInner({
     },
     [setNodes, commit],
   );
+
+  // WE5b: move keyboard selection onto `id`. Mirrors a mouse click (panel + highlight) AND sets the
+  // xyflow `selected` flag — the flag react-flow reads for Delete and the selection ring, which a
+  // panel-only click never set (the WE1 keyboard-Delete quirk). `selected` stays out of the contract
+  // (`fromFlow` reads back only id/position/data) so this never dirties the doc. Keeps the node in view.
+  function selectNode(id: string) {
+    setSelectedNodeId(id);
+    setSelectedEdgeId(null);
+    setHighlightNodeId(id);
+    setNodes((ns) =>
+      ns.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })),
+    );
+    const node = nodes.find((n) => n.id === id);
+    if (node) {
+      const w = node.measured?.width ?? node.width ?? 220;
+      const h = node.measured?.height ?? node.height ?? 60;
+      setCenter(node.position.x + w / 2, node.position.y + h / 2, {
+        zoom: getZoom(),
+        duration: 200,
+      });
+    }
+  }
 
   // Inline rename — commit writes back through the same channel as the panel's Status field.
   const commitRename = useCallback(
@@ -794,6 +900,10 @@ function WorkflowEditorInner({
               edgeTypes={edgeTypes}
               connectionMode={ConnectionMode.Loose}
               zoomOnDoubleClick={false}
+              // WE5b: arrow keys drive our spatial node-navigation, not xyflow's built-in
+              // a11y node-nudging — otherwise arrows would move the selected node by 1px.
+              disableKeyboardA11y
+              deleteKeyCode={["Delete", "Backspace"]}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
@@ -864,10 +974,36 @@ function WorkflowEditorInner({
               Select a state or transition to edit it. Drag from any handle to another node to
               create a transition. Double-click the canvas to add a state, or a node to rename it.
               Press Delete/Backspace to remove the selection. Undo/redo with Ctrl+Z / Ctrl+Shift+Z.
+              Navigate with the arrow keys — press <kbd>?</kbd> for all keyboard shortcuts.
             </Typography.Paragraph>
           )}
         </aside>
       </div>
+
+      {/* WE5b: keyboard-shortcut cheat sheet, toggled with "?". Purely presentational. */}
+      <Modal
+        open={showKeyHelp}
+        onCancel={() => setShowKeyHelp(false)}
+        title="Keyboard shortcuts"
+        footer={null}
+      >
+        <List
+          size="small"
+          dataSource={KEY_HELP}
+          renderItem={([keys, desc]) => (
+            <List.Item>
+              <span style={{ minWidth: 160 }}>
+                {keys.map((k) => (
+                  <kbd key={k} style={{ marginRight: 4 }}>
+                    {k}
+                  </kbd>
+                ))}
+              </span>
+              <span style={{ flex: 1, textAlign: "right", color: "#888" }}>{desc}</span>
+            </List.Item>
+          )}
+        />
+      </Modal>
 
       {/* Workflow-scoped multi-form overview (WE3): every form this workflow uses, grouped by the
           states that bind it, plus the states still missing a form. Jump to a state or open the
