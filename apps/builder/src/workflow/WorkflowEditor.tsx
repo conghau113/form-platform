@@ -1,3 +1,4 @@
+import { QuestionCircleOutlined } from "@ant-design/icons";
 import { FormRenderer } from "@org/form-renderer-web";
 import { type GraphError, type GraphWarning, lintGraph, validateGraph } from "@org/workflow-core";
 import {
@@ -876,6 +877,12 @@ function WorkflowEditorInner({
           <Button danger={issues.length > 0} onClick={onValidate}>
             {issues.length > 0 ? `Validate (${issues.length})` : "Validate"}
           </Button>
+          <Button
+            icon={<QuestionCircleOutlined />}
+            onClick={() => setShowKeyHelp(true)}
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+          />
           <Button type="primary" disabled={!dirty} onClick={save}>
             Save
           </Button>
