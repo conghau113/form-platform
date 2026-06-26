@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "prisma generate && tsc",
+    "postinstall": "prisma generate",
     "start": "node dist/main.js",
-    "dev": "prisma generate && tsc && node dist/main.js",
+    "dev": "tsc && node dist/main.js",
     "typecheck": "prisma generate && tsc --noEmit",
     "test": "vitest run",
     "db:generate": "prisma generate",
