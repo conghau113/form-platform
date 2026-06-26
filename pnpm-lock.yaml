@@ -44,6 +44,9 @@ importers:
       '@org/workflow-ai':
         specifier: workspace:*
         version: link:../../packages/workflow-ai
+      '@org/workflow-core':
+        specifier: workspace:*
+        version: link:../../packages/workflow-core
       '@org/workflow-schema':
         specifier: workspace:*
         version: link:../../packages/workflow-schema

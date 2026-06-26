@@ -8,6 +8,7 @@ import { PrismaProjectMemberRepo } from "./prisma/prisma-project-member.repo.js"
 import { PrismaStatusCatalogRepo } from "./prisma/prisma-status-catalog.repo.js";
 import { PrismaThemeRepo } from "./prisma/prisma-theme.repo.js";
 import { PrismaWorkflowRepo } from "./prisma/prisma-workflow.repo.js";
+import { PrismaWorkflowInstanceRepo } from "./prisma/prisma-workflow-instance.repo.js";
 import { FolderRepo } from "./repositories/folder.repo.js";
 import { FormRepo } from "./repositories/form.repo.js";
 import { PresetRepo } from "./repositories/preset.repo.js";
@@ -16,6 +17,7 @@ import { ProjectMemberRepo } from "./repositories/project-member.repo.js";
 import { StatusCatalogRepo } from "./repositories/status-catalog.repo.js";
 import { ThemeRepo } from "./repositories/theme.repo.js";
 import { WorkflowRepo } from "./repositories/workflow.repo.js";
+import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
 
 /**
  * Global persistence layer (D4). Binds each repo interface (abstract-class DI token) to its
@@ -28,6 +30,7 @@ import { WorkflowRepo } from "./repositories/workflow.repo.js";
     PrismaService,
     { provide: FormRepo, useClass: PrismaFormRepo },
     { provide: WorkflowRepo, useClass: PrismaWorkflowRepo },
+    { provide: WorkflowInstanceRepo, useClass: PrismaWorkflowInstanceRepo },
     { provide: PresetRepo, useClass: PrismaPresetRepo },
     { provide: ThemeRepo, useClass: PrismaThemeRepo },
     { provide: ProjectRepo, useClass: PrismaProjectRepo },
@@ -38,6 +41,7 @@ import { WorkflowRepo } from "./repositories/workflow.repo.js";
   exports: [
     FormRepo,
     WorkflowRepo,
+    WorkflowInstanceRepo,
     PresetRepo,
     ThemeRepo,
     ProjectRepo,

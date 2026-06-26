@@ -1,15 +1,18 @@
 import { Module } from "@nestjs/common";
 import { ProjectsModule } from "../projects/projects.module.js";
+import { WorkflowInstancesController } from "./workflow-instances.controller.js";
+import { WorkflowInstancesService } from "./workflow-instances.service.js";
 import { WorkflowsController } from "./workflows.controller.js";
 import { WorkflowsService } from "./workflows.service.js";
 
 /**
  * Feature module: workflow save/load/list/move/delete endpoints + their service (persists via
- * WorkflowRepo). Imports {@link ProjectsModule} to reuse its owner-scoped access gate.
+ * WorkflowRepo), plus the WF3 runtime (instance start/load/list/advance via WorkflowInstanceRepo
+ * + the pure engine). Imports {@link ProjectsModule} to reuse its owner-scoped access gate.
  */
 @Module({
   imports: [ProjectsModule],
-  controllers: [WorkflowsController],
-  providers: [WorkflowsService],
+  controllers: [WorkflowsController, WorkflowInstancesController],
+  providers: [WorkflowsService, WorkflowInstancesService],
 })
 export class WorkflowsModule {}

@@ -20,6 +20,7 @@ model Project {
   folders     Folder[]
   forms       FormRecord[]
   workflows   WorkflowRecord[]
+  instances   WorkflowInstanceRecord[]
   presets     Preset[]
   statusCatalog StatusCatalogEntry[]
   members     ProjectMember[]
@@ -91,8 +92,29 @@ model WorkflowRecord {
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder    Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  instances WorkflowInstanceRecord[]
 
   @@index([projectId, folderId])
+}
+
+/// A running case of a workflow (Workflow track WF3). `id` == the instance id; `body` is the
+/// `WorkflowInstance` contract (current state + case data + transition history). `projectId` is
+/// denormalised from the parent workflow so access control never has to load the definition, and
+/// `current` mirrors `body.current` so a case list stays cheap. Advancing is server-authoritative:
+/// the service loads (definition, instance), calls the pure `advance()` engine, and re-stores.
+model WorkflowInstanceRecord {
+  id         String   @id
+  workflowId String
+  projectId  String
+  current    String
+  body       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  workflow   WorkflowRecord @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([projectId])
 }
 
 /// Reusable field template. W0 stores them global (scope="global"); W3 adds per-project scope.
