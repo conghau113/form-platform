@@ -295,3 +295,16 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   phím thật** (như WE1 từng xác nhận Delete bằng chuột thật). Commit code `2c20e26` (owner gate push).
   NEXT = view-modes (HOÃN tới runtime) HOẶC chuyển track vận hành/AI-native — ngã ba chiến lược
   infra-vs-app VẪN chưa chốt (cần owner).
+- 2026-06-26 (session 9, MCP reconnect): ✅ **WE5b live smoke MCP PASS.** Hoá ra synthetic `press_key`
+  TỚI ĐƯỢC handler vì WE5b dùng listener **document-level** (khác Delete-key WE1 đọc state nội bộ
+  react-flow — đó là lý do WE1 fail, không phải lỗi WE5b). Verify wf "3-Level Leave Approval": Arrow
+  chưa-chọn→start; Right=downstream / Left=upstream / Down=đứng yên (ngoài nón 45°); F2→rename input;
+  `n`→+1 node + dirty; `s`→start badge chuyển + dirty; Esc→đóng modal rồi clear; `?`→modal; Ctrl+Z
+  revert sạch. State để lại clean.
+- 2026-06-26 (session 9): ✅ **WE5b polish — nút discoverability cheat-sheet (commit `e219611`).**
+  Owner chỉ ra: cheat-sheet vô hình (chỉ mở bằng `?`). Thêm nút toolbar `QuestionCircleOutlined`
+  (title "Keyboard shortcuts (?)" + aria-label) mở Modal `showKeyHelp` đã có — thuần presentational,
+  không đụng contract/engine. typecheck/biome sạch · 38 test workflow xanh · reviewer PASS · smoke MCP
+  PASS. **Remap/custom keys: owner hỏi → KHUYẾN NGHỊ HOÃN** (cần persistence + conflict-detection +
+  settings-surface chưa tồn tại; payoff thấp với ~8 phím cố định; thiên nhánh "app"). Dựng khi có nhu
+  cầu thật + ngã ba ngả về app, kèm một settings surface tử tế.
