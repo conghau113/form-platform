@@ -7,6 +7,7 @@ import {
   FormOutlined,
   LeftOutlined,
   PartitionOutlined,
+  PlayCircleOutlined,
   ShareAltOutlined,
 } from "@ant-design/icons";
 import type { MenuProps, TreeDataNode, TreeProps } from "antd";
@@ -109,6 +110,7 @@ export function ExplorerRail({
 
   const openForm = (id: string) => navigate(`/projects/${projectId}/forms/${id}`);
   const openWorkflow = (id: string) => navigate(`/projects/${projectId}/workflows/${id}/edit`);
+  const runWorkflow = (id: string) => navigate(`/projects/${projectId}/workflows/${id}/run`);
 
   function run(action: Promise<unknown>) {
     action.then(invalidate).catch((e) => message.error((e as Error).message));
@@ -270,6 +272,9 @@ export function ExplorerRail({
           ]
         : [
             { key: "open", icon: <FormOutlined />, label: "Open" },
+            ...(node.kind === "workflow"
+              ? [{ key: "run", icon: <PlayCircleOutlined />, label: "Run" }]
+              : []),
             { key: "rename", icon: <EditOutlined />, label: "Rename" },
             { key: "duplicate", icon: <CopyOutlined />, label: "Duplicate" },
             {
@@ -289,6 +294,7 @@ export function ExplorerRail({
         else if (key === "delete") deleteFolder(node.id, node.title);
       } else if (node.kind === "workflow") {
         if (key === "open") openWorkflow(node.id);
+        else if (key === "run") runWorkflow(node.id);
         else if (key === "rename") startRename("workflow", node.id, node.title);
         else if (key === "duplicate") duplicateWf(node.id, workflowFolder());
         else if (key === "delete") deleteWorkflow(node.id, node.title);

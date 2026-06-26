@@ -1,6 +1,6 @@
-import type { WorkflowDefinition } from "@org/workflow-schema";
+import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema";
 import { API_BASE, ownerHeaders } from "../workspace/config";
-import type { WorkflowSummary } from "../workspace/types";
+import type { WorkflowInstanceSummary, WorkflowSummary } from "../workspace/types";
 
 /**
  * Thin client for the workflow api (Workflow track WF0: `/workflows`). Mirrors `workspace/client.ts`
@@ -74,4 +74,55 @@ export async function deleteWorkflow(id: string): Promise<void> {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Delete workflow failed: ${await readError(res)}`);
+}
+
+/* --- Workflow runtime / instances (WF3) ---------------------------------------------------------
+ * The server is authoritative: it loads the definition + instance, runs the engine (`advance`:
+ * JSONLogic guards + role checks), and persists. The client only POSTs `{action, data}` and reads
+ * the new instance back. Cases nest under their workflow for start/list; a single case is addressed
+ * by its own id under `/workflow-instances`. */
+
+/** Start a fresh case of a workflow at its start node (422 if the graph is invalid). */
+export async function startInstance(
+  workflowId: string,
+  data?: Record<string, unknown>,
+): Promise<WorkflowInstance> {
+  const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/instances`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ data }),
+  });
+  if (!res.ok) throw new Error(`Start case failed: ${await readError(res)}`);
+  return (await res.json()) as WorkflowInstance;
+}
+
+/** List a workflow's cases (summaries, no body), newest first. */
+export async function listInstances(workflowId: string): Promise<WorkflowInstanceSummary[]> {
+  const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/instances`, {
+    headers: ownerHeaders(),
+  });
+  if (!res.ok) throw new Error(`List cases failed: ${await readError(res)}`);
+  return (await res.json()) as WorkflowInstanceSummary[];
+}
+
+/** Load a single running case by id. */
+export async function getInstance(instanceId: string): Promise<WorkflowInstance> {
+  const res = await fetch(`${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}`, {
+    headers: ownerHeaders(),
+  });
+  if (!res.ok) throw new Error(`Load case failed: ${await readError(res)}`);
+  return (await res.json()) as WorkflowInstance;
+}
+
+/** Fire an action against a case; the server advances it (or 422s with the failure reason). */
+export async function advanceInstance(
+  instanceId: string,
+  input: { action: string; data?: Record<string, unknown>; roles?: string[] },
+): Promise<WorkflowInstance> {
+  const res = await fetch(
+    `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/advance`,
+    { method: "POST", headers: jsonHeaders(), body: JSON.stringify(input) },
+  );
+  if (!res.ok) throw new Error(`Advance case failed: ${await readError(res)}`);
+  return (await res.json()) as WorkflowInstance;
 }

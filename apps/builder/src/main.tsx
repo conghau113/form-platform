@@ -6,7 +6,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { createQueryClient } from "./query/index.js";
-import { WorkflowRoute } from "./workflow/index.js";
+import { WorkflowRoute, WorkflowRunRoute } from "./workflow/index.js";
 import { EditorRoute } from "./workspace/EditorRoute.js";
 import { EmptyEditorState } from "./workspace/EmptyEditorState.js";
 import { ProjectsPage } from "./workspace/ProjectsPage.js";
@@ -24,6 +24,8 @@ const router = createBrowserRouter([
       { index: true, element: <EmptyEditorState /> },
       { path: "forms/:formId", element: <EditorRoute /> },
       { path: "workflows/:workflowId/edit", element: <WorkflowRoute /> },
+      { path: "workflows/:workflowId/run", element: <WorkflowRunRoute /> },
+      { path: "workflows/:workflowId/run/:instanceId", element: <WorkflowRunRoute /> },
     ],
   },
   { path: "*", element: <Navigate to="/projects" replace /> },

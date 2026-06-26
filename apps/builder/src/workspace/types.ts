@@ -42,6 +42,16 @@ export interface WorkflowSummary {
   updatedAt: string;
 }
 
+/** Index summary of a running workflow case (no body) — mirrors the api `WorkflowInstanceSummary`. */
+export interface WorkflowInstanceSummary {
+  id: string;
+  workflowId: string;
+  projectId: string;
+  current: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** `GET /projects/:id/tree` payload: flat lists the client assembles into a tree. */
 export interface ProjectTree {
   project: ProjectRecord;
