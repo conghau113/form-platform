@@ -153,9 +153,42 @@ The engine already runs; this is persistence + a thin UI.
   available actions, fire one, persist the advanced instance, show history.
 - Its own multi-phase plan; a full draft exists from the planning pass. Revive after WF2 ships.
 
-## WF4 — Parity polish (later)
-Sharing/roles already come free via `ProjectMember` (WF0 reuses `requireAccess`). Possible later:
-i18n of status/action labels (reuse the i18n pattern), workflow templates, native parity. Defer.
+## WF4 — Parity polish
+Sharing/access already come free via `ProjectMember` (WF0 reuses `requireAccess`). What WF3b's smoke
+exposed is the gap WF4 closes: a real workflow ("3-Level Leave Approval") gates every transition on a
+**domain role** (employee/manager/hr), but the runtime only injected the actor's *project* role
+(owner/editor/viewer), so advancing returned **422 role-denied** — the Run view couldn't operate a
+domain-role-gated workflow at all.
+
+### WF4a — "Acting as" domain roles in the Run view  ✅ DONE (branch feat/workflow-editor-v2)
+The server-side `roles` seam already existed end-to-end (client `advanceInstance` → `AdvanceInstanceDto`
+→ controller → `WorkflowInstancesService` merges the project role → engine `advance` checks
+`roles.includes(transition.role)`). The only missing piece was a client surface to *declare* the role.
+Owner picked the **"Acting as" (operator self-declares)** model over server-assigned RBAC — builder-only,
+additive, fork-agnostic (the unresolved infra-vs-app fork doesn't constrain it); server stays
+authoritative on *access* (project role gates whether you may advance at all). Shipped:
+- NEW `apps/builder/src/workflow/run-roles.ts` — pure `workflowRoles(def)`: distinct `transitions[].role`
+  in first-appearance order (mirrors `run-actions.ts`). +4 unit tests.
+- `WorkflowRunRoute.tsx` (`CaseRunner`): an "Đang đóng vai" antd multi-select, shown only when the
+  workflow has role-gated transitions, defaulting to **all** roles (so the owner can drive the whole
+  flow) and narrowable to simulate a restricted actor; the selection is passed as `roles` to the advance
+  mutation. NO contract / `workflowVersion` / changeset.
+- Green: builder typecheck clean (api typecheck = environment-only prisma-DLL EPERM), 45 workflow tests
+  (+4), biome clean on changed files. Reviewer subagent PASS (no blocking). **Live smoke MCP PASS** on the
+  real "3-Level Leave Approval" wf: picker renders employee/manager/hr defaulted-all → Submit Leave
+  Request (previously 422) advances draft→manager_review; remove "manager" → "Approve by Manager" returns
+  `role-denied` (gate is real, not cosmetic); re-add "manager" → it advances manager_review→hr_review.
+  (Threw away one test instance; no DELETE-instance endpoint, harmless.)
+
+### WF4b — i18n of status/action labels (next)
+Reuse the form i18n pattern (inline `i18n` maps on nodes/transitions + a `localizeWorkflow` in
+workflow-core, mirroring form-core's `localizeForm`). CONTRACT-additive (optional keys ⇒ no
+`workflowVersion` bump, parse-compat test) + engine + editor/Run surfaces. Changeset for the changed
+published packages. Own slice; not started.
+
+Later still: workflow templates, native parity, and — only if the strategic fork lands on "app" —
+server-assigned domain-role RBAC (member→role assignments) as the authoritative successor to WF4a's
+self-declared "Acting as".
 
 ## Recommended slice order
 **WF0 → WF1 → WF2a → WF2b → WF3**, each its own commit + reviewer + STOP. WF0/WF1 (persistence +

@@ -1,9 +1,22 @@
 import { FormRenderer, type FormRendererHandle } from "@org/form-renderer-web";
 import type { WorkflowDefinition } from "@org/workflow-schema";
-import { Alert, Button, Card, Empty, message, Space, Spin, Tag, Timeline, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Empty,
+  message,
+  Select,
+  Space,
+  Spin,
+  Tag,
+  Timeline,
+  Typography,
+} from "antd";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { runActions } from "./run-actions";
+import { workflowRoles } from "./run-roles";
 import { indexStatusCatalog, resolveStatusStyle, useStatusCatalog } from "./status-catalog";
 import { useFormDefinition } from "./useFormDefinition";
 import {
@@ -165,6 +178,12 @@ function CaseRunner({
   const node = instance ? def.nodes.find((n) => n.id === instance.current) : undefined;
   const { definition: form, loading: formLoading } = useFormDefinition(node?.formId);
 
+  // Domain roles the workflow gates transitions on; the operator declares which they act in
+  // ("Acting as"). Defaults to all of them so the owner can drive the whole flow, and can be
+  // narrowed to simulate a restricted actor. The server merges the project role + re-checks (WF4a).
+  const roles = useMemo(() => workflowRoles(def), [def]);
+  const [actingRoles, setActingRoles] = useState<string[]>(roles);
+
   const formRef = useRef<FormRendererHandle>(null);
   const pendingAction = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -172,7 +191,7 @@ function CaseRunner({
   const fire = async (action: string, data: Record<string, unknown>) => {
     setBusy(true);
     try {
-      await advance({ action, data });
+      await advance({ action, data, roles: actingRoles });
       message.success(`Đã thực hiện "${action}"`);
     } catch (e) {
       message.error((e as Error).message);
@@ -248,6 +267,22 @@ function CaseRunner({
             <Text type="secondary">Trạng thái này không gắn form.</Text>
           )}
         </Card>
+
+        {roles.length > 0 && (
+          <Space size="small" wrap>
+            <Text type="secondary">Đang đóng vai:</Text>
+            <Select
+              mode="multiple"
+              allowClear
+              size="small"
+              style={{ minWidth: 220 }}
+              placeholder="Chọn vai trò (không chọn = không có vai trò)"
+              value={actingRoles}
+              onChange={setActingRoles}
+              options={roles.map((r) => ({ label: r, value: r }))}
+            />
+          </Space>
+        )}
 
         <Space wrap>
           {actions.length === 0 ? (
