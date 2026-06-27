@@ -12,16 +12,14 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   Background,
+  BackgroundVariant,
   type Connection,
   ConnectionMode,
   Controls,
   type EdgeChange,
-  Handle,
   MiniMap,
   type NodeChange,
-  type NodeProps,
   type OnBeforeDelete,
-  Position,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -44,22 +42,18 @@ import {
   Tag,
   Typography,
 } from "antd";
-import {
-  createContext,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { App } from "../App";
 import { useHistory } from "../editor/history";
 import { saveForm } from "../workspace/client";
 import { newForm } from "../workspace/newForm";
 import { WorkflowAiDrawer } from "./ai";
-import { FloatingEdge } from "./floating-edge";
+import {
+  EDGE_STROKE_WIDTH,
+  FloatingEdge,
+  PathHighlightContext,
+  type PathHighlightCtx,
+} from "./floating-edge";
 import { tidyLayout } from "./layout";
 import { type Direction, pickNeighbor } from "./navigate";
 import { traceUpstream } from "./path";
@@ -67,10 +61,11 @@ import {
   indexStatusCatalog,
   KIND_COLOR,
   KIND_LABEL,
-  resolveStatusStyle,
   STATUS_PALETTE,
   useStatusCatalog,
 } from "./status-catalog";
+import { NodeViewContext, type NodeViewCtx, workflowNodeTypes } from "./workflow-node-view";
+import "./workflow-canvas.css";
 
 /** WE5b: arrow keys → spatial navigation direction. */
 const ARROW: Record<string, Direction | undefined> = {
@@ -114,98 +109,21 @@ export interface WorkflowFormOption {
   title: string;
 }
 
-/** Lets the custom node render an inline-rename input when its id is the one being renamed, and
- *  resolve its colour/label against the project status catalog (WE4). */
-interface NodeViewCtx {
-  renamingNodeId: string | null;
-  commitRename: (id: string, status: string) => void;
-  cancelRename: () => void;
-  /** Project status catalog indexed by code — the node resolves its colour/label from this. */
-  byCode: ReadonlyMap<string, StatusCatalogEntry>;
-}
-const NodeViewContext = createContext<NodeViewCtx>({
-  renamingNodeId: null,
-  commitRename: () => {},
-  cancelRename: () => {},
-  byCode: new Map(),
-});
-
-const HANDLE_STYLE = {
-  width: 9,
-  height: 9,
-  background: "#1677ff",
-  border: "2px solid #fff",
-} as const;
-const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left] as const;
-
-/** Custom state node: status + bound form + a "start" badge, with connect handles on all four
- *  sides (floating edges route to the nearest border) and double-click-to-rename. Memoized per
- *  React Flow's perf guidance so a node only re-renders when its own props/context change. */
-const WorkflowNodeView = memo(function WorkflowNodeView({
-  id,
-  data,
-  selected,
-}: NodeProps<FlowNode>) {
-  const ctx = useContext(NodeViewContext);
-  const renaming = ctx.renamingNodeId === id;
-  // WE4: resolve label/colour/kind from the project status catalog (falls back to the node's own
-  // snapshot when no `statusCode` or the entry was deleted).
-  const resolved = resolveStatusStyle(data, ctx.byCode);
-
-  return (
-    <div
-      style={{
-        minWidth: 150,
-        // Cap the width so a long status / form id ellipsizes instead of stretching the node
-        // (and the whole graph) out of shape.
-        maxWidth: 220,
-        padding: "8px 12px",
-        borderRadius: 8,
-        border: `2px solid ${selected ? "#1677ff" : "#d9d9d9"}`,
-        // Colour accent driven by the resolved status kind/catalog colour — never stored raw in
-        // the contract, so it stays a presentation concern at the editor boundary.
-        borderLeft: `6px solid ${resolved.color}`,
-        background: "#fff",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-      }}
-    >
-      {SIDES.map((pos) => (
-        // Loose connection mode lets each source handle also accept a drop, so a transition can be
-        // drawn from any side to any side.
-        <Handle key={pos} id={pos} type="source" position={pos} style={HANDLE_STYLE} />
-      ))}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        {renaming ? (
-          <Input
-            className="nodrag"
-            size="small"
-            autoFocus
-            defaultValue={data.status}
-            onClick={(e) => e.stopPropagation()}
-            onBlur={(e) => ctx.commitRename(id, e.target.value)}
-            onPressEnter={(e) => ctx.commitRename(id, (e.target as HTMLInputElement).value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") ctx.cancelRename();
-            }}
-            style={{ width: 130 }}
-          />
-        ) : (
-          <Typography.Text strong ellipsis style={{ flex: 1, minWidth: 0 }}>
-            {resolved.label || "(unnamed)"}
-          </Typography.Text>
-        )}
-        {resolved.missing && <Tag color="orange">?</Tag>}
-        {data.isStart && <Tag color="green">start</Tag>}
-      </div>
-      <Typography.Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
-        {data.formId ? `form: ${data.formId}` : "no form bound"}
-      </Typography.Text>
-    </div>
-  );
-});
-
-const nodeTypes = { workflow: WorkflowNodeView };
 const edgeTypes = { floating: FloatingEdge };
+
+/** Drop presentation-only opacity that may leak from xyflow when derived display styles are passed in. */
+function stripLeakedOpacity<T extends { style?: CSSProperties }>(items: T[]): T[] {
+  let changed = false;
+  const next = items.map((item) => {
+    if (item.style?.opacity == null) return item;
+    changed = true;
+    const { opacity: _opacity, ...restStyle } = item.style;
+    return Object.keys(restStyle).length > 0
+      ? { ...item, style: restStyle }
+      : { ...item, style: undefined };
+  });
+  return changed ? next : items;
+}
 
 export interface WorkflowEditorProps {
   /** The persisted workflow contract to seed the canvas from (loaded by the route). */
@@ -264,7 +182,7 @@ function WorkflowEditorInner({
   const [statusOpen, setStatusOpen] = useState(false);
   // WE5b keyboard-first: the "?" shortcut overlay.
   const [showKeyHelp, setShowKeyHelp] = useState(false);
-  const { deleteElements, screenToFlowPosition, fitView, setCenter, getZoom } = useReactFlow();
+  const { deleteElements, screenToFlowPosition, fitView } = useReactFlow();
 
   // WE4 status catalog: project-scoped master data (`global ∪ thisProject`). Nodes resolve their
   // colour/label from this; the picker + manager read/write it. Indexed by code for O(1) lookups.
@@ -326,7 +244,7 @@ function WorkflowEditorInner({
   // matter for undo: a finished drag and any removal (selection / measurement noise is silent).
   const onNodesChange = useCallback(
     (changes: NodeChange<FlowNode>[]) => {
-      const next = applyNodeChanges(changes, nodesRef.current);
+      const next = stripLeakedOpacity(applyNodeChanges(changes, nodesRef.current));
       setNodes(next);
       const removed = changes.some((c) => c.type === "remove");
       const dragEnded = changes.some((c) => c.type === "position" && c.dragging === false);
@@ -336,7 +254,7 @@ function WorkflowEditorInner({
   );
   const onEdgesChange = useCallback(
     (changes: EdgeChange<FlowEdge>[]) => {
-      setEdges((es) => applyEdgeChanges(changes, es));
+      setEdges((es) => stripLeakedOpacity(applyEdgeChanges(changes, es)));
       if (changes.some((c) => c.type === "remove")) scheduleCommit("Delete");
     },
     [setEdges, scheduleCommit],
@@ -523,7 +441,10 @@ function WorkflowEditorInner({
   function addState() {
     // Drop the new state beside the selected one, else step it out so it never lands on another.
     const base = selectedNode?.position ?? { x: 40, y: 40 };
-    addStateAt({ x: base.x + 220, y: base.y + (selectedNode ? 0 : nodes.length * 30) });
+    addStateAt({
+      x: base.x + 220,
+      y: base.y + (selectedNode ? 0 : nodes.length * 30),
+    });
   }
 
   function onPaneDoubleClick(e: React.MouseEvent) {
@@ -579,10 +500,8 @@ function WorkflowEditorInner({
     [setNodes, commit],
   );
 
-  // WE5b: move keyboard selection onto `id`. Mirrors a mouse click (panel + highlight) AND sets the
-  // xyflow `selected` flag — the flag react-flow reads for Delete and the selection ring, which a
-  // panel-only click never set (the WE1 keyboard-Delete quirk). `selected` stays out of the contract
-  // (`fromFlow` reads back only id/position/data) so this never dirties the doc. Keeps the node in view.
+  // WE5b: sync panel selection + path highlight + xyflow `selected` (for Delete). No viewport pan —
+  // centering on every click was disorienting; use fitView from the issues panel when needed.
   function selectNode(id: string) {
     setSelectedNodeId(id);
     setSelectedEdgeId(null);
@@ -590,15 +509,6 @@ function WorkflowEditorInner({
     setNodes((ns) =>
       ns.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })),
     );
-    const node = nodes.find((n) => n.id === id);
-    if (node) {
-      const w = node.measured?.width ?? node.width ?? 220;
-      const h = node.measured?.height ?? node.height ?? 60;
-      setCenter(node.position.x + w / 2, node.position.y + h / 2, {
-        zoom: getZoom(),
-        duration: 200,
-      });
-    }
   }
 
   // Inline rename — commit writes back through the same channel as the panel's Status field.
@@ -611,10 +521,8 @@ function WorkflowEditorInner({
     [patchNodeData],
   );
   const cancelRename = useCallback(() => setRenamingNodeId(null), []);
-  const nodeViewCtx = useMemo<NodeViewCtx>(
-    () => ({ renamingNodeId, commitRename, cancelRename, byCode }),
-    [renamingNodeId, commitRename, cancelRename, byCode],
-  );
+
+  const formTitles = useMemo(() => new Map(formOptions.map((f) => [f.id, f.title])), [formOptions]);
 
   // Guard destructive deletes: never strand the graph or orphan the start node.
   const onBeforeDelete = useCallback<OnBeforeDelete<FlowNode, FlowEdge>>(
@@ -686,7 +594,11 @@ function WorkflowEditorInner({
       setMeta(nextMeta);
       setNodes(nextNodes);
       setEdges(gen.edges);
-      commit("Generate with AI", { meta: nextMeta, nodes: nextNodes, edges: gen.edges });
+      commit("Generate with AI", {
+        meta: nextMeta,
+        nodes: nextNodes,
+        edges: gen.edges,
+      });
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
@@ -732,47 +644,53 @@ function WorkflowEditorInner({
     () => (highlightNodeId ? traceUpstream(highlightNodeId, edges) : null),
     [highlightNodeId, edges],
   );
-  const displayNodes = useMemo(() => {
-    if (!highlight && errorRefs.nodeIds.size === 0 && warnNodeIds.size === 0) return nodes;
-    return nodes.map((n) => {
-      const isError = errorRefs.nodeIds.has(n.id);
-      const isWarn = !isError && warnNodeIds.has(n.id);
-      const dimmed = highlight ? !highlight.nodeIds.has(n.id) : false;
-      if (!isError && !isWarn && !dimmed) return n;
-      return {
-        ...n,
-        style: {
-          ...n.style,
-          ...(dimmed ? { opacity: 0.25 } : {}),
-          // Red ring = blocking validator error (duplicate / unreachable / missing start).
-          // Amber ring = advisory lint warning (dead-end / end-has-outgoing) — does NOT block save.
-          ...(isError
-            ? { boxShadow: "0 0 0 2px #ff4d4f", borderRadius: 8 }
-            : isWarn
-              ? { boxShadow: "0 0 0 2px #faad14", borderRadius: 8 }
-              : {}),
-        },
-      };
-    });
-  }, [nodes, highlight, errorRefs, warnNodeIds]);
+  const displayNodes = nodes;
   const displayEdges = useMemo(() => {
-    if (!highlight && errorRefs.edgeIds.size === 0) return edges;
+    if (errorRefs.edgeIds.size === 0) return edges;
     return edges.map((e) => {
-      const isError = errorRefs.edgeIds.has(e.id);
-      const onPath = highlight ? highlight.edgeIds.has(e.id) : false;
-      const dimmed = highlight ? !onPath : false;
-      if (!isError && !dimmed && !onPath) return e;
+      if (!errorRefs.edgeIds.has(e.id)) return e;
       return {
         ...e,
         style: {
           ...e.style,
-          ...(onPath ? { stroke: "#1677ff", strokeWidth: 2 } : {}),
-          ...(dimmed ? { opacity: 0.2 } : {}),
-          ...(isError ? { stroke: "#ff4d4f", strokeWidth: 2 } : {}),
+          stroke: "#ff4d4f",
+          strokeWidth: EDGE_STROKE_WIDTH,
         },
       };
     });
-  }, [edges, highlight, errorRefs]);
+  }, [edges, errorRefs]);
+
+  const nodeViewCtx = useMemo<NodeViewCtx>(
+    () => ({
+      renamingNodeId,
+      commitRename,
+      cancelRename,
+      byCode,
+      formTitles,
+      highlightNodeIds: highlight?.nodeIds ?? null,
+      errorNodeIds: errorRefs.nodeIds,
+      warnNodeIds,
+    }),
+    [
+      renamingNodeId,
+      commitRename,
+      cancelRename,
+      byCode,
+      formTitles,
+      highlight,
+      errorRefs.nodeIds,
+      warnNodeIds,
+    ],
+  );
+  const pathHighlightCtx = useMemo<PathHighlightCtx>(
+    () => ({ edgeIds: highlight?.edgeIds ?? null }),
+    [highlight],
+  );
+
+  const minimapNodeColor = useCallback((n: FlowNode) => {
+    const kind = n.data?.kind ?? "normal";
+    return KIND_COLOR[kind];
+  }, []);
 
   // Select + center a flagged node/edge when its issue is clicked in the errors panel.
   const focusRef = useCallback(
@@ -781,7 +699,12 @@ function WorkflowEditorInner({
         setSelectedNodeId(ref);
         setSelectedEdgeId(null);
         setHighlightNodeId(null);
-        fitView({ nodes: [{ id: ref }], duration: 300, padding: 0.6, maxZoom: 1.2 });
+        fitView({
+          nodes: [{ id: ref }],
+          duration: 300,
+          padding: 0.6,
+          maxZoom: 1.2,
+        });
       } else if (edges.some((e) => e.id === ref)) {
         setSelectedEdgeId(ref);
         setSelectedNodeId(null);
@@ -851,7 +774,11 @@ function WorkflowEditorInner({
         style={{
           display: "flex",
           alignItems: "center",
+          // Wrap so a narrow viewport drops the toolbar onto a second row instead of clipping
+          // the buttons (which previously pushed Save off-screen).
+          flexWrap: "wrap",
           gap: 12,
+          rowGap: 8,
           padding: "8px 12px",
           borderBottom: "1px solid rgba(0,0,0,0.08)",
         }}
@@ -862,7 +789,7 @@ function WorkflowEditorInner({
           placeholder="workflow title"
           style={{ width: 240 }}
         />
-        <Space style={{ marginLeft: "auto" }}>
+        <Space wrap style={{ marginLeft: "auto", justifyContent: "flex-end" }}>
           <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
           <Button onClick={() => setFormsOpen(true)}>Forms ({formsView.forms.length})</Button>
           <Button onClick={() => setStatusOpen(true)}>Statuses ({catalog.entries.length})</Button>
@@ -900,45 +827,49 @@ function WorkflowEditorInner({
         {/* biome-ignore lint/a11y/noStaticElementInteractions: pane double-click is a canvas affordance. */}
         <div style={{ flex: 1, minWidth: 0 }} onDoubleClick={onPaneDoubleClick}>
           <NodeViewContext.Provider value={nodeViewCtx}>
-            <ReactFlow
-              nodes={displayNodes}
-              edges={displayEdges}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              connectionMode={ConnectionMode.Loose}
-              zoomOnDoubleClick={false}
-              // WE5b: arrow keys drive our spatial node-navigation, not xyflow's built-in
-              // a11y node-nudging — otherwise arrows would move the selected node by 1px.
-              disableKeyboardA11y
-              deleteKeyCode={["Delete", "Backspace"]}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onBeforeDelete={onBeforeDelete}
-              onNodesDelete={onNodesDelete}
-              onEdgesDelete={onEdgesDelete}
-              onNodeClick={(_, n) => {
-                setSelectedNodeId(n.id);
-                setSelectedEdgeId(null);
-                setHighlightNodeId(n.id);
-              }}
-              onNodeDoubleClick={(_, n) => setRenamingNodeId(n.id)}
-              onEdgeClick={(_, e) => {
-                setSelectedEdgeId(e.id);
-                setSelectedNodeId(null);
-                setHighlightNodeId(null);
-              }}
-              onPaneClick={() => {
-                setSelectedNodeId(null);
-                setSelectedEdgeId(null);
-                setHighlightNodeId(null);
-              }}
-              fitView
-            >
-              <Background />
-              <MiniMap pannable zoomable />
-              <Controls />
-            </ReactFlow>
+            <PathHighlightContext.Provider value={pathHighlightCtx}>
+              <ReactFlow
+                nodes={displayNodes}
+                edges={displayEdges}
+                nodeTypes={workflowNodeTypes}
+                edgeTypes={edgeTypes}
+                connectionMode={ConnectionMode.Loose}
+                zoomOnDoubleClick={false}
+                // WE5b: arrow keys drive our spatial node-navigation, not xyflow's built-in
+                // a11y node-nudging — otherwise arrows would move the selected node by 1px.
+                disableKeyboardA11y
+                deleteKeyCode={["Delete", "Backspace"]}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onBeforeDelete={onBeforeDelete}
+                onNodesDelete={onNodesDelete}
+                onEdgesDelete={onEdgesDelete}
+                onNodeClick={(_, n) => selectNode(n.id)}
+                onNodeDoubleClick={(_, n) => setRenamingNodeId(n.id)}
+                onEdgeClick={(_, e) => {
+                  setSelectedEdgeId(e.id);
+                  setSelectedNodeId(null);
+                  setHighlightNodeId(null);
+                }}
+                onPaneClick={() => {
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                  setHighlightNodeId(null);
+                }}
+                fitView
+              >
+                <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d4d4d8" />
+                <MiniMap
+                  pannable
+                  zoomable
+                  nodeColor={minimapNodeColor}
+                  maskColor="rgba(240, 240, 245, 0.75)"
+                  style={{ borderRadius: 6, border: "1px solid #ebebeb" }}
+                />
+                <Controls style={{ borderRadius: 6, overflow: "hidden" }} />
+              </ReactFlow>
+            </PathHighlightContext.Provider>
           </NodeViewContext.Provider>
         </div>
 
@@ -1130,7 +1061,12 @@ function NodePanel({
   // catalog deletion leaves the node coloured + labelled (the W4 linked-field fallback).
   function pickStatus(code: string | undefined) {
     const entry = code ? statusEntries.find((e) => e.code === code) : undefined;
-    if (entry) onChange({ statusCode: entry.code, kind: entry.kind, status: entry.label });
+    if (entry)
+      onChange({
+        statusCode: entry.code,
+        kind: entry.kind,
+        status: entry.label,
+      });
     else onChange({ statusCode: undefined });
   }
 
@@ -1187,7 +1123,10 @@ function NodePanel({
             placeholder="Mặc định (Thường)"
             value={node.data.kind}
             onChange={(value) => onChange({ kind: (value as StatusKind) || undefined })}
-            options={STATUS_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+            options={STATUS_KINDS.map((k) => ({
+              value: k,
+              label: KIND_LABEL[k],
+            }))}
             optionRender={(opt) => (
               <Space>
                 <ColorDot color={KIND_COLOR[opt.value as StatusKind]} />
@@ -1499,7 +1438,14 @@ function UsedFormsPanel({
                   </Tag>
                 )}
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  marginTop: 6,
+                }}
+              >
                 {f.states.map((s) => (
                   <Button key={s.id} size="small" onClick={() => onFocusState(s.id)}>
                     {s.status || "(unnamed)"}
@@ -1704,7 +1650,13 @@ function StatusCatalogPanel({
         Thường / Kết thúc).
       </Typography.Text>
 
-      <div style={{ border: "1px solid rgba(0,0,0,0.1)", borderRadius: 8, padding: 12 }}>
+      <div
+        style={{
+          border: "1px solid rgba(0,0,0,0.1)",
+          borderRadius: 8,
+          padding: 12,
+        }}
+      >
         <Typography.Text strong>
           {editingCode ? `Sửa: ${editingCode}` : "Tạo trạng thái mới"}
         </Typography.Text>
@@ -1730,7 +1682,10 @@ function StatusCatalogPanel({
               style={{ width: "100%" }}
               value={draft.kind}
               onChange={(value) => setDraft((d) => ({ ...d, kind: value }))}
-              options={STATUS_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+              options={STATUS_KINDS.map((k) => ({
+                value: k,
+                label: KIND_LABEL[k],
+              }))}
               optionRender={(opt) => (
                 <Space>
                   <ColorDot color={KIND_COLOR[opt.value as StatusKind]} />
@@ -1740,7 +1695,14 @@ function StatusCatalogPanel({
             />
           </Field>
           <Field label="Màu">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                alignItems: "center",
+              }}
+            >
               {/* Auto = use the kind default; the active choice when no custom colour is set. */}
               <Button
                 size="small"
@@ -1838,7 +1800,14 @@ function StatusCatalogPanel({
                   </Tag>
                 )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 2 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginTop: 2,
+                }}
+              >
                 <Typography.Text type="secondary" style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
                   {e.code}
                 </Typography.Text>

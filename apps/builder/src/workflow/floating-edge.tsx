@@ -8,15 +8,17 @@ import {
   Position,
   useInternalNode,
 } from "@xyflow/react";
+import { createContext, useContext } from "react";
 
-/**
- * Floating edges: a transition attaches to the nearest border of each state node instead of a
- * fixed Left/Right handle, so the graph reads cleanly no matter which way the user lays it out.
- * The geometry (`getEdgeParams`) is a PURE function of two node boxes — unit-tested, no React —
- * while {@link FloatingEdge} only adapts xyflow's `InternalNode` into those boxes, then routes
- * them as an orthogonal smooth-step path (clearer than a bezier for a state machine). Nothing
- * here touches the workflow contract: edges still persist by `source`/`target` node id only.
- */
+/** Upstream path highlight — colour + dim only; stroke width stays constant on node click. */
+export interface PathHighlightCtx {
+  edgeIds: ReadonlySet<string> | null;
+}
+export const PathHighlightContext = createContext<PathHighlightCtx>({ edgeIds: null });
+
+/** Default edge stroke (editor presentation — not in the contract). */
+export const EDGE_STROKE = "#b1b3bb";
+export const EDGE_STROKE_WIDTH = 1.5;
 
 /** A node's absolute box in flow coordinates (top-left origin + size), the input geometry needs. */
 export interface NodeBox {
@@ -26,7 +28,6 @@ export interface NodeBox {
   height: number;
 }
 
-/** The point where the center-to-center line crosses `node`'s border (ellipse approximation). */
 function getNodeIntersection(node: NodeBox, other: NodeBox): { x: number; y: number } {
   const w = node.width / 2;
   const h = node.height / 2;
@@ -43,7 +44,6 @@ function getNodeIntersection(node: NodeBox, other: NodeBox): { x: number; y: num
   return { x: w * (xx3 + yy3) + cx, y: h * (-xx3 + yy3) + cy };
 }
 
-/** Which border of `node` the intersection point sits on → the handle position for the bezier. */
 function getEdgePosition(node: NodeBox, p: { x: number; y: number }): Position {
   const nx = Math.round(node.x);
   const ny = Math.round(node.y);
@@ -56,7 +56,6 @@ function getEdgePosition(node: NodeBox, p: { x: number; y: number }): Position {
   return Position.Top;
 }
 
-/** Endpoints + sides for a floating edge between two node boxes. */
 export interface EdgeParams {
   sx: number;
   sy: number;
@@ -91,6 +90,28 @@ function boxOf(node: InternalNode<Node>): NodeBox {
 
 /** Custom edge that routes to the nearest borders and renders its action as a centered label. */
 export function FloatingEdge({ id, source, target, markerEnd, style, label, selected }: EdgeProps) {
+  const { edgeIds } = useContext(PathHighlightContext);
+  const onPath = edgeIds?.has(id) ?? false;
+  const dimmed = edgeIds != null && !onPath;
+  const emphasized = selected || onPath;
+
+  const strokeColor = emphasized
+    ? "#1677ff"
+    : ((style?.stroke as string | undefined) ?? EDGE_STROKE);
+  // Width stays constant — only colour/opacity change on path highlight (user UX request).
+  const strokeWidth = (style?.strokeWidth as number | undefined) ?? EDGE_STROKE_WIDTH;
+
+  // Motion is a signal, not a default: normal edges render static & solid; only the highlighted
+  // upstream path / selected edge flows, so movement means "this is the branch you're looking at".
+  const pathClass = emphasized ? "workflow-edge-flow workflow-edge-flow--active" : undefined;
+
+  const pathStyle = {
+    ...style,
+    stroke: strokeColor,
+    strokeWidth,
+    ...(dimmed ? { opacity: 0.22 } : {}),
+  };
+
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   if (!sourceNode || !targetNode) return null;
@@ -111,7 +132,7 @@ export function FloatingEdge({ id, source, target, markerEnd, style, label, sele
 
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={pathStyle} className={pathClass} />
       {label ? (
         <EdgeLabelRenderer>
           <div
@@ -119,12 +140,19 @@ export function FloatingEdge({ id, source, target, markerEnd, style, label, sele
               position: "absolute",
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               pointerEvents: "none",
-              padding: "1px 6px",
-              borderRadius: 4,
-              fontSize: 12,
-              background: "#fff",
-              border: `1px solid ${selected ? "#1677ff" : "#d9d9d9"}`,
-              color: "rgba(0,0,0,0.85)",
+              maxWidth: 140,
+              padding: "3px 9px",
+              borderRadius: 5,
+              fontSize: 11,
+              fontWeight: 500,
+              lineHeight: 1.35,
+              letterSpacing: "0.01em",
+              textAlign: "center",
+              background: emphasized ? "#e6f4ff" : "#fff",
+              border: `1px solid ${emphasized ? "#91caff" : "#e8e8e8"}`,
+              color: emphasized ? "#0958d9" : "rgba(0,0,0,0.72)",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              opacity: dimmed ? 0.35 : 1,
             }}
           >
             {label}
@@ -134,3 +162,5 @@ export function FloatingEdge({ id, source, target, markerEnd, style, label, sele
     </>
   );
 }
+
+export const workflowEdgeTypes = { floating: FloatingEdge };

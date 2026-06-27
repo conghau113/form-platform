@@ -1,0 +1,98 @@
+/* Workflow editor canvas — presentation only (never part of the contract).
+ * Validation rings follow the shadcn/Tailwind `ring-1` + soft halo pattern (1px stroke +
+ * low-alpha spread) so they stay visible when zoomed out without looking heavy. */
+
+.workflow-node {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.05);
+  transition:
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.workflow-node:hover {
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 6px 16px rgba(0, 0, 0, 0.07);
+}
+
+/* Ant Design focus-ring style: 1px ring + 3px soft halo */
+.workflow-node--selected {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    0 0 0 1px #1677ff,
+    0 0 0 3px rgba(22, 119, 255, 0.12);
+}
+
+.workflow-node--issue-error {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    0 0 0 1px #ff4d4f,
+    0 0 0 3px rgba(255, 77, 79, 0.1);
+}
+
+.workflow-node--issue-warn {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    0 0 0 1px #fa8c16,
+    0 0 0 3px rgba(250, 140, 22, 0.1);
+}
+
+.workflow-node--dimmed {
+  opacity: 0.32;
+  pointer-events: auto;
+}
+
+/* Connection handles: hidden until hover/selection — keeps the graph readable. */
+.workflow-node .react-flow__handle {
+  opacity: 0;
+  transform: scale(0.55);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.workflow-node:hover .react-flow__handle,
+.workflow-node--selected .react-flow__handle {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.workflow-node .react-flow__handle:hover {
+  /* biome-ignore lint/complexity/noImportantStyles: the base handle background is set inline
+     (HANDLE_STYLE), so only !important can override it on hover. */
+  background: #0958d9 !important;
+  transform: scale(1.15);
+}
+
+/* Edge flow animation — direction hint along transitions (presentation only). */
+@keyframes workflow-edge-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* Only the highlighted upstream path / selected edge animates — normal edges stay solid & static
+   so motion reads as a deliberate signal rather than ambient noise. */
+path.react-flow__edge-path.workflow-edge-flow--active {
+  stroke-dasharray: 8 4;
+  animation: workflow-edge-flow 0.45s linear infinite;
+}
+
+.react-flow__connection-path {
+  stroke-dasharray: 7 5;
+  animation: workflow-edge-flow 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  path.react-flow__edge-path.workflow-edge-flow--active,
+  .react-flow__connection-path {
+    animation: none;
+    stroke-dasharray: none;
+  }
+}
