@@ -350,7 +350,19 @@ export function ExplorerRail({
 
     const { items, onClick } = nodeMenu(node);
     return (
-      <Dropdown trigger={["contextMenu"]} menu={{ items, onClick: ({ key }) => onClick(key) }}>
+      <Dropdown
+        trigger={["contextMenu"]}
+        menu={{
+          items,
+          // Stop the item click bubbling (React-portal) to the Tree row's onSelect, which would
+          // ALSO navigate (openWorkflow → /edit) and override the menu action — e.g. "Run" landed
+          // on the editor instead of /run.
+          onClick: (info) => {
+            info.domEvent.stopPropagation();
+            onClick(info.key);
+          },
+        }}
+      >
         {/* Full-width so the context menu fires anywhere on the row, not just over the text. */}
         <span style={{ userSelect: "none", display: "block", width: "100%" }}>
           {kindIcon(node.kind)}
