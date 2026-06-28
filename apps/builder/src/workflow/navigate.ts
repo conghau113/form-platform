@@ -27,6 +27,43 @@ function center(n: NavNode): { x: number; y: number } {
   };
 }
 
+/** A node's bounding box in flow coordinates (mirrors what xyflow's `getNode` exposes). */
+export interface NodeRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Canvas transform + pane size — enough to map flow coordinates to screen pixels. */
+export interface ViewportRect {
+  /** pan offset, px */
+  x: number;
+  y: number;
+  zoom: number;
+  /** pane size, px */
+  width: number;
+  height: number;
+}
+
+/**
+ * Is `rect` (flow coords) fully inside the visible pane, keeping `padding` px of breathing room on
+ * every side? Keyboard navigation uses this to pan ONLY when the focused node would be off-screen,
+ * so arrow-stepping never loses the node — while a mouse click (which never reveals) stays put.
+ */
+export function isNodeVisible(rect: NodeRect, vp: ViewportRect, padding = 0): boolean {
+  const left = rect.x * vp.zoom + vp.x;
+  const top = rect.y * vp.zoom + vp.y;
+  const right = left + rect.width * vp.zoom;
+  const bottom = top + rect.height * vp.zoom;
+  return (
+    left >= padding &&
+    top >= padding &&
+    right <= vp.width - padding &&
+    bottom <= vp.height - padding
+  );
+}
+
 /** Id of the nearest node from `currentId` in `dir`, or null if there is none (or no current). */
 export function pickNeighbor(
   nodes: NavNode[],

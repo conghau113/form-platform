@@ -25,6 +25,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  useStore,
 } from "@xyflow/react";
 import {
   Alert,
@@ -55,7 +56,7 @@ import {
   type PathHighlightCtx,
 } from "./floating-edge";
 import { tidyLayout } from "./layout";
-import { type Direction, pickNeighbor } from "./navigate";
+import { type Direction, isNodeVisible, pickNeighbor } from "./navigate";
 import { traceUpstream } from "./path";
 import {
   indexStatusCatalog,
@@ -182,7 +183,11 @@ function WorkflowEditorInner({
   const [statusOpen, setStatusOpen] = useState(false);
   // WE5b keyboard-first: the "?" shortcut overlay.
   const [showKeyHelp, setShowKeyHelp] = useState(false);
-  const { deleteElements, screenToFlowPosition, fitView } = useReactFlow();
+  const { deleteElements, screenToFlowPosition, fitView, getNode, getViewport, setCenter } =
+    useReactFlow();
+  // Pane pixel size (reactive from the xyflow store) — needed to tell whether a node is off-screen.
+  const paneWidth = useStore((s) => s.width);
+  const paneHeight = useStore((s) => s.height);
 
   // WE4 status catalog: project-scoped master data (`global ∪ thisProject`). Nodes resolve their
   // colour/label from this; the picker + manager read/write it. Indexed by code for O(1) lookups.
@@ -373,7 +378,7 @@ function WorkflowEditorInner({
       e.preventDefault();
       // From a node: nearest neighbour in that direction. From nothing selected: jump to the start.
       const next = pickNeighbor(nodes, selectedNodeId, dir) ?? (selectedNodeId ? null : meta.start);
-      if (next) selectNode(next);
+      if (next) selectNode(next, { reveal: true });
       return;
     }
     switch (e.key) {
@@ -500,15 +505,32 @@ function WorkflowEditorInner({
     [setNodes, commit],
   );
 
-  // WE5b: sync panel selection + path highlight + xyflow `selected` (for Delete). No viewport pan —
-  // centering on every click was disorienting; use fitView from the issues panel when needed.
-  function selectNode(id: string) {
+  // WE5b: sync panel selection + path highlight + xyflow `selected` (for Delete). A mouse click never
+  // pans (centering on every click was disorienting); keyboard navigation passes `reveal` so we pan
+  // to the focused node ONLY when it would be off-screen, keeping the current zoom so arrow-stepping
+  // never loses the node.
+  function selectNode(id: string, opts?: { reveal?: boolean }) {
     setSelectedNodeId(id);
     setSelectedEdgeId(null);
     setHighlightNodeId(id);
     setNodes((ns) =>
       ns.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })),
     );
+    if (!opts?.reveal) return;
+    const node = getNode(id);
+    if (!node) return;
+    const { x, y, zoom } = getViewport();
+    const rect = {
+      x: node.position.x,
+      y: node.position.y,
+      width: node.measured?.width ?? node.width ?? 0,
+      height: node.measured?.height ?? node.height ?? 0,
+    };
+    const vp = { x, y, zoom, width: paneWidth, height: paneHeight };
+    // 24px of breathing room so a node hugging the edge still gets pulled comfortably into view.
+    if (!isNodeVisible(rect, vp, 24)) {
+      setCenter(rect.x + rect.width / 2, rect.y + rect.height / 2, { zoom, duration: 300 });
+    }
   }
 
   // Inline rename — commit writes back through the same channel as the panel's Status field.
