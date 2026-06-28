@@ -1,6 +1,7 @@
 import {
   CURRENT_WORKFLOW_VERSION,
   type Guard,
+  type I18nMap,
   type StatusKind,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -25,6 +26,9 @@ export interface FlowNodeData {
    *  node's colour (resolved against the project catalog; both round-trip to the contract). */
   statusCode?: string;
   kind?: StatusKind;
+  /** WF4b: localized overrides of this node's `status` label. Carried through unchanged (no editor
+   *  authoring UI yet) so an AI/JSON-authored map survives a Save round-trip. */
+  i18n?: I18nMap;
   [key: string]: unknown;
 }
 
@@ -33,6 +37,8 @@ export interface FlowEdgeData {
   action: string;
   role?: string;
   guard?: Guard;
+  /** WF4b: localized overrides of this transition's action LABEL. Carried through unchanged. */
+  i18n?: I18nMap;
   [key: string]: unknown;
 }
 
@@ -51,6 +57,10 @@ export interface WorkflowMeta {
   id: string;
   title: string;
   start: string;
+  /** WF4b: definition-level localization, carried through unchanged so a Save round-trips it. */
+  i18n?: I18nMap;
+  defaultLocale?: string;
+  locales?: string[];
 }
 
 /** A committed editor state for undo/redo (the value carried by the History<T> primitive). */
@@ -97,6 +107,7 @@ export function toFlow(def: WorkflowDefinition): {
       isStart: n.id === def.start,
       statusCode: n.statusCode,
       kind: n.kind,
+      i18n: n.i18n,
     },
   }));
   const edges: FlowEdge[] = def.transitions.map((t) => ({
@@ -104,10 +115,21 @@ export function toFlow(def: WorkflowDefinition): {
     source: t.from,
     target: t.to,
     label: t.action,
-    data: { action: t.action, role: t.role, guard: t.guard },
+    data: { action: t.action, role: t.role, guard: t.guard, i18n: t.i18n },
     ...EDGE_PRESENTATION,
   }));
-  return { meta: { id: def.id, title: def.title, start: def.start }, nodes, edges };
+  return {
+    meta: {
+      id: def.id,
+      title: def.title,
+      start: def.start,
+      i18n: def.i18n,
+      defaultLocale: def.defaultLocale,
+      locales: def.locales,
+    },
+    nodes,
+    edges,
+  };
 }
 
 /** xyflow graph -> versioned definition. Reads back only id/position/data. */
@@ -117,8 +139,9 @@ export function fromFlow(
   edges: FlowEdge[],
 ): WorkflowDefinition {
   // Emit keys in the SAME order as workflowNodeSchema (id, status, formId, position, kind,
-  // statusCode) so a round-trip through the server's `migrateWorkflow` (Zod parse → schema key
-  // order) byte-matches `JSON.stringify`, keeping the dirty check clean on load.
+  // statusCode, i18n) so a round-trip through the server's `migrateWorkflow` (Zod parse → schema key
+  // order) byte-matches `JSON.stringify`, keeping the dirty check clean on load. Each optional key
+  // is conditionally spread so an absent value emits no key (matching the Zod-parsed baseline).
   const wfNodes: WorkflowNode[] = nodes.map((n) => ({
     id: n.id,
     status: n.data.status,
@@ -126,14 +149,18 @@ export function fromFlow(
     position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
     ...(n.data.kind ? { kind: n.data.kind } : {}),
     ...(n.data.statusCode ? { statusCode: n.data.statusCode } : {}),
+    ...(n.data.i18n ? { i18n: n.data.i18n } : {}),
   }));
+  // Emit keys in workflowTransitionSchema order (id, from, to, action, guard, role, i18n) for the
+  // same byte-match reason as nodes — `guard` precedes `role`.
   const transitions: WorkflowTransition[] = edges.map((e) => ({
     id: e.id,
     from: e.source,
     to: e.target,
     action: e.data?.action ?? "next",
-    ...(e.data?.role ? { role: e.data.role } : {}),
     ...(e.data?.guard ? { guard: e.data.guard } : {}),
+    ...(e.data?.role ? { role: e.data.role } : {}),
+    ...(e.data?.i18n ? { i18n: e.data.i18n } : {}),
   }));
   return {
     workflowVersion: CURRENT_WORKFLOW_VERSION,
@@ -142,6 +169,9 @@ export function fromFlow(
     start: meta.start,
     nodes: wfNodes,
     transitions,
+    ...(meta.i18n ? { i18n: meta.i18n } : {}),
+    ...(meta.defaultLocale ? { defaultLocale: meta.defaultLocale } : {}),
+    ...(meta.locales ? { locales: meta.locales } : {}),
   };
 }
 

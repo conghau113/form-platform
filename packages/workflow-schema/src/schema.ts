@@ -19,6 +19,13 @@ export const guardSchema = z.object({
   rule: z.record(z.string(), z.any()),
 });
 
+/** Localized text overrides, keyed `attribute → locale → string` (the same shape as
+ *  form-schema's `i18nMapSchema`). Resolved for one locale by `localizeWorkflow` in
+ *  workflow-core. An absent map means "use the authored default string", so old JSON keeps
+ *  parsing and runtime is unchanged when no locale is requested. Additive/optional. */
+export const i18nMapSchema = z.record(z.string(), z.record(z.string(), z.string()));
+export type I18nMap = z.infer<typeof i18nMapSchema>;
+
 /** Neutral canvas coordinates. This is the ONLY presentation data in the
  *  contract; concrete editor internals (xyflow node fields) stay at the boundary,
  *  exactly as dnd-kit `uid` stays out of FormSchema. */
@@ -44,6 +51,9 @@ export const workflowNodeSchema = z.object({
   position: positionSchema.optional(),
   kind: z.enum(STATUS_KINDS).optional(),
   statusCode: z.string().min(1).optional(),
+  /** Localized overrides of this node's display text (`status`). See {@link i18nMapSchema}.
+   *  Additive: old JSON without this key keeps parsing, so no workflowVersion bump. */
+  i18n: i18nMapSchema.optional(),
 });
 
 /** A directed edge between states. `action` is the event that triggers it; an
@@ -55,6 +65,10 @@ export const workflowTransitionSchema = z.object({
   action: z.string().min(1),
   guard: guardSchema.optional(),
   role: z.string().optional(),
+  /** Localized overrides of this transition's display LABEL, under the `action` attribute.
+   *  `action` itself stays the engine identifier (never localized); the label is resolved for
+   *  display only. See {@link i18nMapSchema}. Additive/optional. */
+  i18n: i18nMapSchema.optional(),
 });
 
 /**
@@ -69,6 +83,16 @@ export const workflowDefinitionSchema = z.object({
   start: z.string().min(1),
   nodes: z.array(workflowNodeSchema),
   transitions: z.array(workflowTransitionSchema),
+  /** Localized overrides of the workflow's own text (currently `title`), e.g.
+   *  `{ title: { vi: "…" } }`. See {@link i18nMapSchema}. Additive/optional. */
+  i18n: i18nMapSchema.optional(),
+  /** Locale the authored strings are written in (the implicit default for every node's `i18n`).
+   *  The Run view uses it as the default `fallbackLocale` and seeds its language switcher.
+   *  Additive/optional. */
+  defaultLocale: z.string().optional(),
+  /** Extra locales this workflow offers translations for — drives the Run view's language
+   *  switcher. The authored default locale is implicit (not listed here). Additive/optional. */
+  locales: z.array(z.string()).optional(),
 });
 
 /** One advance recorded on an instance's history. */

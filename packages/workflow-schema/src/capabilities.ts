@@ -25,16 +25,16 @@ export const WORKFLOW_PRIMITIVES: readonly WorkflowPrimitive[] = [
   {
     kind: "node",
     required: ["id", "status"],
-    optional: ["formId", "kind", "position", "statusCode"],
+    optional: ["formId", "i18n", "kind", "position", "statusCode"],
     summary:
-      "A state in the workflow. `status` is the human label; `formId` binds a form (by id) shown in that state. `statusCode` references a project status catalog entry; `kind` (start|normal|end) is a frozen category snapshot for colour fallback.",
+      "A state in the workflow. `status` is the human label; `formId` binds a form (by id) shown in that state. `statusCode` references a project status catalog entry; `kind` (start|normal|end) is a frozen category snapshot for colour fallback. `i18n` localizes the `status` label per locale.",
   },
   {
     kind: "transition",
     required: ["id", "from", "to", "action"],
-    optional: ["guard", "role"],
+    optional: ["guard", "i18n", "role"],
     summary:
-      "A directed edge between nodes. `action` is the event that fires it; `guard` (JSONLogic) and `role` gate it.",
+      "A directed edge between nodes. `action` is the event that fires it; `guard` (JSONLogic) and `role` gate it. `i18n` localizes the action's display LABEL per locale — `action` itself stays the engine identifier.",
   },
   {
     kind: "guard",
@@ -47,10 +47,10 @@ export const WORKFLOW_PRIMITIVES: readonly WorkflowPrimitive[] = [
 /** Top-level required/optional keys of a workflow definition. */
 export const WORKFLOW_DEFINITION_SHAPE = {
   required: ["workflowVersion", "id", "title", "start", "nodes", "transitions"],
-  optional: [],
+  optional: ["defaultLocale", "i18n", "locales"],
   /** `start` must name an existing node id; transitions' `from`/`to` reference node ids. */
   notes:
-    "`start` names the entry node id. Nodes reference forms by id. Transitions reference node ids in `from`/`to`.",
+    "`start` names the entry node id. Nodes reference forms by id. Transitions reference node ids in `from`/`to`. `i18n` localizes the `title`; `defaultLocale`/`locales` declare the languages offered.",
 } as const;
 
 /**

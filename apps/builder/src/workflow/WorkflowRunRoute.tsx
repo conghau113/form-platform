@@ -1,4 +1,5 @@
 import { FormRenderer, type FormRendererHandle } from "@org/form-renderer-web";
+import { localizeWorkflow } from "@org/workflow-core";
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import {
   Alert,
@@ -15,7 +16,7 @@ import {
 } from "antd";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { runActions } from "./run-actions";
+import { actionLabel, runActions } from "./run-actions";
 import { workflowRoles } from "./run-roles";
 import { indexStatusCatalog, resolveStatusStyle, useStatusCatalog } from "./status-catalog";
 import { useFormDefinition } from "./useFormDefinition";
@@ -28,6 +29,40 @@ import {
 import { useWorkflow } from "./useWorkflows";
 
 const { Title, Text } = Typography;
+
+/** The locales this workflow offers (authored default + declared extras), mirroring App.tsx's form
+ *  language switcher. Empty ⇒ no switcher and no localization. */
+function localeOptionsOf(def: WorkflowDefinition): string[] {
+  const all = [...(def.defaultLocale ? [def.defaultLocale] : []), ...(def.locales ?? [])];
+  return [...new Set(all)];
+}
+
+/** The Run view language switcher — only rendered when the workflow declares locales (WF4b). */
+function LocaleSwitcher({
+  options,
+  locale,
+  onLocale,
+}: {
+  options: string[];
+  locale: string | undefined;
+  onLocale: (locale: string | undefined) => void;
+}) {
+  if (options.length === 0) return null;
+  return (
+    <Space size="small">
+      <Text type="secondary">Ngôn ngữ:</Text>
+      <Select<string>
+        allowClear
+        size="small"
+        style={{ width: 120 }}
+        placeholder="Mặc định"
+        value={locale}
+        onChange={onLocale}
+        options={options.map((l) => ({ label: l, value: l }))}
+      />
+    </Space>
+  );
+}
 
 /**
  * Workflow Run view (WF3b) — operates a workflow at runtime, the counterpart to the editor. Two
@@ -91,8 +126,16 @@ function CaseLauncher({
   const byCode = useMemo(() => indexStatusCatalog(entries), [entries]);
   const [starting, setStarting] = useState(false);
 
+  // WF4b: localize state labels + title for display; switcher offers the declared locales.
+  const localeOptions = useMemo(() => localeOptionsOf(def), [def]);
+  const [locale, setLocale] = useState<string | undefined>(def.defaultLocale);
+  const view = useMemo(
+    () => (locale ? localizeWorkflow(def, locale, def.defaultLocale) : def),
+    [def, locale],
+  );
+
   const labelOf = (stateId: string): string => {
-    const node = def.nodes.find((n) => n.id === stateId);
+    const node = view.nodes.find((n) => n.id === stateId);
     return node ? resolveStatusStyle(node, byCode).label : stateId;
   };
 
@@ -111,13 +154,16 @@ function CaseLauncher({
   return (
     <div style={{ padding: 24, maxWidth: 760, margin: "0 auto" }}>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
-        <Space style={{ justifyContent: "space-between", width: "100%" }}>
+        <Space style={{ justifyContent: "space-between", width: "100%" }} wrap>
           <Title level={3} style={{ margin: 0 }}>
-            {def.title}
+            {view.title}
           </Title>
-          <Button type="primary" loading={starting} onClick={onStart}>
-            Bắt đầu case mới
-          </Button>
+          <Space wrap>
+            <LocaleSwitcher options={localeOptions} locale={locale} onLocale={setLocale} />
+            <Button type="primary" loading={starting} onClick={onStart}>
+              Bắt đầu case mới
+            </Button>
+          </Space>
         </Space>
 
         <Card title="Các case đang chạy" size="small">
@@ -175,7 +221,16 @@ function CaseRunner({
   const { entries } = useStatusCatalog(projectId);
   const byCode = useMemo(() => indexStatusCatalog(entries), [entries]);
 
-  const node = instance ? def.nodes.find((n) => n.id === instance.current) : undefined;
+  // WF4b: a localized view for display (title/status/action labels + the bound form). Actions still
+  // fire on the ORIGINAL `def` — `action` is the engine identifier, never the localized label.
+  const localeOptions = useMemo(() => localeOptionsOf(def), [def]);
+  const [locale, setLocale] = useState<string | undefined>(def.defaultLocale);
+  const view = useMemo(
+    () => (locale ? localizeWorkflow(def, locale, def.defaultLocale) : def),
+    [def, locale],
+  );
+
+  const node = instance ? view.nodes.find((n) => n.id === instance.current) : undefined;
   const { definition: form, loading: formLoading } = useFormDefinition(node?.formId);
 
   // Domain roles the workflow gates transitions on; the operator declares which they act in
@@ -238,14 +293,17 @@ function CaseRunner({
   return (
     <div style={{ padding: 24, maxWidth: 760, margin: "0 auto" }}>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
-        <Space style={{ justifyContent: "space-between", width: "100%" }}>
+        <Space style={{ justifyContent: "space-between", width: "100%" }} wrap>
           <Space>
             <Button onClick={back}>← Danh sách case</Button>
             <Title level={4} style={{ margin: 0 }}>
-              {def.title}
+              {view.title}
             </Title>
           </Space>
-          {style ? <Tag color={style.color}>{style.label}</Tag> : <Tag>{instance.current}</Tag>}
+          <Space wrap>
+            <LocaleSwitcher options={localeOptions} locale={locale} onLocale={setLocale} />
+            {style ? <Tag color={style.color}>{style.label}</Tag> : <Tag>{instance.current}</Tag>}
+          </Space>
         </Space>
 
         <Card size="small">
@@ -259,6 +317,8 @@ function CaseRunner({
                 initialValues={instance.data}
                 hideSubmit
                 onSubmit={onSubmit}
+                locale={locale}
+                fallbackLocale={def.defaultLocale}
               />
             ) : (
               <Alert type="warning" showIcon message="Form gắn với trạng thái này không tải được" />
@@ -290,7 +350,7 @@ function CaseRunner({
           ) : (
             actions.map((action) => (
               <Button key={action} type="primary" loading={busy} onClick={() => onAction(action)}>
-                {action}
+                {actionLabel(def, action, locale, def.defaultLocale)}
               </Button>
             ))
           )}

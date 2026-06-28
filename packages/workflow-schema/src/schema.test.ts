@@ -56,4 +56,37 @@ describe("workflowDefinitionSchema", () => {
     const bad = { ...validDef, nodes: [{ id: "a", status: "x", kind: "optional" }] };
     expect(() => workflowDefinitionSchema.parse(bad)).toThrow();
   });
+
+  // WF4b i18n is additive: nodes/transitions gained an optional `i18n` map and the definition
+  // gained `i18n`/`defaultLocale`/`locales`. Old definitions without them must keep parsing.
+  it("parses an old definition without WF4b i18n fields (parse-compat)", () => {
+    const out = workflowDefinitionSchema.parse(validDef);
+    expect(out.i18n).toBeUndefined();
+    expect(out.defaultLocale).toBeUndefined();
+    expect(out.locales).toBeUndefined();
+    expect(out.nodes[0].i18n).toBeUndefined();
+    expect(out.transitions[0].i18n).toBeUndefined();
+  });
+
+  it("parses a definition carrying i18n on node, transition and definition", () => {
+    const localized = {
+      ...validDef,
+      defaultLocale: "en",
+      locales: ["vi"],
+      i18n: { title: { vi: "Quy trình" } },
+      nodes: [
+        { id: "a", status: "created", formId: "f1", i18n: { status: { vi: "Đã tạo" } } },
+        { id: "b", status: "done" },
+      ],
+      transitions: [
+        { id: "t1", from: "a", to: "b", action: "next", i18n: { action: { vi: "Tiếp" } } },
+      ],
+    };
+    const out = workflowDefinitionSchema.parse(localized);
+    expect(out.i18n?.title.vi).toBe("Quy trình");
+    expect(out.defaultLocale).toBe("en");
+    expect(out.locales).toEqual(["vi"]);
+    expect(out.nodes[0].i18n?.status.vi).toBe("Đã tạo");
+    expect(out.transitions[0].i18n?.action.vi).toBe("Tiếp");
+  });
 });

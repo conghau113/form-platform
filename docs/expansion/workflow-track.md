@@ -180,11 +180,25 @@ authoritative on *access* (project role gates whether you may advance at all). S
   `role-denied` (gate is real, not cosmetic); re-add "manager" → it advances manager_review→hr_review.
   (Threw away one test instance; no DELETE-instance endpoint, harmless.)
 
-### WF4b — i18n of status/action labels (next)
-Reuse the form i18n pattern (inline `i18n` maps on nodes/transitions + a `localizeWorkflow` in
-workflow-core, mirroring form-core's `localizeForm`). CONTRACT-additive (optional keys ⇒ no
-`workflowVersion` bump, parse-compat test) + engine + editor/Run surfaces. Changeset for the changed
-published packages. Own slice; not started.
+### WF4b — i18n of status/action labels ✅ DONE (Foundation + Run)
+Reused the form i18n pattern. CONTRACT-additive (no `workflowVersion` bump, parse-compat tests):
+optional `i18n` map on node (`status`), transition (action display LABEL — `action` stays the engine
+identifier), definition (`title`) + definition `defaultLocale`/`locales` (mirror form-schema's
+declared switcher list, NOT a scan). `localizeWorkflow(def, locale, fallback?)` in workflow-core
+mirrors `localizeForm` — resolves `title`+`status`, never touches identifiers (`node.id`,
+`transition.action`). Run view (`WorkflowRunRoute.tsx`) localizes title/status + action labels (via
+builder `actionLabel`, firing still uses the raw id) + passes `locale` to the bound `FormRenderer`;
+switcher driven by `locales` (mirror `App.tsx:129`). Round-trip preservation in `workflow-model.ts`
+(`toFlow`/`fromFlow` carry i18n/defaultLocale/locales, emitted last + conditionally so the dirty
+check byte-matches) so an AI/JSON-authored map survives a Save — also fixed a pre-existing latent
+`fromFlow` ordering bug (transition `role` emitted before `guard`; schema order is guard,role).
+Changesets: `@org/workflow-schema` minor + `@org/workflow-core` minor.
+**Verify:** workflow-schema 22 + workflow-core 26 (localize 6) + workflow-ai 22 (moat no regress) +
+builder workflow 57 (run-actions 8, workflow-model 5) tests green; typecheck clean (api EPERM prisma-DLL
+= env); biome clean on changed files; reviewer subagent PASS; **live-smoke MCP PASS** (server preserves
+i18n on POST; switcher relabels title/status/action; firing localized button advances via raw id;
+editor opens i18n wf with no false-dirty). Editor *authoring* UI for i18n maps deferred to WF4c (its
+priority hinges on the unresolved infra-vs-app fork).
 
 Later still: workflow templates, native parity, and — only if the strategic fork lands on "app" —
 server-assigned domain-role RBAC (member→role assignments) as the authoritative successor to WF4a's

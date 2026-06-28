@@ -21,3 +21,28 @@ export function runActions(def: WorkflowDefinition, current: string): string[] {
   }
   return actions;
 }
+
+/**
+ * The localized DISPLAY label for an action id (WF4b). `action` is the engine identifier, so it is
+ * never mutated — the label lives in a transition's `i18n.action` map and is resolved here for
+ * display only (the Run view still fires the raw id). Returns the first matching transition's
+ * localized label, falling back to `fallback`, then the raw `action` id. No `locale` ⇒ the id, so
+ * this is a no-op for non-localized workflows.
+ */
+export function actionLabel(
+  def: WorkflowDefinition,
+  action: string,
+  locale?: string,
+  fallback?: string,
+): string {
+  if (locale) {
+    for (const t of def.transitions) {
+      const byLocale = t.action === action ? t.i18n?.action : undefined;
+      if (byLocale) {
+        const translated = byLocale[locale] ?? (fallback ? byLocale[fallback] : undefined);
+        if (translated !== undefined) return translated;
+      }
+    }
+  }
+  return action;
+}

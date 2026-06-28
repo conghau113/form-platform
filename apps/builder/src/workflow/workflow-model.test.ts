@@ -1,4 +1,4 @@
-import type { WorkflowDefinition } from "@org/workflow-schema";
+import { type WorkflowDefinition, workflowDefinitionSchema } from "@org/workflow-schema";
 import { describe, expect, it } from "vitest";
 import { fromFlow, toFlow } from "./workflow-model";
 
@@ -54,5 +54,30 @@ describe("workflow-model boundary", () => {
     expect(serialized).not.toContain("dragging");
     expect(serialized).not.toContain("measured");
     expect(out).toEqual(def);
+  });
+
+  // WF4b: the editor has no i18n authoring UI yet, so an AI/JSON-authored i18n must survive a
+  // toFlow → fromFlow round-trip rather than being dropped on Save.
+  it("carries i18n / defaultLocale / locales through the round-trip", () => {
+    const localized: WorkflowDefinition = {
+      ...def,
+      defaultLocale: "en",
+      locales: ["vi"],
+      i18n: { title: { vi: "Quy trình" } },
+      nodes: [{ ...def.nodes[0], i18n: { status: { vi: "Đã tạo" } } }, def.nodes[1]],
+      transitions: [{ ...def.transitions[0], i18n: { action: { vi: "Duyệt" } } }],
+    };
+    const { meta, nodes, edges } = toFlow(localized);
+    expect(fromFlow(meta, nodes, edges)).toEqual(localized);
+  });
+
+  // The dirty check compares JSON.stringify(fromFlow(...)) against the Zod-parsed baseline, so the
+  // round-trip must be BYTE-identical (key order included) — for defs with and without i18n.
+  it("byte-matches the Zod-parsed baseline (no false-dirty)", () => {
+    for (const input of [def, { ...def, defaultLocale: "en", i18n: { title: { vi: "QT" } } }]) {
+      const parsed = workflowDefinitionSchema.parse(input);
+      const { meta, nodes, edges } = toFlow(parsed);
+      expect(JSON.stringify(fromFlow(meta, nodes, edges))).toBe(JSON.stringify(parsed));
+    }
   });
 });
