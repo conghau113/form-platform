@@ -51,6 +51,14 @@ export class FormVersionsService {
     return this.versions.listByForm(formId);
   }
 
+  /** The form's currently-active published version (with body), or `null` if it was never published
+   *  (gate: viewer). Unlike {@link getVersion}, "never published" is a normal state, not a 404 —
+   *  the builder uses this for the editor's publish badge + the version↔draft diff. */
+  async loadActiveVersion(ownerId: string, formId: string): Promise<FormVersion | null> {
+    await this.requireFormAccess(ownerId, formId, "viewer");
+    return this.versions.loadActive(formId);
+  }
+
   /** Load one published version by sequence number, with its frozen body (gate: viewer). */
   async getVersion(ownerId: string, formId: string, version: number): Promise<FormVersion> {
     await this.requireFormAccess(ownerId, formId, "viewer");

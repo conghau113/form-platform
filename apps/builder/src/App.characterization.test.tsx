@@ -42,6 +42,11 @@ function mockFetch(opts: MockOptions = {}) {
     const method = init?.method ?? "GET";
     // Preset library load on mount (usePresets) — keep it empty.
     if (url.includes("/presets")) return Promise.resolve(ok([]));
+    // Publish badge load on mount (PublishControl, when a formId is set) — empty body ⇒ "never
+    // published". `getActiveVersion` reads `.text()`, so this branch must precede the `/forms` one.
+    if (url.includes("/active-version")) {
+      return Promise.resolve({ ok: true, statusText: "OK", text: async () => "" });
+    }
     if (url.includes("/themes/")) {
       if (method === "POST") return Promise.resolve(ok({}));
       return Promise.resolve(themeExists ? ok({}) : fail("Not found"));

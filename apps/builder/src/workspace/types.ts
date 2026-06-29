@@ -63,6 +63,20 @@ export interface SubmissionSummary {
   submittedAt: string;
 }
 
+/** Index summary of a published form version (no body) — mirrors the api `FormVersionSummary` (FB1). */
+export interface FormVersionSummary {
+  id: string;
+  formId: string;
+  projectId: string;
+  /** 1-based publish sequence number (per form). */
+  version: number;
+  /** `formVersion` of the frozen snapshot (denorm of `body.formVersion`). */
+  formVersion: number;
+  publishedBy: string;
+  /** ISO-8601 timestamp of publication. */
+  publishedAt: string;
+}
+
 /** `GET /projects/:id/tree` payload: flat lists the client assembles into a tree. */
 export interface ProjectTree {
   project: ProjectRecord;

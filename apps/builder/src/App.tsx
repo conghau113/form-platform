@@ -26,6 +26,7 @@ import { parseFormFile } from "./lib";
 import { PropertyPanel } from "./PropertyPanel";
 import { presetResolverFromList, usePresets } from "./presets";
 import { TemplateGallery, useUserTemplates } from "./templates";
+import { PublishControl } from "./versions";
 import { CompositePanel } from "./workbench/CompositePanel";
 import { HoverProvider } from "./workbench/hover";
 import { oneOf, usePersistentState } from "./workbench/persist";
@@ -280,6 +281,7 @@ export function App({
             <Button type="primary" onClick={onSave}>
               Save
             </Button>
+            {formId && <PublishControl formId={formId} schema={schema} onSave={onSave} />}
             <Button onClick={() => onLoad()}>Load</Button>
           </Space>
         </header>

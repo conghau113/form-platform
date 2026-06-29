@@ -26,6 +26,13 @@ export class FormVersionsController {
     return this.versions.listVersions(ownerId, id);
   }
 
+  /** The form's active published version (with body), or `null`/empty when never published. Distinct
+   *  path from `:id/versions/:version` (no param capture). Powers the editor publish badge + diff. */
+  @Get(":id/active-version")
+  active(@CurrentOwner() ownerId: string, @Param("id") id: string): Promise<FormVersion | null> {
+    return this.versions.loadActiveVersion(ownerId, id);
+  }
+
   /** Load one published version (with its frozen body) by sequence number. */
   @Get(":id/versions/:version")
   getOne(

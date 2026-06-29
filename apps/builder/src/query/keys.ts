@@ -18,4 +18,8 @@ export const qk = {
   // `roles` is part of the key: changing the reader's declared roles (FS2) re-fetches, since the
   // server masks fields the reader can't view differently per role set.
   submission: (id: string, roles: string[] = []) => ["submissions", id, roles] as const,
+  // Form publish/version history (FB1): the list, one frozen version, and the active published one.
+  versions: (formId: string) => ["forms", "versions", formId] as const,
+  version: (formId: string, version: number) => ["forms", "versions", formId, version] as const,
+  activeVersion: (formId: string) => ["forms", "active-version", formId] as const,
 } as const;

@@ -244,6 +244,20 @@ describe("FormVersionsService", () => {
     await expect(service.getVersion(OWNER, "contact", 9)).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it("returns null for the active version of a never-published form (not a 404)", async () => {
+    await seedForm();
+    await expect(service.loadActiveVersion(OWNER, "contact")).resolves.toBeNull();
+  });
+
+  it("returns the active published version after publishing", async () => {
+    await seedForm();
+    await service.publish(OWNER, "contact");
+    await service.publish(OWNER, "contact"); // active follows the latest publish
+    const active = await service.loadActiveVersion(OWNER, "contact");
+    expect(active?.version).toBe(2);
+    expect(active?.body.fields).toHaveLength(1);
+  });
+
   it("clones a past version back into the draft, keeping the form's placement", async () => {
     await seedForm(form(), "folder-x");
     await service.publish(OWNER, "contact"); // v1 = label "Email"

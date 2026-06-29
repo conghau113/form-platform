@@ -90,14 +90,18 @@ Form publish/submit/lưu/xem-lại end-to-end, server-side validated, pinned sna
   client/hook/qk. KHÔNG migration, KHÔNG bump contract.
 
 ### FB1 — Form draft/publish/version (governance hardening)
-**FB1a (backend) ✅ DONE (reviewer + live smoke PASS).** FB1b (builder UI) = TODO.
+**FB1a (backend) ✅ DONE (`1e3a720`).** **FB1b (builder UI) ✅ DONE (reviewer + live smoke PASS).**
 - [x] `FormVersion` immutable snapshot + `publishedAt`/`publishedBy`/`activeVersion`; save = draft;
   publish tạo version; **submission ưu tiên active published version, fallback draft** (owner chốt —
   không strict). Submission FS1 đã pin snapshot ⇒ additive hardening (không phá dữ liệu cũ).
 - [x] Endpoints: `POST /forms/:id/publish`, `GET /forms/:id/versions`, `GET /forms/:id/versions/:v`,
-  `POST /forms/:id/versions/:v/clone-draft` (clone-draft = rollback: version body → draft).
-- [ ] **FB1b (builder UI):** nút Publish + badge "draft ahead" (`updatedAt > publishedAt`), version
-  history drawer, diff version↔draft, rollback/clone button. client.ts + react-query.
+  `POST /forms/:id/versions/:v/clone-draft` (clone-draft = rollback: version body → draft),
+  `GET /forms/:id/active-version` (FB1b: active version body, null khi chưa publish — cho badge+diff).
+- [x] **FB1b (builder UI):** nút Publish + badge "draft ahead" trên header editor; route Versions
+  riêng (`/forms/:id/versions`): publish + lịch sử + xem read-only + rollback + **field-level diff**
+  version↔draft. **Badge content-based** (`diffForms(active.body, draft)` ≠ rỗng), KHÔNG so timestamp
+  (publish tự bump `updatedAt` ⇒ timestamp false-positive). Feature folder `apps/builder/src/versions/`
+  (client/diff+test/useVersions/VersionsRoute/PublishControl), mirror `submissions/`.
 
 ### FS3 — File storage
 - [ ] Upload endpoint + storage adapter (local/S3-compatible) + metadata in submission + size/type
@@ -218,3 +222,28 @@ ngã ba (task inbox/governance nặng = nhánh app; MCP submission tool = nhánh
     (`npx vite`) cho UI-smoke. Live-smoke chạy api+vite STANDALONE (port 3001/5173); owner nên
     `pnpm dev` lại sau /clear. NEXT = **FB1 (draft/publish/version)** HOẶC FS3 (file storage) — ngã ba
     infra-vs-app vẫn chưa chốt; FS2 hợp-lệ cả hai nhánh.
+- 2026-06-29 (đóng phase): **FB1b DONE — Form draft/publish/version (builder UI).** Owner chốt 2:
+  Publish ở **header editor + panel Versions riêng**; diff **field-level**.
+  - **Backend (additive):** `FormVersionsService.loadActiveVersion` + controller `GET /forms/:id/active-version`
+    (`FormVersion | null`, never-published = null KHÔNG 404; reuse repo `loadActive` đã có) + 2 test
+    (service 7). KHÔNG prisma/migration/changeset.
+  - **Builder feature `apps/builder/src/versions/`** (mirror `submissions/`): `client.ts` (publish/list/
+    getVersion/getActiveVersion/cloneDraft, empty-body→null); `diff.ts` pure `diffForms` field-level
+    (flatten leaf reuse `childrenOf`/`isLayoutContainer`, container transparent + array `name[].child`,
+    skip display-text) + `hasFormChanges` + `diff.test.ts` (7); `useVersions.ts` (list/version/active
+    query + publish/cloneDraft mutation + invalidation); `VersionsRoute.tsx` (history + publish + Xem
+    readPretty modal + Khôi phục clone-draft confirm + DiffView Thêm/Xoá/Đổi); `PublishControl.tsx`
+    header widget (Publish save-then-publish + **badge content-based** `diffForms(active.body, schema)`
+    ≠ rỗng → KHÔNG so timestamp vì publish bump `updatedAt`). Wiring: qk `versions/version/activeVersion`,
+    type `FormVersionSummary`, route `/forms/:id/versions`, ExplorerRail menu "Versions", App.tsx render
+    `<PublishControl>` khi có formId, characterization mockFetch route `/active-version`.
+  - **Verify ALL PASS:** builder+api typecheck sạch · api 114 (form-versions 7) · diff 7 · App
+    characterization 5 (riêng) · biome sạch 16 file · **reviewer PASS** · **live smoke**: HTTP thật
+    (active-version null→v1→**pin v1 khi draft +phone**→v2→clone-draft rollback 1-field) + **UI MCP**
+    (header badge "Chưa publish"→Publish→"Đã publish v1"; panel Versions: diff "trùng khớp v1", lịch sử
+    v1, Xem modal readPretty; console chỉ RR future-flag pre-existing — đã sửa `destroyOnClose`→`destroyOnHidden`).
+  - ⚠️ **GOTCHA (mới, quan trọng):** smoke đầu FALSE-FAIL `active-version` 404 vì **server FB1a CŨ còn
+    bind 3001** (EADDRINUSE — server mới KHÔNG bind) ⇒ trước live-smoke phải KILL process nghe 3001 rồi
+    start lại (Nest log Mapped route nhưng request "Cannot GET" = đang hit server cũ). Express 4 path-to-regexp
+    KHỚP route hyphen (`active-version`) bình thường — KHÔNG phải lỗi route. NEXT = **FS3 (file storage)**
+    HOẶC FS4 (ops) — FB1 (versioning) XONG cả backend+UI; ngã ba infra-vs-app vẫn chưa chốt.
