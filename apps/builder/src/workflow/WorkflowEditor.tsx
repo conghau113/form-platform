@@ -1,4 +1,4 @@
-import { QuestionCircleOutlined } from "@ant-design/icons";
+import { PlayCircleOutlined, QuestionCircleOutlined } from "@ant-design/icons";
 import { FormRenderer } from "@org/form-renderer-web";
 import { type GraphError, type GraphWarning, lintGraph, validateGraph } from "@org/workflow-core";
 import {
@@ -44,6 +44,7 @@ import {
   Typography,
 } from "antd";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { App } from "../App";
 import { useHistory } from "../editor/history";
 import { saveForm } from "../workspace/client";
@@ -185,6 +186,7 @@ function WorkflowEditorInner({
   const [showKeyHelp, setShowKeyHelp] = useState(false);
   const { deleteElements, screenToFlowPosition, fitView, getNode, getViewport, setCenter } =
     useReactFlow();
+  const navigate = useNavigate();
   // Pane pixel size (reactive from the xyflow store) — needed to tell whether a node is off-screen.
   const paneWidth = useStore((s) => s.width);
   const paneHeight = useStore((s) => s.height);
@@ -832,6 +834,19 @@ function WorkflowEditorInner({
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
           />
+          {projectId ? (
+            // Jump to the Run view to operate this workflow. The route's unsaved-changes blocker
+            // (useBlocker) catches the navigation while dirty and offers Save / Discard / Cancel.
+            <Button
+              icon={<PlayCircleOutlined />}
+              onClick={() =>
+                navigate(`/projects/${projectId}/workflows/${definition.id}/run`)
+              }
+              title="Mở chế độ chạy"
+            >
+              Run
+            </Button>
+          ) : null}
           <Button type="primary" disabled={!dirty} onClick={save}>
             Save
           </Button>

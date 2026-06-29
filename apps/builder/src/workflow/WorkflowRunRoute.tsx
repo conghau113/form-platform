@@ -7,6 +7,7 @@ import {
   Card,
   Empty,
   message,
+  Segmented,
   Select,
   Space,
   Spin,
@@ -16,7 +17,7 @@ import {
 } from "antd";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { actionLabel, runActions } from "./run-actions";
+import { actionLabel, isTerminalState, runActions } from "./run-actions";
 import { workflowRoles } from "./run-roles";
 import { indexStatusCatalog, resolveStatusStyle, useStatusCatalog } from "./status-catalog";
 import { useFormDefinition } from "./useFormDefinition";
@@ -126,6 +127,20 @@ function CaseLauncher({
   const byCode = useMemo(() => indexStatusCatalog(entries), [entries]);
   const [starting, setStarting] = useState(false);
 
+  // #3: a case is "done" when its current state is terminal (no outgoing transition). Default to the
+  // running cases so a long-lived list isn't dominated by finished ones; offer Done / All as well.
+  type Filter = "active" | "done" | "all";
+  const [filter, setFilter] = useState<Filter>("active");
+  const { active, done } = useMemo(() => {
+    const a: typeof instances = [];
+    const d: typeof instances = [];
+    for (const inst of instances) {
+      (isTerminalState(def, inst.current) ? d : a).push(inst);
+    }
+    return { active: a, done: d };
+  }, [instances, def]);
+  const visible = filter === "active" ? active : filter === "done" ? done : instances;
+
   // WF4b: localize state labels + title for display; switcher offers the declared locales.
   const localeOptions = useMemo(() => localeOptionsOf(def), [def]);
   const [locale, setLocale] = useState<string | undefined>(def.defaultLocale);
@@ -166,14 +181,40 @@ function CaseLauncher({
           </Space>
         </Space>
 
-        <Card title="Các case đang chạy" size="small">
+        <Card
+          title="Các case"
+          size="small"
+          extra={
+            instances.length > 0 ? (
+              <Segmented<Filter>
+                size="small"
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { label: `Đang chạy (${active.length})`, value: "active" },
+                  { label: `Đã xong (${done.length})`, value: "done" },
+                  { label: `Tất cả (${instances.length})`, value: "all" },
+                ]}
+              />
+            ) : null
+          }
+        >
           {loading ? (
             <Spin />
-          ) : instances.length === 0 ? (
-            <Empty description="Chưa có case nào" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          ) : visible.length === 0 ? (
+            <Empty
+              description={
+                instances.length === 0
+                  ? "Chưa có case nào"
+                  : filter === "active"
+                    ? "Không có case đang chạy"
+                    : "Không có case đã xong"
+              }
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
           ) : (
             <Space direction="vertical" style={{ width: "100%" }}>
-              {instances.map((inst) => (
+              {visible.map((inst) => (
                 <Button
                   key={inst.id}
                   block

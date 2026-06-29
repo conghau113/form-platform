@@ -8,6 +8,15 @@ function node(id: string): FlowNode {
 function edge(source: string, target: string): FlowEdge {
   return { id: `${source}-${target}`, source, target, data: { action: "next" } };
 }
+function labeledEdge(source: string, target: string): FlowEdge {
+  return {
+    id: `${source}-${target}`,
+    source,
+    target,
+    label: "submit",
+    data: { action: "submit", role: "reviewer", guard: { "==": [{ var: "ok" }, true] } },
+  };
+}
 
 describe("tidyLayout", () => {
   it("returns nodes unchanged for an empty graph", () => {
@@ -27,6 +36,17 @@ describe("tidyLayout", () => {
       expect(Number.isFinite(n.position.x)).toBe(true);
       expect(Number.isFinite(n.position.y)).toBe(true);
     }
+  });
+
+  it("reserves more horizontal room between columns for labeled/guarded edges (#6)", () => {
+    const nodes = [node("a"), node("b")];
+    const bare = tidyLayout(nodes, [edge("a", "b")]);
+    const labeled = tidyLayout(nodes, [labeledEdge("a", "b")]);
+    const gap = (out: FlowNode[]) => {
+      const x = Object.fromEntries(out.map((n) => [n.id, n.position.x]));
+      return x.b - x.a;
+    };
+    expect(gap(labeled)).toBeGreaterThan(gap(bare));
   });
 
   it("preserves id/data and does not mutate the input", () => {

@@ -30,6 +30,19 @@ import { CheckboxGroupControl } from "./CheckboxGroupControl.js";
 import { SelectControl } from "./SelectControl.js";
 import { TreeSelectControl } from "./TreeSelectControl.js";
 
+/** Forward antd `addonBefore`/`addonAfter` only when the field actually configures one. Passing the
+ *  key at all — even `undefined` — trips antd 5.x's deprecation warning (it checks `'addonBefore' in
+ *  props`), so an omitted addon would otherwise warn on every input render. */
+function addonProps(node: { addonBefore?: string; addonAfter?: string }): {
+  addonBefore?: string;
+  addonAfter?: string;
+} {
+  return {
+    ...(node.addonBefore !== undefined ? { addonBefore: node.addonBefore } : {}),
+    ...(node.addonAfter !== undefined ? { addonAfter: node.addonAfter } : {}),
+  };
+}
+
 /** Maps a rate `character` preset to the glyph passed to antd's Rate. `star` keeps antd's
  *  default star icon (undefined); the others are plain text glyphs — no icon import. */
 const RATE_CHARACTER: Record<string, string | undefined> = {
@@ -72,8 +85,7 @@ export function FieldControl(props: {
           showCount={node.showCount}
           prefix={resolveIconNode(node.prefixIcon) ?? node.prefix}
           suffix={resolveIconNode(node.suffixIcon) ?? node.suffix}
-          addonBefore={node.addonBefore}
-          addonAfter={node.addonAfter}
+          {...addonProps(node)}
           size={node.size}
           variant={node.variant}
           onChange={(e) => onChange(e.target.value)}
@@ -109,8 +121,7 @@ export function FieldControl(props: {
           step={node.step}
           precision={node.precision}
           prefix={resolveIconNode(node.prefixIcon) ?? node.prefix}
-          addonBefore={node.addonBefore}
-          addonAfter={node.addonAfter}
+          {...addonProps(node)}
           controls={node.controls}
           keyboard={node.keyboard}
           size={node.size}

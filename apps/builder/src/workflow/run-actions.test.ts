@@ -1,6 +1,6 @@
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import { describe, expect, it } from "vitest";
-import { actionLabel, runActions } from "./run-actions";
+import { actionLabel, isTerminalState, runActions } from "./run-actions";
 
 const def = (transitions: WorkflowDefinition["transitions"]): WorkflowDefinition => ({
   workflowVersion: 1,
@@ -36,6 +36,24 @@ describe("runActions", () => {
   it("returns no actions for a terminal state", () => {
     const d = def([t("t1", "draft", "done", "submit")]);
     expect(runActions(d, "done")).toEqual([]);
+  });
+});
+
+describe("isTerminalState", () => {
+  it("is false for a state with an outgoing transition", () => {
+    const d = def([t("t1", "draft", "review", "submit"), t("t2", "review", "done", "approve")]);
+    expect(isTerminalState(d, "draft")).toBe(false);
+    expect(isTerminalState(d, "review")).toBe(false);
+  });
+
+  it("is true for a state with no outgoing transition (done)", () => {
+    const d = def([t("t1", "draft", "done", "submit")]);
+    expect(isTerminalState(d, "done")).toBe(true);
+  });
+
+  it("is true for a state guard-branched into but never out of", () => {
+    const d = def([t("t1", "draft", "rejected", "reject")]);
+    expect(isTerminalState(d, "rejected")).toBe(true);
   });
 });
 

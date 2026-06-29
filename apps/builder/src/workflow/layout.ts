@@ -6,6 +6,21 @@ const NODE_W = 180;
 const NODE_H = 64;
 
 /**
+ * Estimate an edge's rendered label box (action label + optional role/guard chips, stacked) so dagre
+ * can reserve a rank slot for it (#6). Without this dagre lays out as if edges are bare and a centred
+ * label collides with a node when columns are tight. PURE; returns `null` for a label-less edge.
+ * Dimensions mirror `floating-edge.tsx`: the action box ≈26px tall, each chip ≈22px, capped ~150 wide.
+ */
+function estimateEdgeLabelSize(edge: FlowEdge): { width: number; height: number } | null {
+  let height = 0;
+  if (edge.label) height += 26;
+  if (edge.data?.role) height += 22;
+  if (edge.data?.guard) height += 22;
+  if (height === 0) return null;
+  return { width: 150, height };
+}
+
+/**
  * Auto-arrange the graph left-to-right with dagre. PURE: returns NEW nodes with refreshed
  * positions (xyflow's top-left origin) and leaves ids/data/edges untouched, so the caller can
  * `setNodes(tidyLayout(...))` and the change flows through `fromFlow` like any manual drag.
@@ -26,7 +41,11 @@ export function tidyLayout(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[] {
     });
   }
   for (const e of edges) {
-    if (g.hasNode(e.source) && g.hasNode(e.target)) g.setEdge(e.source, e.target);
+    if (!(g.hasNode(e.source) && g.hasNode(e.target))) continue;
+    // Reserve space for the edge's label so dagre routes columns around it instead of letting it
+    // overlap a node; bare edges stay tight (`{}`).
+    const size = estimateEdgeLabelSize(e);
+    g.setEdge(e.source, e.target, size ? { ...size, labelpos: "c" } : {});
   }
 
   dagre.layout(g);

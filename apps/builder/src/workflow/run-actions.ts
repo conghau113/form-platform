@@ -23,6 +23,16 @@ export function runActions(def: WorkflowDefinition, current: string): string[] {
 }
 
 /**
+ * Whether a state is terminal — has no outgoing transition, so a case sitting on it is **done** and
+ * can advance no further (#3 run-list filter). Structural (graph-only), independent of case data, so
+ * the launcher can partition the case list active/done from the workflow `def` + each summary's
+ * `current` with no server round-trip. Mirrors {@link runActions} returning `[]` for a terminal state.
+ */
+export function isTerminalState(def: WorkflowDefinition, stateId: string): boolean {
+  return availableTransitions(def, stateId).length === 0;
+}
+
+/**
  * The localized DISPLAY label for an action id (WF4b). `action` is the engine identifier, so it is
  * never mutated — the label lives in a transition's `i18n.action` map and is resolved here for
  * display only (the Run view still fires the raw id). Returns the first matching transition's

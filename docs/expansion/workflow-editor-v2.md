@@ -333,3 +333,31 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
     Backfill 3 instance demo cũ qua script tạm (đã xoá khỏi repo). Owner gate push (chưa push). CÒN 5
     vấn đề UX (#3 lọc run-list · #4 nút Run editor · #5 i18n validate-msg · #6 edge-label overlap ·
     #7 antd deprec) — chờ owner chọn tiếp.
+- 2026-06-29 (session 15): ✅ **UX#3 + #4 + #6 + #7 DONE** (owner chọn 4/5 còn lại, để #5 lại). Đều
+  additive, hợp-lệ cả hai nhánh ngã ba.
+  - **#3 lọc run-list (builder-only):** helper THUẦN `isTerminalState(def, stateId)` trong
+    `apps/builder/src/workflow/run-actions.ts` (= `availableTransitions(def, stateId).length === 0`,
+    REUSE engine, không nhân đôi logic; 3 test) + `Segmented` Đang chạy/Đã xong/Tất cả (mặc định
+    "Đang chạy") trong `CaseLauncher` (`WorkflowRunRoute.tsx`), partition theo terminal — structural,
+    không cần data/round-trip. Empty-state theo từng filter. Card đổi tiêu đề "Các case".
+  - **#4 nút Run editor (builder-only):** nút `▶ Run` (`PlayCircleOutlined`) trong toolbar
+    `WorkflowEditor.tsx`, `useNavigate` tới `…/workflows/:id/run`. Dirty được CHẶN bởi `useBlocker` sẵn
+    có ở `WorkflowRoute` (modal Save/Discard/Cancel) — không thêm guard mới. Gate `projectId`.
+  - **#6 edge-label overlap (builder-only):** `layout.ts` truyền **kích thước nhãn cạnh cho dagre**
+    (`estimateEdgeLabelSize`: action ≈26px + mỗi chip role/guard ≈22px, rộng ~150; `labelpos:"c"`),
+    nên cạnh có nhãn được dagre chừa rank-slot → nhãn không đè node khi cột khít; cạnh trơ vẫn `{}`.
+    Chỉ ảnh hưởng layout do **Tidy/auto-arrange** sinh ra; position đã lưu KHÔNG đổi khi load. +1 test.
+  - **#7 antd addon deprecation (RENDER — published):** ⚠️ memory ghi nhầm "builder-only";
+    `addonBefore/addonAfter` là field-prop của form-schema render bởi `packages/form-renderer-web/.../
+    FieldControl.tsx`. antd 5.x deprecate 2 prop này và cảnh báo MỖI KHI **key có mặt** (kể cả
+    `undefined`) → renderer cũ truyền key vô điều kiện ⇒ warn mỗi lần render input (đúng 2 warn của
+    demo). Fix: helper `addonProps(node)` chỉ forward khi giá trị `!== undefined`. Changeset
+    `@org/form-renderer-web` patch. Migration đầy đủ sang `Space.Compact` HOÃN (rủi ro visual-regression
+    cho feature ít dùng).
+  - **Verify:** typecheck 18/18 (api fail = EPERM prisma-DLL môi trường, không đụng api) · builder
+    workflow 72 test · renderer 117 test (1 fail `containers` = flaky `waitFor` timeout dưới tải song
+    song, xanh khi chạy riêng) · biome chỉ còn CRLF artifact (git lưu LF) · reviewer PASS · **live smoke
+    MCP PASS:** #3 filter 2/3/5 + toggle đúng + nhãn #1 giữ · #4 Run mở blocker dirty rồi điều hướng ·
+    #6 Tidy nhãn nằm gọn giữa cột không đè node · #7 sau khi **rebuild dist form-renderer-web + reload**
+    (Vite cache pre-bundle cũ — gotcha) thì 2 warn addon BIẾN MẤT, form vẫn render 12 input. Owner gate
+    push. **CÒN #5 (i18n validate-msg, đụng form-core/renderer) — phase riêng.**
