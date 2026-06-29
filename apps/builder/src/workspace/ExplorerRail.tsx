@@ -8,6 +8,7 @@ import {
   LeftOutlined,
   PartitionOutlined,
   PlayCircleOutlined,
+  ProfileOutlined,
   ShareAltOutlined,
 } from "@ant-design/icons";
 import type { MenuProps, TreeDataNode, TreeProps } from "antd";
@@ -109,6 +110,8 @@ export function ExplorerRail({
   const nodes = tree ? buildTree(tree.folders, tree.forms, workflows) : [];
 
   const openForm = (id: string) => navigate(`/projects/${projectId}/forms/${id}`);
+  const openSubmissions = (id: string) =>
+    navigate(`/projects/${projectId}/forms/${id}/submissions`);
   const openWorkflow = (id: string) => navigate(`/projects/${projectId}/workflows/${id}/edit`);
   const runWorkflow = (id: string) => navigate(`/projects/${projectId}/workflows/${id}/run`);
 
@@ -274,7 +277,7 @@ export function ExplorerRail({
             { key: "open", icon: <FormOutlined />, label: "Open" },
             ...(node.kind === "workflow"
               ? [{ key: "run", icon: <PlayCircleOutlined />, label: "Run" }]
-              : []),
+              : [{ key: "submissions", icon: <ProfileOutlined />, label: "Submissions" }]),
             { key: "rename", icon: <EditOutlined />, label: "Rename" },
             { key: "duplicate", icon: <CopyOutlined />, label: "Duplicate" },
             {
@@ -299,6 +302,7 @@ export function ExplorerRail({
         else if (key === "duplicate") duplicateWf(node.id, workflowFolder());
         else if (key === "delete") deleteWorkflow(node.id, node.title);
       } else if (key === "open") openForm(node.id);
+      else if (key === "submissions") openSubmissions(node.id);
       else if (key === "rename") startRename("form", node.id, node.title);
       else if (key === "duplicate") duplicate(node.id, formFolder());
       else if (key === "delete") deleteForm(node.id, node.title);

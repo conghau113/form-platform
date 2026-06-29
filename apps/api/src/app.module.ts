@@ -5,6 +5,7 @@ import { FormsModule } from "./modules/forms/forms.module.js";
 import { PresetsModule } from "./modules/presets/presets.module.js";
 import { ProjectsModule } from "./modules/projects/projects.module.js";
 import { StatusCatalogModule } from "./modules/status-catalog/status-catalog.module.js";
+import { SubmissionsModule } from "./modules/submissions/submissions.module.js";
 import { ThemesModule } from "./modules/themes/themes.module.js";
 import { WorkflowsModule } from "./modules/workflows/workflows.module.js";
 import { PersistenceModule } from "./persistence/persistence.module.js";
@@ -23,6 +24,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     ThemesModule,
     PresetsModule,
     StatusCatalogModule,
+    SubmissionsModule,
     AiModule,
   ],
 })

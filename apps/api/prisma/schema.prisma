@@ -21,6 +21,7 @@ model Project {
   forms       FormRecord[]
   workflows   WorkflowRecord[]
   instances   WorkflowInstanceRecord[]
+  submissions SubmissionRecord[]
   presets     Preset[]
   statusCatalog StatusCatalogEntry[]
   members     ProjectMember[]
@@ -75,8 +76,29 @@ model FormRecord {
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder    Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  submissions SubmissionRecord[]
 
   @@index([projectId, folderId])
+}
+
+/// A recorded answer to a form (Track FS1). `id` == the submission id; `body` is the
+/// `Submission` contract (incl. the pinned `schemaSnapshot` the data was server-validated
+/// against + the validated `data`). `projectId` is denormalised from the parent form so access
+/// control never loads the body; `submittedBy`/`submittedAt` are denormalised for cheap listing.
+/// Creation is server-authoritative: the service re-validates `data` with `@org/form-core`
+/// (never trusting the client) before storing.
+model SubmissionRecord {
+  id          String   @id
+  formId      String
+  projectId   String
+  submittedBy String
+  body        Json
+  submittedAt DateTime @default(now())
+  form        FormRecord @relation(fields: [formId], references: [id], onDelete: Cascade)
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([projectId])
 }
 
 /// Org index for a workflow (Workflow track WF0). Mirrors {@link FormRecord}: `id` == the

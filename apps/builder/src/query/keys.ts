@@ -14,4 +14,6 @@ export const qk = {
   instances: (workflowId: string) => ["workflows", "instances", workflowId] as const,
   instance: (id: string) => ["workflow-instances", id] as const,
   statusCatalog: (projectId?: string) => ["status-catalog", projectId ?? null] as const,
+  submissions: (formId: string) => ["forms", "submissions", formId] as const,
+  submission: (id: string) => ["submissions", id] as const,
 } as const;

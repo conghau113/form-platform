@@ -14,7 +14,7 @@ function labeledEdge(source: string, target: string): FlowEdge {
     source,
     target,
     label: "submit",
-    data: { action: "submit", role: "reviewer", guard: { "==": [{ var: "ok" }, true] } },
+    data: { action: "submit", role: "reviewer", guard: { rule: { "==": [{ var: "ok" }, true] } } },
   };
 }
 

@@ -35,6 +35,9 @@ importers:
       '@org/form-ai':
         specifier: workspace:*
         version: link:../../packages/form-ai
+      '@org/form-core':
+        specifier: workspace:*
+        version: link:../../packages/form-core
       '@org/form-schema':
         specifier: workspace:*
         version: link:../../packages/form-schema

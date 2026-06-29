@@ -54,6 +54,15 @@ export interface WorkflowInstanceSummary {
   updatedAt: string;
 }
 
+/** Index summary of a form submission (no body) — mirrors the api `SubmissionSummary` (FS1). */
+export interface SubmissionSummary {
+  id: string;
+  formId: string;
+  projectId: string;
+  submittedBy: string;
+  submittedAt: string;
+}
+
 /** `GET /projects/:id/tree` payload: flat lists the client assembles into a tree. */
 export interface ProjectTree {
   project: ProjectRecord;
