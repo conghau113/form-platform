@@ -6,6 +6,8 @@ import { assertId } from "../../common/file-store.js";
 import type { FormSummary } from "../../persistence/repositories/form.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { FormRepo } from "../../persistence/repositories/form.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
 import type { ProjectRole } from "../../persistence/repositories/project-member.repo.js";
 import type { SubmissionSummary } from "../../persistence/repositories/submission.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
@@ -35,15 +37,16 @@ export class SubmissionsService {
   constructor(
     private readonly submissions: SubmissionRepo,
     private readonly forms: FormRepo,
+    private readonly versions: FormVersionRepo,
     private readonly projectsService: ProjectsService,
   ) {}
 
-  /** Validate `data` against the form server-side and store the (stripped) answer. */
+  /** Validate `data` against the form server-side and store the (stripped) answer. The snapshot the
+   *  data is validated against and pinned to is the form's active PUBLISHED version when one exists
+   *  (FB1); a form that was never published falls back to its current draft (FS1 behavior). */
   async submit(ownerId: string, formId: string, opts: SubmitOptions): Promise<Submission> {
     const summary = await this.requireFormAccess(ownerId, formId, "viewer");
-    const stored = await this.forms.load(formId);
-    if (!stored) throw new NotFoundException(`Form not found: ${formId}`);
-    const snapshot: FormSchema = migrate(stored); // normalize to CURRENT_FORM_VERSION (pinned)
+    const snapshot = await this.resolveSnapshot(formId);
 
     // Field-level RBAC (FS2): fields the submitter can't view are excluded from the validation
     // shape, so the server never stores answers the client wasn't allowed to set.
@@ -87,6 +90,16 @@ export class SubmissionsService {
   async list(ownerId: string, formId: string): Promise<SubmissionSummary[]> {
     await this.requireFormAccess(ownerId, formId, "viewer");
     return this.submissions.listByForm(formId);
+  }
+
+  /** The migrated form to validate + pin a submission against: the active published version (FB1)
+   *  when the form has one, else the current draft (FS1 fallback). Throws 404 if neither exists. */
+  private async resolveSnapshot(formId: string): Promise<FormSchema> {
+    const active = await this.versions.loadActive(formId);
+    if (active) return migrate(active.body); // re-normalize the frozen snapshot
+    const draft = await this.forms.load(formId);
+    if (!draft) throw new NotFoundException(`Form not found: ${formId}`);
+    return migrate(draft); // normalize to CURRENT_FORM_VERSION (pinned)
   }
 
   /** Field-level RBAC roles for the actor: the roles they self-declare plus their project role

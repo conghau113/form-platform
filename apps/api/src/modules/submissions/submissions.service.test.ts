@@ -1,5 +1,11 @@
 import { NotFoundException, UnprocessableEntityException } from "@nestjs/common";
-import { CURRENT_FORM_VERSION, type FormSchema, migrate, type Submission } from "@org/form-schema";
+import {
+  CURRENT_FORM_VERSION,
+  type FormSchema,
+  type FormVersion,
+  migrate,
+  type Submission,
+} from "@org/form-schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
   FolderChildCounts,
@@ -12,6 +18,11 @@ import {
   type FormSummary,
   type FormUpsertMeta,
 } from "../../persistence/repositories/form.repo.js";
+import {
+  FormVersionRepo,
+  type FormVersionSummary,
+  type PublishInput,
+} from "../../persistence/repositories/form-version.repo.js";
 import {
   type ProjectCreateInput,
   type ProjectRecord,
@@ -125,6 +136,48 @@ class FakeFormRepo extends FormRepo {
   }
 }
 
+/** In-memory FormVersionRepo. Empty ⇒ `loadActive` returns null ⇒ submissions fall back to the
+ *  draft (FS1 behavior). `publish` mirrors the prisma impl: assign next sequence, set active. */
+class FakeFormVersionRepo extends FormVersionRepo {
+  readonly byForm = new Map<string, FormVersion[]>();
+  readonly active = new Map<string, number>();
+  async publish(input: PublishInput): Promise<FormVersion> {
+    const list = this.byForm.get(input.formId) ?? [];
+    const version = (list.at(-1)?.version ?? 0) + 1;
+    const v: FormVersion = {
+      id: input.id,
+      formId: input.formId,
+      version,
+      formVersion: input.body.formVersion,
+      body: input.body,
+      publishedBy: input.publishedBy,
+      publishedAt: input.publishedAt.toISOString(),
+    };
+    list.push(v);
+    this.byForm.set(input.formId, list);
+    this.active.set(input.formId, version);
+    return v;
+  }
+  async loadActive(formId: string): Promise<FormVersion | null> {
+    const a = this.active.get(formId);
+    return a == null ? null : this.load(formId, a);
+  }
+  async load(formId: string, version: number): Promise<FormVersion | null> {
+    return this.byForm.get(formId)?.find((v) => v.version === version) ?? null;
+  }
+  async listByForm(formId: string): Promise<FormVersionSummary[]> {
+    return [...(this.byForm.get(formId) ?? [])].reverse().map((v) => ({
+      id: v.id,
+      formId: v.formId,
+      projectId: "",
+      version: v.version,
+      formVersion: v.formVersion,
+      publishedBy: v.publishedBy,
+      publishedAt: new Date(v.publishedAt),
+    }));
+  }
+}
+
 class FakeProjectRepo extends ProjectRepo {
   readonly rows = new Map<string, ProjectRecord>();
   async ensureUnfiled(ownerId: string): Promise<ProjectRecord> {
@@ -209,6 +262,7 @@ class FakeProjectMemberRepo extends ProjectMemberRepo {
 const OWNER = "owner-a";
 let submissionRepo: FakeSubmissionRepo;
 let formRepo: FakeFormRepo;
+let versionRepo: FakeFormVersionRepo;
 let projectRepo: FakeProjectRepo;
 let memberRepo: FakeProjectMemberRepo;
 let service: SubmissionsService;
@@ -222,10 +276,11 @@ beforeEach(async () => {
   seq = 0;
   submissionRepo = new FakeSubmissionRepo();
   formRepo = new FakeFormRepo();
+  versionRepo = new FakeFormVersionRepo();
   projectRepo = new FakeProjectRepo();
   memberRepo = new FakeProjectMemberRepo();
   const projects = new ProjectsService(projectRepo, new FakeFolderRepo(), formRepo, memberRepo);
-  service = new SubmissionsService(submissionRepo, formRepo, projects);
+  service = new SubmissionsService(submissionRepo, formRepo, versionRepo, projects);
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });
 });
 
@@ -324,6 +379,44 @@ describe("SubmissionsService", () => {
     await expect(service.load(OWNER, sub.id, ["hr"])).resolves.toMatchObject({
       data: { email: "a@b.com", salary: "999" },
     });
+  });
+
+  it("validates against the current draft when the form was never published (FB1 fallback)", async () => {
+    await seedForm();
+    // No published version → loadActive returns null → the draft is the pinned snapshot.
+    const sub = await service.submit(OWNER, "contact", { data: { email: "a@b.com" } });
+    expect(sub.schemaSnapshot.fields).toHaveLength(1);
+  });
+
+  it("pins the active published version even after the draft changes (FB1)", async () => {
+    await seedForm();
+    // Publish v1 (one field), then edit the draft to add a second field.
+    await versionRepo.publish({
+      id: "ver-1",
+      formId: "contact",
+      projectId: project.id,
+      body: form(),
+      publishedBy: OWNER,
+      publishedAt: new Date(),
+    });
+    await formRepo.upsert(
+      migrate({
+        formVersion: CURRENT_FORM_VERSION,
+        id: "contact",
+        title: "Contact",
+        fields: [
+          { type: "text", name: "email", label: "Email", required: true },
+          { type: "text", name: "phone", label: "Phone" },
+        ],
+      }),
+      { projectId: project.id },
+    );
+    // A submission validates against published v1, not the 2-field draft → `phone` is stripped.
+    const sub = await service.submit(OWNER, "contact", {
+      data: { email: "a@b.com", phone: "123" },
+    });
+    expect(sub.schemaSnapshot.fields).toHaveLength(1);
+    expect(sub.data).toEqual({ email: "a@b.com" });
   });
 
   it("404s submitting to an unknown form or loading an unknown submission", async () => {

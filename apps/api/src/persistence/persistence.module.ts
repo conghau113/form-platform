@@ -2,6 +2,7 @@ import { Global, Module } from "@nestjs/common";
 import { PrismaService } from "./prisma/prisma.service.js";
 import { PrismaFolderRepo } from "./prisma/prisma-folder.repo.js";
 import { PrismaFormRepo } from "./prisma/prisma-form.repo.js";
+import { PrismaFormVersionRepo } from "./prisma/prisma-form-version.repo.js";
 import { PrismaPresetRepo } from "./prisma/prisma-preset.repo.js";
 import { PrismaProjectRepo } from "./prisma/prisma-project.repo.js";
 import { PrismaProjectMemberRepo } from "./prisma/prisma-project-member.repo.js";
@@ -12,6 +13,7 @@ import { PrismaWorkflowRepo } from "./prisma/prisma-workflow.repo.js";
 import { PrismaWorkflowInstanceRepo } from "./prisma/prisma-workflow-instance.repo.js";
 import { FolderRepo } from "./repositories/folder.repo.js";
 import { FormRepo } from "./repositories/form.repo.js";
+import { FormVersionRepo } from "./repositories/form-version.repo.js";
 import { PresetRepo } from "./repositories/preset.repo.js";
 import { ProjectRepo } from "./repositories/project.repo.js";
 import { ProjectMemberRepo } from "./repositories/project-member.repo.js";
@@ -31,6 +33,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
   providers: [
     PrismaService,
     { provide: FormRepo, useClass: PrismaFormRepo },
+    { provide: FormVersionRepo, useClass: PrismaFormVersionRepo },
     { provide: WorkflowRepo, useClass: PrismaWorkflowRepo },
     { provide: WorkflowInstanceRepo, useClass: PrismaWorkflowInstanceRepo },
     { provide: PresetRepo, useClass: PrismaPresetRepo },
@@ -43,6 +46,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
   ],
   exports: [
     FormRepo,
+    FormVersionRepo,
     WorkflowRepo,
     WorkflowInstanceRepo,
     PresetRepo,

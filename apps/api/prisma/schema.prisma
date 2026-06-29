@@ -22,6 +22,7 @@ model Project {
   workflows   WorkflowRecord[]
   instances   WorkflowInstanceRecord[]
   submissions SubmissionRecord[]
+  formVersions FormVersionRecord[]
   presets     Preset[]
   statusCatalog StatusCatalogEntry[]
   members     ProjectMember[]
@@ -73,12 +74,43 @@ model FormRecord {
   title     String
   status    String?
   body      Json
+  /// The published version pointer (FB1). Null until first publish; mirrors the highest
+  /// `FormVersionRecord.version`. Runtime (submission) prefers this version's frozen snapshot.
+  activeVersion Int?
+  /// When the active version was published (FB1). With `updatedAt` it gives a cheap "draft ahead of
+  /// published" signal (`updatedAt > publishedAt`) without diffing bodies.
+  publishedAt DateTime?
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder    Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   submissions SubmissionRecord[]
+  versions  FormVersionRecord[]
 
   @@index([projectId, folderId])
+}
+
+/// An immutable published snapshot of a form (Track FB1). `id` == the version id; `body` is the
+/// `FormVersion` contract (the migrated form frozen at publish time). `projectId` is denormalised
+/// from the parent form so access control never loads the body; `version` is the 1-based publish
+/// sequence per form. Publishing is server-authoritative: the service re-`migrate()`s the draft and
+/// the active-version pointer + this row are written in one transaction.
+model FormVersionRecord {
+  id          String   @id @default(cuid())
+  formId      String
+  projectId   String
+  version     Int
+  /// Denormalised `body.formVersion` (the contract version of the frozen snapshot) so listing a
+  /// form's history never has to load each `body` Json just to read it.
+  formVersion Int
+  body        Json
+  publishedBy String
+  publishedAt DateTime @default(now())
+  form        FormRecord @relation(fields: [formId], references: [id], onDelete: Cascade)
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, version])
+  @@index([formId])
+  @@index([projectId])
 }
 
 /// A recorded answer to a form (Track FS1). `id` == the submission id; `body` is the

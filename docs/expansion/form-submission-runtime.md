@@ -90,11 +90,14 @@ Form publish/submit/lưu/xem-lại end-to-end, server-side validated, pinned sna
   client/hook/qk. KHÔNG migration, KHÔNG bump contract.
 
 ### FB1 — Form draft/publish/version (governance hardening)
-- [ ] `FormVersion` immutable snapshot + `publishedAt`/`publishedBy`/`activeVersion`; save = draft;
-  publish tạo version; runtime/submission dùng published version. Submission FS1 đã pin snapshot ⇒
-  đây là additive hardening (không phá dữ liệu cũ). Builder: version history + diff + rollback/clone.
-- [ ] Endpoints: `GET /forms/:id/versions`, `/versions/:v`, `POST /forms/:id/publish`,
-  `/versions/:v/clone-draft`.
+**FB1a (backend) ✅ DONE (reviewer + live smoke PASS).** FB1b (builder UI) = TODO.
+- [x] `FormVersion` immutable snapshot + `publishedAt`/`publishedBy`/`activeVersion`; save = draft;
+  publish tạo version; **submission ưu tiên active published version, fallback draft** (owner chốt —
+  không strict). Submission FS1 đã pin snapshot ⇒ additive hardening (không phá dữ liệu cũ).
+- [x] Endpoints: `POST /forms/:id/publish`, `GET /forms/:id/versions`, `GET /forms/:id/versions/:v`,
+  `POST /forms/:id/versions/:v/clone-draft` (clone-draft = rollback: version body → draft).
+- [ ] **FB1b (builder UI):** nút Publish + badge "draft ahead" (`updatedAt > publishedAt`), version
+  history drawer, diff version↔draft, rollback/clone button. client.ts + react-query.
 
 ### FS3 — File storage
 - [ ] Upload endpoint + storage adapter (local/S3-compatible) + metadata in submission + size/type
@@ -161,6 +164,34 @@ ngã ba (task inbox/governance nặng = nhánh app; MCP submission tool = nhánh
     stack trước khi `prisma migrate dev`/regen, rồi `pnpm dev` lại. Server-side validation message
     hiện tiếng Anh (form-core enMessages mặc định; server không có locale context — i18n msg server
     là chuyện riêng, ngoài FS1). NEXT = FS2 (access-control/masking) HOẶC FB1 (versioning).
+- 2026-06-29 (đóng phase): **FB1a DONE — Form draft/publish/version (backend).** Owner chốt 2 fork:
+  submit **ưu tiên published, fallback draft** (không strict); scope **backend trước** (UI = FB1b).
+  - **Contract:** `packages/form-schema/src/form-version.ts` (`FormVersion` + `formVersionSchema`/
+    `parseFormVersion`, decoupled như `Submission` — `version` 1-based publish-seq + `formVersion`
+    denorm + `body` frozen `FormSchema`; KHÔNG bump `CURRENT_FORM_VERSION`) + barrel + `form-version.test.ts`
+    (4) + changeset `@org/form-schema` minor.
+  - **Prisma:** model `FormVersionRecord` (id cuid / formId / projectId denorm / version Int / body Json /
+    publishedBy / publishedAt; `@@unique([formId,version])`) + `FormRecord.activeVersion Int?` +
+    `FormRecord.publishedAt DateTime?` + relations; migration `20260629083228_form_versions`.
+  - **Repo:** `persistence/repositories/form-version.repo.ts` (abstract `FormVersionRepo` +
+    `PublishInput` + `FormVersionSummary`) + `prisma/prisma-form-version.repo.ts` (`publish` dùng
+    `$transaction`: max(version)+1 → insert → update FormRecord active pointer, ATOMIC; `loadActive`/
+    `load`/`listByForm`) + wire `persistence.module`.
+  - **Module:** `modules/forms/form-versions.{service,controller}.ts` (mirror submissions access:
+    read=viewer, write=editor) — `publish` (migrate draft→freeze), `listVersions`, `getVersion`,
+    `cloneDraft` (rollback: version body→draft qua `forms.upsert`, giữ placement) + wire `forms.module`
+    (cùng `@Controller("forms")`, route con không đụng `GET /forms/:id`).
+  - **Submission nối:** `submissions.service.ts` `resolveSnapshot()` — `versions.loadActive(formId)`
+    có → pin published; null → fallback draft (FS1). Inject `FormVersionRepo`.
+  - **Verify:** form-schema 87 (form-version 4) + dist build · api typecheck sạch · **repo typecheck
+    22/22** · api 112 test (form-versions 5, submissions 11 = +2: fallback + pin-published) · biome
+    sạch 12 file · **reviewer PASS** · **live smoke HTTP thật** (create → submit-pre-publish fallback
+    1-field → publish v1 → edit draft +phone → submit-post-publish PIN v1 (phone stripped) → list
+    [1] → get v1 → clone-draft rollback → GET draft rolled-back → invalid 422 → delete 204 cascade).
+  - ⚠️ GOTCHA: phải dừng dev stack (api khoá prisma DLL) trước `prisma migrate dev`; api no-watch
+    (rebuild dist + restart); kill api PID teardown cả Vite → smoke chạy api standalone 3001 (owner
+    nên `pnpm dev` lại). NEXT = **FB1b (builder UI: publish/history/diff/rollback)** HOẶC FS3 (file
+    storage). Ngã ba infra-vs-app vẫn chưa chốt; FB1 hợp-lệ cả hai nhánh.
 - 2026-06-29 (đóng phase): **FS2 DONE — Submission access control + field masking.** Owner chốt 2
   default (submit giữ `viewer` + server-strip; read-mask khai role default-all — mirror WF4a model A).
   - **form-core:** pure `maskData(form,data,access)` (`mask.ts`) bỏ field actor không `canView`
