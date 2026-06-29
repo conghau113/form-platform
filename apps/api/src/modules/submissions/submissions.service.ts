@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
-import { buildZodSchema } from "@org/form-core";
+import { buildZodSchema, maskData } from "@org/form-core";
 import { type FormSchema, migrate, type Submission } from "@org/form-schema";
 import { assertId } from "../../common/file-store.js";
 import type { FormSummary } from "../../persistence/repositories/form.repo.js";
@@ -16,6 +16,9 @@ import { ProjectsService } from "../projects/projects.service.js";
 /** Input to record a submission against a form. */
 export interface SubmitOptions {
   data: Record<string, unknown>;
+  /** Domain roles the submitter declares (FS2); the actor's project role is merged in. Drives
+   *  field-level RBAC so fields the submitter can't view are stripped server-side before storage. */
+  roles?: string[];
 }
 
 /**
@@ -42,7 +45,10 @@ export class SubmissionsService {
     if (!stored) throw new NotFoundException(`Form not found: ${formId}`);
     const snapshot: FormSchema = migrate(stored); // normalize to CURRENT_FORM_VERSION (pinned)
 
-    const schema = buildZodSchema(snapshot, { values: opts.data });
+    // Field-level RBAC (FS2): fields the submitter can't view are excluded from the validation
+    // shape, so the server never stores answers the client wasn't allowed to set.
+    const roles = await this.actorRoles(ownerId, summary.projectId, opts.roles);
+    const schema = buildZodSchema(snapshot, { values: opts.data, access: { roles } });
     const result = schema.safeParse(opts.data);
     if (!result.success) {
       throw new UnprocessableEntityException({
@@ -66,18 +72,32 @@ export class SubmissionsService {
     return this.submissions.create(submission, { formId, projectId: summary.projectId });
   }
 
-  /** Load a single submission by id (read ⇒ requires `viewer`). */
-  async load(ownerId: string, id: string): Promise<Submission> {
-    await this.requireSubmissionAccess(ownerId, id, "viewer");
+  /** Load a single submission by id (read ⇒ requires `viewer`). Fields the reader can't view are
+   *  masked server-side (FS2), against the submission's PINNED snapshot so masking is stable as the
+   *  live form changes. `roles` are the reader's declared domain roles; the project role is merged. */
+  async load(ownerId: string, id: string, declaredRoles?: string[]): Promise<Submission> {
+    const summary = await this.requireSubmissionAccess(ownerId, id, "viewer");
     const submission = await this.submissions.load(id);
     if (!submission) throw new NotFoundException(`Submission not found: ${id}`);
-    return submission;
+    const roles = await this.actorRoles(ownerId, summary.projectId, declaredRoles);
+    return { ...submission, data: maskData(submission.schemaSnapshot, submission.data, { roles }) };
   }
 
   /** List a form's submissions (summaries, no body) (read ⇒ requires `viewer`). */
   async list(ownerId: string, formId: string): Promise<SubmissionSummary[]> {
     await this.requireFormAccess(ownerId, formId, "viewer");
     return this.submissions.listByForm(formId);
+  }
+
+  /** Field-level RBAC roles for the actor: the roles they self-declare plus their project role
+   *  (owner|editor|viewer), mirroring the workflow runtime. Empty unless a field gates on them. */
+  private async actorRoles(
+    ownerId: string,
+    projectId: string,
+    declared: string[] | undefined,
+  ): Promise<string[]> {
+    const role = await this.projectsService.resolveRole(ownerId, projectId);
+    return [...(declared ?? []), ...(role ? [role] : [])];
   }
 
   /** Resolve a form's project and assert the user holds at least `minRole` on it. */

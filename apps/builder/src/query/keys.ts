@@ -15,5 +15,7 @@ export const qk = {
   instance: (id: string) => ["workflow-instances", id] as const,
   statusCatalog: (projectId?: string) => ["status-catalog", projectId ?? null] as const,
   submissions: (formId: string) => ["forms", "submissions", formId] as const,
-  submission: (id: string) => ["submissions", id] as const,
+  // `roles` is part of the key: changing the reader's declared roles (FS2) re-fetches, since the
+  // server masks fields the reader can't view differently per role set.
+  submission: (id: string, roles: string[] = []) => ["submissions", id, roles] as const,
 } as const;

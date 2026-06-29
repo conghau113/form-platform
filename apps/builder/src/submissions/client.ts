@@ -18,15 +18,17 @@ const jsonHeaders = (): Record<string, string> => ({
   ...ownerHeaders(),
 });
 
-/** Record a submission against a form (server re-validates `data`; invalid → throws). */
+/** Record a submission against a form (server re-validates `data`; invalid → throws). `roles` are
+ *  the submitter's declared domain roles (FS2) — the server strips fields they can't view. */
 export async function submitForm(
   formId: string,
   data: Record<string, unknown>,
+  roles?: string[],
 ): Promise<Submission> {
   const res = await fetch(`${API_BASE}/forms/${encodeURIComponent(formId)}/submissions`, {
     method: "POST",
     headers: jsonHeaders(),
-    body: JSON.stringify({ data }),
+    body: JSON.stringify({ data, roles }),
   });
   if (!res.ok) throw new Error(await readError(res));
   return (await res.json()) as Submission;
@@ -41,9 +43,11 @@ export async function listSubmissions(formId: string): Promise<SubmissionSummary
   return (await res.json()) as SubmissionSummary[];
 }
 
-/** Load a single submission (incl. its pinned schema snapshot + data). */
-export async function getSubmission(id: string): Promise<Submission> {
-  const res = await fetch(`${API_BASE}/submissions/${encodeURIComponent(id)}`, {
+/** Load a single submission (incl. its pinned schema snapshot + data). `roles` are the reader's
+ *  declared domain roles (FS2) — fields they can't view are masked out of `data` server-side. */
+export async function getSubmission(id: string, roles?: string[]): Promise<Submission> {
+  const query = roles && roles.length > 0 ? `?roles=${encodeURIComponent(roles.join(","))}` : "";
+  const res = await fetch(`${API_BASE}/submissions/${encodeURIComponent(id)}${query}`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load submission failed: ${await readError(res)}`);

@@ -42,6 +42,19 @@ function form(id = "contact"): FormSchema {
   });
 }
 
+/** A form with an `hr`-gated field, for FS2 field-level RBAC on submit/read. */
+function rbacForm(id = "hrform"): FormSchema {
+  return migrate({
+    formVersion: CURRENT_FORM_VERSION,
+    id,
+    title: "HR",
+    fields: [
+      { type: "text", name: "email", label: "Email", required: true },
+      { type: "text", name: "salary", label: "Salary", permissions: { viewRoles: ["hr"] } },
+    ],
+  });
+}
+
 class FakeSubmissionRepo extends SubmissionRepo {
   readonly bodies = new Map<string, Submission>();
   readonly meta = new Map<string, SubmissionMeta>();
@@ -276,6 +289,41 @@ describe("SubmissionsService", () => {
     await memberRepo.upsert({ projectId: project.id, userId: "viewer-u", role: "viewer" });
     const sub = await service.submit("viewer-u", "contact", { data: { email: "v@w.com" } });
     expect(sub.submittedBy).toBe("viewer-u");
+  });
+
+  it("strips a role-gated field on submit when the submitter lacks the role (FS2)", async () => {
+    await formRepo.upsert(rbacForm(), { projectId: project.id });
+    // OWNER holds only the project `owner` role, not `hr` → `salary` is excluded server-side.
+    const sub = await service.submit(OWNER, "hrform", {
+      data: { email: "a@b.com", salary: "999" },
+    });
+    expect(sub.data).toEqual({ email: "a@b.com" });
+  });
+
+  it("keeps a role-gated field on submit when the submitter declares the role (FS2)", async () => {
+    await formRepo.upsert(rbacForm(), { projectId: project.id });
+    const sub = await service.submit(OWNER, "hrform", {
+      data: { email: "a@b.com", salary: "999" },
+      roles: ["hr"],
+    });
+    expect(sub.data).toEqual({ email: "a@b.com", salary: "999" });
+  });
+
+  it("masks a role-gated field on read unless the reader declares the role (FS2)", async () => {
+    await formRepo.upsert(rbacForm(), { projectId: project.id });
+    const sub = await service.submit(OWNER, "hrform", {
+      data: { email: "a@b.com", salary: "999" },
+      roles: ["hr"],
+    });
+    // Stored with salary, but a reader without `hr` sees it masked…
+    await expect(service.load(OWNER, sub.id)).resolves.toMatchObject({
+      data: { email: "a@b.com" },
+    });
+    expect((await service.load(OWNER, sub.id)).data).not.toHaveProperty("salary");
+    // …and a reader who declares `hr` sees it.
+    await expect(service.load(OWNER, sub.id, ["hr"])).resolves.toMatchObject({
+      data: { email: "a@b.com", salary: "999" },
+    });
   });
 
   it("404s submitting to an unknown form or loading an unknown submission", async () => {

@@ -75,10 +75,19 @@ Form publish/submit/lưu/xem-lại end-to-end, server-side validated, pinned sna
 - Acceptance: form submit được, lưu, xem lại; server từ chối payload sai; submission cũ bất biến
   khi schema đổi.
 
-### FS2 — Submission access control + field masking
-- [ ] RBAC view/edit/export submission theo role; server-side strip/reject field hidden/non-viewable
-  (dùng `canView`/`canEdit` của form-core — đã có); submission audit entry tối thiểu (ai/lúc nào).
-- [ ] Builder: mask field không được view ở detail/list/export.
+### FS2 — Submission access control + field masking  ✅ DONE (reviewer PASS + live smoke PASS)
+- [x] RBAC view submission theo role; server-side strip (submit) + mask (read) field non-viewable
+  (`canView` của form-core). Submit gate giữ `viewer` (owner chốt); audit `submittedBy/submittedAt`
+  của FS1 đủ cho MVP. (canEdit-gate + export masking + audit-log = follow-up.)
+- [x] Builder: "Acting as" role picker (default = tất cả role) ở cả submit + detail; mask field
+  không được view ở detail (server-side + renderer `access`).
+- **Cách làm:** form-core thêm pure `maskData(form,data,access)` (`packages/form-core/src/mask.ts`,
+  mirror `buildZodSchema` traversal: container phẳng + array per-row) + barrel + test(6) + changeset
+  `@org/form-core` minor. api `SubmitDto.roles?`; `submit` truyền `access:{roles}` vào `buildZodSchema`
+  (strip field submitter không xem được); `load` mask data qua `maskData` trên snapshot ĐÃ pin; helper
+  `actorRoles` merge declared+project-role (mirror `workflow-instances`); controller `GET ?roles=a,b`;
+  test(3). builder `submissions/form-roles.ts` (mirror `run-roles`), picker, thread roles vào
+  client/hook/qk. KHÔNG migration, KHÔNG bump contract.
 
 ### FB1 — Form draft/publish/version (governance hardening)
 - [ ] `FormVersion` immutable snapshot + `publishedAt`/`publishedBy`/`activeVersion`; save = draft;
@@ -152,5 +161,29 @@ ngã ba (task inbox/governance nặng = nhánh app; MCP submission tool = nhánh
     stack trước khi `prisma migrate dev`/regen, rồi `pnpm dev` lại. Server-side validation message
     hiện tiếng Anh (form-core enMessages mặc định; server không có locale context — i18n msg server
     là chuyện riêng, ngoài FS1). NEXT = FS2 (access-control/masking) HOẶC FB1 (versioning).
-</content>
-</invoke>
+- 2026-06-29 (đóng phase): **FS2 DONE — Submission access control + field masking.** Owner chốt 2
+  default (submit giữ `viewer` + server-strip; read-mask khai role default-all — mirror WF4a model A).
+  - **form-core:** pure `maskData(form,data,access)` (`mask.ts`) bỏ field actor không `canView`
+    (mirror `buildZodSchema` traversal: container phẳng + array per-row; `structuredClone`, không
+    mutate) + barrel + `mask.test.ts` (6) + changeset `@org/form-core` minor.
+  - **API:** `SubmitDto.roles?`; `submit` truyền `access:{roles}` vào `buildZodSchema` (strip field
+    submitter không xem được TRƯỚC khi lưu); `load(ownerId,id,roles?)` mask `data` qua `maskData`
+    trên `schemaSnapshot` ĐÃ pin (ổn định khi form đổi sau); helper `actorRoles` merge declared +
+    project-role (`resolveRole`, mirror `workflow-instances`); controller `GET /submissions/:id?roles=a,b`;
+    `submissions.service.test.ts` +3 (submit-strip / read-mask / role-present). KHÔNG migration, KHÔNG
+    bump contract. Gate vẫn `viewer`.
+  - **Builder:** `submissions/form-roles.ts` (`formRoles` gom viewRoles/editRoles, mirror `run-roles`);
+    `SubmissionsRoute.tsx` "Acting as" `Select` (default tất cả role) ở submit + detail; thread roles
+    vào `client.ts` (POST body + `?roles=`), `useSubmissions` (key `qk.submission(id,roles)`); pass
+    `access` cho FormRenderer. Detail fetch form trước để default-all không nháy mask.
+  - **Verify:** typecheck form-core/builder sạch · api `tsc --noEmit` sạch (skip prisma-generate vì
+    DLL lock) · form-core 124 (mask 6) · api submissions 9 (mới 3) · builder layout 4 · biome sạch 12
+    file (đã normalize CRLF `form-core/index.ts`) · **reviewer PASS** (không fix bắt buộc) · **live
+    smoke**: HTTP thật (submit no-role→strip salary · submit hr→lưu · GET no-roles→mask · GET
+    `?roles=hr`→hiện · invalid→422) + **UI MCP** (detail picker default-all hiện Email+Salary; bỏ `hr`
+    → refetch chỉ Email; console sạch trừ RR future-flag warning pre-existing). Form smoke đã xoá.
+  - ⚠️ **GOTCHA môi trường:** api dev = `tsc && node dist/main.js` (KHÔNG watch) ⇒ phải rebuild dist +
+    restart để chạy code mới; **kill api PID làm turbo teardown CẢ builder Vite** → phải start lại Vite
+    (`npx vite`) cho UI-smoke. Live-smoke chạy api+vite STANDALONE (port 3001/5173); owner nên
+    `pnpm dev` lại sau /clear. NEXT = **FB1 (draft/publish/version)** HOẶC FS3 (file storage) — ngã ba
+    infra-vs-app vẫn chưa chốt; FS2 hợp-lệ cả hai nhánh.

@@ -1,13 +1,47 @@
 import { FormRenderer } from "@org/form-renderer-web";
 import type { FormSchema } from "@org/form-schema";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Empty, message, Space, Spin, Typography } from "antd";
+import { Alert, Button, Card, Empty, message, Select, Space, Spin, Typography } from "antd";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { qk } from "../query";
 import { loadForm } from "../workspace/client";
+import { formRoles } from "./form-roles";
 import { useSubmission, useSubmissions, useSubmitForm } from "./useSubmissions";
 
 const { Title, Text } = Typography;
+
+/** "Acting as" role picker (FS2). The operator declares the domain roles they act in; the server
+ *  masks/strips fields they can't view. Defaults to all roles (`value ?? roles`), so nothing is
+ *  hidden until the operator narrows it. Hidden when the form gates no field on a role. */
+function ActingAsPicker({
+  roles,
+  value,
+  onChange,
+}: {
+  roles: string[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  if (roles.length === 0) return null;
+  return (
+    <Space>
+      <Text type="secondary" style={{ fontSize: 13 }}>
+        Đang thao tác với vai trò:
+      </Text>
+      <Select
+        mode="multiple"
+        allowClear
+        size="small"
+        style={{ minWidth: 220 }}
+        placeholder="(không vai trò nào)"
+        value={value}
+        onChange={onChange}
+        options={roles.map((r) => ({ label: r, value: r }))}
+      />
+    </Space>
+  );
+}
 
 /**
  * Form Submissions view (FS1) — the runtime counterpart to the form editor. Two modes share one
@@ -47,10 +81,13 @@ function SubmissionLauncher({
   const form = formQuery.data as FormSchema | undefined;
   const { submissions, loading } = useSubmissions(formId);
   const submit = useSubmitForm(formId);
+  const roles = useMemo(() => (form ? formRoles(form) : []), [form]);
+  const [actingRoles, setActingRoles] = useState<string[] | null>(null);
+  const effectiveRoles = actingRoles ?? roles; // default = all roles until the operator narrows it
 
   const onSubmit = async (values: Record<string, unknown>) => {
     try {
-      await submit(values);
+      await submit(values, effectiveRoles);
       message.success("Đã ghi nhận câu trả lời");
     } catch (e) {
       message.error((e as Error).message);
@@ -64,14 +101,19 @@ function SubmissionLauncher({
           {form?.title ?? "Submissions"}
         </Title>
 
+        <ActingAsPicker roles={roles} value={effectiveRoles} onChange={setActingRoles} />
+
         <Card title="Câu trả lời mới" size="small">
           {formQuery.isPending ? (
             <Spin />
           ) : form ? (
             <FormRenderer
-              key={submissions.length /* reset the fields after a successful submit */}
+              key={
+                `${submissions.length}:${effectiveRoles.join(",")}` /* reset on submit / role change */
+              }
               schema={form}
               onSubmit={onSubmit}
+              access={{ roles: effectiveRoles }}
               locale={form.defaultLocale}
             />
           ) : (
@@ -122,10 +164,22 @@ function SubmissionDetail({
   id: string;
 }) {
   const navigate = useNavigate();
-  const { submission, loading, error } = useSubmission(id);
+  // The role menu comes from the (live) form; masking itself uses the submission's pinned snapshot
+  // server-side. Loading the form first lets the picker default to all roles BEFORE the submission
+  // is fetched, so the detail opens unmasked rather than flashing project-role masking.
+  const formQuery = useQuery({
+    queryKey: qk.form(formId ?? ""),
+    queryFn: () => loadForm(formId as string),
+    enabled: !!formId,
+  });
+  const form = formQuery.data as FormSchema | undefined;
+  const roles = useMemo(() => (form ? formRoles(form) : []), [form]);
+  const [actingRoles, setActingRoles] = useState<string[] | null>(null);
+  const effectiveRoles = actingRoles ?? roles;
+  const { submission, loading, error } = useSubmission(form ? id : undefined, effectiveRoles);
   const back = () => navigate(`/projects/${projectId}/forms/${formId}/submissions`);
 
-  if (loading) {
+  if (formQuery.isPending || loading) {
     return (
       <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
         <Spin />
@@ -159,10 +213,12 @@ function SubmissionDetail({
             </Text>
           </div>
         </Space>
+        <ActingAsPicker roles={roles} value={effectiveRoles} onChange={setActingRoles} />
         <Card size="small">
           <FormRenderer
             schema={submission.schemaSnapshot}
             initialValues={submission.data}
+            access={{ roles: effectiveRoles }}
             readPretty
             hideSubmit
             locale={submission.schemaSnapshot.defaultLocale}
