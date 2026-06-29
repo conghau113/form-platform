@@ -54,6 +54,21 @@ describe("FormRenderer i18n", () => {
     expect(await screen.findByText("Tên là bắt buộc")).toBeInTheDocument();
   });
 
+  it("honors the form's defaultLocale for validation defaults without a locale prop (UX#5)", async () => {
+    const user = userEvent.setup();
+    const viForm = {
+      formVersion: 3,
+      id: "v",
+      title: "V",
+      defaultLocale: "vi",
+      fields: [{ type: "text", name: "name", label: "Tên", required: true }],
+    };
+    // No `locale` prop: the authored base language drives the default messages.
+    render(<FormRenderer schema={viForm} />);
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    expect(await screen.findByText("Tên là bắt buộc")).toBeInTheDocument();
+  });
+
   it("keeps English validation messages when no locale is given (EN parity)", async () => {
     const user = userEvent.setup();
     const enForm = {

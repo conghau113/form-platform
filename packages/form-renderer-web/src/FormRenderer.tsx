@@ -154,10 +154,16 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     return locale ? localizeForm(linked, locale, fallbackLocale) : linked;
   }, [schema, presetResolver, locale, fallbackLocale]);
 
-  // Locale-aware default validation messages (i18n P3). No `locale` ⇒ the `en` pack (no
-  // errorMap) ⇒ today's exact English. The pack's `errorMap` localizes Zod's own generic
-  // codes (bare `.min/.max/.length/...`) and must be applied at parse time alongside it.
-  const messages = useMemo(() => resolveMessages(locale, fallbackLocale), [locale, fallbackLocale]);
+  // Locale-aware default validation messages (i18n P3). The requested `locale` wins; absent
+  // one we honor the form's authored base language (`defaultLocale`) so a form written in e.g.
+  // Vietnamese gets Vietnamese defaults ("… là bắt buộc") without the host switching locale —
+  // no `defaultLocale` ⇒ the `en` pack (no errorMap) ⇒ today's exact English (parity). The
+  // pack's `errorMap` localizes Zod's own generic codes (bare `.min/.max/.length/...`) and must
+  // be applied at parse time alongside it.
+  const messages = useMemo(
+    () => resolveMessages(locale ?? form.defaultLocale, fallbackLocale ?? form.defaultLocale),
+    [locale, fallbackLocale, form.defaultLocale],
+  );
   const parseParams = messages.errorMap ? { errorMap: messages.errorMap } : undefined;
 
   // Self-contained QueryClient so consumers don't have to provide one. Retries
