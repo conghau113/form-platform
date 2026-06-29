@@ -308,3 +308,28 @@ hướng build ra hai sản phẩm khác nhau. WE1→WE4 (authoring safety) đú
   PASS. **Remap/custom keys: owner hỏi → KHUYẾN NGHỊ HOÃN** (cần persistence + conflict-detection +
   settings-surface chưa tồn tại; payoff thấp với ~8 phím cố định; thiên nhánh "app"). Dựng khi có nhu
   cầu thật + ngã ba ngả về app, kèm một settings surface tử tế.
+- 2026-06-29 (session 14, đóng phase): ✅ **UX#2 + UX#1 từ demo Onboarding DONE.** Sau khi demo case
+  phức tạp (session 13) lộ 7 vấn đề, owner chốt sửa **#2 (role/guard trên canvas)** + **#1 (case
+  label theo data)**.
+  - **#2 (builder-only):** mỗi transition giờ hiện chip role + chip guard NGAY trên cạnh (trước phải
+    click mới thấy). Helper THUẦN `apps/builder/src/workflow/edge-summary.ts` (`summarizeGuard`/
+    `shortGuard`: JSONLogic→chuỗi người-đọc, vd `backgroundCheckPassed = true`, `overallRating ≥ 3`;
+    KHÔNG eval — chỉ stringify, engine vẫn chấm rule gốc) + render chip trong `floating-edge.tsx`
+    (icon `UserOutlined`/`FilterOutlined`, palette xám=role / hổ phách=guard, tooltip đầy đủ). 11 test.
+  - **#1 (full-stack, owner chốt hướng "detail + list"):** vì `WorkflowInstanceSummary` (list) KHÔNG
+    mang form data, list-view không thuần-builder. Giải pháp: helper THUẦN `deriveCaseLabel(data)` ở
+    `@org/workflow-core` (heuristic chọn field tên/tiêu đề EN+VI, fallback chuỗi đầu non-empty; 9 test;
+    changeset minor) + **denormalize cột `label`** trên `WorkflowInstanceRecord` (prisma migration
+    `20260629031305_workflow_instance_label`, nullable → row cũ hợp lệ, backfill khi save kế) tính lúc
+    `upsert` trong `prisma-workflow-instance.repo.ts`; summary type + builder `workspace/types.ts` thêm
+    `label`. Run view: list hiện nhãn case (fallback italic "Case chưa có nhãn") + tag trạng thái + id
+    mờ; detail header H4 = nhãn case (deriveCaseLabel trên `instance.data`), phụ đề = tên workflow.
+  - **Additive:** KHÔNG bump `workflowVersion` (label là cột PERSISTENCE, không phải field contract;
+    `workflowInstanceSchema.data` bất biến). Self-verify: full typecheck 22/22 · workflow-core 35 test ·
+    builder workflow 68 test · api instance-service 13 test · biome sạch file đổi · reviewer PASS
+    (xác nhận additive + no-eval + layering + cast `data as FlowEdgeData` an toàn) · **live smoke MCP
+    PASS:** list hiện "Trần Thị Minh Khuê"/"Test Reject"/"Test Lowscore" + "Case chưa có nhãn"; detail
+    H4="Trần Thị Minh Khuê"; canvas hiện chip role+guard mọi cạnh; Save disabled = không false-dirty.
+    Backfill 3 instance demo cũ qua script tạm (đã xoá khỏi repo). Owner gate push (chưa push). CÒN 5
+    vấn đề UX (#3 lọc run-list · #4 nút Run editor · #5 i18n validate-msg · #6 edge-label overlap ·
+    #7 antd deprec) — chờ owner chọn tiếp.

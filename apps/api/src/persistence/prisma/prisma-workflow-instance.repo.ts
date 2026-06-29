@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { deriveCaseLabel } from "@org/workflow-core";
 import type { WorkflowInstance } from "@org/workflow-schema";
 import type { Prisma, WorkflowInstanceRecord } from "@prisma/client";
 import {
@@ -15,6 +16,7 @@ const summarySelect = {
   workflowId: true,
   projectId: true,
   current: true,
+  label: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -27,6 +29,7 @@ function toSummary(r: SummaryRow): WorkflowInstanceSummary {
     workflowId: r.workflowId,
     projectId: r.projectId,
     current: r.current,
+    label: r.label,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
@@ -43,6 +46,7 @@ export class PrismaWorkflowInstanceRepo extends WorkflowInstanceRepo {
       workflowId: meta.workflowId,
       projectId: meta.projectId,
       current: instance.current,
+      label: deriveCaseLabel(instance.data) ?? null,
       body: instance as unknown as Prisma.InputJsonValue,
     };
     await this.prisma.workflowInstanceRecord.upsert({

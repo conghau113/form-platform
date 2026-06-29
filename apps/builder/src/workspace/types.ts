@@ -48,6 +48,8 @@ export interface WorkflowInstanceSummary {
   workflowId: string;
   projectId: string;
   current: string;
+  /** Denormalized human label derived from the case data (#1), or null when none was derived. */
+  label: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,5 +1,5 @@
 import { FormRenderer, type FormRendererHandle } from "@org/form-renderer-web";
-import { localizeWorkflow } from "@org/workflow-core";
+import { deriveCaseLabel, localizeWorkflow } from "@org/workflow-core";
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import {
   Alert,
@@ -182,16 +182,25 @@ function CaseLauncher({
                     navigate(`/projects/${projectId}/workflows/${workflowId}/run/${inst.id}`)
                   }
                 >
-                  <Space style={{ justifyContent: "space-between", width: "100%" }}>
-                    <span>
-                      <Tag>{labelOf(inst.current)}</Tag>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                    <Space style={{ justifyContent: "space-between", width: "100%" }}>
+                      <Text strong style={{ fontSize: 13 }}>
+                        {inst.label ?? (
+                          <Text type="secondary" italic style={{ fontSize: 13 }}>
+                            Case chưa có nhãn
+                          </Text>
+                        )}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+                        {new Date(inst.updatedAt).toLocaleString()}
+                      </Text>
+                    </Space>
+                    <Space size="small">
+                      <Tag style={{ margin: 0 }}>{labelOf(inst.current)}</Tag>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
                         {inst.id}
                       </Text>
-                    </span>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {new Date(inst.updatedAt).toLocaleString()}
-                    </Text>
+                    </Space>
                   </Space>
                 </Button>
               ))}
@@ -288,6 +297,7 @@ function CaseRunner({
 
   const style = node ? resolveStatusStyle(node, byCode) : null;
   const actions = runActions(def, instance.current);
+  const caseLabel = deriveCaseLabel(instance.data);
   const back = () => navigate(`/projects/${projectId}/workflows/${workflowId}/run`);
 
   return (
@@ -296,9 +306,14 @@ function CaseRunner({
         <Space style={{ justifyContent: "space-between", width: "100%" }} wrap>
           <Space>
             <Button onClick={back}>← Danh sách case</Button>
-            <Title level={4} style={{ margin: 0 }}>
-              {view.title}
-            </Title>
+            <div>
+              <Title level={4} style={{ margin: 0 }}>
+                {caseLabel ?? view.title}
+              </Title>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {caseLabel ? view.title : instance.id}
+              </Text>
+            </div>
           </Space>
           <Space wrap>
             <LocaleSwitcher options={localeOptions} locale={locale} onLocale={setLocale} />

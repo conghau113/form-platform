@@ -3,6 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
+import { deriveCaseLabel } from "@org/workflow-core";
 import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import type {
@@ -130,6 +131,7 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
       workflowId: meta.workflowId,
       projectId: meta.projectId,
       current: instance.current,
+      label: deriveCaseLabel(instance.data) ?? null,
       createdAt: this.updatedAt.get(id) ?? new Date(),
       updatedAt: this.updatedAt.get(id) ?? new Date(),
     };

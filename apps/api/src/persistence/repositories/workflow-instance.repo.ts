@@ -12,6 +12,8 @@ export interface WorkflowInstanceSummary {
   workflowId: string;
   projectId: string;
   current: string;
+  /** Denormalized label derived from the case data (#1), or null when none could be derived. */
+  label: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

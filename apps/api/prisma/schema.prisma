@@ -107,6 +107,9 @@ model WorkflowInstanceRecord {
   workflowId String
   projectId  String
   current    String
+  /// Denormalized human label derived from the case data (deriveCaseLabel) so a case list shows the
+  /// subject (e.g. an employee name) without loading each body. Null when no label can be derived.
+  label      String?
   body       Json
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

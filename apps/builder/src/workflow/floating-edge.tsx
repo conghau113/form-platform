@@ -1,3 +1,4 @@
+import { FilterOutlined, UserOutlined } from "@ant-design/icons";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -8,7 +9,9 @@ import {
   Position,
   useInternalNode,
 } from "@xyflow/react";
-import { createContext, useContext } from "react";
+import { createContext, type ReactNode, useContext } from "react";
+import { shortGuard, summarizeGuard } from "./edge-summary";
+import type { FlowEdgeData } from "./workflow-model";
 
 /** Upstream path highlight — colour + dim only; stroke width stays constant on node click. */
 export interface PathHighlightCtx {
@@ -88,8 +91,59 @@ function boxOf(node: InternalNode<Node>): NodeBox {
   };
 }
 
+/** A role/guard chip shown beneath the action label so the branch's "who" and "when" read straight
+ *  off the canvas (#2). Presentation only — the engine still evaluates the raw role/guard. */
+function EdgeChip({
+  icon,
+  text,
+  title,
+  tone,
+}: {
+  icon: ReactNode;
+  text: string;
+  title?: string;
+  tone: "role" | "guard";
+}) {
+  const palette =
+    tone === "guard"
+      ? { background: "#fffbe6", border: "#ffe58f", color: "#ad6800" }
+      : { background: "#f5f5f5", border: "#e8e8e8", color: "rgba(0,0,0,0.6)" };
+  return (
+    <span
+      title={title}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        maxWidth: 150,
+        padding: "1px 6px",
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 500,
+        lineHeight: 1.4,
+        whiteSpace: "nowrap",
+        background: palette.background,
+        border: `1px solid ${palette.border}`,
+        color: palette.color,
+      }}
+    >
+      <span style={{ fontSize: 9, display: "inline-flex" }}>{icon}</span>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{text}</span>
+    </span>
+  );
+}
+
 /** Custom edge that routes to the nearest borders and renders its action as a centered label. */
-export function FloatingEdge({ id, source, target, markerEnd, style, label, selected }: EdgeProps) {
+export function FloatingEdge({
+  id,
+  source,
+  target,
+  markerEnd,
+  style,
+  label,
+  selected,
+  data,
+}: EdgeProps) {
   const { edgeIds } = useContext(PathHighlightContext);
   const onPath = edgeIds?.has(id) ?? false;
   const dimmed = edgeIds != null && !onPath;
@@ -112,6 +166,11 @@ export function FloatingEdge({ id, source, target, markerEnd, style, label, sele
     ...(dimmed ? { opacity: 0.22 } : {}),
   };
 
+  const edgeData = data as FlowEdgeData | undefined;
+  const role = edgeData?.role;
+  const guard = edgeData?.guard;
+  const hasMeta = Boolean(label || role || guard);
+
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   if (!sourceNode || !targetNode) return null;
@@ -133,29 +192,56 @@ export function FloatingEdge({ id, source, target, markerEnd, style, label, sele
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} style={pathStyle} className={pathClass} />
-      {label ? (
+      {hasMeta ? (
         <EdgeLabelRenderer>
           <div
             style={{
               position: "absolute",
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               pointerEvents: "none",
-              maxWidth: 140,
-              padding: "3px 9px",
-              borderRadius: 5,
-              fontSize: 11,
-              fontWeight: 500,
-              lineHeight: 1.35,
-              letterSpacing: "0.01em",
-              textAlign: "center",
-              background: emphasized ? "#e6f4ff" : "#fff",
-              border: `1px solid ${emphasized ? "#91caff" : "#e8e8e8"}`,
-              color: emphasized ? "#0958d9" : "rgba(0,0,0,0.72)",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 2,
               opacity: dimmed ? 0.35 : 1,
             }}
           >
-            {label}
+            {label ? (
+              <div
+                style={{
+                  maxWidth: 140,
+                  padding: "3px 9px",
+                  borderRadius: 5,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  lineHeight: 1.35,
+                  letterSpacing: "0.01em",
+                  textAlign: "center",
+                  background: emphasized ? "#e6f4ff" : "#fff",
+                  border: `1px solid ${emphasized ? "#91caff" : "#e8e8e8"}`,
+                  color: emphasized ? "#0958d9" : "rgba(0,0,0,0.72)",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                }}
+              >
+                {label}
+              </div>
+            ) : null}
+            {role ? (
+              <EdgeChip
+                tone="role"
+                icon={<UserOutlined />}
+                text={role}
+                title={`Vai trò: ${role}`}
+              />
+            ) : null}
+            {guard ? (
+              <EdgeChip
+                tone="guard"
+                icon={<FilterOutlined />}
+                text={shortGuard(guard)}
+                title={`Điều kiện: ${summarizeGuard(guard)}`}
+              />
+            ) : null}
           </div>
         </EdgeLabelRenderer>
       ) : null}
