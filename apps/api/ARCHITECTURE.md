@@ -25,8 +25,10 @@ it. `PrismaService` (the `PrismaClient` lifecycle) lives only in `persistence/pr
 ## Layout (`src/`)
 | Concern | Path |
 |---|---|
-| Bootstrap (CORS, **global `ValidationPipe`**, port) | `main.ts` |
-| Root module — composes feature modules | `app.module.ts` |
+| Bootstrap (helmet, **CORS allowlist**, global `ValidationPipe`, port) | `main.ts` |
+| Root module — `ConfigModule` (Zod env validate) + `ThrottlerModule` + feature modules | `app.module.ts` |
+| Env contract — Zod schema + `validateEnv` (fail-fast) + `parseCorsOrigins` | `config/env.ts` |
+| Health probe — `GET /health` runs `SELECT 1` (process + DB) | `modules/health/` |
 | Auth seam — `@CurrentOwner()` reads `x-owner-id` (default `SEED_OWNER_ID`) | `auth/current-owner.decorator.ts` |
 | Slug helpers + path/id guards | `common/` |
 | Persistence — repo **interfaces** + Prisma impls + `PrismaService` | `persistence/{repositories,prisma}/` |
@@ -55,6 +57,22 @@ it. `PrismaService` (the `PrismaClient` lifecycle) lives only in `persistence/pr
 > DTO classes must be imported as **values** (not `import type`) in controllers — `@Body() dto:
 > Foo` relies on `emitDecoratorMetadata` emitting the runtime class reference for the pipe.
 
+## Security hardening (production-hardening 1D)
+Infrastructure-level only — **real authentication arrives in Phase 2**.
+- **Env validation** — `ConfigModule.forRoot({ validate: validateEnv })` parses the environment with
+  Zod at boot; a missing/malformed required var (`DATABASE_URL`) **fails fast** instead of erroring
+  mid-request. Optional vars take defaults + coerce (`config/env.ts`).
+- **CORS** — `main.ts` enables an **allowlist** from `CORS_ORIGINS` (comma-separated); an empty list
+  disables cross-origin requests. No allow-all fallback.
+- **helmet** — `app.use(helmet())` sets standard security headers.
+- **Rate limiting** — `ThrottlerModule` + a global `ThrottlerGuard` cap requests/IP
+  (`THROTTLE_TTL`/`THROTTLE_LIMIT`); `/health` opts out via `@SkipThrottle()`.
+
+> **Trust boundary:** `x-owner-id` (the `@CurrentOwner()` seam) and the `?roles=` query are
+> **operator-declared, NOT a security boundary** — any client can set them. They identify *who the
+> caller claims to be* for tenancy/RBAC shaping, not *who they are*. Real auth (verified identity +
+> server-enforced authorization) lands in **Phase 2**; until then this API assumes a trusted caller.
+
 ## Access control (Track W5)
 `ProjectsService.requireAccess(userId, projectId, minRole)` is the single gate. The canonical owner
 (`Project.ownerId`) always resolves to the `owner` role; other users get the role on their
@@ -70,6 +88,7 @@ register it in `app.module.ts`'s `imports`. Put data access behind a new repo **
 bodies a DTO under `dto/`; leave contract bodies on the schema's `migrate`/parse.
 
 ## Endpoints (all carry `x-owner-id`; default `SEED_OWNER_ID`)
+- **Health** — `GET /health` (no auth, throttle-exempt; `SELECT 1` → `{ status, db }`)
 - **Projects** — `POST /projects` · `GET /projects` (owned ∪ shared) · `GET /projects/:id` ·
   `GET /projects/:id/tree` · `PATCH /projects/:id` (owner) · `DELETE /projects/:id` (owner)
 - **Members** — `GET /projects/:id/members` (viewer+) · `POST` · `PATCH /:userId` ·

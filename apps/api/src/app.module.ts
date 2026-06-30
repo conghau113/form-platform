@@ -1,7 +1,12 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { validateEnv } from "./config/env.js";
 import { AiModule } from "./modules/ai/ai.module.js";
 import { FoldersModule } from "./modules/folders/folders.module.js";
 import { FormsModule } from "./modules/forms/forms.module.js";
+import { HealthModule } from "./modules/health/health.module.js";
 import { PresetsModule } from "./modules/presets/presets.module.js";
 import { ProjectsModule } from "./modules/projects/projects.module.js";
 import { StatusCatalogModule } from "./modules/status-catalog/status-catalog.module.js";
@@ -13,10 +18,27 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
 /** Root module — composes the feature modules. New features (e.g. workflow) are added
  *  here as their own `src/modules/<feature>` module rather than registering controllers
  *  and providers flat. `PersistenceModule` is global, so feature services can inject the
- *  repo interfaces without re-importing it. */
+ *  repo interfaces without re-importing it.
+ *
+ *  `ConfigModule` validates the environment (Zod) at boot — fail-fast on a missing required
+ *  var. `ThrottlerModule` + the global `ThrottlerGuard` rate-limit every route (window/limit
+ *  from env); `/health` opts out via `@SkipThrottle()`. Production-hardening 1D. */
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: config.get<number>("THROTTLE_TTL", 60_000),
+            limit: config.get<number>("THROTTLE_LIMIT", 120),
+          },
+        ],
+      }),
+    }),
     PersistenceModule,
+    HealthModule,
     ProjectsModule,
     FoldersModule,
     FormsModule,
@@ -27,5 +49,6 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     SubmissionsModule,
     AiModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

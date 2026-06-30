@@ -35,17 +35,17 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-formplatform}:${POSTGRES_PASSWORD:-formplatform}@postgres:5432/${POSTGRES_DB:-formplatform}?schema=public
       PORT: 3001
-      # Browser origin allowed by CORS (the builder below). Enforced from Phase 1D.
+      # Browser origins allowed by CORS (the builder below). Empty => no cross-origin requests.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
     ports:
       - "${API_PORT:-3001}:3001"
-    # /health lands in Phase 1D; until then probe the listening port directly.
+    # GET /health runs a `SELECT 1`, so green = process up AND database reachable (1D).
     healthcheck:
       test:
         - CMD
         - node
         - -e
-        - "require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
+        - "require('http').get('http://127.0.0.1:3001/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
       interval: 10s
       timeout: 5s
       retries: 10

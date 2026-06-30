@@ -45,6 +45,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: SubmissionRepo, useClass: PrismaSubmissionRepo },
   ],
   exports: [
+    PrismaService,
     FormRepo,
     FormVersionRepo,
     WorkflowRepo,
