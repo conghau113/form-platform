@@ -39,6 +39,8 @@ pnpm version-packages
 pnpm release        # build + changeset publish to your PRIVATE registry
 ```
 
+> **Hướng dẫn vận hành (chạy dev, kiểm thử, self-host Docker):** xem [`docs/usage.md`](docs/usage.md).
+
 ## Versioning rules of thumb
 
 - Breaking change to the schema shape -> MAJOR on `@org/form-schema` + new `formVersion` + migration.
