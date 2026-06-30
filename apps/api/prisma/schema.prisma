@@ -1,12 +1,13 @@
 // Track W persistence (W0). The DB holds organisational metadata + form bodies; the form
 // JSON contract itself stays pure (no projectId/folderId) — `body` is the migrated contract.
-// SQLite for dev; switch `provider` to "postgresql" for production (D4).
+// PostgreSQL (production-hardening 1B). The schema is portable (no native @db.* types); the
+// connection string comes from DATABASE_URL — see env.example and docker-compose.yml.
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
