@@ -1,0 +1,68 @@
+# Self-host stack for the Form Platform (production-hardening 1C).
+#   docker compose up --build
+# Postgres + the NestJS API (auto-migrates on boot) + the Vite SPA served by nginx.
+# Values below are non-secret local defaults; override per-host with a root `.env`
+# (compose substitutes ${VAR:-default}). Real secrets/auth arrive in Phase 2.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-formplatform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-formplatform}
+      POSTGRES_DB: ${POSTGRES_DB:-formplatform}
+    # Host port 5435 (5432/5433 are commonly taken by a local Postgres) so DataGrip can
+    # still connect to the container DB.
+    ports:
+      - "${POSTGRES_PORT:-5435}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-formplatform} -d ${POSTGRES_DB:-formplatform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-formplatform}:${POSTGRES_PASSWORD:-formplatform}@postgres:5432/${POSTGRES_DB:-formplatform}?schema=public
+      PORT: 3001
+      # Browser origin allowed by CORS (the builder below). Enforced from Phase 1D.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    # /health lands in Phase 1D; until then probe the listening port directly.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  builder:
+    build:
+      context: .
+      dockerfile: apps/builder/Dockerfile
+      args:
+        # Baked into the bundle at build time — the API origin the browser calls.
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:3001}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${BUILDER_PORT:-8080}:80"
+
+volumes:
+  pgdata:

@@ -1,0 +1,29 @@
+# Keep the build context small + force a clean install inside the image.
+# Host artefacts must never leak in (wrong-platform binaries, stale builds).
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+**/.vite
+
+.git
+.github
+.changeset
+.claude
+.vscode
+.idea
+
+# runtime data + secrets (never bake into an image)
+**/.data
+**/.env
+**/.env.*
+!**/env.example
+
+# docs / scratch
+**/*.md
+docs
+project-tree-for-ai.txt
+structure.txt
+**/*.log
+.DS_Store
+Thumbs.db
