@@ -30,7 +30,7 @@ Jenkins/SonarQube/BlackDuck/GitLab; đang dùng GitHub + Vercel).
 |---|---|---|---|
 | **1A** | Repo hygiene (engines/.nvmrc/LICENSE, gitignore .env, env.example, de-hardcode API_BASE) | ✅ DONE | `89e0c06` |
 | **1B** | DB SQLite → PostgreSQL (provider + reset migrations + sửa test) | ✅ DONE | `0929697` |
-| **1C** | Containerization (Dockerfile api+builder, docker-compose, .dockerignore) | ⬜ TODO | — |
+| **1C** | Containerization (Dockerfile api+builder, docker-compose, .dockerignore) | ✅ DONE | `aa22288` |
 | **1D** | Security hardening hạ tầng (ConfigModule+env-validate, CORS allowlist, helmet, throttler, /health) | ⬜ TODO | — |
 | **1E** | CI/CD (GitHub Actions + CodeQL + Dependabot + SonarCloud + gitleaks + Trivy + changeset gate) | ⬜ TODO | — |
 | **2** | Auth thật + authorization + multi-tenant (phác thảo, làm sau) | ⬜ LATER | — |
@@ -60,12 +60,15 @@ Legend: ✅ done · 🟡 đang làm · ⬜ chưa · ⏭️ later.
 - **Verify:** `pnpm --filter @app/api test` = **114 PASS** (gồm import test chạy THẬT trên PG container ~15s, KHÔNG skip) · api typecheck PASS · biome sạch (file đổi) · reviewer PASS.
 - **Gotcha:** (1) `prisma generate` **EPERM** rename query-engine DLL khi api dev server đang giữ DLL → phải kill PID api (3001) trước generate; provider bị bake vào client nên BẮT BUỘC regenerate sau khi đổi provider. (2) Sau phase này dev stack đã bị kill → **owner nên `pnpm dev` lại** (lần đầu sẽ chạy migrate lên DB Postgres — cần Postgres listening; xem 1C docker-compose). (3) Migration generate cần Postgres đang chạy: dùng `docker run postgres:16-alpine` tạm (port tránh trùng — 5432/5433 đã bị chiếm máy owner, dùng 5434).
 
-### ⬜ 1C — Containerization (Docker Compose self-host)
-- [ ] `apps/api/Dockerfile` multi-stage (context = repo root): build (`pnpm install --frozen-lockfile` → turbo build api+deps → `prisma generate`) → runtime `node:20-alpine` (dist + prod node_modules + prisma/; entrypoint `prisma migrate deploy` rồi `node dist/main.js`).
-- [ ] `apps/builder/Dockerfile` multi-stage: build Vite (`ARG VITE_API_BASE`) → serve `nginx:alpine` (SPA fallback `try_files … /index.html`).
-- [ ] `docker-compose.yml` (root): `postgres` (volume + healthcheck `pg_isready`), `api` (env + depends_on healthy + healthcheck `/health`), `builder` (build-arg VITE_API_BASE). Optional `docker-compose.override.yml` cho dev hot-reload.
-- [ ] `.dockerignore` (root): node_modules, dist, .turbo, .git, **/.vite, .data, *.md…
-- **Verify:** `docker compose up --build` → postgres healthy → api migrate+listen → `curl /health` OK → builder mở được → tạo/Save form xuyên tới Postgres (DataGrip kiểm `FormRecord`).
+### ✅ 1C — Containerization (Docker Compose self-host) — DONE `aa22288`
+- [x] `apps/api/Dockerfile` multi-stage (context = **repo root**): build = `pnpm install --frozen-lockfile` → `pnpm turbo run build --filter=@app/api` (build api dist + mọi workspace dep) → `pnpm prune --prod` → `prisma generate` lại (prune ghi lại node_modules). Runtime `node:20-alpine` COPY cả `/repo` (giữ symlink workspace), `apk add openssl` (prisma musl engine), entrypoint `pnpm exec prisma migrate deploy && node dist/main.js`.
+- [x] `apps/builder/Dockerfile` multi-stage: build `ARG/ENV VITE_API_BASE` → `pnpm turbo run build --filter=@app/builder` → runtime `nginx:alpine` serve `apps/builder/dist` + `apps/builder/nginx.conf` (SPA fallback `try_files $uri $uri/ /index.html` + cache `/assets/`).
+- [x] `docker-compose.yml` (root, KHÔNG `version:`): `postgres:16-alpine` (named volume `pgdata` + healthcheck `pg_isready`), `api` (`depends_on postgres: service_healthy`, `DATABASE_URL`→service `postgres:5432`, healthcheck **node-TCP** vì `/health` để 1D), `builder` (build-arg `VITE_API_BASE`, host `8080`→80). Cổng host tránh trùng: postgres `5435:5432` (5432/5433 bận máy owner; vẫn để DataGrip nối), api `3001:3001`, builder `8080:80` (tránh dev Vite 5173). Mọi env `${VAR:-default}` override được qua root `.env`.
+- [x] `.dockerignore` (root): node_modules/dist/.turbo/.tsbuildinfo/.vite/.git/.github/.changeset/.claude/.data/.env*/docs/*.md…
+- [x] `apps/api/package.json`: **`prisma` CLI devDep → dep** (runtime cần `migrate deploy`); `turbo.json` build task thêm `env:["VITE_API_BASE","NODE_ENV"]` (turbo 2 strict env-mode ẩn var không khai → Vite sẽ bake nhầm default).
+- **Verify (E2E THẬT, `docker compose up --build`):** postgres Healthy → api apply migration `20260630075905_init` lên container PG → "API listening :3001" → **GET /projects 200 `[]`** → **POST /projects 201 → GET count=1 persisted** (round-trip xuyên Postgres) → **builder 200 có `#root` + SPA deep-link fallback 200**. api typecheck PASS · biome sạch (JSON đổi) · reviewer PASS. Teardown `down -v` (xóa volume test). Image: builder 95.3MB, **api 1.47GB** (full-copy + prune; ⏭️ slim sau — chỉ copy phần api cần).
+- **Gotcha:** (1) `pnpm deploy` KHÔNG dùng được: api `dist/` bị `.gitignore` ignore → npm-pack-semantics của deploy loại dist ⇒ chọn full-copy+`prune --prod`. (2) `pnpm prune --prod` hỏi confirm interactive → trong Docker non-TTY tự `true` (OK). (3) prisma musl engine cần `openssl` trên alpine. (4) Dev stack `pnpm dev` (3001/5173) **đụng cổng** api 3001 nếu compose cũng chạy — chạy MỘT trong hai.
+- **Known gaps (reviewer, → xử lý sau):** (a) `CORS_ORIGINS` đã có trong compose nhưng `main.ts` vẫn `enableCors()` allow-all → **enforce ở 1D** (đừng ship allow-all). (b) `migrate deploy` chạy trong `CMD` + `restart:unless-stopped` ⇒ giả định **1 API replica** (scale >1 sẽ race migrate lúc boot — tách init/job khi cần). (c) Image api 1.47GB ⏭️ slim sau (chỉ copy phần api cần thay vì cả `/repo`).
 
 ### ⬜ 1D — Security hardening hạ tầng (KHÔNG đụng auth thật)
 Trong `apps/api` (`main.ts` + `app.module.ts`); thêm deps `@nestjs/config`, `helmet`, `@nestjs/throttler` (đã xác minh CHƯA có):
