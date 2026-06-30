@@ -1,7 +1,12 @@
 {
   "name": "form-platform",
   "private": true,
+  "license": "UNLICENSED",
   "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
