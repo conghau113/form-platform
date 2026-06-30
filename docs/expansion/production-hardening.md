@@ -29,7 +29,7 @@ Jenkins/SonarQube/BlackDuck/GitLab; đang dùng GitHub + Vercel).
 | Phase | Nội dung | Trạng thái | Commit |
 |---|---|---|---|
 | **1A** | Repo hygiene (engines/.nvmrc/LICENSE, gitignore .env, env.example, de-hardcode API_BASE) | ✅ DONE | `89e0c06` |
-| **1B** | DB SQLite → PostgreSQL (provider + reset migrations + sửa test) | ⬜ TODO | — |
+| **1B** | DB SQLite → PostgreSQL (provider + reset migrations + sửa test) | ✅ DONE | `0929697` |
 | **1C** | Containerization (Dockerfile api+builder, docker-compose, .dockerignore) | ⬜ TODO | — |
 | **1D** | Security hardening hạ tầng (ConfigModule+env-validate, CORS allowlist, helmet, throttler, /health) | ⬜ TODO | — |
 | **1E** | CI/CD (GitHub Actions + CodeQL + Dependabot + SonarCloud + gitleaks + Trivy + changeset gate) | ⬜ TODO | — |
@@ -52,12 +52,13 @@ Legend: ✅ done · 🟡 đang làm · ⬜ chưa · ⏭️ later.
 - **Verify:** builder typecheck PASS · biome chỉ CRLF (blob commit LF) · no packages/* ⇒ no changeset.
 - **Gotcha:** `.env.example` bị deny rule `**/.env.*` trong settings.json → dùng tên `env.example`. `core.autocrlf=true` → biome local báo CRLF nhưng commit LF (đã chứng minh `git show :file|grep -c CR`=0).
 
-### ⬜ 1B — DB SQLite → PostgreSQL (`apps/api`)
-- [ ] `prisma/schema.prisma`: `provider` `"sqlite"` → `"postgresql"` (`PrismaService` đã đọc `DATABASE_URL` từ env — OK).
-- [ ] Reset migrations: xóa `prisma/migrations/*` cũ (sqlite-bound, `migration_lock.toml`="sqlite") → tạo `init` mới trên Postgres (`prisma migrate dev --name init`). Mất data dev cũ (chỉ seed — chấp nhận; chạy lại seed sau).
-- [ ] **Sửa `apps/api/src/scripts/import-files-to-db.test.ts`** — test DUY NHẤT chạm DB; hiện tự tạo SQLite tạm (`file:` qua `prisma db push`) → SẼ VỠ khi đổi provider. Viết lại chạy Postgres ephemeral: **khuyến nghị Testcontainers** (`@testcontainers/postgresql`) hoặc nhẹ hơn `TEST_DATABASE_URL`+`describe.skipIf` (đúng pattern repo) + CI cấp `services: postgres`.
-- [ ] (Các test khác dùng FakeRepo in-memory → không đổi. `preset.live.test.ts` đã tự `skipIf`.)
-- **Verify:** `pnpm --filter @app/api test` PASS với Postgres; `prisma migrate deploy` chạy sạch trên DB rỗng; seed/import lại OK.
+### ✅ 1B — DB SQLite → PostgreSQL (`apps/api`) — DONE `0929697`
+- [x] `prisma/schema.prisma`: `provider` `"sqlite"` → `"postgresql"` (+ header comment). Schema portable (chỉ `Json/DateTime/String/Int/cuid()`, KHÔNG native `@db.*`) → đổi an toàn. `PrismaService` đọc `DATABASE_URL` từ env (không override).
+- [x] Reset migrations: xóa 9 migration cũ sqlite-bound → squash thành 1 `20260630075905_init` (PG dialect: `TIMESTAMP(3)`, `JSONB`×7) + `migration_lock.toml` provider=`postgresql`. Tạo bằng `prisma migrate dev --name init` trên Postgres tạm (docker `postgres:16-alpine`). Chưa có PG production ⇒ không cần giữ history.
+- [x] **Viết lại `import-files-to-db.test.ts`** dùng **Testcontainers** (`@testcontainers/postgresql`) thay SQLite tạm: `beforeAll` start `PostgreSqlContainer("postgres:16-alpine")` → `getConnectionUri()` → `prisma db push --skip-generate` → fixtures; `afterAll` disconnect+`container.stop()`. Guard `describe.skipIf(!hasDocker())` (probe `docker info` đồng bộ lúc collection — khớp pattern `skipIf` repo) để `pnpm test` không vỡ nơi thiếu Docker.
+- [x] (Các test khác dùng FakeRepo in-memory → không đổi.)
+- **Verify:** `pnpm --filter @app/api test` = **114 PASS** (gồm import test chạy THẬT trên PG container ~15s, KHÔNG skip) · api typecheck PASS · biome sạch (file đổi) · reviewer PASS.
+- **Gotcha:** (1) `prisma generate` **EPERM** rename query-engine DLL khi api dev server đang giữ DLL → phải kill PID api (3001) trước generate; provider bị bake vào client nên BẮT BUỘC regenerate sau khi đổi provider. (2) Sau phase này dev stack đã bị kill → **owner nên `pnpm dev` lại** (lần đầu sẽ chạy migrate lên DB Postgres — cần Postgres listening; xem 1C docker-compose). (3) Migration generate cần Postgres đang chạy: dùng `docker run postgres:16-alpine` tạm (port tránh trùng — 5432/5433 đã bị chiếm máy owner, dùng 5434).
 
 ### ⬜ 1C — Containerization (Docker Compose self-host)
 - [ ] `apps/api/Dockerfile` multi-stage (context = repo root): build (`pnpm install --frozen-lockfile` → turbo build api+deps → `prisma generate`) → runtime `node:20-alpine` (dist + prod node_modules + prisma/; entrypoint `prisma migrate deploy` rồi `node dist/main.js`).
@@ -114,8 +115,8 @@ Tạo `.github/`:
 ---
 
 ## Facts đã xác minh & Gotchas (đọc trước khi sửa)
-- **DB:** `schema.prisma`=sqlite, `migration_lock.toml`="sqlite"; `PrismaService` không override datasource → đọc `DATABASE_URL` từ env.
-- **Test/DB:** chỉ `import-files-to-db.test.ts` chạm DB (tự tạo SQLite tạm); còn lại FakeRepo in-memory; `preset.live.test.ts` tự `skipIf(!liveProvider)`.
+- **DB:** ~~sqlite~~ → **postgresql** (1B); `migration_lock.toml`="postgresql", baseline migration `20260630075905_init`; `PrismaService` không override datasource → đọc `DATABASE_URL` từ env.
+- **Test/DB:** chỉ `import-files-to-db.test.ts` chạm DB (Testcontainers Postgres, `skipIf(!hasDocker())`); còn lại FakeRepo in-memory; `preset.live.test.ts` (form-ai) tự `skipIf`.
 - **Security deps:** helmet/@nestjs/config/throttler/terminus đều CHƯA có (grep package.json = "No matches").
 - **Auth hiện tại:** `auth/current-owner.decorator.ts` đọc `x-owner-id` default `"local"` — KHÔNG phải auth.
 - **CRLF:** `core.autocrlf=true`, không `.gitattributes` → biome local báo CRLF nhưng commit LF (ứng viên cải thiện sau: `.gitattributes eol=lf`, nhưng renormalize cả repo → để riêng).
