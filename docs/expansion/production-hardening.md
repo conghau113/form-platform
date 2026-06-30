@@ -31,7 +31,7 @@ Jenkins/SonarQube/BlackDuck/GitLab; đang dùng GitHub + Vercel).
 | **1A** | Repo hygiene (engines/.nvmrc/LICENSE, gitignore .env, env.example, de-hardcode API_BASE) | ✅ DONE | `89e0c06` |
 | **1B** | DB SQLite → PostgreSQL (provider + reset migrations + sửa test) | ✅ DONE | `0929697` |
 | **1C** | Containerization (Dockerfile api+builder, docker-compose, .dockerignore) | ✅ DONE | `aa22288` |
-| **1D** | Security hardening hạ tầng (ConfigModule+env-validate, CORS allowlist, helmet, throttler, /health) | ⬜ TODO | — |
+| **1D** | Security hardening hạ tầng (ConfigModule+env-validate, CORS allowlist, helmet, throttler, /health) | ✅ DONE | `bc0a758` |
 | **1E** | CI/CD (GitHub Actions + CodeQL + Dependabot + SonarCloud + gitleaks + Trivy + changeset gate) | ⬜ TODO | — |
 | **2** | Auth thật + authorization + multi-tenant (phác thảo, làm sau) | ⬜ LATER | — |
 
@@ -70,15 +70,17 @@ Legend: ✅ done · 🟡 đang làm · ⬜ chưa · ⏭️ later.
 - **Gotcha:** (1) `pnpm deploy` KHÔNG dùng được: api `dist/` bị `.gitignore` ignore → npm-pack-semantics của deploy loại dist ⇒ chọn full-copy+`prune --prod`. (2) `pnpm prune --prod` hỏi confirm interactive → trong Docker non-TTY tự `true` (OK). (3) prisma musl engine cần `openssl` trên alpine. (4) Dev stack `pnpm dev` (3001/5173) **đụng cổng** api 3001 nếu compose cũng chạy — chạy MỘT trong hai.
 - **Known gaps (reviewer, → xử lý sau):** (a) `CORS_ORIGINS` đã có trong compose nhưng `main.ts` vẫn `enableCors()` allow-all → **enforce ở 1D** (đừng ship allow-all). (b) `migrate deploy` chạy trong `CMD` + `restart:unless-stopped` ⇒ giả định **1 API replica** (scale >1 sẽ race migrate lúc boot — tách init/job khi cần). (c) Image api 1.47GB ⏭️ slim sau (chỉ copy phần api cần thay vì cả `/repo`).
 
-### ⬜ 1D — Security hardening hạ tầng (KHÔNG đụng auth thật)
-Trong `apps/api` (`main.ts` + `app.module.ts`); thêm deps `@nestjs/config`, `helmet`, `@nestjs/throttler` (đã xác minh CHƯA có):
-- [ ] `ConfigModule.forRoot({ isGlobal:true, validate })` validate env bằng Zod (fail-fast nếu thiếu DATABASE_URL/PORT/CORS_ORIGINS).
-- [ ] CORS: thay `app.enableCors()` bằng allowlist từ `CORS_ORIGINS`.
-- [ ] `app.use(helmet())`.
-- [ ] `@nestjs/throttler` global guard (ngưỡng qua env).
-- [ ] `GET /health` (controller nhẹ hoặc `@nestjs/terminus` kiểm Prisma).
-- [ ] Ghi chú trust-boundary: `x-owner-id` + `?roles=` KHÔNG phải ranh giới bảo mật tới Phase 2 (`apps/api/ARCHITECTURE.md`).
-- **Verify:** origin lạ bị CORS chặn · header helmet hiện diện · vượt ngưỡng → 429 · thiếu env bắt buộc → app fail-fast.
+### ✅ 1D — Security hardening hạ tầng (KHÔNG đụng auth thật) — DONE `bc0a758`
+Trong `apps/api`; deps thêm: `@nestjs/config@3.3`, `helmet@8.2`, `@nestjs/throttler@6.5`, `zod@3.25` (khớp form-schema).
+- [x] **`config/env.ts`** — `envSchema` (Zod, `.passthrough()` để AI_*/biến khác đi qua) + `validateEnv` (hook `ConfigModule.forRoot({ isGlobal:true, validate })`, gộp lỗi → throw → **fail-fast** tại boot nếu thiếu `DATABASE_URL`/sai kiểu `PORT`…) + `parseCorsOrigins`. Coerce `PORT`/`THROTTLE_*` về number; default `CORS_ORIGINS="http://localhost:5173"`, `THROTTLE_TTL=60000`, `THROTTLE_LIMIT=120`. +`env.test.ts` (7 test).
+- [x] **CORS allowlist** — `main.ts` `app.enableCors({ origin: origins.length ? origins : false, credentials:true })` từ `CORS_ORIGINS` (bỏ `enableCors()` allow-all; list rỗng ⇒ chặn cross-origin, KHÔNG fallback allow-all).
+- [x] **`app.use(helmet())`** (CSP off — đây là JSON API; SPA do nginx phục vụ). Gỡ `X-Powered-By`.
+- [x] **`@nestjs/throttler`** — `ThrottlerModule.forRootAsync` (`{ throttlers:[{ ttl, limit }] }` — shape v6, ttl tính **ms**) + global `APP_GUARD: ThrottlerGuard`. `/health` `@SkipThrottle()`.
+- [x] **`GET /health`** — `modules/health/` controller tự viết (KHÔNG cần `@nestjs/terminus`): inject `PrismaService` (export thêm từ `PersistenceModule` global) → `prisma.$queryRaw\`SELECT 1\`` → `{status:"ok",db:"up"}`. DB chết ⇒ throw ⇒ non-200 (đúng tín hiệu unhealthy). `docker-compose` api healthcheck đổi raw-TCP → `GET /health`.
+- [x] **Trust-boundary note** (`apps/api/ARCHITECTURE.md` mục "Security hardening 1D"): `x-owner-id` + `?roles=` là **operator-declared, KHÔNG phải security boundary** tới Phase 2.
+- **Verify (ALL PASS):** api typecheck · **test 121 PASS** (114+7 env; import test chạy THẬT trên PG container ~22s) · biome sạch (file đổi; ⚠️ HealthController cần `biome-ignore useImportType` — DI value-import) · reviewer **PASS** (no blocking). **Live smoke THẬT** (temp `postgres:16-alpine` :5436 + `migrate deploy` + `node dist/main.js` standalone, `THROTTLE_LIMIT=3`): `/health`→200 `{status:ok,db:up}` + helmet headers (`X-Content-Type-Options=nosniff`/`X-Frame-Options=SAMEORIGIN`, `X-Powered-By` gỡ) · CORS allowed-origin echo `ACAO=localhost:5173` / preflight evil-origin `ACAO` rỗng (chặn) · throttle → 429 sau ngưỡng, `/health` exempt vẫn 200 · boot với `PORT="not-a-number"` → fail-fast `Invalid environment variables: PORT: Expected number` exit 1.
+- **Gotcha:** (1) `@prisma/client` **tự load `apps/api/.env`** lúc import (runtime) → `.env` cũ còn `DATABASE_URL="file:../.data/workspace.db"` (sót pre-1B) sẽ poison test fail-fast (Prisma P1012 thay vì message của ta). `.env` gitignored + Docker bỏ qua (compose set env tường minh) ⇒ production OK; **owner nên cập nhật `apps/api/.env` → Postgres URL** (hoặc xóa để dùng compose). (2) `HealthController` import `PrismaService` phải là **value-import** (`emitDecoratorMetadata` cho DI) → thêm `// biome-ignore lint/style/useImportType` (theo convention controller hiện có). (3) `ConfigService.get` đọc validated-env trước ⇒ number đã coerce (PORT/THROTTLE_*) tới đúng factory/`app.listen`.
+- **Known gaps (→ sau):** (a) **trust-proxy chưa set** — compose hiện browser→api:3001 trực tiếp nên `req.ip` thật, throttler đúng per-client; nếu Phase 2 đặt API sau nginx/LB phải `app.set('trust proxy', …)` nếu không throttle gộp theo IP proxy. (b) CORS_ORIGINS unset ⇒ default `localhost:5173` (tiện dev, localhost vô hại); muốn fail-closed thì đổi Zod default `""`.
 
 ### ⬜ 1E — CI/CD + chất lượng mã + quét bảo mật
 Tạo `.github/`:
@@ -120,7 +122,8 @@ Tạo `.github/`:
 ## Facts đã xác minh & Gotchas (đọc trước khi sửa)
 - **DB:** ~~sqlite~~ → **postgresql** (1B); `migration_lock.toml`="postgresql", baseline migration `20260630075905_init`; `PrismaService` không override datasource → đọc `DATABASE_URL` từ env.
 - **Test/DB:** chỉ `import-files-to-db.test.ts` chạm DB (Testcontainers Postgres, `skipIf(!hasDocker())`); còn lại FakeRepo in-memory; `preset.live.test.ts` (form-ai) tự `skipIf`.
-- **Security deps:** helmet/@nestjs/config/throttler/terminus đều CHƯA có (grep package.json = "No matches").
+- **Security deps:** ~~CHƯA có~~ → **ĐÃ thêm 1D**: `@nestjs/config@3.3`, `helmet@8.2`, `@nestjs/throttler@6.5`, `zod@3.25` (deps của `apps/api`). `@nestjs/terminus` KHÔNG dùng (health tự viết `$queryRaw`).
+- **`apps/api/.env` (gitignored):** còn `DATABASE_URL="file:../.data/workspace.db"` (sót pre-1B) — `@prisma/client` tự load lúc import ⇒ poison fail-fast test cục bộ. Docker bỏ qua (compose set env). Owner nên đổi sang Postgres URL hoặc xóa.
 - **Auth hiện tại:** `auth/current-owner.decorator.ts` đọc `x-owner-id` default `"local"` — KHÔNG phải auth.
 - **CRLF:** `core.autocrlf=true`, không `.gitattributes` → biome local báo CRLF nhưng commit LF (ứng viên cải thiện sau: `.gitattributes eol=lf`, nhưng renormalize cả repo → để riêng).
 - **settings.json:** deny `**/.env.*` (chặn `.env.example` → dùng `env.example`); đang modified — KHÔNG commit (để nguyên).
