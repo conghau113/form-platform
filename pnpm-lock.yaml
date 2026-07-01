@@ -295,7 +295,7 @@ importers:
     dependencies:
       '@hookform/resolvers':
         specifier: ^3.9.0
-        version: 3.10.0(react-hook-form@7.78.0(react@18.3.1))
+        version: 3.10.0(react-hook-form@7.80.0(react@18.3.1))
       '@org/form-core':
         specifier: workspace:*
         version: link:../form-core
@@ -303,8 +303,8 @@ importers:
         specifier: workspace:*
         version: link:../form-schema
       react-hook-form:
-        specifier: ^7.53.0
-        version: 7.78.0(react@18.3.1)
+        specifier: ^7.80.0
+        version: 7.80.0(react@18.3.1)
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -1743,6 +1743,11 @@ packages:
 
   acorn@8.16.0:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
+    engines: {node: '>=0.4.0'}
+    hasBin: true
+
+  acorn@8.17.0:
+    resolution: {integrity: sha512-xRQbDb9BnwDafYNn6Vwl839DYVjqXYb1XVGtWAZ1kcDc6iwAL4hg3B1dZlRiuENFeO2H53gFG3in621AdERVAg==}
     engines: {node: '>=0.4.0'}
     hasBin: true
 
@@ -3741,8 +3746,8 @@ packages:
     peerDependencies:
       react: ^18.3.1
 
-  react-hook-form@7.78.0:
-    resolution: {integrity: sha512-EEZqc+N23moyzTlz61Pj+JvcXo76ICkpfOZo8JZw+sM4+wLQGh6nI2Ms+PdMOYNluFu0ghlM7B8mCzhRYtJCnA==}
+  react-hook-form@7.80.0:
+    resolution: {integrity: sha512-4P+fk6oXsxY+6xSj7Euhc2sumQD8zQqCuVHoJwoyp9EchP+IUW9OESB7uHFJOKsIBQ4MQqYE84INJFqUCYNoOg==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19
@@ -5068,9 +5073,9 @@ snapshots:
     dependencies:
       hono: 4.12.27
 
-  '@hookform/resolvers@3.10.0(react-hook-form@7.78.0(react@18.3.1))':
+  '@hookform/resolvers@3.10.0(react-hook-form@7.80.0(react@18.3.1))':
     dependencies:
-      react-hook-form: 7.78.0(react@18.3.1)
+      react-hook-form: 7.80.0(react@18.3.1)
 
   '@inquirer/external-editor@1.0.3(@types/node@20.19.42)':
     dependencies:
@@ -5822,6 +5827,8 @@ snapshots:
       acorn: 8.16.0
 
   acorn@8.16.0: {}
+
+  acorn@8.17.0: {}
 
   agent-base@7.1.4: {}
 
@@ -8169,7 +8176,7 @@ snapshots:
       react: 18.3.1
       scheduler: 0.23.2
 
-  react-hook-form@7.78.0(react@18.3.1):
+  react-hook-form@7.80.0(react@18.3.1):
     dependencies:
       react: 18.3.1
 
@@ -8681,7 +8688,7 @@ snapshots:
   terser@5.48.0:
     dependencies:
       '@jridgewell/source-map': 0.3.11
-      acorn: 8.16.0
+      acorn: 8.17.0
       commander: 2.20.3
       source-map-support: 0.5.21
 
