@@ -97,11 +97,26 @@ Tạo `.github/` (config-only, KHÔNG đụng app code). Tất cả action versi
 
 ---
 
-## Phase 2 — Auth thật + sản phẩm (LATER — phác thảo)
-- [ ] Thay seam `x-owner-id` bằng auth thật (JWT tự quản / OAuth provider free: Auth0 / Clerk / Supabase Auth — phân tích trade-off khi tới).
-- [ ] Authorization server-side thật cho `?roles=` (hiện owner tự khai — xem track FS2).
-- [ ] Multi-tenant hóa `ownerId`/`ProjectMember` quanh user registry thật.
-- [ ] (Optional) Error tracking: Sentry free / GlitchTip self-host.
+## Phase 2 — Auth thật + sản phẩm
+Owner chốt (2026-07-01): **Self-managed email/password JWT** (self-host 100%, không lock-in/chi phí ngoài — hợp Docker-Compose). Phân đoạn: **2A backend** → 2B builder login UI → 2C server-side authorization (`?roles`/ProjectMember thật) → 2D (optional) refresh/hardening.
+
+### ✅ 2A — Auth backend foundation — DONE `dd26fb5`
+Self-managed JWT cho `apps/api` (chỉ api code + config; KHÔNG đụng contract/renderer, không bump formVersion).
+- [x] **`User` model + migration** `20260701061049_add_user_auth` (id cuid / email unique / passwordHash / displayName? / timestamps). Additive, non-destructive.
+- [x] **`modules/auth/`**: `auth.service.ts` (register/login/me + bcryptjs hash SALT_ROUNDS=10 + `@nestjs/jwt` sign; lỗi login/register generic chống account-enumeration + DUMMY_HASH so-timing) · `auth.controller.ts` (`POST /auth/register` @Public 201, `POST /auth/login` @Public 200, `GET /auth/me` protected) · DTOs (class-validator) · `auth.module.ts` (JwtModule.registerAsync secret/expiry từ env).
+- [x] **`auth/jwt-auth.guard.ts`** global `APP_GUARD` (đăng ký trong AuthModule để JwtService resolvable) — secure-by-default: mọi route cần Bearer trừ `@Public`. `auth/public.decorator.ts` + `jwt-payload.ts`.
+- [x] **`current-owner.decorator.ts`** đọc verified `req.user.sub` (bỏ `x-owner-id`); mọi row đã `ownerId`-scoped từ Track W ⇒ swap non-destructive. `/health` + `/auth/*` gắn `@Public`.
+- [x] **`UserRepo` + `PrismaUserRepo`** đăng ký PersistenceModule (D4: service không thấy Prisma).
+- [x] **env** (Zod): `JWT_SECRET` required min-16 (fail-fast), `JWT_EXPIRES_IN` default `7d`, `AUTH_BOOTSTRAP_EMAIL`/`_PASSWORD` optional. `env.example` + `docker-compose.yml` (api truyền JWT_SECRET/bootstrap) cập nhật.
+- [x] **Bootstrap admin** id=`SEED_OWNER_ID` ("local") khi cả 2 biến bootstrap có + chưa tồn tại ⇒ **dữ liệu pre-2A (ownerId="local") vẫn có chủ/truy cập được**. Đọc `process.env` (KHÔNG ConfigService) — xem gotcha.
+- **Verify (ALL PASS):** api typecheck · **test 133 PASS** (121→133, +12: auth.service 7 + jwt-auth.guard 4 + env 1) · biome sạch (file đổi). **Live smoke THẬT trên build compiled** (`node dist/main.js` + temp `postgres:16-alpine` :5439 + `migrate deploy`): 10/10 — `/health` public 200 · `/projects` no-token **401** · register 201 (token + KHÔNG lộ passwordHash) · duplicate **409** · `/auth/me` token 200 / bad-token 401 · `/projects` token 200 · login sai-pw 401 / đúng 200 · create project 201. **+ Bootstrap-verify riêng:** boot với `AUTH_BOOTSTRAP_*` → login admin → `user.id="local"`, `/auth/me` id=local.
+- **⚠️ Gotcha (QUAN TRỌNG):** (1) **tsx KHÔNG emit `emitDecoratorMetadata`** → constructor-DI theo type (Reflector/JwtService/ConfigService) thành `undefined` (crash "getAllAndOverride of undefined"). App chạy `tsc && node dist` (script `dev`/`start`), KHÔNG tsx → **live-smoke phải `pnpm build` rồi `node dist/main.js`**, đừng `tsx src/main.ts`. (2) **biome `useImportType` tự đổi JwtService/Reflector → `import type`** làm class bị **elide** ⇒ DI undefined y hệt ⇒ **BẮT BUỘC `// biome-ignore lint/style/useImportType` + value-import** cho mọi class constructor-inject (đúng convention PrismaService/DTO/UserRepo sẵn có). (3) Bootstrap đọc `process.env` thay `ConfigService` (tránh mong manh DI + đúng tiền lệ `ai.config.ts`); env đã Zod-validate lúc boot.
+- **⚠️ Known gaps → 2B/2C:** builder CHƯA gửi token (`ownerHeaders()` vẫn `x-owner-id`) ⇒ builder hiện sẽ 401 tới khi 2B; `?roles`/ProjectMember vẫn owner-declared (2C); chưa refresh-token (2D). Compose `JWT_SECRET` default là placeholder dev — deploy phải đặt secret thật.
+
+### Phase 2 (còn lại — phác thảo)
+- [ ] **2B** — Builder login UI: trang login/register, lưu token, `ownerHeaders()` → `Authorization: Bearer`, route guard, logout.
+- [ ] **2C** — Authorization server-side thật cho `?roles=`/ProjectMember (hiện owner tự khai — xem FS2). Multi-tenant hóa quanh user registry thật.
+- [ ] **2D (optional)** — refresh token / hardening; Error tracking: Sentry free / GlitchTip self-host.
 
 ---
 
