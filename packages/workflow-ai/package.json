@@ -22,7 +22,7 @@
     "@org/ai-core": "workspace:*",
     "@org/workflow-core": "workspace:*",
     "@org/workflow-schema": "workspace:*",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
