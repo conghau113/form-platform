@@ -34,7 +34,7 @@ jobs:
           output: trivy-fs.sarif
           exit-code: "0"
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-fs.sarif
@@ -67,7 +67,7 @@ jobs:
           output: "trivy-image-${{ matrix.name }}.sarif"
           exit-code: "0"
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: "trivy-image-${{ matrix.name }}.sarif"
