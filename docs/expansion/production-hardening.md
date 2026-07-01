@@ -32,7 +32,7 @@ Jenkins/SonarQube/BlackDuck/GitLab; đang dùng GitHub + Vercel).
 | **1B** | DB SQLite → PostgreSQL (provider + reset migrations + sửa test) | ✅ DONE | `0929697` |
 | **1C** | Containerization (Dockerfile api+builder, docker-compose, .dockerignore) | ✅ DONE | `aa22288` |
 | **1D** | Security hardening hạ tầng (ConfigModule+env-validate, CORS allowlist, helmet, throttler, /health) | ✅ DONE | `bc0a758` |
-| **1E** | CI/CD (GitHub Actions + CodeQL + Dependabot + SonarCloud + gitleaks + Trivy + changeset gate) | ⬜ TODO | — |
+| **1E** | CI/CD (GitHub Actions + CodeQL + Dependabot + SonarCloud + gitleaks + Trivy + changeset gate) | ✅ DONE | `47934a8` |
 | **2** | Auth thật + authorization + multi-tenant (phác thảo, làm sau) | ⬜ LATER | — |
 
 Legend: ✅ done · 🟡 đang làm · ⬜ chưa · ⏭️ later.
@@ -82,17 +82,18 @@ Trong `apps/api`; deps thêm: `@nestjs/config@3.3`, `helmet@8.2`, `@nestjs/throt
 - **Gotcha:** (1) `@prisma/client` **tự load `apps/api/.env`** lúc import (runtime) → `.env` cũ còn `DATABASE_URL="file:../.data/workspace.db"` (sót pre-1B) sẽ poison test fail-fast (Prisma P1012 thay vì message của ta). `.env` gitignored + Docker bỏ qua (compose set env tường minh) ⇒ production OK; **owner nên cập nhật `apps/api/.env` → Postgres URL** (hoặc xóa để dùng compose). (2) `HealthController` import `PrismaService` phải là **value-import** (`emitDecoratorMetadata` cho DI) → thêm `// biome-ignore lint/style/useImportType` (theo convention controller hiện có). (3) `ConfigService.get` đọc validated-env trước ⇒ number đã coerce (PORT/THROTTLE_*) tới đúng factory/`app.listen`.
 - **Known gaps (→ sau):** (a) **trust-proxy chưa set** — compose hiện browser→api:3001 trực tiếp nên `req.ip` thật, throttler đúng per-client; nếu Phase 2 đặt API sau nginx/LB phải `app.set('trust proxy', …)` nếu không throttle gộp theo IP proxy. (b) CORS_ORIGINS unset ⇒ default `localhost:5173` (tiện dev, localhost vô hại); muốn fail-closed thì đổi Zod default `""`.
 
-### ⬜ 1E — CI/CD + chất lượng mã + quét bảo mật
-Tạo `.github/`:
-- [ ] `workflows/ci.yml` (PR + push): pnpm + cache → biome (file đổi) → `turbo typecheck` → `turbo build` → `turbo test` (cấp `services: postgres`/Testcontainers cho 1 test DB; live-test tự skip).
-- [ ] `workflows/codeql.yml` — CodeQL JS/TS (SAST, native free).
-- [ ] `dependabot.yml` — npm(pnpm) + github-actions (SCA tự động).
-- [ ] `workflows/sonarcloud.yml` + `sonar-project.properties` — SonarCloud (= SonarQube cloud).
-- [ ] `workflows/gitleaks.yml` — gitleaks (secret scan, OSS).
-- [ ] Trivy — scan image Docker trong pipeline.
-- [ ] Changeset gate — `changeset status --since=origin/main`.
+### ✅ 1E — CI/CD + chất lượng mã + quét bảo mật — DONE `47934a8`
+Tạo `.github/` (config-only, KHÔNG đụng app code). Tất cả action versions đã **xác minh tồn tại thật** (WebFetch tags GitHub — tránh tag chết fail pipeline).
+- [x] `workflows/ci.yml` (push `main`/`feat/**` + PR→main): pnpm@9 + `actions/setup-node@v4 cache:pnpm` → **biome CHỈ file đổi** (baseline repo KHÔNG biome-clean: 326 lỗi phần lớn CRLF-local → gate repo-wide sẽ fail giả) → `turbo typecheck` → `turbo build` → `turbo test`. Job `changeset` (PR-only) chạy `changeset status --since=origin/<base>`. `fetch-depth:0` để có base cho diff + changeset. `concurrency` cancel-in-progress.
+- [x] `workflows/codeql.yml` — CodeQL `javascript-typescript` + `queries:security-and-quality` (KHÔNG autobuild — JS/TS interpreted), push/PR/weekly-cron. `security-events:write`.
+- [x] `dependabot.yml` — npm `/` (đọc root pnpm-lock, phủ cả workspace) + github-actions + docker×2 (`apps/api`,`apps/builder`), weekly; group dev-tooling + @types.
+- [x] `workflows/sonarcloud.yml` + `sonar-project.properties` — `SonarSource/sonarqube-scan-action@v8` (v4 CŨ đã biến mất; major hiện tại v7/v8) + `SONAR_HOST_URL=https://sonarcloud.io`. **Gate qua step-output `guard` đọc `secrets.SONAR_TOKEN`** → thiếu token thì job **no-op** (không fail pipeline). `sonar-project.properties` có placeholder `REPLACE_ME_ORG`/`REPLACE_ME_PROJECT_KEY`.
+- [x] `workflows/gitleaks.yml` — `gitleaks/gitleaks-action@v2`, `fetch-depth:0`. (⚠️ repo dưới **org** cần free `GITLEAKS_LICENSE`; repo cá nhân/public thì free.)
+- [x] `workflows/trivy.yml` — `aquasecurity/trivy-action@0.35.0` (tag `0.28.0` KHÔNG tồn tại; dòng hiện tại `v0.36.0`). Job `fs` (vuln,misconfig,secret HIGH,CRITICAL, ignore-unfixed, PR/push) + job `image` (build api+builder Dockerfile rồi scan, chỉ push/schedule vì nặng). Cả hai `exit-code:0` **non-blocking** → upload SARIF lên Security tab (owner siết sau).
 - [ ] (Later) `workflows/release.yml` — changesets publish GitHub Packages (cho embed).
-- **Verify:** mở PR thử → mọi job xanh; commit secret giả → gitleaks fail.
+- **Verify (chạy thật cục bộ, CI chỉ chạy sau khi push/PR):** cả 6 YAML parse OK (node `yaml@2.9.0`) · `changeset status --since=main` chạy thật exit 0 (liệt kê packages sẽ bump — changeset đã có) · biome chạy được trên file lẻ · action versions cross-check GitHub tags.
+- **Gotcha:** (1) **biome KHÔNG gate repo-wide** — baseline 326 lỗi (CRLF-local Windows; blob commit LF) → CI Linux checkout LF nên phần lớn tan; vẫn scope changed-files để khớp convention + tránh residual. (2) **Action version pins**: `trivy-action@0.28.0` và `sonarqube-scan-action@v4` (dự tính ban đầu) **KHÔNG tồn tại** — đã sửa `0.35.0`/`v8` sau khi fetch tags thật. (3) Testcontainers DB test chạy THẬT trên ubuntu-latest (Docker pre-installed) — không cần `services:postgres`. (4) reviewer subagent gặp session-limit không trả được → **tự review inline** (YAML parse + version-verify + logic changed-files/guard). (5) `.claude/settings.json` vẫn modified — KHÔNG commit (để nguyên).
+- **Owner setup thủ công (một lần, để bật SonarCloud):** tạo project trên sonarcloud.io → điền `sonar.organization`+`sonar.projectKey` trong `sonar-project.properties` → thêm secret `SONAR_TOKEN`. Tới lúc đó job SonarCloud mới chạy (giờ no-op).
 
 ---
 
