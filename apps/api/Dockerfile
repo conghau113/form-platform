@@ -5,7 +5,7 @@
 # packages (@org/form-core, …) via turbo. See docker-compose.yml `build.context: .`.
 
 # ---- build: install the whole workspace, build the API + its workspace deps ----
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 RUN corepack enable
 WORKDIR /repo
 
@@ -28,7 +28,7 @@ RUN pnpm prune --prod
 RUN cd apps/api && pnpm exec prisma generate
 
 # ---- runtime: slim image carrying the built workspace + prod node_modules ----
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 RUN corepack enable
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
