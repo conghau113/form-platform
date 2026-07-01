@@ -21,7 +21,7 @@
   "dependencies": {
     "@org/ai-core": "workspace:*",
     "@org/form-schema": "workspace:*",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
