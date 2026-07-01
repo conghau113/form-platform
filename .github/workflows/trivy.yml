@@ -22,7 +22,7 @@ jobs:
     name: Filesystem (deps + config)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@0.35.0
         with:
@@ -53,7 +53,7 @@ jobs:
           - name: builder
             dockerfile: apps/builder/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build image
         run: docker build -f "${{ matrix.dockerfile }}" -t "form-platform-${{ matrix.name }}:ci" .
       - name: Trivy image scan

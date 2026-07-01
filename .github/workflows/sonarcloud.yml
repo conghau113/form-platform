@@ -32,7 +32,7 @@ jobs:
             echo "::notice::SONAR_TOKEN not set — skipping SonarCloud scan."
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.guard.outputs.ok == 'true'
         with:
           # Disable shallow clone so Sonar can assign issues to the right commits.
