@@ -49,6 +49,19 @@ model ProjectMember {
   @@index([userId])
 }
 
+/// Authenticated account (production-hardening 2A). The primary key doubles as the tenant
+/// `ownerId` on every existing row — real auth resolves `CurrentOwner` from a verified JWT
+/// `sub`, replacing the `x-owner-id` seam non-destructively. A bootstrap admin is seeded with
+/// `id = SEED_OWNER_ID ("local")` so pre-2A data keeps its owner. `email` is the login handle.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 /// Adjacency-list tree (parentId) → unlimited nesting. CRUD/endpoints arrive in W1.
 model Folder {
   id        String       @id @default(cuid())

@@ -1,24 +1,21 @@
-import { createParamDecorator, type ExecutionContext } from "@nestjs/common";
-import { SEED_OWNER_ID } from "../common/constants.js";
-
-/** The slice of the HTTP request we read — avoids a hard dependency on express' types. */
-interface RequestWithHeaders {
-  headers: Record<string, string | string[] | undefined>;
-}
+import { createParamDecorator, type ExecutionContext, UnauthorizedException } from "@nestjs/common";
+import type { AuthedRequest } from "./jwt-payload.js";
 
 /**
- * Minimal owner-aware auth seam (Track W, D3). Resolves the current owner from the
- * `x-owner-id` request header, falling back to {@link SEED_OWNER_ID} when absent so the API
- * works without a login. Real auth (session/JWT, multi-tenant) lands in W5; because every row
- * is scoped to this owner from day one, that swap is non-destructive.
+ * Resolves the current owner/tenant id from the authenticated principal (production-hardening 2A).
+ * The global {@link JwtAuthGuard} verifies the bearer token and stashes the payload on `req.user`
+ * before this decorator runs, so `sub` is always present on a protected route. Because every row
+ * has been `ownerId`-scoped since Track W, swapping the old `x-owner-id` header for the verified
+ * `sub` is non-destructive — a bootstrap admin seeded with `id = SEED_OWNER_ID` keeps pre-2A data
+ * reachable.
  *
  * Usage: `findAll(@CurrentOwner() ownerId: string)`.
  */
 export const CurrentOwner = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string => {
-    const req = ctx.switchToHttp().getRequest<RequestWithHeaders>();
-    const header = req.headers["x-owner-id"];
-    const value = Array.isArray(header) ? header[0] : header;
-    return value?.trim() ? value.trim() : SEED_OWNER_ID;
+    const req = ctx.switchToHttp().getRequest<AuthedRequest>();
+    const sub = req.user?.sub?.trim();
+    if (!sub) throw new UnauthorizedException("No authenticated user");
+    return sub;
   },
 );

@@ -4,6 +4,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { validateEnv } from "./config/env.js";
 import { AiModule } from "./modules/ai/ai.module.js";
+import { AuthModule } from "./modules/auth/auth.module.js";
 import { FoldersModule } from "./modules/folders/folders.module.js";
 import { FormsModule } from "./modules/forms/forms.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
@@ -22,7 +23,8 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
  *
  *  `ConfigModule` validates the environment (Zod) at boot — fail-fast on a missing required
  *  var. `ThrottlerModule` + the global `ThrottlerGuard` rate-limit every route (window/limit
- *  from env); `/health` opts out via `@SkipThrottle()`. Production-hardening 1D. */
+ *  from env); `/health` opts out via `@SkipThrottle()`. Production-hardening 1D. `AuthModule`
+ *  adds the global `JwtAuthGuard` (secure-by-default; `@Public` opts out) — 2A. */
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -38,6 +40,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
       }),
     }),
     PersistenceModule,
+    AuthModule,
     HealthModule,
     ProjectsModule,
     FoldersModule,

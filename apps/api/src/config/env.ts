@@ -19,6 +19,19 @@ export const envSchema = z
     /** Throttler window in milliseconds and the max requests per IP within it. */
     THROTTLE_TTL: z.coerce.number().int().positive().default(60_000),
     THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
+    /**
+     * JWT signing secret (production-hardening 2A). Required — a missing/short secret is a real
+     * auth vulnerability, so we fail fast rather than fall back to a guessable default.
+     */
+    JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
+    /** Access-token lifetime, as accepted by `@nestjs/jwt` (`"7d"`, `"12h"`, or seconds). */
+    JWT_EXPIRES_IN: z.string().default("7d"),
+    /**
+     * Optional bootstrap admin. When both are set and no user with `id = SEED_OWNER_ID` exists,
+     * the app seeds that admin at boot so pre-2A `ownerId="local"` data stays owned/reachable.
+     */
+    AUTH_BOOTSTRAP_EMAIL: z.string().email().optional(),
+    AUTH_BOOTSTRAP_PASSWORD: z.string().min(8).optional(),
   })
   .passthrough();
 

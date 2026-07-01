@@ -37,6 +37,13 @@ services:
       PORT: 3001
       # Browser origins allowed by CORS (the builder below). Empty => no cross-origin requests.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      # JWT signing secret (2A). The default is a dev-only placeholder — set a real
+      # JWT_SECRET in a root .env for any deployment (boot fails fast if < 16 chars).
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # Optional: seed an admin owning pre-2A data (id="local"). Leave unset to skip.
+      AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
+      AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
     ports:
       - "${API_PORT:-3001}:3001"
     # GET /health runs a `SELECT 1`, so green = process up AND database reachable (1D).
