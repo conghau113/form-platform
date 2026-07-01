@@ -27,7 +27,14 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
  *  adds the global `JwtAuthGuard` (secure-by-default; `@Public` opts out) — 2A. */
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validate: validateEnv,
+      // Per-environment env files (Phase 0): `.env.<NODE_ENV>` overrides the base `.env`, so a
+      // single checkout can run dev / test / production against different config. Missing files
+      // are ignored; in Docker the values come from the process env (compose), not these files.
+      envFilePath: [`.env.${process.env.NODE_ENV ?? "development"}`, ".env"],
+    }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
