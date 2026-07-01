@@ -27,6 +27,16 @@ export const envSchema = z
     /** Access-token lifetime, as accepted by `@nestjs/jwt` (`"7d"`, `"12h"`, or seconds). */
     JWT_EXPIRES_IN: z.string().default("7d"),
     /**
+     * Set the `Secure` flag on the auth cookie (production-hardening 2B). Keep `false` for local
+     * plain-HTTP dev; set `true` in production so the browser only sends the cookie over HTTPS.
+     */
+    AUTH_COOKIE_SECURE: z
+      .preprocess(
+        (v) => (typeof v === "string" ? ["1", "true"].includes(v.toLowerCase()) : v),
+        z.boolean(),
+      )
+      .default(false),
+    /**
      * Optional bootstrap admin. When both are set and no user with `id = SEED_OWNER_ID` exists,
      * the app seeds that admin at boot so pre-2A `ownerId="local"` data stays owned/reachable.
      */
@@ -58,4 +68,24 @@ export function parseCorsOrigins(value: string): string[] {
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean);
+}
+
+const DURATION_UNIT_MS: Record<string, number> = {
+  ms: 1,
+  s: 1000,
+  m: 60_000,
+  h: 3_600_000,
+  d: 86_400_000,
+};
+
+/**
+ * Convert a JWT-style lifetime (`"7d"`, `"12h"`, `"3600s"`, or a bare number = seconds) to
+ * milliseconds — used to give the auth cookie the same `maxAge` as the token. Unparseable input
+ * falls back to 7 days (matching the `JWT_EXPIRES_IN` default) rather than throwing at request time.
+ */
+export function durationToMs(value: string): number {
+  const match = /^(\d+)\s*(ms|s|m|h|d)?$/.exec(value.trim());
+  if (!match) return 7 * DURATION_UNIT_MS.d;
+  // A bare number follows the JWT convention (seconds); a suffix uses that unit.
+  return Number(match[1]) * DURATION_UNIT_MS[match[2] ?? "s"];
 }

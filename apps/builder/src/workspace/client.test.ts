@@ -12,7 +12,7 @@ import {
   saveForm,
   updateMemberRole,
 } from "./client";
-import { API_BASE, OWNER_ID } from "./config";
+import { API_BASE } from "./config";
 
 function mockFetch(response: Partial<Response> & { json?: () => Promise<unknown> }) {
   const fn = vi
@@ -26,7 +26,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const ownerHeader = { "x-owner-id": OWNER_ID };
+// Auth now rides the same-origin HttpOnly cookie (2B), so workspace requests carry no extra headers.
+const ownerHeader: Record<string, string> = {};
 
 describe("workspace client", () => {
   it("listProjects GETs /projects with the owner header", async () => {
@@ -89,7 +90,7 @@ describe("workspace client", () => {
   });
 
   it("listMembers GETs /projects/:id/members with the owner header", async () => {
-    const fetchFn = mockFetch({ json: async () => ({ ownerId: OWNER_ID, members: [] }) });
+    const fetchFn = mockFetch({ json: async () => ({ ownerId: "u1", members: [] }) });
     await listMembers("p1");
     expect(fetchFn).toHaveBeenCalledWith(`${API_BASE}/projects/p1/members`, {
       headers: ownerHeader,

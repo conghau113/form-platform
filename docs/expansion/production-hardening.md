@@ -33,7 +33,9 @@ Jenkins/SonarQube/BlackDuck/GitLab; đang dùng GitHub + Vercel).
 | **1C** | Containerization (Dockerfile api+builder, docker-compose, .dockerignore) | ✅ DONE | `aa22288` |
 | **1D** | Security hardening hạ tầng (ConfigModule+env-validate, CORS allowlist, helmet, throttler, /health) | ✅ DONE | `bc0a758` |
 | **1E** | CI/CD (GitHub Actions + CodeQL + Dependabot + SonarCloud + gitleaks + Trivy + changeset gate) | ✅ DONE | `47934a8` |
-| **2** | Auth thật + authorization + multi-tenant (phác thảo, làm sau) | ⬜ LATER | — |
+| **2A** | Auth backend (self-managed JWT: User model, register/login/me, guard, bootstrap) | ✅ DONE | `dd26fb5` |
+| **2B** | Builder auth UI (HttpOnly cookie + same-origin proxy, login/register/logout, route guard) | ✅ DONE | — |
+| **2C/2D** | Server-side authz (`?roles`/ProjectMember thật) + refresh/hardening | ⬜ LATER | — |
 
 Legend: ✅ done · 🟡 đang làm · ⬜ chưa · ⏭️ later.
 
@@ -113,9 +115,30 @@ Self-managed JWT cho `apps/api` (chỉ api code + config; KHÔNG đụng contrac
 - **⚠️ Gotcha (QUAN TRỌNG):** (1) **tsx KHÔNG emit `emitDecoratorMetadata`** → constructor-DI theo type (Reflector/JwtService/ConfigService) thành `undefined` (crash "getAllAndOverride of undefined"). App chạy `tsc && node dist` (script `dev`/`start`), KHÔNG tsx → **live-smoke phải `pnpm build` rồi `node dist/main.js`**, đừng `tsx src/main.ts`. (2) **biome `useImportType` tự đổi JwtService/Reflector → `import type`** làm class bị **elide** ⇒ DI undefined y hệt ⇒ **BẮT BUỘC `// biome-ignore lint/style/useImportType` + value-import** cho mọi class constructor-inject (đúng convention PrismaService/DTO/UserRepo sẵn có). (3) Bootstrap đọc `process.env` thay `ConfigService` (tránh mong manh DI + đúng tiền lệ `ai.config.ts`); env đã Zod-validate lúc boot.
 - **⚠️ Known gaps → 2B/2C:** builder CHƯA gửi token (`ownerHeaders()` vẫn `x-owner-id`) ⇒ builder hiện sẽ 401 tới khi 2B; `?roles`/ProjectMember vẫn owner-declared (2C); chưa refresh-token (2D). Compose `JWT_SECRET` default là placeholder dev — deploy phải đặt secret thật.
 
+### ✅ 2B — Builder login UI (HttpOnly cookie + same-origin proxy) — DONE
+**Ngã ba kiến trúc (owner chốt 2026-07-01):** owner ưu tiên bảo mật → chọn **HttpOnly cookie + same-origin proxy** thay vì localStorage+Bearer (khuyến nghị của tôi khi owner hỏi). Token nằm trong HttpOnly cookie (JS không đọc được → miễn nhiễm đánh cắp qua XSS); builder gọi API **same-origin** qua proxy `/api` nên cookie tự gửi + xóa luôn CORS phía browser; `SameSite=Strict` ⇒ chống CSRF. Tự-đăng-ký (Login+Register) bật.
+
+**Backend (mở rộng 2A, cùng nhánh):**
+- [x] `auth/cookie.ts`: `AUTH_COOKIE_NAME="access_token"`, `authCookieOptions(secure,maxAge)` (httpOnly+sameSite:strict+path:/), `parseCookies()` (dependency-free, không cần cookie-parser).
+- [x] `auth.controller.ts`: `register`/`login` set HttpOnly cookie (maxAge=`durationToMs(JWT_EXPIRES_IN)`, secure theo `AUTH_COOKIE_SECURE`), **body chỉ `{ user }`** (token KHÔNG lộ ra JS). Thêm `POST /auth/logout` (@Public, `clearCookie`).
+- [x] `jwt-auth.guard.ts`: đọc token **cookie trước → Bearer sau** (Bearer giữ cho API client/test).
+- [x] `config/env.ts`: `AUTH_COOKIE_SECURE` (bool, default false; prod HTTPS=true) + `durationToMs()` helper.
+
+**Same-origin proxy:**
+- [x] `apps/builder/vite.config.ts`: dev proxy `/api` → `$VITE_API_PROXY_TARGET` (default `:3001`), strip prefix.
+- [x] `apps/builder/nginx.conf`: `location /api/ { proxy_pass http://api:3001/; }` (prod).
+- [x] `presets/config.ts`: `API_BASE` default → `/api`. `docker-compose.yml`: builder `VITE_API_BASE=/api` + `depends_on api service_healthy`; api env `AUTH_COOKIE_SECURE`. env.example (api+builder) cập nhật.
+
+**Builder auth feature `apps/builder/src/auth/`:**
+- [x] `client.ts` (login/register/logout/fetchMe; fetchMe→null on 401), `types.ts`, `useAuth.tsx` (AuthProvider: `/auth/me` query = nguồn-sự-thật `user`/`status`; login/register mutations ghi cache; logout `qc.clear()`), `LoginPage.tsx` (tab Sign-in/Create-account), `RequireAuth.tsx` (guard: loading Spin / anon→/login state.from / authed→Outlet), `UserMenu.tsx` (email + Sign out), `index.ts`.
+- [x] `main.tsx`: `<AuthProvider>` bọc router; `/login` public; mọi route dưới `RequireAuth`. `workspace/config.ts`: bỏ `x-owner-id` (cookie tự gửi) → `ownerHeaders()` trả `{}`; bỏ `OWNER_ID` → `ProjectsPage`/`ShareDialog` dùng `useAuth().user.id`.
+
+- **Verify (ALL PASS):** api+builder typecheck · **api test 144** (133→144: cookie 5 + guard +2 + env durationToMs/secure 4) · **builder test 366** (auth/client 6 mới + workspace/client cập nhật) · biome sạch (file đổi). **Live-smoke HTTP cookie-jar** (`node dist` + temp PG :5441, 20/20): /health public 200 · /projects no-cookie 401 · register 201 (cookie HttpOnly+SameSite=Strict+Max-Age=604800+NOT-Secure, body ko token/passwordHash) · /auth/me cookie 200 · /projects cookie 200 owned-by-me · logout xóa cookie (Expires 1970) · /projects sau logout 401 · login sai 401/đúng 200 · Bearer-fallback 200. **UI-smoke MCP** (Vite dev proxy→api :3005): /projects→redirect /login · register-qua-proxy set cookie→/projects + UserMenu email · reload giữ phiên · logout→/login · guard chặn /projects sau logout · console sạch (chỉ RR future-warning + 401-probe by-design).
+- **⚠️ Gotcha 2B:** (1) tsx/build gotcha 2A vẫn áp dụng (live-smoke `node dist`). (2) `res.cookie`/`clearCookie` là Express native — KHÔNG cần cookie-parser; đọc cookie parse thủ công trong guard. (3) `AUTH_COOKIE_SECURE` dùng `z.preprocess` (KHÔNG `z.coerce.boolean` — nó coerce "false"→true). (4) nginx upstream `api` literal ⇒ builder `depends_on api service_healthy` để resolve lúc boot. (5) `@prisma/client` tự load `apps/api/.env` (gotcha 1D) — dùng DATABASE_URL env override khi smoke.
+- **⚠️ Known gaps → 2C/2D:** `?roles`/ProjectMember vẫn owner-declared (2C); ShareDialog vẫn grant theo user-id-string (cần lookup email ở 2C); chưa refresh-token/CSRF-token (SameSite=Strict đã chặn CSRF; refresh = 2D); prod phải `AUTH_COOKIE_SECURE=true` + HTTPS.
+
 ### Phase 2 (còn lại — phác thảo)
-- [ ] **2B** — Builder login UI: trang login/register, lưu token, `ownerHeaders()` → `Authorization: Bearer`, route guard, logout.
-- [ ] **2C** — Authorization server-side thật cho `?roles=`/ProjectMember (hiện owner tự khai — xem FS2). Multi-tenant hóa quanh user registry thật.
+- [ ] **2C** — Authorization server-side thật cho `?roles=`/ProjectMember (hiện owner tự khai — xem FS2). Multi-tenant hóa quanh user registry thật + lookup collaborator theo email.
 - [ ] **2D (optional)** — refresh token / hardening; Error tracking: Sentry free / GlitchTip self-host.
 
 ---

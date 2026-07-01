@@ -4,6 +4,8 @@
  * than re-typing a string array that can drift out of sync with the query that reads it.
  */
 export const qk = {
+  // Current authenticated session (2B): the `/auth/me` probe that drives the auth gate.
+  me: ["auth", "me"] as const,
   projects: ["projects"] as const,
   projectTree: (projectId: string) => ["projects", projectId, "tree"] as const,
   presets: (projectId?: string) => ["presets", projectId ?? null] as const,

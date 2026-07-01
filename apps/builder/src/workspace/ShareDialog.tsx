@@ -1,8 +1,8 @@
 import { DeleteOutlined, UserAddOutlined } from "@ant-design/icons";
 import { Button, Input, List, Modal, message, Select, Space, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "../auth";
 import * as api from "./client";
-import { OWNER_ID } from "./config";
 import type { MemberRole, ProjectMembersView, ProjectRecord } from "./types";
 
 const ROLE_OPTIONS: { value: MemberRole; label: string }[] = [
@@ -27,7 +27,8 @@ export function ShareDialog({
   const [newUserId, setNewUserId] = useState("");
   const [newRole, setNewRole] = useState<MemberRole>("editor");
 
-  const isOwner = project?.ownerId === OWNER_ID;
+  const { user } = useAuth();
+  const isOwner = project?.ownerId === user?.id;
   const projectId = project?.id;
 
   const reload = useCallback(async () => {

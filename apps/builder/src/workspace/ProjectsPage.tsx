@@ -20,7 +20,7 @@ import {
 } from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { OWNER_ID } from "./config";
+import { UserMenu, useAuth } from "../auth";
 import { ShareDialog } from "./ShareDialog";
 import type { ProjectRecord } from "./types";
 import { useProjects } from "./useWorkspace";
@@ -32,6 +32,7 @@ import { useProjects } from "./useWorkspace";
  */
 export function ProjectsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { projects, loading, create, rename, remove } = useProjects();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -83,14 +84,12 @@ export function ProjectsPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           Projects
         </Typography.Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          style={{ marginLeft: "auto" }}
-          onClick={() => setCreating(true)}
-        >
-          New project
-        </Button>
+        <Space style={{ marginLeft: "auto" }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+            New project
+          </Button>
+          <UserMenu />
+        </Space>
       </div>
 
       {loading ? (
@@ -106,7 +105,7 @@ export function ProjectsPage() {
           }}
         >
           {projects.map((project) => {
-            const owned = project.ownerId === OWNER_ID;
+            const owned = project.ownerId === user?.id;
             return (
               <Dropdown
                 key={project.id}

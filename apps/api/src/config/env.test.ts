@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCorsOrigins, validateEnv } from "./env.js";
+import { durationToMs, parseCorsOrigins, validateEnv } from "./env.js";
 
 /**
  * Pins the env contract enforced at boot (production-hardening 1D). `validateEnv` is the
@@ -44,6 +44,31 @@ describe("validateEnv", () => {
   it("passes unknown vars (e.g. AI_*) through untouched", () => {
     const env = validateEnv({ ...base, AI_PROVIDER: "anthropic" }) as Record<string, unknown>;
     expect(env.AI_PROVIDER).toBe("anthropic");
+  });
+
+  it("parses AUTH_COOKIE_SECURE from a string flag (default false)", () => {
+    expect(validateEnv({ ...base }).AUTH_COOKIE_SECURE).toBe(false);
+    expect(validateEnv({ ...base, AUTH_COOKIE_SECURE: "true" }).AUTH_COOKIE_SECURE).toBe(true);
+    expect(validateEnv({ ...base, AUTH_COOKIE_SECURE: "1" }).AUTH_COOKIE_SECURE).toBe(true);
+    expect(validateEnv({ ...base, AUTH_COOKIE_SECURE: "false" }).AUTH_COOKIE_SECURE).toBe(false);
+  });
+});
+
+describe("durationToMs", () => {
+  it("converts unit suffixes to milliseconds", () => {
+    expect(durationToMs("7d")).toBe(7 * 86_400_000);
+    expect(durationToMs("12h")).toBe(12 * 3_600_000);
+    expect(durationToMs("30m")).toBe(30 * 60_000);
+    expect(durationToMs("45s")).toBe(45_000);
+    expect(durationToMs("500ms")).toBe(500);
+  });
+
+  it("treats a bare number as seconds (JWT convention)", () => {
+    expect(durationToMs("3600")).toBe(3_600_000);
+  });
+
+  it("falls back to 7 days on unparseable input", () => {
+    expect(durationToMs("not-a-duration")).toBe(7 * 86_400_000);
   });
 });
 

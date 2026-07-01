@@ -1,17 +1,17 @@
 import { API_BASE } from "../presets/config";
 
 /**
- * Workspace (Track W) client config. Reuses the shared `@app/api` base URL; adds the single
- * owner seam: every workspace request carries `x-owner-id`. The api defaults a missing header to
- * its own `SEED_OWNER_ID` ("local"), so this constant must match it for the existing editor
- * Save/Load (which send no header) to address the same owner. W5 replaces this with the real
- * authenticated owner — the only place to change.
+ * Workspace (Track W) client config. Reuses the shared `@app/api` base URL.
+ *
+ * Auth moved to the browser's HttpOnly cookie (production-hardening 2B): every request the builder
+ * makes is same-origin (via the `/api` proxy), so the `access_token` cookie is attached
+ * automatically and there is no header for this code to add. `ownerHeaders()` is kept as the shared
+ * seam (all `client.ts` files call it) but now contributes nothing; the authenticated owner comes
+ * from the verified token server-side, and the UI reads it from {@link useAuth} where it needs the id.
  */
 export { API_BASE };
 
-export const OWNER_ID = "local";
-
-/** Owner header attached to every workspace request (the W5-auth seam). */
+/** Extra request headers for workspace calls. Empty now that auth rides the HttpOnly cookie. */
 export function ownerHeaders(): Record<string, string> {
-  return { "x-owner-id": OWNER_ID };
+  return {};
 }

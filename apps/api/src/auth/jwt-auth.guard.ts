@@ -8,14 +8,16 @@ import {
 import { Reflector } from "@nestjs/core";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { JwtService } from "@nestjs/jwt";
+import { AUTH_COOKIE_NAME, parseCookies } from "./cookie.js";
 import type { AuthedRequest, JwtPayload } from "./jwt-payload.js";
 import { IS_PUBLIC_KEY } from "./public.decorator.js";
 
 /**
- * Global authentication guard (production-hardening 2A). Every route requires a valid
- * `Authorization: Bearer <jwt>` unless it is marked {@link Public}. On success the verified
- * payload is stashed on `req.user` so {@link CurrentOwner} resolves the tenant from a trusted
- * `sub` instead of the old operator-declared `x-owner-id` header.
+ * Global authentication guard (production-hardening 2A/2B). Every route requires a valid token
+ * unless it is marked {@link Public}. The browser SPA sends it as the HttpOnly `access_token`
+ * cookie (preferred); non-browser API clients may still send `Authorization: Bearer <jwt>`. On
+ * success the verified payload is stashed on `req.user` so {@link CurrentOwner} resolves the tenant
+ * from a trusted `sub` instead of the old operator-declared `x-owner-id` header.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -32,8 +34,8 @@ export class JwtAuthGuard implements CanActivate {
     if (isPublic) return true;
 
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
-    const token = extractBearer(req);
-    if (!token) throw new UnauthorizedException("Missing bearer token");
+    const token = extractToken(req);
+    if (!token) throw new UnauthorizedException("Missing authentication token");
 
     try {
       const payload = await this.jwt.verifyAsync<JwtPayload>(token);
@@ -43,6 +45,12 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException("Invalid or expired token");
     }
   }
+}
+
+/** The access token, from the HttpOnly cookie first (browser) then a `Bearer` header (API clients). */
+function extractToken(req: AuthedRequest): string | null {
+  const fromCookie = parseCookies(req.headers.cookie)[AUTH_COOKIE_NAME]?.trim();
+  return fromCookie || extractBearer(req);
 }
 
 /** Pull the raw JWT from a `Bearer` Authorization header, or `null` when absent/malformed. */

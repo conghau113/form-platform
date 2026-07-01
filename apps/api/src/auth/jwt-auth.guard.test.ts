@@ -53,6 +53,26 @@ describe("JwtAuthGuard", () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  it("accepts a valid token from the access_token cookie (browser path)", async () => {
+    const token = await jwt.signAsync({ sub: "user-2", email: "c@d.com" });
+    const guard = new JwtAuthGuard(jwt, reflector(false));
+    const { ctx, req } = context({ cookie: `foo=bar; access_token=${token}` });
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(req.user).toEqual({ sub: "user-2", email: "c@d.com" });
+  });
+
+  it("prefers the cookie over a (stale) bearer header", async () => {
+    const cookieToken = await jwt.signAsync({ sub: "cookie-user", email: "cookie@x.com" });
+    const bearerToken = await jwt.signAsync({ sub: "bearer-user", email: "bearer@x.com" });
+    const guard = new JwtAuthGuard(jwt, reflector(false));
+    const { ctx, req } = context({
+      cookie: `access_token=${cookieToken}`,
+      authorization: `Bearer ${bearerToken}`,
+    });
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(req.user?.sub).toBe("cookie-user");
+  });
+
   it("rejects a token signed with a different secret", async () => {
     const foreign = new JwtService({ secret: "some-other-secret-16chars" });
     const token = await foreign.signAsync({ sub: "user-1", email: "a@b.com" });

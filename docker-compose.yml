@@ -41,6 +41,8 @@ services:
       # JWT_SECRET in a root .env for any deployment (boot fails fast if < 16 chars).
       JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # Set true behind HTTPS in production so the browser only sends the auth cookie over TLS (2B).
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       # Optional: seed an admin owning pre-2A data (id="local"). Leave unset to skip.
       AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
@@ -63,11 +65,14 @@ services:
       context: .
       dockerfile: apps/builder/Dockerfile
       args:
-        # Baked into the bundle at build time — the API origin the browser calls.
-        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:3001}
+        # Same-origin by default (2B): the SPA calls /api/*, which nginx proxies to the api service
+        # so the HttpOnly auth cookie rides along. Override only if the API is on another origin.
+        VITE_API_BASE: ${VITE_API_BASE:-/api}
     restart: unless-stopped
     depends_on:
-      - api
+      # Wait until the api is healthy so nginx can resolve the `api` upstream at startup.
+      api:
+        condition: service_healthy
     ports:
       - "${BUILDER_PORT:-8080}:80"
 
