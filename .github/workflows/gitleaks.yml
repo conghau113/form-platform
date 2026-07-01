@@ -1,0 +1,27 @@
+name: gitleaks
+
+# Secret scanning (OSS). On PRs it scans the new commits; on push to main it scans
+# the pushed range. gitleaks-action is free for personal/public repos; organization
+# repos require a free license key set as the GITLEAKS_LICENSE secret.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only required when this repo lives under a GitHub organization.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}

@@ -1,0 +1,46 @@
+name: SonarCloud
+
+# SonarCloud (= SonarQube cloud) static analysis & quality gate.
+# REQUIRES one-time owner setup before it does anything:
+#   1. Create the project at https://sonarcloud.io (import this GitHub repo).
+#   2. Set sonar.organization + sonar.projectKey in sonar-project.properties.
+#   3. Add the SONAR_TOKEN repo secret (Settings → Secrets → Actions).
+# Until SONAR_TOKEN exists the job no-ops (it does not fail the pipeline).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for SONAR_TOKEN
+        id: guard
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SONAR_TOKEN not set — skipping SonarCloud scan."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.ok == 'true'
+        with:
+          # Disable shallow clone so Sonar can assign issues to the right commits.
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        if: steps.guard.outputs.ok == 'true'
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io

@@ -1,0 +1,74 @@
+name: Trivy
+
+# Software-composition + misconfiguration scanning (≈ BlackDuck role).
+# - trivy-fs: fast dependency + IaC/Dockerfile scan on every PR/push (SARIF, non-blocking).
+# - trivy-image: builds the api + builder images and scans them. Heavy, so it runs only
+#   when Docker/build inputs change or on the weekly schedule.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  fs:
+    name: Filesystem (deps + config)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scanners: vuln,misconfig,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: "0"
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  image:
+    name: Container images
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: builder
+            dockerfile: apps/builder/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f "${{ matrix.dockerfile }}" -t "form-platform-${{ matrix.name }}:ci" .
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: image
+          image-ref: "form-platform-${{ matrix.name }}:ci"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: "trivy-image-${{ matrix.name }}.sarif"
+          exit-code: "0"
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-image-${{ matrix.name }}.sarif"
+          category: "trivy-image-${{ matrix.name }}"

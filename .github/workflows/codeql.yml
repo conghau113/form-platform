@@ -1,0 +1,36 @@
+name: CodeQL
+
+# Static application security testing (SAST) — native, free for this repo.
+# Results land in the GitHub Security → Code scanning tab.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly full scan (Mondays 03:00 UTC) to catch newly published query packs.
+    - cron: "0 3 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      # No autobuild step: JS/TS is interpreted, CodeQL extracts source directly.
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"

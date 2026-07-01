@@ -1,0 +1,37 @@
+version: 2
+
+# Automated dependency + action + base-image updates (SCA role).
+# The npm ecosystem reads the root pnpm-lock.yaml and covers the whole workspace.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk dev tooling so updates don't fan out into many PRs.
+      dev-tooling:
+        patterns:
+          - "@biomejs/*"
+          - "turbo"
+          - "typescript"
+          - "vitest"
+          - "@changesets/*"
+      types:
+        patterns:
+          - "@types/*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/apps/api"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/apps/builder"
+    schedule:
+      interval: weekly

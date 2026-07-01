@@ -1,0 +1,100 @@
+name: CI
+
+# Core quality gate: lint (changed files) · typecheck · build · test · changeset.
+# Biome is scoped to changed files on purpose — the repo baseline is not biome-clean
+# (mostly CRLF artifacts on the author's Windows checkout), so a repo-wide gate would
+# fail spuriously. The convention is "scope biome to changed files" (see AGENTS.md).
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint · Typecheck · Build · Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the changed-files diff and changeset status have a base.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Biome (changed files only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            BASE="$(git merge-base "origin/${{ github.base_ref }}" HEAD)"
+          else
+            BASE="${{ github.event.before }}"
+            # New branch (all-zero SHA) or shallow miss → fall back to previous commit.
+            if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+              BASE="$(git rev-parse HEAD^ 2>/dev/null || git hash-object -t tree /dev/null)"
+            fi
+          fi
+          FILES=$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD \
+            -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.json' | tr '\n' ' ')
+          if [ -n "$FILES" ]; then
+            echo "Linting changed files: $FILES"
+            pnpm biome check $FILES
+          else
+            echo "No lintable files changed."
+          fi
+
+      - name: Typecheck
+        run: pnpm turbo run typecheck
+
+      - name: Build
+        run: pnpm turbo run build
+
+      - name: Test
+        # The single DB-touching test (import-files-to-db) uses Testcontainers, which
+        # works out of the box on ubuntu-latest (Docker pre-installed). The AI live
+        # test self-skips without an API key.
+        run: pnpm turbo run test
+
+  changeset:
+    name: Changeset gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Changeset status
+        # Apps (@app/api, @app/builder, @app/mcp) are in .changeset ignore, so this only
+        # enforces a changeset when packages/* change. Fails the PR if one is missing.
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          pnpm changeset status --since="origin/${{ github.base_ref }}"
