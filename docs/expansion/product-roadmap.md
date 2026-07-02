@@ -73,9 +73,11 @@ Ký hiệu: 🔒 = phụ thuộc ngoài (owner phải cung cấp) · ⭐ = nền
 > vs suy-luận. Repo hiện có: `/api` proxy (2B), `User`(id/email/passwordHash/displayName), **`RefreshToken`
 > (A1 ✅ rotating + revocable)**, **`Tenant`+`Membership`+`Project.tenantId` (B1 ✅ personal-tenant/user)**,
 > **`OrgUnit` cây org/department per-tenant + `Membership.orgUnitId?` (B2 ✅)**,
+> **`Function`+`Role`+`RoleFunction`+`UserRole`+`@RequireFunction`+`FunctionGuard` (C1+C2+C4 ✅ — RBAC
+> function/role/enforcement; `*` superadmin auto-provision cho tenant owner)**,
 > project-member role (editor/viewer), form-core datasource/reactions/conditions,
-> workflow engine, cookie-auth (access **15m** + refresh **30d** — A1). Vẫn 📋 PLANNED: `UserRole`,`DataScope`,
-> `Function`,`Role`,`RoleFunction`,`@RequireFunction`,`FunctionGuard`, tenantId trên bảng khác (B3).
+> workflow engine, cookie-auth (access **15m** + refresh **30d** — A1). Vẫn 📋 PLANNED: `DataScope` (C3
+> data-scope org/department), client-custom `Function` (`tenantId?`), tenantId trên bảng khác (B3).
 
 ### Phase 0 — Nền tảng môi trường & cấu hình (LÀM NGAY — owner yêu cầu) ⭐ ✅ DONE (2026-07-01)
 Mục tiêu: 3 môi trường **dev / test / production** cho cả `api` (NestJS) và `builder` (Vite), base-path
@@ -206,7 +208,7 @@ Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 te
   → `tenantId+slug`, tương tự các unique khác) → **test dữ liệu cũ vẫn truy cập được** (bootstrap admin
   id="local" ∈ tenant mặc định). Migration additive, không phá JSON đã lưu.
 
-### Phase C — RBAC data-driven (phân quyền chức năng + dữ liệu, cấu hình được) ⭐⭐ Δ 📋 PLANNED [crux]
+### Phase C — RBAC data-driven (phân quyền chức năng + dữ liệu, cấu hình được) ⭐⭐ Δ [C1+C2+C4 ✅ DONE 2026-07-02; C3/C5-custom 📋 PLANNED] [crux]
 Phỏng mô hình EVN nhưng bằng Prisma; **KHÔNG hardcode role** — client tự cấu hình:
 - **C1 — Function catalog:** `Function`(bản ghi DB: `code`/`name`/`parentCode` phân cấp — vd `form.manage`,
   `workflow.manage`, `user.admin`, `version.publish`) do **platform khai bộ gốc** + **client mở rộng**.
@@ -214,6 +216,41 @@ Phỏng mô hình EVN nhưng bằng Prisma; **KHÔNG hardcode role** — client 
 - **C2 — Role (tenant/org-scoped) + mappings:** `Role`(client tạo) · `RoleFunction`(role→function =
   chức năng) · `UserRole`(user↔role **M-N — 1 user nhiều role**). Permission hiệu dụng = union functions
   của các role user giữ.
+
+> **✅ ĐÃ LÀM (2026-07-02) — lát cắt C1+C2+C4 (owner chốt: function/role/enforcement, HOÃN C3 data-scope):**
+> - **Schema (additive, migration `20260702074515_add_rbac`):** `Function`(`code @id`/`name`/`parentCode?`/
+>   `system` — catalog toàn cục platform-seeded, **read-only** slice này; client-custom = hoãn, thêm `tenantId?`
+>   sau) + `Role`(`id`/`tenantId`/`name`/`description?`/`system`, `@@unique([tenantId,name])`, scope-tenant) +
+>   `RoleFunction`(join `roleId↔functionCode`) + `UserRole`(**M-N** `userId↔roleId`) + back-relations
+>   `User.roles`/`Tenant.roles`. Thuần additive (4 bảng mới + cột relation-only), KHÔNG đụng bảng cũ → không
+>   backfill (provisioning lười lúc login). **KHÔNG changeset** (app private).
+> - **Enforcement (C4):** `@RequireFunction('role.admin')` (`auth/require-function.decorator.ts`) +
+>   `FunctionGuard` (APP_GUARD trong `RbacModule`, bind SAU `JwtAuthGuard` của AuthModule): no-metadata→allow;
+>   resolve tenant (`findTenantIdForUser`)+functions của caller; **sentinel `*`→allow-all** (thay hardcode EVN
+>   `code==='ADMIN'` §6.6); thiếu→**403**, no-principal→401, no-tenant→403. Gate **chỉ endpoint /rbac mới**
+>   (KHÔNG rip `CurrentOwner` route cũ — giảm rủi ro, thay dần sau).
+> - **Base catalog (C5 mã ổn định, seed idempotent lúc boot `RbacService.onModuleInit`):** `form.read/manage`,
+>   `version.publish`(parent `form.manage`), `workflow.read/manage/run`, `submission.read/manage`, `org.admin`,
+>   `role.admin`, `user.admin`. `*` (superadmin) seed riêng trong `ensureTenantAdmin` để thỏa FK RoleFunction,
+>   **ẩn khỏi `listFunctions`** + `assertKnownFunctions` từ chối → client KHÔNG grant được `*` qua API (governance).
+> - **Provisioning:** `auth.issue()` sau `ensurePersonalTenant` → `RbacRepo.ensureTenantAdmin(user,tenant)`
+>   (idempotent: role `Admin` giữ `*` + UserRole) ⇒ mọi user hiện tại giữ full-access trong tenant của họ, giờ
+>   biểu diễn qua RBAC data-driven. Auth service +dep `RbacRepo` (global, không tạo cycle module).
+> - **Endpoints `modules/rbac/`:** `GET /rbac/me/functions` (open-authed, **seam nav §6.7**) · `GET /rbac/functions`
+>   · CRUD `/rbac/roles` + `PUT /rbac/roles/:id/functions` (gate `role.admin`) · `GET/PUT /rbac/users/:id/roles`
+>   (gate `user.admin`, **scope-tenant** cả delete). Mirror pattern org-units (repo-interface+prisma-impl+DTO;
+>   requireEditableRole = tenant 404 + system-role 400).
+> - **Verify ALL PASS:** api typecheck · **171 test** (+15: rbac.service 8, function.guard 6, auth +1 — union
+>   permission/`*` wildcard/cross-tenant 404/system-role 400/unknown-code 400/guard allow-deny-no-metadata,
+>   §8 test-plan) · biome sạch · **KHÔNG changeset** · reviewer **PASS** (1 required fix ĐÃ sửa: `setUserRoles`
+>   deleteMany unscoped → thread `tenantId` scope delete, chống mất data chéo tenant khi multi-tenant) ·
+>   **live-smoke Postgres 10/10** (built `node dist`): anon 401 · admin `*`+catalog 200+role CRUD+set-functions ·
+>   unknown-code 400 · fresh-user `*` · strip-own-wildcard→`['form.manage']`→non-admin 403 (chứng minh guard
+>   ordering: 403 chứ không 401). Dọn data smoke + temp script.
+> - **⚠️ Known-gap / hoãn (advisory reviewer, non-blocking):** (1) `setUserRoles`/`getUserRoles` chưa assert
+>   target user CÓ Membership trong tenant (chỉ cấp quyền trong tenant admin nên không leak — Phase D user-mgmt);
+>   (2) `findTenantIdForUser` trả 1 tenant — mơ hồ khi user đa-tenant (cần active-tenant selection sau); (3)
+>   `parentCode` chưa dùng trong resolve (union phẳng, `version.publish` KHÔNG kéo theo `form.manage` — cosmetic).
 - **C3 — Phân quyền dữ liệu:** `DataScope`/`DataPermissionGroup` gắn theo **org/department** (phỏng EVN
   `permission_data_group`↔`permission_department`↔`permission_user`) → giới hạn user chỉ thấy dữ liệu của
   đơn vị được cấp.

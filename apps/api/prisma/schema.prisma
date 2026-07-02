@@ -23,8 +23,73 @@ model Tenant {
   members   Membership[]
   projects  Project[]
   orgUnits  OrgUnit[]
+  roles     Role[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+}
+
+/// Platform permission catalog (product-roadmap Phase C1). A `Function` is a stable permission *code*
+/// (e.g. `form.manage`, `role.admin`) — the atom RBAC grants. Data-driven per §1.1: the platform seeds
+/// an immutable base set at boot (`system = true`; see RbacRepo.seedFunctions) so upgrades stay safe;
+/// `parentCode` is an optional hierarchy seam. Client-defined functions (a nullable `tenantId`) are a
+/// later, additive slice — this slice keeps the catalog a read-only global set. The sentinel code `*`
+/// means "all functions" (held by a tenant's admin role), replacing EVN's hardcoded `code==='ADMIN'`.
+model Function {
+  code        String         @id
+  name        String
+  parentCode  String?
+  system      Boolean        @default(true)
+  roles       RoleFunction[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+/// A client-defined role within a tenant (product-roadmap Phase C2). NEVER hardcoded — a client creates
+/// roles and maps them to functions (`RoleFunction`) and to users (`UserRole`, many-to-many). The
+/// tenant's `system` "admin" role (holding `*`) is auto-provisioned for the tenant owner on login so
+/// existing users keep full access under the new model. Scoped to `tenantId`; unique by name per tenant.
+model Role {
+  id          String         @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  system      Boolean        @default(false)
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  functions   RoleFunction[]
+  users       UserRole[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Grant of a function code to a role (product-roadmap Phase C2). A role's effective permission set is
+/// the union of its `functionCode`s; a user's effective set is the union over the roles they hold.
+model RoleFunction {
+  id           String   @id @default(cuid())
+  roleId       String
+  functionCode String
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  function     Function @relation(fields: [functionCode], references: [code], onDelete: Cascade)
+
+  @@unique([roleId, functionCode])
+  @@index([functionCode])
+}
+
+/// A user ↔ role assignment (product-roadmap Phase C2). Many-to-many: one user may hold several roles;
+/// their effective functions are the union across all held roles (within the role's tenant).
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
 }
 
 /// A node in a tenant's organisational tree (product-roadmap Phase B2). A single unified adjacency-list
@@ -120,6 +185,7 @@ model User {
   displayName   String?
   refreshTokens RefreshToken[]
   memberships   Membership[]
+  roles         UserRole[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }

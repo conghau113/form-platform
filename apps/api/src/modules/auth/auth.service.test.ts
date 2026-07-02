@@ -3,6 +3,7 @@ import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SEED_OWNER_ID } from "../../common/constants.js";
+import { RbacRepo } from "../../persistence/repositories/rbac.repo.js";
 import {
   type RefreshTokenRecord,
   RefreshTokenRepo,
@@ -105,6 +106,44 @@ class FakeTenantRepo extends TenantRepo {
   }
 }
 
+/** In-memory RbacRepo — records tenant-admin provisioning; the rest are unused no-op stubs here. */
+class FakeRbacRepo extends RbacRepo {
+  readonly admins: { userId: string; tenantId: string }[] = [];
+  async ensureTenantAdmin(userId: string, tenantId: string): Promise<void> {
+    if (!this.admins.some((a) => a.userId === userId && a.tenantId === tenantId)) {
+      this.admins.push({ userId, tenantId });
+    }
+  }
+  async seedFunctions(): Promise<void> {}
+  async listFunctions(): Promise<never[]> {
+    return [];
+  }
+  async createRole(): Promise<never> {
+    throw new Error("not used");
+  }
+  async listRoles(): Promise<never[]> {
+    return [];
+  }
+  async findRoleById(): Promise<null> {
+    return null;
+  }
+  async updateRole(): Promise<never> {
+    throw new Error("not used");
+  }
+  async deleteRole(): Promise<void> {}
+  async setRoleFunctions(): Promise<void> {}
+  async listRoleFunctions(): Promise<never[]> {
+    return [];
+  }
+  async setUserRoles(): Promise<void> {}
+  async listUserRoleIds(): Promise<never[]> {
+    return [];
+  }
+  async resolveFunctions(): Promise<never[]> {
+    return [];
+  }
+}
+
 describe("AuthService", () => {
   const jwt = new JwtService({
     secret: "test-secret-at-least-16-chars",
@@ -113,13 +152,15 @@ describe("AuthService", () => {
   let users: FakeUserRepo;
   let refreshTokens: FakeRefreshTokenRepo;
   let tenants: FakeTenantRepo;
+  let rbac: FakeRbacRepo;
   let service: AuthService;
 
   beforeEach(() => {
     users = new FakeUserRepo();
     refreshTokens = new FakeRefreshTokenRepo();
     tenants = new FakeTenantRepo();
-    service = new AuthService(users, jwt, refreshTokens, tenants);
+    rbac = new FakeRbacRepo();
+    service = new AuthService(users, jwt, refreshTokens, tenants, rbac);
   });
 
   afterEach(() => {
@@ -160,6 +201,12 @@ describe("AuthService", () => {
     // Login for the same user does not create a second tenant (ensurePersonalTenant is idempotent).
     await service.login("tina@example.com", "password1");
     expect(tenants.memberships.filter((m) => m.userId === reg.user.id)).toHaveLength(1);
+  });
+
+  it("auto-provisions the tenant owner as admin on register (Phase C)", async () => {
+    const reg = await service.register("carla@example.com", "password1");
+    const tenantId = await tenants.findTenantIdForUser(reg.user.id);
+    expect(rbac.admins).toContainEqual({ userId: reg.user.id, tenantId });
   });
 
   it("rejects a duplicate email", async () => {
@@ -287,6 +334,7 @@ describe("AuthService", () => {
         jwt,
         new FakeRefreshTokenRepo(),
         new FakeTenantRepo(),
+        new FakeRbacRepo(),
       ).onModuleInit();
       expect(users2.rows).toHaveLength(0);
     });

@@ -11,6 +11,8 @@ import bcrypt from "bcryptjs";
 import { SEED_OWNER_ID } from "../../common/constants.js";
 import { durationToMs } from "../../config/env.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { RbacRepo } from "../../persistence/repositories/rbac.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { RefreshTokenRepo } from "../../persistence/repositories/refresh-token.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
@@ -56,6 +58,7 @@ export class AuthService implements OnModuleInit {
     private readonly jwt: JwtService,
     private readonly refreshTokens: RefreshTokenRepo,
     private readonly tenants: TenantRepo,
+    private readonly rbac: RbacRepo,
   ) {}
 
   /** Seed the bootstrap admin (if configured) so pre-2A `ownerId="local"` data keeps its owner. */
@@ -132,7 +135,14 @@ export class AuthService implements OnModuleInit {
     // Auto-provision the caller's personal tenant (product-roadmap B1). Idempotent, so login/refresh
     // for an existing user is a no-op; a freshly registered user (and the bootstrap admin on first
     // login) gets a Tenant + Membership here, establishing "every logged-in user has a tenant".
-    await this.tenants.ensurePersonalTenant(user.id, user.displayName ?? user.email);
+    const tenantId = await this.tenants.ensurePersonalTenant(
+      user.id,
+      user.displayName ?? user.email,
+    );
+    // Auto-provision the tenant owner as its admin (product-roadmap Phase C). Idempotent: gives the
+    // user the tenant's `*`-holding admin role so existing users keep full access under RBAC (replacing
+    // EVN's hardcoded `code==='ADMIN'` with a data-driven role, §6.6).
+    await this.rbac.ensureTenantAdmin(user.id, tenantId);
     const accessToken = await this.jwt.signAsync({ sub: user.id, email: user.email });
     const refreshToken = await this.issueRefreshToken(user.id);
     return { accessToken, refreshToken, user: toProfile(user) };

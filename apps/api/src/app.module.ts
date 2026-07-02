@@ -11,6 +11,7 @@ import { HealthModule } from "./modules/health/health.module.js";
 import { OrgUnitsModule } from "./modules/org-units/org-units.module.js";
 import { PresetsModule } from "./modules/presets/presets.module.js";
 import { ProjectsModule } from "./modules/projects/projects.module.js";
+import { RbacModule } from "./modules/rbac/rbac.module.js";
 import { StatusCatalogModule } from "./modules/status-catalog/status-catalog.module.js";
 import { SubmissionsModule } from "./modules/submissions/submissions.module.js";
 import { ThemesModule } from "./modules/themes/themes.module.js";
@@ -48,7 +49,10 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
       }),
     }),
     PersistenceModule,
+    // Order matters: AuthModule's global JwtAuthGuard must run before RbacModule's FunctionGuard
+    // (which reads the `req.user` the former populates). Keep AuthModule before RbacModule.
     AuthModule,
+    RbacModule,
     HealthModule,
     ProjectsModule,
     OrgUnitsModule,

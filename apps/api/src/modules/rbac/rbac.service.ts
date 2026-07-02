@@ -1,0 +1,162 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  type OnModuleInit,
+} from "@nestjs/common";
+import { BASE_FUNCTIONS } from "../../auth/function-catalog.js";
+import type { FunctionRecord, RoleRecord } from "../../persistence/repositories/rbac.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { RbacRepo } from "../../persistence/repositories/rbac.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
+import type { SetRoleFunctionsDto } from "./dto/set-role-functions.dto.js";
+import type { SetUserRolesDto } from "./dto/set-user-roles.dto.js";
+import type { UpsertRoleDto } from "./dto/upsert-role.dto.js";
+
+/** A role plus the function codes it grants (the shape the admin UI edits). */
+export interface RoleWithFunctions extends RoleRecord {
+  functions: string[];
+}
+
+/**
+ * RBAC service (product-roadmap Phase C1/C2/C4). Seeds the platform function catalog at boot, and owns
+ * tenant-scoped role management + user↔role assignment. Every operation is scoped to the caller's
+ * tenant (resolved from membership, mirroring {@link OrgUnitsService}); a role in another tenant reads
+ * as 404 (no existence leak). `system` roles (the auto-provisioned admin) can't be edited or deleted.
+ * The function catalog is a read-only global set in this slice (client-defined functions come later).
+ */
+@Injectable()
+export class RbacService implements OnModuleInit {
+  constructor(
+    private readonly rbac: RbacRepo,
+    private readonly tenants: TenantRepo,
+  ) {}
+
+  /** Seed the immutable base function catalog (idempotent; safe to run every boot). */
+  async onModuleInit(): Promise<void> {
+    await this.rbac.seedFunctions(BASE_FUNCTIONS);
+  }
+
+  /** The caller's effective function codes in their tenant (seam for nav gating, §6.7). */
+  async myFunctions(userId: string): Promise<string[]> {
+    const tenantId = await this.tenants.findTenantIdForUser(userId);
+    if (!tenantId) return [];
+    return this.rbac.resolveFunctions(userId, tenantId);
+  }
+
+  /** The full platform function catalog (for the role editor). */
+  listFunctions(): Promise<FunctionRecord[]> {
+    return this.rbac.listFunctions();
+  }
+
+  async listRoles(userId: string): Promise<RoleWithFunctions[]> {
+    const tenantId = await this.requireTenant(userId);
+    const roles = await this.rbac.listRoles(tenantId);
+    return Promise.all(
+      roles.map(async (r) => ({ ...r, functions: await this.rbac.listRoleFunctions(r.id) })),
+    );
+  }
+
+  async createRole(userId: string, dto: UpsertRoleDto): Promise<RoleWithFunctions> {
+    if (!dto.name?.trim()) throw new BadRequestException("Role name is required");
+    const tenantId = await this.requireTenant(userId);
+    try {
+      const role = await this.rbac.createRole({
+        tenantId,
+        name: dto.name.trim(),
+        description: dto.description?.trim() || null,
+      });
+      return { ...role, functions: [] };
+    } catch (err) {
+      throw toConflict(err, `A role named "${dto.name.trim()}" already exists`);
+    }
+  }
+
+  async updateRole(userId: string, id: string, dto: UpsertRoleDto): Promise<RoleWithFunctions> {
+    await this.requireEditableRole(userId, id); // tenant + non-system guard
+    try {
+      const updated = await this.rbac.updateRole(id, {
+        name: dto.name?.trim(),
+        description: dto.description === undefined ? undefined : dto.description?.trim() || null,
+      });
+      return { ...updated, functions: await this.rbac.listRoleFunctions(id) };
+    } catch (err) {
+      throw toConflict(err, `A role named "${dto.name?.trim()}" already exists`);
+    }
+  }
+
+  async deleteRole(userId: string, id: string): Promise<void> {
+    await this.requireEditableRole(userId, id);
+    await this.rbac.deleteRole(id);
+  }
+
+  /** Replace a role's granted function codes; every code must exist in the catalog. */
+  async setRoleFunctions(
+    userId: string,
+    id: string,
+    dto: SetRoleFunctionsDto,
+  ): Promise<RoleWithFunctions> {
+    const role = await this.requireEditableRole(userId, id);
+    await this.assertKnownFunctions(dto.functions);
+    await this.rbac.setRoleFunctions(id, dto.functions);
+    return { ...role, functions: await this.rbac.listRoleFunctions(id) };
+  }
+
+  /** The role ids currently assigned to a user (within the caller's tenant). */
+  async getUserRoles(userId: string, targetUserId: string): Promise<string[]> {
+    const tenantId = await this.requireTenant(userId);
+    return this.rbac.listUserRoleIds(targetUserId, tenantId);
+  }
+
+  /** Replace a user's assigned roles; every role must live in the caller's tenant. */
+  async setUserRoles(
+    userId: string,
+    targetUserId: string,
+    dto: SetUserRolesDto,
+  ): Promise<string[]> {
+    const tenantId = await this.requireTenant(userId);
+    for (const roleId of dto.roleIds) {
+      const role = await this.rbac.findRoleById(roleId);
+      if (!role || role.tenantId !== tenantId) {
+        throw new BadRequestException(`Role not in tenant: ${roleId}`);
+      }
+    }
+    await this.rbac.setUserRoles(targetUserId, tenantId, dto.roleIds);
+    return this.rbac.listUserRoleIds(targetUserId, tenantId);
+  }
+
+  /** The caller's tenant (B1 guarantees one); absent → 404 (defensive). */
+  private async requireTenant(userId: string): Promise<string> {
+    const tenantId = await this.tenants.findTenantIdForUser(userId);
+    if (!tenantId) throw new NotFoundException("No tenant for user");
+    return tenantId;
+  }
+
+  /** Load a role, assert it lives in the caller's tenant (404) and is not a system role (400). */
+  private async requireEditableRole(userId: string, id: string): Promise<RoleRecord> {
+    const tenantId = await this.requireTenant(userId);
+    const role = await this.rbac.findRoleById(id);
+    if (!role || role.tenantId !== tenantId) throw new NotFoundException(`Role not found: ${id}`);
+    if (role.system) throw new BadRequestException("The built-in admin role can't be modified");
+    return role;
+  }
+
+  /** Reject any function code not in the catalog (data integrity for grants). */
+  private async assertKnownFunctions(codes: string[]): Promise<void> {
+    const known = new Set((await this.rbac.listFunctions()).map((f) => f.code));
+    const unknown = codes.filter((c) => !known.has(c));
+    if (unknown.length > 0) {
+      throw new BadRequestException(`Unknown function code(s): ${unknown.join(", ")}`);
+    }
+  }
+}
+
+/** Map a Prisma unique-constraint violation (P2002) to a 409; rethrow anything else. */
+function toConflict(err: unknown, message: string): Error {
+  if (typeof err === "object" && err !== null && "code" in err && err.code === "P2002") {
+    return new ConflictException(message);
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}

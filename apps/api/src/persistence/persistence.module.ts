@@ -7,6 +7,7 @@ import { PrismaOrgUnitRepo } from "./prisma/prisma-org-unit.repo.js";
 import { PrismaPresetRepo } from "./prisma/prisma-preset.repo.js";
 import { PrismaProjectRepo } from "./prisma/prisma-project.repo.js";
 import { PrismaProjectMemberRepo } from "./prisma/prisma-project-member.repo.js";
+import { PrismaRbacRepo } from "./prisma/prisma-rbac.repo.js";
 import { PrismaRefreshTokenRepo } from "./prisma/prisma-refresh-token.repo.js";
 import { PrismaStatusCatalogRepo } from "./prisma/prisma-status-catalog.repo.js";
 import { PrismaSubmissionRepo } from "./prisma/prisma-submission.repo.js";
@@ -22,6 +23,7 @@ import { OrgUnitRepo } from "./repositories/org-unit.repo.js";
 import { PresetRepo } from "./repositories/preset.repo.js";
 import { ProjectRepo } from "./repositories/project.repo.js";
 import { ProjectMemberRepo } from "./repositories/project-member.repo.js";
+import { RbacRepo } from "./repositories/rbac.repo.js";
 import { RefreshTokenRepo } from "./repositories/refresh-token.repo.js";
 import { StatusCatalogRepo } from "./repositories/status-catalog.repo.js";
 import { SubmissionRepo } from "./repositories/submission.repo.js";
@@ -55,6 +57,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: RefreshTokenRepo, useClass: PrismaRefreshTokenRepo },
     { provide: TenantRepo, useClass: PrismaTenantRepo },
     { provide: OrgUnitRepo, useClass: PrismaOrgUnitRepo },
+    { provide: RbacRepo, useClass: PrismaRbacRepo },
   ],
   exports: [
     PrismaService,
@@ -73,6 +76,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     RefreshTokenRepo,
     TenantRepo,
     OrgUnitRepo,
+    RbacRepo,
   ],
 })
 export class PersistenceModule {}
