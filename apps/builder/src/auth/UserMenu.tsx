@@ -3,8 +3,11 @@ import { Avatar, Dropdown, message, Typography } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./useAuth";
 
-/** Signed-in identity + sign-out (production-hardening 2B). Renders nothing when anonymous. */
-export function UserMenu() {
+/**
+ * Signed-in identity + sign-out (production-hardening 2B). Renders nothing when anonymous.
+ * `compact` drops the name label (avatar only) so it fits the narrow AppShell rail.
+ */
+export function UserMenu({ compact = false }: { compact?: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   if (!user) return null;
@@ -34,7 +37,7 @@ export function UserMenu() {
         title="Account"
       >
         <Avatar size="small" icon={<UserOutlined />} />
-        <Typography.Text>{user.displayName || user.email}</Typography.Text>
+        {!compact && <Typography.Text>{user.displayName || user.email}</Typography.Text>}
       </span>
     </Dropdown>
   );

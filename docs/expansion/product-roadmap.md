@@ -317,6 +317,16 @@ sản phẩm cuối, dựa trên nền đã vững. Có thể chèn A2 sớm n�
    Operate/Admin sau — tránh refactor lớn về cuối. Ẩn nav ≠ bảo mật ⇒ server luôn `@RequireFunction`.
    **Rollout (codex):** shell bản đầu **chỉ wrap route `/projects` hiện tại** (Design) + Settings;
    **CHƯA bật Admin/Operate thật** — chúng chỉ là mục nav ẩn tới khi Phase C/D/E hiện thực.
+   > **✅ DONE (2026-07-02):** feature-folder `apps/builder/src/shell/` — `nav.ts` (catalog `NAV_SECTIONS`
+   > = single source: `design`✓ · `operate`/`admin` `enabled:false` = nav ẩn; `visibleSections()` +
+   > `activeNavKey()` pure + test) · `NavRail.tsx` (activity-bar 64px, antd Menu inlineCollapsed + Settings
+   > footer + `<UserMenu compact/>`) · `AppShell.tsx` (layout route wrap children của `RequireAuth`) ·
+   > `SettingsPage.tsx` (account tối giản). `main.tsx` bọc AppShell + route `/settings`; `ProjectsPage` bỏ
+   > UserMenu inline; `ProjectWorkspace` `100vh→100%`; `UserMenu` thêm prop `compact`. Additive thuần FE,
+   > KHÔNG đụng DB/API, KHÔNG changeset (app private). Verify: builder typecheck · 374 test (shell nav 3) ·
+   > biome · reviewer PASS · **live UI smoke MCP** (login→rail Design-active+Settings+avatar · mở project
+   > editor+ExplorerRail+rail không tràn · /settings account · nav Design↔Settings · Operate/Admin ẩn ·
+   > sign-out→/login · console sạch). Seam Phase C: `visibleSections` nối `functions × edition`.
 
 ---
 

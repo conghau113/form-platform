@@ -49,7 +49,7 @@ export function ProjectWorkspace() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", minHeight: 0 }}>
+    <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
       <ExplorerRail
         projectId={projectId}
         projects={projects}

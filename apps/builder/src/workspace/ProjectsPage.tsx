@@ -20,7 +20,7 @@ import {
 } from "antd";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserMenu, useAuth } from "../auth";
+import { useAuth } from "../auth";
 import { ShareDialog } from "./ShareDialog";
 import type { ProjectRecord } from "./types";
 import { useProjects } from "./useWorkspace";
@@ -84,12 +84,14 @@ export function ProjectsPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           Projects
         </Typography.Title>
-        <Space style={{ marginLeft: "auto" }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-            New project
-          </Button>
-          <UserMenu />
-        </Space>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setCreating(true)}
+          style={{ marginLeft: "auto" }}
+        >
+          New project
+        </Button>
       </div>
 
       {loading ? (
