@@ -18,6 +18,7 @@ import {
   ProjectMemberRepo,
 } from "../../persistence/repositories/project-member.repo.js";
 import { ThemeRepo } from "../../persistence/repositories/theme.repo.js";
+import { FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import { ThemesService } from "./themes.service.js";
 
@@ -74,6 +75,7 @@ class FakeProjectRepo extends ProjectRepo {
     const row: ProjectRecord = {
       id: `proj_${++seq}`,
       ownerId: input.ownerId,
+      tenantId: FakeTenantRepo.tenantIdFor(input.ownerId),
       name: input.name,
       slug: input.slug,
       description: input.description ?? null,
@@ -91,6 +93,9 @@ class FakeProjectRepo extends ProjectRepo {
   }
   async findByIds(ids: string[]): Promise<ProjectRecord[]> {
     return ids.map((id) => this.rows.get(id)).filter((p): p is ProjectRecord => p != null);
+  }
+  async listByTenants(tenantIds: string[]): Promise<ProjectRecord[]> {
+    return [...this.rows.values()].filter((p) => tenantIds.includes(p.tenantId));
   }
   async update(): Promise<ProjectRecord> {
     throw new Error("not used");
@@ -159,7 +164,14 @@ beforeEach(async () => {
   formRepo = new FakeFormRepo();
   projectRepo = new FakeProjectRepo();
   memberRepo = new FakeProjectMemberRepo();
-  const projects = new ProjectsService(projectRepo, new UnusedFolderRepo(), formRepo, memberRepo);
+  const projects = new ProjectsService(
+    projectRepo,
+    new UnusedFolderRepo(),
+    formRepo,
+    memberRepo,
+    new FakeTenantRepo(),
+    new FakeRbacRepo(),
+  );
   themes = new ThemesService(themeRepo, formRepo, projects);
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });
   formRepo.seed({ id: "form1", projectId: project.id });

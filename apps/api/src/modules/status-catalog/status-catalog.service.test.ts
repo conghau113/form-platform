@@ -18,6 +18,7 @@ import {
   type StatusCatalogProjectScope,
   StatusCatalogRepo,
 } from "../../persistence/repositories/status-catalog.repo.js";
+import { FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import { StatusCatalogService } from "./status-catalog.service.js";
 
@@ -84,6 +85,7 @@ class FakeProjectRepo extends ProjectRepo {
     const row: ProjectRecord = {
       id: `proj_${++seq}`,
       ownerId: input.ownerId,
+      tenantId: FakeTenantRepo.tenantIdFor(input.ownerId),
       name: input.name,
       slug: input.slug,
       description: input.description ?? null,
@@ -101,6 +103,9 @@ class FakeProjectRepo extends ProjectRepo {
   }
   async findByIds(ids: string[]): Promise<ProjectRecord[]> {
     return ids.map((id) => this.rows.get(id)).filter((p): p is ProjectRecord => p != null);
+  }
+  async listByTenants(tenantIds: string[]): Promise<ProjectRecord[]> {
+    return [...this.rows.values()].filter((p) => tenantIds.includes(p.tenantId));
   }
   async update(): Promise<ProjectRecord> {
     throw new Error("not used");
@@ -199,6 +204,8 @@ beforeEach(async () => {
     new UnusedFolderRepo(),
     new UnusedFormRepo(),
     memberRepo,
+    new FakeTenantRepo(),
+    new FakeRbacRepo(),
   );
   catalog = new StatusCatalogService(repo, projects);
   projA = await projectRepo.create({ ownerId: OWNER, name: "A", slug: "a" });

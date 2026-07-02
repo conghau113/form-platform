@@ -148,7 +148,7 @@ env-driven, secret CHỈ ở `.env` phía API.
   callback, liên kết account theo email đã verify. Cần **Google client-id/secret/redirect**.
 - Δ nhỏ: `User` thêm `emailVerifiedAt?`, `authProvider?`. Additive.
 
-### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1+B2 ✅ DONE 2026-07-02; B3–B4 📋 PLANNED] [làm TRƯỚC RBAC]
+### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1+B2+B3 ✅ DONE 2026-07-02; B4 📋 PLANNED] [làm TRƯỚC RBAC]
 Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 tenant). RBAC/form/workflow
 đều **scope theo tenant + org/phòng ban** nên hạ tầng này phải có TRƯỚC.
 - **B1 — Tenant model:** `Tenant`(installation của 1 client) + `Membership`(user thuộc tenant, có thể nhiều
@@ -202,6 +202,33 @@ Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 te
   > - **Chưa làm (Phase D/C):** UI admin org, endpoint gán user↔orgUnit (writer của `orgUnitId`), data-scope RBAC.
 - **B3 — Tenant-scoping:** mọi bảng dữ liệu (project/form/workflow/submission/preset…) gắn `tenantId`;
   repository lọc theo tenant tập trung (guard/interceptor) — **chống rò dữ liệu chéo tenant** (rủi ro chính).
+  > **✅ ĐÃ LÀM (2026-07-02) — tenant-scoping READS qua chokepoint duy nhất; owner chốt 3 fork: map theo
+  > RBAC functions · union mọi tenant trong list · B3 chỉ reads (B4 tách riêng).** Không migration DB —
+  > schema đã đủ từ B1/C (mọi resource con treo dưới `projectId`, Project đã có `tenantId`).
+  > - **Kiến trúc:** MỌI module con (folders/forms/workflows/instances/submissions/versions/presets/
+  >   status-catalog/themes/members) đều access-check qua `ProjectsService.requireAccess`/`resolveRole` →
+  >   thêm "đường thứ 3" đúng 1 chỗ là tenant-scoping lan ra toàn bộ reads (không cần gắn tenantId từng bảng
+  >   — `projectId → Project.tenantId` là đủ).
+  > - **Map quyền (data-driven §1.1, `modules/projects/tenant-role.ts` thuần):** functions hiệu dụng của user
+  >   trong tenant của project (`RbacRepo.resolveFunctions`) → project role: `*`→owner (client-admin quản trọn) ·
+  >   any-of `form.manage|workflow.manage|submission.manage|version.publish`→editor · any-of
+  >   `form.read|workflow.read|submission.read|workflow.run`→viewer · không role→**404** (member mới chưa gán
+  >   role không thấy gì — admin kiểm soát bằng role). Union semantics: role cuối = max(W5 grant, tenant role)
+  >   — grant thấp không demote tenant-admin.
+  > - **List:** `/projects` = owned ∪ shared (W5) ∪ project của mọi tenant user giữ role ≥viewer
+  >   (`TenantRepo.listTenantIdsForUser` + `ProjectRepo.listByTenants`); dedupe, sort updatedAt.
+  > - **Repo Δ:** `ProjectRecord.tenantId` lộ ra + `listByTenants` · `TenantRepo.listTenantIdsForUser`
+  >   (oldest-first, cùng ordering `findTenantIdForUser`). FE builder KHÔNG đổi (list tự hiện qua API).
+  > - **Test:** +11 (tenant-role 4 thuần + workspace B3 7: admin-`*` owner-level · manage→editor ·
+  >   read→viewer · no-role 404 · cross-tenant 404 (§8 leak) · list union dedupe · union-not-demote).
+  >   Fake dùng chung `src/testing/fake-tenant-rbac.ts` (8 file test service tái dùng).
+  > - **Verify:** typecheck · 189/189 test · biome · reviewer PASS (0 fix) · **live-smoke Postgres 29/29**
+  >   (member-chưa-role 404 → gán form.read thấy list+tree nhưng ghi 403 → +form.manage ghi 201 →
+  >   role Admin `*` rename 200 → outsider 404 cả GET/tree/PATCH) · **UI smoke MCP** (member login thấy
+  >   project tenant badge Shared, mở editor load form THẬT, console sạch trừ warning antd pre-existing).
+  > - **⚠️ Known-gap (chuyển B4/C3):** granularity thô — 1 function read cấp viewer CẢ project (per-resource
+  >   data-scope = C3); member tạo project mới vẫn vào tenant CÁ NHÂN (writes + unique-index = B4);
+  >   active-tenant selection chưa có (`/rbac`,`/org-units` vẫn resolve personal-first).
 - **Hai tầng admin:** vendor-admin (quản tenant) vs client-admin (quản trong tenant). Onboarding tenant.
 - Khuyến nghị **shared-DB + `tenantId` + scope-guard** (đủ cho self-host + SaaS; tránh schema-per-tenant nặng).
 - **B4 — Chiến lược di trú `ownerId`→`tenantId` (codex):** tạo **tenant mặc định** cho data hiện có →

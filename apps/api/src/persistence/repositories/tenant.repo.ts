@@ -26,6 +26,11 @@ export abstract class TenantRepo {
    * the personal tenant created at register — being added to another tenant never flips a user's context.
    */
   abstract findTenantIdForUser(userId: string): Promise<string | null>;
+  /**
+   * Every tenant the user belongs to via `Membership`, oldest membership first (same ordering as
+   * {@link findTenantIdForUser} — the personal tenant leads). B3 unions these for project listing.
+   */
+  abstract listTenantIdsForUser(userId: string): Promise<string[]>;
   /** Whether the user holds a `Membership` in the tenant (D1: role assignment targets members only). */
   abstract isMember(userId: string, tenantId: string): Promise<boolean>;
   /** Add a user to a tenant (idempotent upsert on the userId+tenantId unique — D1 add-member). */

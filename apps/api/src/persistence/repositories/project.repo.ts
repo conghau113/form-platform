@@ -2,6 +2,8 @@
 export interface ProjectRecord {
   id: string;
   ownerId: string;
+  /** Owning tenant (B1). B3 reads it to resolve tenant-membership access on top of `ownerId`. */
+  tenantId: string;
   name: string;
   slug: string;
   description: string | null;
@@ -37,6 +39,8 @@ export abstract class ProjectRepo {
   abstract findById(id: string): Promise<ProjectRecord | null>;
   /** Resolve many projects in one query (any order); missing ids are simply absent from the result. */
   abstract findByIds(ids: string[]): Promise<ProjectRecord[]>;
+  /** All projects belonging to any of `tenantIds` (B3 tenant-scoped listing), most-recent first. */
+  abstract listByTenants(tenantIds: string[]): Promise<ProjectRecord[]>;
   abstract update(id: string, patch: ProjectUpdateInput): Promise<ProjectRecord>;
   abstract delete(id: string): Promise<void>;
 }

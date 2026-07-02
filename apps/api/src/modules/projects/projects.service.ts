@@ -23,7 +23,12 @@ import {
   type ProjectRole,
   roleSatisfies,
 } from "../../persistence/repositories/project-member.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { RbacRepo } from "../../persistence/repositories/rbac.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
 import type { CreateProjectDto } from "./dto/create-project.dto.js";
+import { projectRoleFromFunctions } from "./tenant-role.js";
 
 /** Single payload the builder (W2) renders as a DirectoryTree: project + flat folders + forms. */
 export interface ProjectTree {
@@ -33,11 +38,13 @@ export interface ProjectTree {
 }
 
 /**
- * Project CRUD with role-based access (Track W; W1 owner-scoping, W5 sharing). Access resolves
- * through {@link requireAccess}: the canonical owner (`Project.ownerId`) always has the `owner`
- * role; other users get the role on their {@link ProjectMemberRepo} grant (`editor`/`viewer`).
- * No access → 404 (never leaking existence); access but too low a role → 403. Slugs are unique
- * per owner (`@@unique([ownerId, slug])`).
+ * Project CRUD with role-based access (Track W; W1 owner-scoping, W5 sharing, B3 tenant scoping).
+ * Access resolves through {@link requireAccess}: the canonical owner (`Project.ownerId`) always
+ * has the `owner` role; other users get the role on their {@link ProjectMemberRepo} grant
+ * (`editor`/`viewer`), or — B3 — the role their RBAC functions in the project's tenant map to
+ * ({@link projectRoleFromFunctions}). No access → 404 (never leaking existence); access but too
+ * low a role → 403. Slugs are unique per owner (`@@unique([ownerId, slug])`; B4 moves this to
+ * tenant, together with creating projects inside a team tenant — creates stay personal here).
  */
 @Injectable()
 export class ProjectsService {
@@ -46,6 +53,8 @@ export class ProjectsService {
     private readonly folders: FolderRepo,
     private readonly forms: FormRepo,
     private readonly members: ProjectMemberRepo,
+    private readonly tenants: TenantRepo,
+    private readonly rbac: RbacRepo,
   ) {}
 
   async create(ownerId: string, dto: CreateProjectDto): Promise<ProjectRecord> {
@@ -63,16 +72,31 @@ export class ProjectsService {
     });
   }
 
-  /** Projects the user can see: ones they own plus ones shared with them (most-recent first). */
+  /**
+   * Projects the user can see (most-recent first): ones they own, ones shared with them (W5),
+   * and — B3 — ones in tenants where their RBAC functions confer at least `viewer`.
+   */
   async list(userId: string): Promise<ProjectRecord[]> {
     const sharedIds = await this.members.listProjectIdsForUser(userId);
-    const [owned, shared] = await Promise.all([
+    const [owned, shared, tenantProjects] = await Promise.all([
       this.projects.list(userId),
       this.projects.findByIds(sharedIds), // one query, not one findById per shared id
+      this.listTenantProjects(userId),
     ]);
     const byId = new Map(owned.map((p) => [p.id, p]));
-    for (const p of shared) if (!byId.has(p.id)) byId.set(p.id, p);
+    for (const p of [...shared, ...tenantProjects]) if (!byId.has(p.id)) byId.set(p.id, p);
     return [...byId.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  /** Projects of every tenant the user holds a viewer+ role in (a user has 1–2 tenants in practice). */
+  private async listTenantProjects(userId: string): Promise<ProjectRecord[]> {
+    const tenantIds = await this.tenants.listTenantIdsForUser(userId);
+    const visible: string[] = [];
+    for (const tenantId of tenantIds) {
+      const functions = await this.rbac.resolveFunctions(userId, tenantId);
+      if (projectRoleFromFunctions(functions)) visible.push(tenantId);
+    }
+    return this.projects.listByTenants(visible);
   }
 
   /** Read gate (viewer+). Kept named `getOne` for the folders/forms read paths that reuse it. */
@@ -99,12 +123,31 @@ export class ProjectsService {
     await this.projects.delete(id);
   }
 
-  /** The user's role on a project (owner via `ownerId`, else the grant), or `null` if no access. */
+  /** The user's role on a project (owner / grant / tenant functions), or `null` if no access. */
   async resolveRole(userId: string, projectId: string): Promise<ProjectRole | null> {
     const project = await this.projects.findById(projectId);
     if (!project) return null;
+    return this.resolveRoleForProject(userId, project);
+  }
+
+  /**
+   * The role a user holds on a loaded project: the canonical owner, else the higher of their W5
+   * grant and — B3 — the role their RBAC functions in the project's tenant map to (union
+   * semantics: an explicit low grant never demotes a tenant admin).
+   */
+  private async resolveRoleForProject(
+    userId: string,
+    project: ProjectRecord,
+  ): Promise<ProjectRole | null> {
     if (project.ownerId === userId) return "owner";
-    return (await this.members.find(projectId, userId))?.role ?? null;
+    const [grant, functions] = await Promise.all([
+      this.members.find(project.id, userId),
+      this.rbac.resolveFunctions(userId, project.tenantId),
+    ]);
+    const granted = grant?.role ?? null;
+    const tenantRole = projectRoleFromFunctions(functions);
+    if (!granted || !tenantRole) return granted ?? tenantRole;
+    return roleSatisfies(granted, tenantRole) ? granted : tenantRole;
   }
 
   /**
@@ -118,8 +161,7 @@ export class ProjectsService {
   ): Promise<ProjectRecord> {
     const project = await this.projects.findById(id);
     if (!project) throw new NotFoundException(`Project not found: ${id}`);
-    const role =
-      project.ownerId === userId ? "owner" : ((await this.members.find(id, userId))?.role ?? null);
+    const role = await this.resolveRoleForProject(userId, project);
     if (!role) throw new NotFoundException(`Project not found: ${id}`);
     if (!roleSatisfies(role, minRole)) {
       throw new ForbiddenException(`Requires ${minRole} role on project: ${id}`);

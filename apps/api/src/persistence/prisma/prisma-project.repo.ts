@@ -18,6 +18,7 @@ function toRecord(p: Project): ProjectRecord {
   return {
     id: p.id,
     ownerId: p.ownerId,
+    tenantId: p.tenantId,
     name: p.name,
     slug: p.slug,
     description: p.description,
@@ -77,6 +78,15 @@ export class PrismaProjectRepo extends ProjectRepo {
   async findByIds(ids: string[]): Promise<ProjectRecord[]> {
     if (ids.length === 0) return [];
     const projects = await this.prisma.project.findMany({ where: { id: { in: ids } } });
+    return projects.map(toRecord);
+  }
+
+  async listByTenants(tenantIds: string[]): Promise<ProjectRecord[]> {
+    if (tenantIds.length === 0) return [];
+    const projects = await this.prisma.project.findMany({
+      where: { tenantId: { in: tenantIds } },
+      orderBy: { updatedAt: "desc" },
+    });
     return projects.map(toRecord);
   }
 

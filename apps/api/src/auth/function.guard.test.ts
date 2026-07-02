@@ -59,6 +59,9 @@ class StubTenantRepo extends TenantRepo {
   async findTenantIdForUser(): Promise<string | null> {
     return this.tenantId;
   }
+  async listTenantIdsForUser(): Promise<string[]> {
+    return this.tenantId ? [this.tenantId] : [];
+  }
   async isMember(): Promise<boolean> {
     return true;
   }

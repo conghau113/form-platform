@@ -31,6 +31,15 @@ export class PrismaTenantRepo extends TenantRepo {
     return membership?.tenantId ?? null;
   }
 
+  async listTenantIdsForUser(userId: string): Promise<string[]> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      select: { tenantId: true },
+    });
+    return memberships.map((m) => m.tenantId);
+  }
+
   async isMember(userId: string, tenantId: string): Promise<boolean> {
     const row = await this.prisma.membership.findUnique({
       where: { userId_tenantId: { userId, tenantId } },
