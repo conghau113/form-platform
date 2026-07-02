@@ -66,6 +66,10 @@ class FakeTenantRepo extends TenantRepo {
   async findTenantIdForUser(userId: string): Promise<string | null> {
     return this.map[userId] ?? null;
   }
+  async isMember(userId: string, tenantId: string): Promise<boolean> {
+    return this.map[userId] === tenantId;
+  }
+  async addMember(): Promise<void> {}
 }
 
 describe("OrgUnitsService", () => {

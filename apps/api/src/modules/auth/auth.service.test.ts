@@ -97,6 +97,14 @@ class FakeTenantRepo extends TenantRepo {
     return this.tenants.get(userId) ?? null;
   }
 
+  async isMember(userId: string, tenantId: string): Promise<boolean> {
+    return this.memberships.some((m) => m.userId === userId && m.tenantId === tenantId);
+  }
+
+  async addMember(tenantId: string, userId: string): Promise<void> {
+    if (!(await this.isMember(userId, tenantId))) this.memberships.push({ userId, tenantId });
+  }
+
   async ensurePersonalTenant(userId: string): Promise<string> {
     const tenantId = await this.ensureTenantForOwner(userId);
     if (!this.memberships.some((m) => m.userId === userId && m.tenantId === tenantId)) {
@@ -133,6 +141,9 @@ class FakeRbacRepo extends RbacRepo {
   async deleteRole(): Promise<void> {}
   async setRoleFunctions(): Promise<void> {}
   async listRoleFunctions(): Promise<never[]> {
+    return [];
+  }
+  async listTenantUsers(): Promise<never[]> {
     return [];
   }
   async setUserRoles(): Promise<void> {}

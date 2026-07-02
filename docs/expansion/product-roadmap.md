@@ -74,7 +74,8 @@ Ký hiệu: 🔒 = phụ thuộc ngoài (owner phải cung cấp) · ⭐ = nền
 > (A1 ✅ rotating + revocable)**, **`Tenant`+`Membership`+`Project.tenantId` (B1 ✅ personal-tenant/user)**,
 > **`OrgUnit` cây org/department per-tenant + `Membership.orgUnitId?` (B2 ✅)**,
 > **`Function`+`Role`+`RoleFunction`+`UserRole`+`@RequireFunction`+`FunctionGuard` (C1+C2+C4 ✅ — RBAC
-> function/role/enforcement; `*` superadmin auto-provision cho tenant owner)**,
+> function/role/enforcement; `*` superadmin auto-provision cho tenant owner; guard **any-of** từ D1)**,
+> **`AuditLog` + admin UI `/admin` + add-member + nav gate `useAuth().functions` (D1 ✅)**,
 > project-member role (editor/viewer), form-core datasource/reactions/conditions,
 > workflow engine, cookie-auth (access **15m** + refresh **30d** — A1). Vẫn 📋 PLANNED: `DataScope` (C3
 > data-scope org/department), client-custom `Function` (`tenantId?`), tenantId trên bảng khác (B3).
@@ -264,11 +265,45 @@ Phỏng mô hình EVN nhưng bằng Prisma; **KHÔNG hardcode role** — client 
   nâng cấp. Versioning catalog khi thêm quyền mới.
 - ⚠️ Phase LỚN nhất, dễ sai — làm additive, test kỹ, chốt **bộ function tối thiểu** trước, không mạ vàng.
 
-### Phase D — Admin panels (builder web) [phần owner nêu: quản lý form/user/workflow/version]
+### Phase D — Admin panels (builder web) [phần owner nêu: quản lý form/user/workflow/version] [D1 ✅ DONE 2026-07-02]
 Feature-folders mới trong `apps/builder` (theo convention `feature-module`), gated bởi function (C4).
 **Client-admin** cấu hình tenant của họ; **vendor-admin** quản tenant/installation:
 - **D1 — User & Role management:** liệt kê user, gán nhiều role, tạo/sửa role + gán permission chức năng,
   cấu hình data-scope (phòng ban/tổ chức). (phỏng `web-admin/userManager`)
+  > **✅ ĐÃ LÀM (2026-07-02) — owner chốt 3 quyết định (đánh giá lại theo suggestions.txt codex):**
+  > gộp **add-member-by-email** vào D1 (không có nó user-list luôn =1, không demo được gán role) ·
+  > gộp **audit-log write-side** (§8 — lẽ ra bật cùng C/D) · **phase kế = B3** (tenant-scoping reads).
+  > - **Backend (`apps/api`, additive):** `GET /rbac/users` (member + roleIds theo tenant, 1 query nested
+  >   include no-N+1) · `POST /rbac/users {email}` add-member (reuse `UserRepo.findByEmail`, email không
+  >   có → 404; idempotent qua `TenantRepo.addMember` upsert) · đóng known-gap C#1: `get/setUserRoles`
+  >   assert target CÓ Membership (`TenantRepo.isMember`) → 404 · `@RequireFunction` chuyển **any-of**
+  >   (`every`→`some`, mirror web-admin `hasPermissionForAccessPage`; route đa-code duy nhất:
+  >   `GET /rbac/roles` = `role.admin|user.admin` để user-admin đọc tên role) ·
+  >   **`findTenantIdForUser` tất định** (`orderBy createdAt asc` = membership cũ nhất = personal tenant
+  >   → bị thêm vào tenant khác KHÔNG đổi context) · **AuditLog** (model+migration `add_audit_log`,
+  >   string-ref không FK để log sống lâu hơn actor/target; `AuditRepo`+Prisma impl) ghi
+  >   `role.create/update/delete`, `role.set-functions`, `user.set-roles`, `member.add`.
+  > - **Builder (`apps/builder`):** seam §6.7 **`useAuth().functions`** (query `qk.myFunctions` trên
+  >   `GET /rbac/me/functions` + `functionsLoading`); `auth/functions.ts` thuần `hasFunction`/`hasAnyFunction`
+  >   (wildcard `*` MỘT chỗ); `nav.ts` `NavSection.anyFunction` — section `admin` bật, gate
+  >   `user.admin|role.admin`; feature-folder **`src/admin/`** (client/useAdmin react-query/AdminPage tabs
+  >   Người-dùng+Vai-trò gate theo function, deep-link không quyền → Result 403/UsersPanel thêm-member+gán-role/
+  >   RolesPanel CRUD+Checkbox-catalog, role `system` khóa); route `/admin`; mutation nào cũng invalidate
+  >   `qk.myFunctions` → nav gate tự cập nhật.
+  > - **Verify ALL PASS:** api typecheck · **178 test** (+9: rbac 14, guard any-of 7; 2 import-script test
+  >   hết skip vì Postgres bật) · builder typecheck · **379 test** (nav 5 + hasFunction 3; 1 flaky timeout
+  >   pass khi rerun) · biome 32 file · reviewer **PASS** (0 required fix) · **live-smoke UI MCP** (built
+  >   `node dist` + Vite): admin login → rail Quản trị → add-member user2 → tạo role "Biên tập" + grant
+  >   `form.manage,version.publish` (catalog 11 code, `*` ẩn ✓) → gán user2 → tag hiện; **AuditLog 4 action
+  >   đúng tenant/actor (psql)** ✓; negative: user2 login (thấy Quản trị của tenant CÁ NHÂN — đúng thiết kế
+  >   mọi user là admin tenant mình; user-list chỉ có mình = scope ✓) → tự bỏ role Admin → **rail mất
+  >   Quản trị NGAY + /admin Result 403 + API 403/403 (không phải 401 = guard ordering ✓)**, `me/functions`
+  >   `[]`; console sạch (chỉ log 403 chủ đích). Dọn data smoke. KHÔNG changeset (apps private).
+  > - **⚠️ Known-gap (advisory, không chặn):** (1) add-member không cần consent của target + 404 lộ
+  >   email-đã-đăng-ký (chỉ lộ cho user.admin — chấp nhận; invite thật = A2/SMTP); (2) audit `detail` chứa
+  >   PII (email) — D5 read/retention phải tôn trọng; (3) **active-tenant selection chưa có** — user
+  >   đa-tenant luôn resolve tenant cá nhân (tất định nhưng chưa switch được; làm cùng/sau B3); (4) member
+  >   được thêm chưa thấy project tenant (reads còn ownerId-scoped) — **đúng là việc của B3**.
 - **D2 — Form management:** danh sách form toàn tenant (không chỉ của mình), trạng thái publish/version,
   chuyển owner, khóa/xóa. (phỏng `form-management` mock)
 - **D3 — Workflow management:** danh sách workflow + instance đang chạy, ai đang xử lý bước nào.

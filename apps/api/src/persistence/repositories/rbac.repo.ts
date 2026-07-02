@@ -50,6 +50,15 @@ export interface RoleUpdateInput {
   description?: string | null;
 }
 
+/** A tenant member as the admin user list shows them (Phase D1): identity + the role ids they hold
+ *  **in this tenant** (a user may hold roles in other tenants; those are never listed here). */
+export interface TenantUserRecord {
+  id: string;
+  email: string;
+  displayName: string | null;
+  roleIds: string[];
+}
+
 export abstract class RbacRepo {
   /** Idempotently upsert the platform base function catalog (Phase C1; called at boot). */
   abstract seedFunctions(functions: FunctionSeed[]): Promise<void>;
@@ -70,6 +79,8 @@ export abstract class RbacRepo {
   abstract listRoleFunctions(roleId: string): Promise<string[]>;
 
   // --- User ↔ role assignments (many-to-many) ---
+  /** The tenant's members with the role ids each holds in that tenant (Phase D1 admin user list). */
+  abstract listTenantUsers(tenantId: string): Promise<TenantUserRecord[]>;
   /** Replace the set of role ids a user holds **within one tenant** (Phase C2). Scoped by `tenantId`
    *  so it never touches the user's assignments in other tenants (the roadmap targets multi-tenant). */
   abstract setUserRoles(userId: string, tenantId: string, roleIds: string[]): Promise<void>;

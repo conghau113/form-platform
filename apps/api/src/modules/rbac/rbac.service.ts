@@ -6,11 +6,20 @@ import {
   type OnModuleInit,
 } from "@nestjs/common";
 import { BASE_FUNCTIONS } from "../../auth/function-catalog.js";
-import type { FunctionRecord, RoleRecord } from "../../persistence/repositories/rbac.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
+import type {
+  FunctionRecord,
+  RoleRecord,
+  TenantUserRecord,
+} from "../../persistence/repositories/rbac.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { RbacRepo } from "../../persistence/repositories/rbac.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { UserRepo } from "../../persistence/repositories/user.repo.js";
+import type { AddMemberDto } from "./dto/add-member.dto.js";
 import type { SetRoleFunctionsDto } from "./dto/set-role-functions.dto.js";
 import type { SetUserRolesDto } from "./dto/set-user-roles.dto.js";
 import type { UpsertRoleDto } from "./dto/upsert-role.dto.js";
@@ -32,6 +41,8 @@ export class RbacService implements OnModuleInit {
   constructor(
     private readonly rbac: RbacRepo,
     private readonly tenants: TenantRepo,
+    private readonly users: UserRepo,
+    private readonly audit: AuditRepo,
   ) {}
 
   /** Seed the immutable base function catalog (idempotent; safe to run every boot). */
@@ -68,6 +79,14 @@ export class RbacService implements OnModuleInit {
         name: dto.name.trim(),
         description: dto.description?.trim() || null,
       });
+      await this.audit.record({
+        tenantId,
+        actorId: userId,
+        action: "role.create",
+        targetType: "role",
+        targetId: role.id,
+        detail: { name: role.name },
+      });
       return { ...role, functions: [] };
     } catch (err) {
       throw toConflict(err, `A role named "${dto.name.trim()}" already exists`);
@@ -75,11 +94,19 @@ export class RbacService implements OnModuleInit {
   }
 
   async updateRole(userId: string, id: string, dto: UpsertRoleDto): Promise<RoleWithFunctions> {
-    await this.requireEditableRole(userId, id); // tenant + non-system guard
+    const role = await this.requireEditableRole(userId, id); // tenant + non-system guard
     try {
       const updated = await this.rbac.updateRole(id, {
         name: dto.name?.trim(),
         description: dto.description === undefined ? undefined : dto.description?.trim() || null,
+      });
+      await this.audit.record({
+        tenantId: role.tenantId,
+        actorId: userId,
+        action: "role.update",
+        targetType: "role",
+        targetId: id,
+        detail: { name: updated.name },
       });
       return { ...updated, functions: await this.rbac.listRoleFunctions(id) };
     } catch (err) {
@@ -88,8 +115,16 @@ export class RbacService implements OnModuleInit {
   }
 
   async deleteRole(userId: string, id: string): Promise<void> {
-    await this.requireEditableRole(userId, id);
+    const role = await this.requireEditableRole(userId, id);
     await this.rbac.deleteRole(id);
+    await this.audit.record({
+      tenantId: role.tenantId,
+      actorId: userId,
+      action: "role.delete",
+      targetType: "role",
+      targetId: id,
+      detail: { name: role.name },
+    });
   }
 
   /** Replace a role's granted function codes; every code must exist in the catalog. */
@@ -101,22 +136,61 @@ export class RbacService implements OnModuleInit {
     const role = await this.requireEditableRole(userId, id);
     await this.assertKnownFunctions(dto.functions);
     await this.rbac.setRoleFunctions(id, dto.functions);
+    await this.audit.record({
+      tenantId: role.tenantId,
+      actorId: userId,
+      action: "role.set-functions",
+      targetType: "role",
+      targetId: id,
+      detail: { functions: dto.functions },
+    });
     return { ...role, functions: await this.rbac.listRoleFunctions(id) };
+  }
+
+  /** The caller's tenant members with the roles each holds (Phase D1 admin user list). */
+  async listUsers(userId: string): Promise<TenantUserRecord[]> {
+    const tenantId = await this.requireTenant(userId);
+    return this.rbac.listTenantUsers(tenantId);
+  }
+
+  /**
+   * Add an existing user to the caller's tenant by email (D1 — the first writer that grows a
+   * personal tenant into a team). Idempotent; the user arrives with no roles (assign separately).
+   * Real email invitations (users who don't exist yet) are Phase A2 (needs SMTP).
+   */
+  async addMember(userId: string, dto: AddMemberDto): Promise<TenantUserRecord[]> {
+    const tenantId = await this.requireTenant(userId);
+    const target = await this.users.findByEmail(dto.email.trim().toLowerCase());
+    // 404 reveals whether an email is registered — acceptable: the caller already holds user.admin.
+    if (!target) throw new NotFoundException(`No user with email: ${dto.email}`);
+    await this.tenants.addMember(tenantId, target.id);
+    await this.audit.record({
+      tenantId,
+      actorId: userId,
+      action: "member.add",
+      targetType: "user",
+      targetId: target.id,
+      detail: { email: target.email },
+    });
+    return this.rbac.listTenantUsers(tenantId);
   }
 
   /** The role ids currently assigned to a user (within the caller's tenant). */
   async getUserRoles(userId: string, targetUserId: string): Promise<string[]> {
     const tenantId = await this.requireTenant(userId);
+    await this.requireMember(targetUserId, tenantId);
     return this.rbac.listUserRoleIds(targetUserId, tenantId);
   }
 
-  /** Replace a user's assigned roles; every role must live in the caller's tenant. */
+  /** Replace a user's assigned roles; the target must be a tenant member and every role must live
+   *  in the caller's tenant. */
   async setUserRoles(
     userId: string,
     targetUserId: string,
     dto: SetUserRolesDto,
   ): Promise<string[]> {
     const tenantId = await this.requireTenant(userId);
+    await this.requireMember(targetUserId, tenantId);
     for (const roleId of dto.roleIds) {
       const role = await this.rbac.findRoleById(roleId);
       if (!role || role.tenantId !== tenantId) {
@@ -124,6 +198,14 @@ export class RbacService implements OnModuleInit {
       }
     }
     await this.rbac.setUserRoles(targetUserId, tenantId, dto.roleIds);
+    await this.audit.record({
+      tenantId,
+      actorId: userId,
+      action: "user.set-roles",
+      targetType: "user",
+      targetId: targetUserId,
+      detail: { roleIds: dto.roleIds },
+    });
     return this.rbac.listUserRoleIds(targetUserId, tenantId);
   }
 
@@ -132,6 +214,13 @@ export class RbacService implements OnModuleInit {
     const tenantId = await this.tenants.findTenantIdForUser(userId);
     if (!tenantId) throw new NotFoundException("No tenant for user");
     return tenantId;
+  }
+
+  /** Assert the target user is a member of the tenant → 404 otherwise (no existence leak). */
+  private async requireMember(targetUserId: string, tenantId: string): Promise<void> {
+    if (!(await this.tenants.isMember(targetUserId, tenantId))) {
+      throw new NotFoundException(`User not in tenant: ${targetUserId}`);
+    }
   }
 
   /** Load a role, assert it lives in the caller's tenant (404) and is not a system role (400). */

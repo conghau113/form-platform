@@ -8,6 +8,7 @@ import {
   type RoleCreateInput,
   type RoleRecord,
   type RoleUpdateInput,
+  type TenantUserRecord,
   WILDCARD_FUNCTION,
 } from "../repositories/rbac.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
@@ -112,6 +113,31 @@ export class PrismaRbacRepo extends RbacRepo {
       select: { functionCode: true },
     });
     return rows.map((r) => r.functionCode);
+  }
+
+  async listTenantUsers(tenantId: string): Promise<TenantUserRecord[]> {
+    // Members come from Membership (the tenant↔user link); each user's roles are filtered to this
+    // tenant so cross-tenant assignments never leak. One query with nested includes (no N+1).
+    const members = await this.prisma.membership.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            roles: { where: { role: { tenantId } }, select: { roleId: true } },
+          },
+        },
+      },
+    });
+    return members.map((m) => ({
+      id: m.user.id,
+      email: m.user.email,
+      displayName: m.user.displayName,
+      roleIds: m.user.roles.map((r) => r.roleId),
+    }));
   }
 
   async setUserRoles(userId: string, tenantId: string, roleIds: string[]): Promise<void> {

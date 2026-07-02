@@ -6,6 +6,12 @@
 export const qk = {
   // Current authenticated session (2B): the `/auth/me` probe that drives the auth gate.
   me: ["auth", "me"] as const,
+  // The session's effective function codes (D1): drives nav gating + the admin surface.
+  myFunctions: ["auth", "my-functions"] as const,
+  // RBAC admin data (D1): the platform function catalog, tenant roles, tenant members.
+  rbacFunctions: ["rbac", "functions"] as const,
+  rbacRoles: ["rbac", "roles"] as const,
+  rbacUsers: ["rbac", "users"] as const,
   projects: ["projects"] as const,
   projectTree: (projectId: string) => ["projects", projectId, "tree"] as const,
   presets: (projectId?: string) => ["presets", projectId ?? null] as const,

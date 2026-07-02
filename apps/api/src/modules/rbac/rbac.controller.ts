@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from "@nestjs/common";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import { RequireFunction } from "../../auth/require-function.decorator.js";
-import type { FunctionRecord } from "../../persistence/repositories/rbac.repo.js";
+import type { FunctionRecord, TenantUserRecord } from "../../persistence/repositories/rbac.repo.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { AddMemberDto } from "./dto/add-member.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { SetRoleFunctionsDto } from "./dto/set-role-functions.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
@@ -35,8 +37,9 @@ export class RbacController {
     return this.rbac.listFunctions();
   }
 
+  /** Any-of gate: the user admin also needs the tenant's roles (names) to display/assign them. */
   @Get("roles")
-  @RequireFunction("role.admin")
+  @RequireFunction("role.admin", "user.admin")
   listRoles(@CurrentOwner() userId: string): Promise<RoleWithFunctions[]> {
     return this.rbac.listRoles(userId);
   }
@@ -76,6 +79,23 @@ export class RbacController {
     @Body() dto: SetRoleFunctionsDto,
   ): Promise<RoleWithFunctions> {
     return this.rbac.setRoleFunctions(userId, id, dto);
+  }
+
+  /** The tenant's members with the roles each holds (drives the admin user list). */
+  @Get("users")
+  @RequireFunction("user.admin")
+  listUsers(@CurrentOwner() userId: string): Promise<TenantUserRecord[]> {
+    return this.rbac.listUsers(userId);
+  }
+
+  /** Add an existing user (by email) to the caller's tenant; returns the refreshed member list. */
+  @Post("users")
+  @RequireFunction("user.admin")
+  addMember(
+    @CurrentOwner() userId: string,
+    @Body() dto: AddMemberDto,
+  ): Promise<TenantUserRecord[]> {
+    return this.rbac.addMember(userId, dto);
   }
 
   @Get("users/:userId/roles")

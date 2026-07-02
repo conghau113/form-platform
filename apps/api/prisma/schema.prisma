@@ -131,6 +131,23 @@ model Membership {
   @@index([tenantId])
 }
 
+/// Immutable audit trail of sensitive admin actions (product-roadmap §8; write-side lands with D1).
+/// Who (`actorId`) did what (`action`, e.g. `role.create`) to which target within a tenant. Plain
+/// string references — no FKs — so history survives deletion of the actor/target rows. The read/UI
+/// surface is Phase D5; this slice only appends.
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  actorId    String
+  action     String
+  targetType String?
+  targetId   String?
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
 /// Top-level container a user owns (e.g. "HR Platform"). W0 seeds one "Unfiled" project.
 model Project {
   id          String          @id @default(cuid())

@@ -18,9 +18,9 @@ import { REQUIRE_FUNCTION_KEY } from "./require-function.decorator.js";
  * Function-level authorization guard (product-roadmap Phase C4). Runs after {@link JwtAuthGuard}
  * (which stashes the verified principal on `req.user`). A route without {@link RequireFunction} is
  * not gated. Otherwise the caller's effective functions — the union of function codes over the roles
- * they hold in their tenant — must include **every** required code, unless they hold the `*`
- * superadmin code (a tenant admin). Missing tenant/principal → 401; insufficient functions → 403.
- * Server-side is the real boundary; the client only hides nav.
+ * they hold in their tenant — must include **any** required code (any-of, D1), unless they hold the
+ * `*` superadmin code (a tenant admin). No principal → 401; missing tenant or insufficient functions
+ * → 403. Server-side is the real boundary; the client only hides nav.
  */
 @Injectable()
 export class FunctionGuard implements CanActivate {
@@ -46,7 +46,7 @@ export class FunctionGuard implements CanActivate {
 
     const held = new Set(await this.rbac.resolveFunctions(userId, tenantId));
     if (held.has(WILDCARD_FUNCTION)) return true;
-    if (required.every((code) => held.has(code))) return true;
+    if (required.some((code) => held.has(code))) return true;
     throw new ForbiddenException(`Missing required permission: ${required.join(", ")}`);
   }
 }

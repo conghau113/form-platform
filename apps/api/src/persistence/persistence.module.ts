@@ -1,5 +1,6 @@
 import { Global, Module } from "@nestjs/common";
 import { PrismaService } from "./prisma/prisma.service.js";
+import { PrismaAuditRepo } from "./prisma/prisma-audit.repo.js";
 import { PrismaFolderRepo } from "./prisma/prisma-folder.repo.js";
 import { PrismaFormRepo } from "./prisma/prisma-form.repo.js";
 import { PrismaFormVersionRepo } from "./prisma/prisma-form-version.repo.js";
@@ -16,6 +17,7 @@ import { PrismaThemeRepo } from "./prisma/prisma-theme.repo.js";
 import { PrismaUserRepo } from "./prisma/prisma-user.repo.js";
 import { PrismaWorkflowRepo } from "./prisma/prisma-workflow.repo.js";
 import { PrismaWorkflowInstanceRepo } from "./prisma/prisma-workflow-instance.repo.js";
+import { AuditRepo } from "./repositories/audit.repo.js";
 import { FolderRepo } from "./repositories/folder.repo.js";
 import { FormRepo } from "./repositories/form.repo.js";
 import { FormVersionRepo } from "./repositories/form-version.repo.js";
@@ -58,6 +60,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: TenantRepo, useClass: PrismaTenantRepo },
     { provide: OrgUnitRepo, useClass: PrismaOrgUnitRepo },
     { provide: RbacRepo, useClass: PrismaRbacRepo },
+    { provide: AuditRepo, useClass: PrismaAuditRepo },
   ],
   exports: [
     PrismaService,
@@ -77,6 +80,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     TenantRepo,
     OrgUnitRepo,
     RbacRepo,
+    AuditRepo,
   ],
 })
 export class PersistenceModule {}

@@ -28,6 +28,18 @@ export async function fetchMe(): Promise<UserProfile | null> {
   return (await res.json()) as UserProfile;
 }
 
+/**
+ * The caller's effective function codes (union over their roles; `*` = tenant admin). Drives the
+ * nav gate + admin pages (D1). An anonymous/expired session reads as "no functions" rather than
+ * an error so the shell can render while auth settles.
+ */
+export async function fetchMyFunctions(): Promise<string[]> {
+  const res = await apiFetch(`${API_BASE}/rbac/me/functions`);
+  if (res.status === 401) return [];
+  if (!res.ok) throw new Error(`Load permissions failed: ${await readError(res)}`);
+  return (await res.json()) as string[];
+}
+
 export async function login(email: string, password: string): Promise<UserProfile> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",

@@ -36,6 +36,9 @@ class StubRbacRepo extends RbacRepo {
   async listRoleFunctions(): Promise<never[]> {
     return [];
   }
+  async listTenantUsers(): Promise<never[]> {
+    return [];
+  }
   async setUserRoles(): Promise<void> {}
   async listUserRoleIds(): Promise<never[]> {
     return [];
@@ -56,6 +59,10 @@ class StubTenantRepo extends TenantRepo {
   async findTenantIdForUser(): Promise<string | null> {
     return this.tenantId;
   }
+  async isMember(): Promise<boolean> {
+    return true;
+  }
+  async addMember(): Promise<void> {}
 }
 
 /** Build an ExecutionContext exposing a request with the given principal + a fixed required-metadata. */
@@ -98,6 +105,16 @@ describe("FunctionGuard", () => {
     await expect(guard.canActivate(ctx(alice, ["role.admin"]))).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  it("any-of: allows when the caller holds one of several required functions (D1)", async () => {
+    const required = ["role.admin", "user.admin"];
+    expect(
+      await guardWith(required, ["user.admin"], "tenantA").canActivate(ctx(alice, required)),
+    ).toBe(true);
+    await expect(
+      guardWith(required, ["form.manage"], "tenantA").canActivate(ctx(alice, required)),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("401s when there is no authenticated principal", async () => {

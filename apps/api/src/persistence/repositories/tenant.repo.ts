@@ -22,8 +22,14 @@ export abstract class TenantRepo {
   /**
    * Read-side complement (B2): the tenant a user belongs to via their `Membership`, or `null` when the
    * user has none. Used to resolve the caller's tenant on requests (every logged-in user has one — B1).
+   * Deterministic for multi-membership users (D1 add-member): the **oldest** membership wins, which is
+   * the personal tenant created at register — being added to another tenant never flips a user's context.
    */
   abstract findTenantIdForUser(userId: string): Promise<string | null>;
+  /** Whether the user holds a `Membership` in the tenant (D1: role assignment targets members only). */
+  abstract isMember(userId: string, tenantId: string): Promise<boolean>;
+  /** Add a user to a tenant (idempotent upsert on the userId+tenantId unique — D1 add-member). */
+  abstract addMember(tenantId: string, userId: string): Promise<void>;
   /**
    * Get-or-create the user's personal tenant **and** their membership in it, returning the tenant id
    * (idempotent). Requires a real `User` (membership FKs to `User`), so this is the login/register

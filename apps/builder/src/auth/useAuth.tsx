@@ -11,6 +11,12 @@ export type AuthStatus = "loading" | "authed" | "anon";
 export interface AuthContextValue {
   user: UserProfile | null;
   status: AuthStatus;
+  /** The session's effective function codes (D1 nav gate; `*` = tenant admin). Empty while
+   *  loading or anonymous — surfaces gated on it appear once the probe lands. */
+  functions: string[];
+  /** True while the functions probe is still in flight (authed only) — gated pages show a spinner
+   *  instead of flashing "no access". */
+  functionsLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -26,6 +32,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const query = useQuery({ queryKey: qk.me, queryFn: api.fetchMe, staleTime: 5 * 60_000 });
+  // Permissions ride a second query keyed to the session: it only runs once authed, and logout's
+  // cache clear drops it with everything else. Role changes elsewhere invalidate qk.myFunctions.
+  const fnQuery = useQuery({
+    queryKey: qk.myFunctions,
+    queryFn: api.fetchMyFunctions,
+    enabled: !!query.data,
+    staleTime: 5 * 60_000,
+  });
 
   // When a background refresh fails (session truly over), drop to anon so RequireAuth redirects.
   useEffect(() => {
@@ -59,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {
       user,
       status,
+      functions: fnQuery.data ?? [],
+      functionsLoading: !!user && fnQuery.isPending,
       login: async (email, password) => {
         await loginM.mutateAsync({ email, password });
       },
@@ -69,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await logoutM.mutateAsync();
       },
     };
-  }, [query.data, query.isPending, loginM, registerM, logoutM]);
+  }, [query.data, query.isPending, fnQuery.data, fnQuery.isPending, loginM, registerM, logoutM]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

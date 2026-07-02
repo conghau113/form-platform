@@ -1,13 +1,14 @@
-import { AppstoreOutlined, SettingOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, SettingOutlined, TeamOutlined } from "@ant-design/icons";
 import { Menu, Tooltip } from "antd";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { UserMenu } from "../auth";
+import { UserMenu, useAuth } from "../auth";
 import { activeNavKey, visibleSections } from "./nav";
 
 /** Icon per section key. Kept here (not in the pure `nav.ts`) so the catalog stays JSX-free. */
 const SECTION_ICONS: Record<string, ReactNode> = {
   design: <AppstoreOutlined />,
+  admin: <TeamOutlined />,
 };
 
 /**
@@ -18,7 +19,9 @@ const SECTION_ICONS: Record<string, ReactNode> = {
 export function NavRail() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const active = activeNavKey(pathname);
+  const { functions } = useAuth();
+  const sections = visibleSections(functions);
+  const active = activeNavKey(pathname, functions);
   const onSettings = pathname === "/settings" || pathname.startsWith("/settings/");
 
   return (
@@ -38,10 +41,10 @@ export function NavRail() {
         selectedKeys={active ? [active] : []}
         style={{ borderInlineEnd: "none" }}
         onClick={({ key }) => {
-          const section = visibleSections().find((s) => s.key === key);
+          const section = sections.find((s) => s.key === key);
           if (section) navigate(section.path);
         }}
-        items={visibleSections().map((s) => ({
+        items={sections.map((s) => ({
           key: s.key,
           icon: SECTION_ICONS[s.key],
           label: s.label,

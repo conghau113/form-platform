@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { AdminPage } from "./admin/index.js";
 import { AuthProvider, LoginPage, RequireAuth } from "./auth/index.js";
 import { createQueryClient } from "./query/index.js";
 import { AppShell, SettingsPage } from "./shell/index.js";
@@ -36,6 +37,7 @@ const router = createBrowserRouter(
           children: [
             { path: "/", element: <Navigate to="/projects" replace /> },
             { path: "/projects", element: <ProjectsPage /> },
+            { path: "/admin", element: <AdminPage /> },
             { path: "/settings", element: <SettingsPage /> },
             {
               path: "/projects/:projectId",

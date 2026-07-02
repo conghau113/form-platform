@@ -22,8 +22,29 @@ export class PrismaTenantRepo extends TenantRepo {
   }
 
   async findTenantIdForUser(userId: string): Promise<string | null> {
-    const membership = await this.prisma.membership.findFirst({ where: { userId } });
+    // Oldest membership wins (deterministic): that is the personal tenant created at register, so a
+    // user added to another tenant (D1 add-member) keeps resolving to their own context.
+    const membership = await this.prisma.membership.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    });
     return membership?.tenantId ?? null;
+  }
+
+  async isMember(userId: string, tenantId: string): Promise<boolean> {
+    const row = await this.prisma.membership.findUnique({
+      where: { userId_tenantId: { userId, tenantId } },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
+  async addMember(tenantId: string, userId: string): Promise<void> {
+    await this.prisma.membership.upsert({
+      where: { userId_tenantId: { userId, tenantId } },
+      update: {},
+      create: { userId, tenantId },
+    });
   }
 
   async ensurePersonalTenant(userId: string, name?: string): Promise<string> {

@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { beforeEach, describe, expect, it } from "vitest";
 import { BASE_FUNCTIONS } from "../../auth/function-catalog.js";
+import { type AuditEntry, AuditRepo } from "../../persistence/repositories/audit.repo.js";
 import {
   type FunctionRecord,
   type FunctionSeed,
@@ -8,9 +9,11 @@ import {
   type RoleCreateInput,
   type RoleRecord,
   type RoleUpdateInput,
+  type TenantUserRecord,
   WILDCARD_FUNCTION,
 } from "../../persistence/repositories/rbac.repo.js";
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
+import { type UserRecord, UserRepo } from "../../persistence/repositories/user.repo.js";
 import { RbacService } from "./rbac.service.js";
 
 let seq = 0;
@@ -80,6 +83,10 @@ class FakeRbacRepo extends RbacRepo {
   async listRoleFunctions(roleId: string): Promise<string[]> {
     return [...(this.roleFns.get(roleId) ?? [])];
   }
+  tenantUsers = new Map<string, TenantUserRecord[]>(); // tenantId -> member records
+  async listTenantUsers(tenantId: string): Promise<TenantUserRecord[]> {
+    return this.tenantUsers.get(tenantId) ?? [];
+  }
   async setUserRoles(userId: string, tenantId: string, roleIds: string[]): Promise<void> {
     // Keep this user's roles in other tenants; replace only those in `tenantId`.
     const kept = [...(this.userRoles.get(userId) ?? [])].filter(
@@ -107,12 +114,13 @@ class FakeRbacRepo extends RbacRepo {
   }
 }
 
-/** Two users in two tenants: alice→tenant A, bob→tenant B. */
+/** Two users in two tenants: alice→tenant A, bob→tenant B. `map` seeds the memberships. */
 class FakeTenantRepo extends TenantRepo {
   map = new Map<string, string>([
     ["alice", "tenantA"],
     ["bob", "tenantB"],
   ]);
+  added: Array<{ tenantId: string; userId: string }> = [];
   async ensureTenantForOwner(ownerId: string): Promise<string> {
     return this.map.get(ownerId) ?? ownerId;
   }
@@ -122,17 +130,60 @@ class FakeTenantRepo extends TenantRepo {
   async findTenantIdForUser(userId: string): Promise<string | null> {
     return this.map.get(userId) ?? null;
   }
+  async isMember(userId: string, tenantId: string): Promise<boolean> {
+    if (this.map.get(userId) === tenantId) return true;
+    return this.added.some((m) => m.userId === userId && m.tenantId === tenantId);
+  }
+  async addMember(tenantId: string, userId: string): Promise<void> {
+    if (!(await this.isMember(userId, tenantId))) this.added.push({ tenantId, userId });
+  }
+}
+
+/** Accounts findable by email (for add-member). */
+class FakeUserRepo extends UserRepo {
+  byEmail = new Map<string, UserRecord>();
+  seed(id: string, email: string): void {
+    this.byEmail.set(email, {
+      id,
+      email,
+      passwordHash: "x",
+      displayName: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+  async findByEmail(email: string): Promise<UserRecord | null> {
+    return this.byEmail.get(email) ?? null;
+  }
+  async findById(): Promise<UserRecord | null> {
+    return null;
+  }
+  async create(): Promise<UserRecord> {
+    throw new Error("not used");
+  }
+}
+
+/** Captures audit writes so tests can assert who-did-what was recorded. */
+class FakeAuditRepo extends AuditRepo {
+  entries: AuditEntry[] = [];
+  async record(entry: AuditEntry): Promise<void> {
+    this.entries.push(entry);
+  }
 }
 
 describe("RbacService", () => {
   let rbac: FakeRbacRepo;
   let tenants: FakeTenantRepo;
+  let users: FakeUserRepo;
+  let audit: FakeAuditRepo;
   let service: RbacService;
 
   beforeEach(async () => {
     rbac = new FakeRbacRepo();
     tenants = new FakeTenantRepo();
-    service = new RbacService(rbac, tenants);
+    users = new FakeUserRepo();
+    audit = new FakeAuditRepo();
+    service = new RbacService(rbac, tenants, users, audit);
     await service.onModuleInit(); // seed the catalog
   });
 
@@ -195,5 +246,59 @@ describe("RbacService", () => {
     await expect(
       service.setUserRoles("bob", "bob", { roleIds: [roleA.id] }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("lists the caller's tenant members (D1 user list)", async () => {
+    const record = { id: "alice", email: "a@x.dev", displayName: null, roleIds: [] };
+    rbac.tenantUsers.set("tenantA", [record]);
+    expect(await service.listUsers("alice")).toEqual([record]);
+    expect(await service.listUsers("bob")).toEqual([]); // scoped to the caller's tenant
+  });
+
+  it("adds an existing user to the caller's tenant by email (idempotent)", async () => {
+    users.seed("dave", "dave@x.dev");
+    await service.addMember("alice", { email: "  Dave@X.dev " }); // normalized lookup
+    await service.addMember("alice", { email: "dave@x.dev" });
+    expect(tenants.added).toEqual([{ tenantId: "tenantA", userId: "dave" }]);
+    expect(audit.entries.filter((e) => e.action === "member.add")).toHaveLength(2);
+  });
+
+  it("404s adding an email with no account (invitations are Phase A2)", async () => {
+    await expect(service.addMember("alice", { email: "ghost@x.dev" })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it("404s role reads/writes when the target is not a tenant member", async () => {
+    await expect(service.getUserRoles("alice", "bob")).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.setUserRoles("alice", "bob", { roleIds: [] })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it("assigns roles to a member added from another personal tenant", async () => {
+    users.seed("bob", "bob@x.dev");
+    await service.addMember("alice", { email: "bob@x.dev" }); // bob joins tenant A
+    const role = await service.createRole("alice", { name: "Editor" });
+    expect(await service.setUserRoles("alice", "bob", { roleIds: [role.id] })).toEqual([role.id]);
+  });
+
+  it("audits sensitive mutations with tenant + actor (§8 write-side)", async () => {
+    const role = await service.createRole("alice", { name: "Designer" });
+    await service.setRoleFunctions("alice", role.id, { functions: ["form.manage"] });
+    await service.updateRole("alice", role.id, { name: "Design" });
+    await service.setUserRoles("alice", "alice", { roleIds: [role.id] });
+    await service.deleteRole("alice", role.id);
+    expect(audit.entries.map((e) => e.action)).toEqual([
+      "role.create",
+      "role.set-functions",
+      "role.update",
+      "user.set-roles",
+      "role.delete",
+    ]);
+    for (const e of audit.entries) {
+      expect(e.tenantId).toBe("tenantA");
+      expect(e.actorId).toBe("alice");
+    }
   });
 });
