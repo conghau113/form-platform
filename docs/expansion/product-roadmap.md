@@ -72,9 +72,10 @@ Ký hiệu: 🔒 = phụ thuộc ngoài (owner phải cung cấp) · ⭐ = nền
 > kế phỏng từ reference ngoài (EVN/web-admin/estd). Xem **§7 Evidence ledger** để biết cái gì đọc-từ-source
 > vs suy-luận. Repo hiện có: `/api` proxy (2B), `User`(id/email/passwordHash/displayName), **`RefreshToken`
 > (A1 ✅ rotating + revocable)**, **`Tenant`+`Membership`+`Project.tenantId` (B1 ✅ personal-tenant/user)**,
+> **`OrgUnit` cây org/department per-tenant + `Membership.orgUnitId?` (B2 ✅)**,
 > project-member role (editor/viewer), form-core datasource/reactions/conditions,
 > workflow engine, cookie-auth (access **15m** + refresh **30d** — A1). Vẫn 📋 PLANNED: `UserRole`,`DataScope`,
-> `Function`,`Role`,`RoleFunction`,`@RequireFunction`,`FunctionGuard`, org/department, tenantId trên bảng khác.
+> `Function`,`Role`,`RoleFunction`,`@RequireFunction`,`FunctionGuard`, tenantId trên bảng khác (B3).
 
 ### Phase 0 — Nền tảng môi trường & cấu hình (LÀM NGAY — owner yêu cầu) ⭐ ✅ DONE (2026-07-01)
 Mục tiêu: 3 môi trường **dev / test / production** cho cả `api` (NestJS) và `builder` (Vite), base-path
@@ -144,7 +145,7 @@ env-driven, secret CHỈ ở `.env` phía API.
   callback, liên kết account theo email đã verify. Cần **Google client-id/secret/redirect**.
 - Δ nhỏ: `User` thêm `emailVerifiedAt?`, `authProvider?`. Additive.
 
-### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1 ✅ DONE 2026-07-02; B2–B4 📋 PLANNED] [làm TRƯỚC RBAC]
+### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1+B2 ✅ DONE 2026-07-02; B3–B4 📋 PLANNED] [làm TRƯỚC RBAC]
 Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 tenant). RBAC/form/workflow
 đều **scope theo tenant + org/phòng ban** nên hạ tầng này phải có TRƯỚC.
 - **B1 — Tenant model:** `Tenant`(installation của 1 client) + `Membership`(user thuộc tenant, có thể nhiều
@@ -176,6 +177,26 @@ Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 te
   > - **Seam Phase C/B3:** `tenantId` sẵn trên Project + membership/user; B3 gắn tenantId mọi bảng + scope-guard.
 - **B2 — Org/Department hierarchy** (phỏng EVN `Organization`+`Department`, `parent` phân cấp): client tự
   khai cây đơn vị/phòng ban của họ (DATA, không hardcode). User gắn org/department.
+  > **✅ ĐÃ LÀM (2026-07-02) — cây `OrgUnit` HỢP NHẤT (không copy 2-entity EVN):** đã đọc source EVN
+  > (`core-service` `Organization` `code/name/parent_code` + `Department` `code/name/parent_code/organization_code/level`
+  > = **2 entity**). **Quyết định (§1.1 primitive tổng quát, KHÔNG hardcode EVN):** làm **1 cây `OrgUnit`
+  > tự-tham-chiếu, scope theo tenant** + nhãn tùy chọn `kind` ("organization"/"department"/client đặt) — client
+  > dựng độ sâu tùy ý; KHÔNG nhét mô hình 2-tầng EVN vào code vendor. Mirror pattern `Folder` sẵn có.
+  > - **Schema (additive):** model `OrgUnit`(id/tenantId/parentId?/name/kind?/order, cây `OrgUnitTree` Cascade,
+  >   `@@index([tenantId,parentId])`) + `Membership.orgUnitId?`(FK SetNull = **seam đặt user**, writer ở Phase D)
+  >   + `Tenant.orgUnits`. Migration `20260702070520_add_org_unit` thuần additive (bảng mới + cột nullable, **không backfill**).
+  > - **Repo/feature:** `OrgUnitRepo`+`PrismaOrgUnitRepo` (mirror FolderRepo) wire persistence.module; thêm
+  >   `TenantRepo.findTenantIdForUser` (đọc Membership → resolve tenant caller). Module `modules/org-units/`
+  >   (service/controller/dto mirror `folders/`): **scope theo tenant MỌI op** — create trong tenant caller,
+  >   update/delete load-by-id + assert `tenantId` khớp → **404** (no existence leak); move cycle **TÁI DÙNG
+  >   `wouldCreateCycle`** (folders); non-empty delete → 409 trừ `?cascade=true`. Route `GET/POST/PATCH/DELETE /org-units`.
+  > - **★ Enforcement cross-tenant THẬT đầu tiên** (nhưng chỉ trên resource mới; query owner-scoped cũ chưa đụng = B3).
+  > - **Verify ALL PASS:** api typecheck · **156 test** (org-units +5: tenant-scope/cross-tenant-404/cycle-409/
+  >   non-empty-delete) · biome · **KHÔNG changeset** (app private) · reviewer **PASS** (no fix; advisory:
+  >   `findFirst` chưa order — ok personal-tenant; đã fix normalize `kind` trong update) · **live-smoke Postgres**
+  >   (tạo cây 3 node→list→move→cycle 409→non-empty 409→cascade 204→empty; user mới list rỗng + PATCH/DELETE
+  >   unit tenant khác → 404). Dọn data + orphan tenant + temp script.
+  > - **Chưa làm (Phase D/C):** UI admin org, endpoint gán user↔orgUnit (writer của `orgUnitId`), data-scope RBAC.
 - **B3 — Tenant-scoping:** mọi bảng dữ liệu (project/form/workflow/submission/preset…) gắn `tenantId`;
   repository lọc theo tenant tập trung (guard/interceptor) — **chống rò dữ liệu chéo tenant** (rủi ro chính).
 - **Hai tầng admin:** vendor-admin (quản tenant) vs client-admin (quản trong tenant). Onboarding tenant.

@@ -8,6 +8,7 @@ import { AuthModule } from "./modules/auth/auth.module.js";
 import { FoldersModule } from "./modules/folders/folders.module.js";
 import { FormsModule } from "./modules/forms/forms.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
+import { OrgUnitsModule } from "./modules/org-units/org-units.module.js";
 import { PresetsModule } from "./modules/presets/presets.module.js";
 import { ProjectsModule } from "./modules/projects/projects.module.js";
 import { StatusCatalogModule } from "./modules/status-catalog/status-catalog.module.js";
@@ -50,6 +51,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     AuthModule,
     HealthModule,
     ProjectsModule,
+    OrgUnitsModule,
     FoldersModule,
     FormsModule,
     WorkflowsModule,

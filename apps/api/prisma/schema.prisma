@@ -22,8 +22,30 @@ model Tenant {
   kind      String       @default("personal")
   members   Membership[]
   projects  Project[]
+  orgUnits  OrgUnit[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+}
+
+/// A node in a tenant's organisational tree (product-roadmap Phase B2). A single unified adjacency-list
+/// tree (`parentId`) — a client models any depth (đơn vị → phòng ban → tổ…) with an optional free-form
+/// `kind` label, rather than the platform hardcoding EVN's Organization/Department split. Users attach
+/// via `Membership.orgUnitId` (Phase D). Data-scope RBAC (Phase C) will grant permissions per org unit.
+model OrgUnit {
+  id        String       @id @default(cuid())
+  tenantId  String
+  parentId  String?
+  name      String
+  kind      String?
+  order     Int          @default(0)
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent    OrgUnit?     @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  OrgUnit[]    @relation("OrgUnitTree")
+  members   Membership[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([tenantId, parentId])
 }
 
 /// A user's membership in a tenant (product-roadmap Phase B1). A user may belong to several tenants;
@@ -33,9 +55,12 @@ model Membership {
   id        String   @id @default(cuid())
   userId    String
   tenantId  String
+  /// The user's placement in the tenant's org tree (B2 seam; the writer arrives with Phase D admin).
+  orgUnitId String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orgUnit   OrgUnit? @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
 
   @@unique([userId, tenantId])
   @@index([tenantId])

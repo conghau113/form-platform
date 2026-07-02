@@ -20,6 +20,11 @@ export abstract class TenantRepo {
    */
   abstract ensureTenantForOwner(ownerId: string, name?: string): Promise<string>;
   /**
+   * Read-side complement (B2): the tenant a user belongs to via their `Membership`, or `null` when the
+   * user has none. Used to resolve the caller's tenant on requests (every logged-in user has one — B1).
+   */
+  abstract findTenantIdForUser(userId: string): Promise<string | null>;
+  /**
    * Get-or-create the user's personal tenant **and** their membership in it, returning the tenant id
    * (idempotent). Requires a real `User` (membership FKs to `User`), so this is the login/register
    * provisioning path — establishing "every logged-in user has a tenant + membership".

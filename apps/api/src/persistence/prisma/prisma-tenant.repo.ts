@@ -21,6 +21,11 @@ export class PrismaTenantRepo extends TenantRepo {
     return tenant.id;
   }
 
+  async findTenantIdForUser(userId: string): Promise<string | null> {
+    const membership = await this.prisma.membership.findFirst({ where: { userId } });
+    return membership?.tenantId ?? null;
+  }
+
   async ensurePersonalTenant(userId: string, name?: string): Promise<string> {
     const tenantId = await this.ensureTenantForOwner(userId, name);
     await this.prisma.membership.upsert({

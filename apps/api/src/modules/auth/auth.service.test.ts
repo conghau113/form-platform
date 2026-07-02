@@ -92,6 +92,10 @@ class FakeTenantRepo extends TenantRepo {
     return tenantId;
   }
 
+  async findTenantIdForUser(userId: string): Promise<string | null> {
+    return this.tenants.get(userId) ?? null;
+  }
+
   async ensurePersonalTenant(userId: string): Promise<string> {
     const tenantId = await this.ensureTenantForOwner(userId);
     if (!this.memberships.some((m) => m.userId === userId && m.tenantId === tenantId)) {
