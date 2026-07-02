@@ -11,13 +11,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Installation of a single client (product-roadmap Phase B1). `1 tenant = 1 client`. Existing
+/// data is backfilled to a personal tenant per distinct `ownerId` (preserving today's isolation);
+/// new users get one on first login via `TenantRepo.ensurePersonalTenant`. `kind` is the edition
+/// seam (personal|team|enterprise, §6.7). Org/department (B2) and RBAC roles (Phase C) attach later.
+model Tenant {
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  kind      String       @default("personal")
+  members   Membership[]
+  projects  Project[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+/// A user's membership in a tenant (product-roadmap Phase B1). A user may belong to several tenants;
+/// in the personal-tenant model there is exactly one. Role/permissions within a tenant are Phase C
+/// (RBAC) — this row only records the link.
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+}
+
 /// Top-level container a user owns (e.g. "HR Platform"). W0 seeds one "Unfiled" project.
 model Project {
   id          String          @id @default(cuid())
   ownerId     String
+  /// Owning tenant (B1). Derived from `ownerId` (1:1 personal tenant) at write time; populated on
+  /// every row by the B1 backfill. `ownerId` stays the canonical creator + Track-W project-owner role.
+  tenantId    String
   name        String
   slug        String
   description String?
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   folders     Folder[]
   forms       FormRecord[]
   workflows   WorkflowRecord[]
@@ -31,6 +65,7 @@ model Project {
   updatedAt   DateTime        @updatedAt
 
   @@unique([ownerId, slug])
+  @@index([tenantId])
 }
 
 /// Sharing grant for a collaborator (W5). The canonical owner stays `Project.ownerId` (always
@@ -59,6 +94,7 @@ model User {
   passwordHash  String
   displayName   String?
   refreshTokens RefreshToken[]
+  memberships   Membership[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }

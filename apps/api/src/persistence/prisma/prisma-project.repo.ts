@@ -7,6 +7,8 @@ import {
   type ProjectUpdateInput,
 } from "../repositories/project.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { TenantRepo } from "../repositories/tenant.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { PrismaService } from "./prisma.service.js";
 
 /** Slug of the default landing project that adopts forms with no explicit project (W0). */
@@ -26,23 +28,31 @@ function toRecord(p: Project): ProjectRecord {
 
 @Injectable()
 export class PrismaProjectRepo extends ProjectRepo {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenants: TenantRepo,
+  ) {
     super();
   }
 
   async ensureUnfiled(ownerId: string): Promise<ProjectRecord> {
+    // Derive the owning tenant from the owner (1:1 personal tenant, B1); idempotent, and membership-
+    // free so it works for owners without a User row (e.g. the import script / legacy data).
+    const tenantId = await this.tenants.ensureTenantForOwner(ownerId);
     const project = await this.prisma.project.upsert({
       where: { ownerId_slug: { ownerId, slug: UNFILED_SLUG } },
       update: {},
-      create: { ownerId, slug: UNFILED_SLUG, name: "Unfiled" },
+      create: { ownerId, tenantId, slug: UNFILED_SLUG, name: "Unfiled" },
     });
     return toRecord(project);
   }
 
   async create(input: ProjectCreateInput): Promise<ProjectRecord> {
+    const tenantId = await this.tenants.ensureTenantForOwner(input.ownerId);
     const project = await this.prisma.project.create({
       data: {
         ownerId: input.ownerId,
+        tenantId,
         name: input.name,
         slug: input.slug,
         description: input.description ?? null,

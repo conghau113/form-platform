@@ -9,6 +9,7 @@ import { PrismaService } from "../persistence/prisma/prisma.service.js";
 import { PrismaFormRepo } from "../persistence/prisma/prisma-form.repo.js";
 import { PrismaPresetRepo } from "../persistence/prisma/prisma-preset.repo.js";
 import { PrismaProjectRepo } from "../persistence/prisma/prisma-project.repo.js";
+import { PrismaTenantRepo } from "../persistence/prisma/prisma-tenant.repo.js";
 import { PrismaThemeRepo } from "../persistence/prisma/prisma-theme.repo.js";
 
 const THEME_SUFFIX = ".theme.json";
@@ -31,7 +32,7 @@ export async function importFilesToDb(
   dataDir: string,
   prisma: PrismaService,
 ): Promise<ImportResult> {
-  const projects = new PrismaProjectRepo(prisma);
+  const projects = new PrismaProjectRepo(prisma, new PrismaTenantRepo(prisma));
   const forms = new PrismaFormRepo(prisma);
   const themes = new PrismaThemeRepo(prisma);
   const presets = new PrismaPresetRepo(prisma);

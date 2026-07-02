@@ -71,8 +71,10 @@ Ký hiệu: 🔒 = phụ thuộc ngoài (owner phải cung cấp) · ⭐ = nền
 > `@RequireFunction`,`FunctionGuard`,`VITE_BASE_PATH`/router-basename/nginx-base — **CHƯA tồn tại**, là thiết
 > kế phỏng từ reference ngoài (EVN/web-admin/estd). Xem **§7 Evidence ledger** để biết cái gì đọc-từ-source
 > vs suy-luận. Repo hiện có: `/api` proxy (2B), `User`(id/email/passwordHash/displayName), **`RefreshToken`
-> (A1 ✅ rotating + revocable)**, project-member role (editor/viewer), form-core datasource/reactions/conditions,
-> workflow engine, cookie-auth (access **15m** + refresh **30d** — A1).
+> (A1 ✅ rotating + revocable)**, **`Tenant`+`Membership`+`Project.tenantId` (B1 ✅ personal-tenant/user)**,
+> project-member role (editor/viewer), form-core datasource/reactions/conditions,
+> workflow engine, cookie-auth (access **15m** + refresh **30d** — A1). Vẫn 📋 PLANNED: `UserRole`,`DataScope`,
+> `Function`,`Role`,`RoleFunction`,`@RequireFunction`,`FunctionGuard`, org/department, tenantId trên bảng khác.
 
 ### Phase 0 — Nền tảng môi trường & cấu hình (LÀM NGAY — owner yêu cầu) ⭐ ✅ DONE (2026-07-01)
 Mục tiêu: 3 môi trường **dev / test / production** cho cả `api` (NestJS) và `builder` (Vite), base-path
@@ -142,11 +144,36 @@ env-driven, secret CHỈ ở `.env` phía API.
   callback, liên kết account theo email đã verify. Cần **Google client-id/secret/redirect**.
 - Δ nhỏ: `User` thêm `emailVerifiedAt?`, `authProvider?`. Additive.
 
-### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ 📋 PLANNED [làm TRƯỚC RBAC]
+### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1 ✅ DONE 2026-07-02; B2–B4 📋 PLANNED] [làm TRƯỚC RBAC]
 Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 tenant). RBAC/form/workflow
 đều **scope theo tenant + org/phòng ban** nên hạ tầng này phải có TRƯỚC.
 - **B1 — Tenant model:** `Tenant`(installation của 1 client) + `Membership`(user thuộc tenant, có thể nhiều
   tenant). Tổng quát hóa `ownerId` hiện tại → `tenantId` (giữ tương thích: tenant mặc định cho data cũ).
+  > **✅ ĐÃ LÀM (2026-07-02) — owner chốt: chỉ B1 · personal-tenant mỗi user · tenantId chỉ trên Project:**
+  > - **Schema (additive):** model `Tenant`(id/name/slug@unique/kind `personal|team|enterprise` = seam
+  >   edition §6.7) + `Membership`(user↔tenant, `@@unique([userId,tenantId])`, FK→User+Tenant Cascade) +
+  >   `Project.tenantId`(+index+FK) — **GIỮ NGUYÊN** `ownerId` và `@@unique([ownerId,slug])` (B4 dời việc
+  >   đổi unique sang tenantId). RBAC/role trong tenant để Phase C (Membership chưa có role).
+  > - **Migration `20260702063854_add_tenant` + backfill:** tạo bảng → thêm `tenantId` nullable → backfill
+  >   **1 personal tenant / mỗi ownerId ∪ mỗi User** (id tất định `tnt_<owner>`, slug `personal-<owner>`) +
+  >   membership/user → `UPDATE Project.tenantId` → NOT NULL + FK. **Giữ nguyên cô lập dữ liệu hiện tại**.
+  > - **`TenantRepo`** (mirror refresh-token repo): `ensureTenantForOwner(ownerId)` upsert tenant theo slug
+  >   **KHÔNG tạo membership** (an toàn cho owner không phải User — import script/legacy); `ensurePersonalTenant(userId)`
+  >   = ensureTenantForOwner + membership upsert (đường auth, user thật). `auth.service.issue()` gọi
+  >   `ensurePersonalTenant` → auto-provision khi register/login/refresh. `prisma-project.repo` create+ensureUnfiled
+  >   dập tenantId qua `ensureTenantForOwner` (KHÔNG đổi chữ ký; `ProjectRecord` read-model chưa lộ tenantId).
+  > - **Zero behavior change:** đọc/scope vẫn theo `ownerId` (B1 chỉ *ghi* tenantId). Enforcement theo tenant = B3/C.
+  > - **Verify ALL PASS:** api typecheck · **151 test** (auth +1: auto-provision + idempotent) · biome sạch 7 file ·
+  >   **KHÔNG changeset** (app private) · reviewer **PASS** (no required fix) · **live-smoke Postgres thật** (built
+  >   `node dist`): backfill `tnt_local`/`mem_local` OK; admin tạo project→`tnt_local`; user mới register→tenant
+  >   RIÊNG (`personal-<uid>`), project trỏ đúng; user mới **KHÔNG thấy** project của admin (isolation); membership
+  >   = 1/user dù login 2 lần (idempotency). Dọn data smoke + temp script.
+  > - ⚠️ **Root-cause fix trong lúc làm:** ban đầu project-write gọi `ensurePersonalTenant` → FK
+  >   `Membership.userId→User` vỡ khi owner không có User row (import script/legacy) → tách 2 method
+  >   (`ensureTenantForOwner` không-membership cho đường ghi-project; `ensurePersonalTenant` có-membership cho auth).
+  > - ⚠️ **Known-gap (non-blocking):** `ensurePersonalTenant` upsert tenant+membership chưa atomic (idempotent
+  >   self-heal); `issue()` chạy mỗi login+refresh (rẻ, idempotent); tenant `name` set-once (update:{}) — cosmetic.
+  > - **Seam Phase C/B3:** `tenantId` sẵn trên Project + membership/user; B3 gắn tenantId mọi bảng + scope-guard.
 - **B2 — Org/Department hierarchy** (phỏng EVN `Organization`+`Department`, `parent` phân cấp): client tự
   khai cây đơn vị/phòng ban của họ (DATA, không hardcode). User gắn org/department.
 - **B3 — Tenant-scoping:** mọi bảng dữ liệu (project/form/workflow/submission/preset…) gắn `tenantId`;

@@ -9,6 +9,7 @@ import { PrismaProjectMemberRepo } from "./prisma/prisma-project-member.repo.js"
 import { PrismaRefreshTokenRepo } from "./prisma/prisma-refresh-token.repo.js";
 import { PrismaStatusCatalogRepo } from "./prisma/prisma-status-catalog.repo.js";
 import { PrismaSubmissionRepo } from "./prisma/prisma-submission.repo.js";
+import { PrismaTenantRepo } from "./prisma/prisma-tenant.repo.js";
 import { PrismaThemeRepo } from "./prisma/prisma-theme.repo.js";
 import { PrismaUserRepo } from "./prisma/prisma-user.repo.js";
 import { PrismaWorkflowRepo } from "./prisma/prisma-workflow.repo.js";
@@ -22,6 +23,7 @@ import { ProjectMemberRepo } from "./repositories/project-member.repo.js";
 import { RefreshTokenRepo } from "./repositories/refresh-token.repo.js";
 import { StatusCatalogRepo } from "./repositories/status-catalog.repo.js";
 import { SubmissionRepo } from "./repositories/submission.repo.js";
+import { TenantRepo } from "./repositories/tenant.repo.js";
 import { ThemeRepo } from "./repositories/theme.repo.js";
 import { UserRepo } from "./repositories/user.repo.js";
 import { WorkflowRepo } from "./repositories/workflow.repo.js";
@@ -49,6 +51,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: SubmissionRepo, useClass: PrismaSubmissionRepo },
     { provide: UserRepo, useClass: PrismaUserRepo },
     { provide: RefreshTokenRepo, useClass: PrismaRefreshTokenRepo },
+    { provide: TenantRepo, useClass: PrismaTenantRepo },
   ],
   exports: [
     PrismaService,
@@ -65,6 +68,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     SubmissionRepo,
     UserRepo,
     RefreshTokenRepo,
+    TenantRepo,
   ],
 })
 export class PersistenceModule {}

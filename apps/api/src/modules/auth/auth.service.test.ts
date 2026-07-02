@@ -7,6 +7,7 @@ import {
   type RefreshTokenRecord,
   RefreshTokenRepo,
 } from "../../persistence/repositories/refresh-token.repo.js";
+import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
 import { type UserRecord, UserRepo } from "../../persistence/repositories/user.repo.js";
 import { AuthService } from "./auth.service.js";
 
@@ -77,6 +78,29 @@ class FakeRefreshTokenRepo extends RefreshTokenRepo {
   }
 }
 
+/** In-memory TenantRepo — one personal tenant per owner + a membership per user, idempotent like the
+ *  Prisma impl (tenant keyed by owner id; membership only on the personal-tenant path). */
+class FakeTenantRepo extends TenantRepo {
+  readonly tenants = new Map<string, string>(); // ownerId -> tenantId
+  readonly memberships: { userId: string; tenantId: string }[] = [];
+
+  async ensureTenantForOwner(ownerId: string): Promise<string> {
+    const existing = this.tenants.get(ownerId);
+    if (existing) return existing;
+    const tenantId = `t${++seq}`;
+    this.tenants.set(ownerId, tenantId);
+    return tenantId;
+  }
+
+  async ensurePersonalTenant(userId: string): Promise<string> {
+    const tenantId = await this.ensureTenantForOwner(userId);
+    if (!this.memberships.some((m) => m.userId === userId && m.tenantId === tenantId)) {
+      this.memberships.push({ userId, tenantId });
+    }
+    return tenantId;
+  }
+}
+
 describe("AuthService", () => {
   const jwt = new JwtService({
     secret: "test-secret-at-least-16-chars",
@@ -84,12 +108,14 @@ describe("AuthService", () => {
   });
   let users: FakeUserRepo;
   let refreshTokens: FakeRefreshTokenRepo;
+  let tenants: FakeTenantRepo;
   let service: AuthService;
 
   beforeEach(() => {
     users = new FakeUserRepo();
     refreshTokens = new FakeRefreshTokenRepo();
-    service = new AuthService(users, jwt, refreshTokens);
+    tenants = new FakeTenantRepo();
+    service = new AuthService(users, jwt, refreshTokens, tenants);
   });
 
   afterEach(() => {
@@ -120,6 +146,16 @@ describe("AuthService", () => {
     expect(refreshTokens.rows).toHaveLength(1);
     expect(refreshTokens.rows[0].tokenHash).not.toBe(res.refreshToken);
     expect(refreshTokens.rows[0].userId).toBe(res.user.id);
+  });
+
+  it("auto-provisions a personal tenant on register and reuses it on later login (B1)", async () => {
+    const reg = await service.register("tina@example.com", "password1");
+    expect(tenants.memberships).toHaveLength(1);
+    expect(tenants.memberships[0].userId).toBe(reg.user.id);
+
+    // Login for the same user does not create a second tenant (ensurePersonalTenant is idempotent).
+    await service.login("tina@example.com", "password1");
+    expect(tenants.memberships.filter((m) => m.userId === reg.user.id)).toHaveLength(1);
   });
 
   it("rejects a duplicate email", async () => {
@@ -242,7 +278,12 @@ describe("AuthService", () => {
       delete process.env.AUTH_BOOTSTRAP_EMAIL;
       delete process.env.AUTH_BOOTSTRAP_PASSWORD;
       const users2 = new FakeUserRepo();
-      await new AuthService(users2, jwt, new FakeRefreshTokenRepo()).onModuleInit();
+      await new AuthService(
+        users2,
+        jwt,
+        new FakeRefreshTokenRepo(),
+        new FakeTenantRepo(),
+      ).onModuleInit();
       expect(users2.rows).toHaveLength(0);
     });
   });
