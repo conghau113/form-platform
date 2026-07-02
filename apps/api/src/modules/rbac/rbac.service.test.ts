@@ -134,6 +134,9 @@ class FakeTenantRepo extends TenantRepo {
     const tenantId = this.map.get(userId);
     return tenantId ? [tenantId] : [];
   }
+  async listTenantsForUser(): Promise<never> {
+    throw new Error("not used");
+  }
   async isMember(userId: string, tenantId: string): Promise<boolean> {
     if (this.map.get(userId) === tenantId) return true;
     return this.added.some((m) => m.userId === userId && m.tenantId === tenantId);

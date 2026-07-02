@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { TenantRepo } from "../repositories/tenant.repo.js";
+import { type TenantRecord, TenantRepo } from "../repositories/tenant.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { PrismaService } from "./prisma.service.js";
 
@@ -38,6 +38,22 @@ export class PrismaTenantRepo extends TenantRepo {
       select: { tenantId: true },
     });
     return memberships.map((m) => m.tenantId);
+  }
+
+  async listTenantsForUser(userId: string): Promise<TenantRecord[]> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      include: { tenant: true },
+    });
+    return memberships.map((m) => ({
+      id: m.tenant.id,
+      name: m.tenant.name,
+      slug: m.tenant.slug,
+      kind: m.tenant.kind,
+      createdAt: m.tenant.createdAt,
+      updatedAt: m.tenant.updatedAt,
+    }));
   }
 
   async isMember(userId: string, tenantId: string): Promise<boolean> {

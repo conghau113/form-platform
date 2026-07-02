@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { qk } from "../query";
 import * as api from "./client";
-import type { ProjectRecord, ProjectTree } from "./types";
+import type { ProjectRecord, ProjectTree, TenantSummary } from "./types";
 
 /**
  * Workspace data hooks (Track W, react-query as of R4). The server is the source of truth: the
@@ -14,7 +14,12 @@ import type { ProjectRecord, ProjectTree } from "./types";
 export interface ProjectsStore {
   projects: ProjectRecord[];
   loading: boolean;
-  create: (input: { name: string; description?: string | null }) => Promise<ProjectRecord>;
+  create: (input: {
+    name: string;
+    description?: string | null;
+    /** Target tenant (B4). Omitted → the user's personal tenant. */
+    tenantId?: string;
+  }) => Promise<ProjectRecord>;
   rename: (id: string, name: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
@@ -48,6 +53,12 @@ export function useProjects(): ProjectsStore {
       await remove.mutateAsync(id);
     },
   };
+}
+
+/** The user's tenant memberships (B4) — drives the New-project workspace picker. */
+export function useMyTenants(): { tenants: TenantSummary[]; loading: boolean } {
+  const query = useQuery({ queryKey: qk.myTenants, queryFn: api.listMyTenants });
+  return { tenants: query.data ?? [], loading: query.isPending };
 }
 
 export interface ProjectTreeStore {

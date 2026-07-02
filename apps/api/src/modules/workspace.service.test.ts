@@ -50,7 +50,7 @@ class FakeProjectRepo extends ProjectRepo {
     const row: ProjectRecord = {
       id: nextId("proj"),
       ownerId: input.ownerId,
-      tenantId: FakeTenantRepo.tenantIdFor(input.ownerId),
+      tenantId: input.tenantId ?? FakeTenantRepo.tenantIdFor(input.ownerId),
       name: input.name,
       slug: input.slug,
       description: input.description ?? null,
@@ -372,6 +372,47 @@ describe("ProjectsService tenant scoping (B3)", () => {
     await expect(projects.update("mix2-u", p.id, { name: "Won" })).resolves.toMatchObject({
       name: "Won",
     });
+  });
+});
+
+describe("ProjectsService tenant writes (B4)", () => {
+  const TENANT = FakeTenantRepo.tenantIdFor(OWNER);
+
+  const joinTenant = (userId: string, functions: string[]) => {
+    tenantRepo.join(userId, FakeTenantRepo.tenantIdFor(userId));
+    tenantRepo.join(userId, TENANT);
+    rbacRepo.grant(userId, TENANT, functions);
+  };
+
+  it("lets an editor-level member create into the team tenant (creator stays ownerId)", async () => {
+    joinTenant("editor-u", ["form.manage"]);
+    const p = await projects.create("editor-u", { name: "Team Project", tenantId: TENANT });
+    expect(p.tenantId).toBe(TENANT);
+    expect(p.ownerId).toBe("editor-u");
+  });
+
+  it("keeps slugs unique per tenant across different creators", async () => {
+    joinTenant("editor-u", ["form.manage"]);
+    const a = await projects.create(OWNER, { name: "HR Platform" });
+    const b = await projects.create("editor-u", { name: "HR Platform", tenantId: TENANT });
+    expect(a.slug).toBe("hr-platform");
+    expect(b.slug).toBe("hr-platform-2");
+  });
+
+  it("rejects a viewer-level member (403) and a non-member (404, no existence leak)", async () => {
+    joinTenant("viewer-u", ["form.read"]);
+    await expect(
+      projects.create("viewer-u", { name: "Nope", tenantId: TENANT }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      projects.create("stranger", { name: "Nope", tenantId: TENANT }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("defaults to the creator's personal tenant when no tenantId is given", async () => {
+    joinTenant("editor-u", ["form.manage"]);
+    const p = await projects.create("editor-u", { name: "Mine" });
+    expect(p.tenantId).toBe(FakeTenantRepo.tenantIdFor("editor-u"));
   });
 });
 

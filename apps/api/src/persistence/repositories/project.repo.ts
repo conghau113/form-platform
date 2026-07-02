@@ -11,9 +11,11 @@ export interface ProjectRecord {
   updatedAt: Date;
 }
 
-/** Fields settable on create; `slug` is resolved by the service (unique per owner). */
+/** Fields settable on create; `slug` is resolved by the service (unique per tenant as of B4). */
 export interface ProjectCreateInput {
   ownerId: string;
+  /** Target tenant (B4). Omitted → the creator's personal tenant (the pre-B4 behaviour). */
+  tenantId?: string;
   name: string;
   slug: string;
   description?: string | null;

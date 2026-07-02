@@ -62,6 +62,9 @@ class StubTenantRepo extends TenantRepo {
   async listTenantIdsForUser(): Promise<string[]> {
     return this.tenantId ? [this.tenantId] : [];
   }
+  async listTenantsForUser(): Promise<never> {
+    throw new Error("not used");
+  }
   async isMember(): Promise<boolean> {
     return true;
   }

@@ -6,6 +6,7 @@ import {
   grantMember,
   listForms,
   listMembers,
+  listMyTenants,
   listProjects,
   moveForm,
   revokeMember,
@@ -44,6 +45,22 @@ describe("workspace client", () => {
       headers: { "content-type": "application/json", ...ownerHeader },
       body: JSON.stringify({ name: "HR" }),
     });
+  });
+
+  it("createProject forwards the target tenantId when given (B4)", async () => {
+    const fetchFn = mockFetch({ json: async () => ({ id: "p1" }) });
+    await createProject({ name: "HR", tenantId: "tnt_team" });
+    expect(fetchFn).toHaveBeenCalledWith(`${API_BASE}/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...ownerHeader },
+      body: JSON.stringify({ name: "HR", tenantId: "tnt_team" }),
+    });
+  });
+
+  it("listMyTenants GETs /tenants (B4)", async () => {
+    const fetchFn = mockFetch({ json: async () => [] });
+    await listMyTenants();
+    expect(fetchFn).toHaveBeenCalledWith(`${API_BASE}/tenants`, { headers: ownerHeader });
   });
 
   it("listForms encodes projectId and folderId query params", async () => {

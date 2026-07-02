@@ -31,6 +31,8 @@ export abstract class TenantRepo {
    * {@link findTenantIdForUser} — the personal tenant leads). B3 unions these for project listing.
    */
   abstract listTenantIdsForUser(userId: string): Promise<string[]>;
+  /** Full records of the user's tenants, oldest membership first (B4 — the workspace picker). */
+  abstract listTenantsForUser(userId: string): Promise<TenantRecord[]>;
   /** Whether the user holds a `Membership` in the tenant (D1: role assignment targets members only). */
   abstract isMember(userId: string, tenantId: string): Promise<boolean>;
   /** Add a user to a tenant (idempotent upsert on the userId+tenantId unique — D1 add-member). */

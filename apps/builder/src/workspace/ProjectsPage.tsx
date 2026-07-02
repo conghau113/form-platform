@@ -13,6 +13,7 @@ import {
   Input,
   Modal,
   message,
+  Select,
   Space,
   Spin,
   Tag,
@@ -23,7 +24,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { ShareDialog } from "./ShareDialog";
 import type { ProjectRecord } from "./types";
-import { useProjects } from "./useWorkspace";
+import { useMyTenants, useProjects } from "./useWorkspace";
 
 /**
  * Workspace landing page (`/projects`). Lists the owner's projects as cards; create, rename and
@@ -34,16 +35,27 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { projects, loading, create, rename, remove } = useProjects();
+  const { tenants } = useMyTenants();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [tenantChoice, setTenantChoice] = useState<string | undefined>(undefined);
   const [renaming, setRenaming] = useState<ProjectRecord | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [sharing, setSharing] = useState<ProjectRecord | null>(null);
 
+  // Workspaces the user may create a project in (B4: editor+ per their RBAC role in the tenant).
+  const creatable = tenants.filter((t) => t.projectRole === "owner" || t.projectRole === "editor");
+  const defaultTenantId = (creatable.find((t) => t.personal) ?? creatable[0])?.id;
+
   async function onCreate() {
     if (!name.trim()) return;
     try {
-      const project = await create({ name: name.trim() });
+      const target = creatable.find((t) => t.id === (tenantChoice ?? defaultTenantId));
+      const project = await create({
+        name: name.trim(),
+        // Personal is the server default — only send an explicit target for a team workspace.
+        ...(target && !target.personal ? { tenantId: target.id } : {}),
+      });
       setCreating(false);
       setName("");
       navigate(`/projects/${project.id}`);
@@ -168,15 +180,33 @@ export function ProjectsPage() {
         okText="Create"
         onOk={onCreate}
         onCancel={() => setCreating(false)}
-        afterOpenChange={(open) => !open && setName("")}
+        afterOpenChange={(open) => {
+          if (!open) {
+            setName("");
+            setTenantChoice(undefined);
+          }
+        }}
       >
-        <Input
-          autoFocus
-          placeholder="Project name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onPressEnter={onCreate}
-        />
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Input
+            autoFocus
+            placeholder="Project name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onPressEnter={onCreate}
+          />
+          {creatable.length > 1 && (
+            <Select
+              style={{ width: "100%" }}
+              value={tenantChoice ?? defaultTenantId}
+              onChange={setTenantChoice}
+              options={creatable.map((t) => ({
+                value: t.id,
+                label: t.personal ? "Personal workspace" : t.name,
+              }))}
+            />
+          )}
+        </Space>
       </Modal>
 
       <Modal

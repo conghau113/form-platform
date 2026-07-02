@@ -162,7 +162,7 @@ class FakeProjectRepo extends ProjectRepo {
     const row: ProjectRecord = {
       id: `proj_${++seq}`,
       ownerId: input.ownerId,
-      tenantId: FakeTenantRepo.tenantIdFor(input.ownerId),
+      tenantId: input.tenantId ?? FakeTenantRepo.tenantIdFor(input.ownerId),
       name: input.name,
       slug: input.slug,
       description: input.description ?? null,

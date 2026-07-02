@@ -148,7 +148,7 @@ env-driven, secret CHỈ ở `.env` phía API.
   callback, liên kết account theo email đã verify. Cần **Google client-id/secret/redirect**.
 - Δ nhỏ: `User` thêm `emailVerifiedAt?`, `authProvider?`. Additive.
 
-### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1+B2+B3 ✅ DONE 2026-07-02; B4 📋 PLANNED] [làm TRƯỚC RBAC]
+### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1–B4 ✅ DONE 2026-07-03 — PHASE B XONG] [làm TRƯỚC RBAC]
 Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 tenant). RBAC/form/workflow
 đều **scope theo tenant + org/phòng ban** nên hạ tầng này phải có TRƯỚC.
 - **B1 — Tenant model:** `Tenant`(installation của 1 client) + `Membership`(user thuộc tenant, có thể nhiều
@@ -235,6 +235,29 @@ Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 te
   **backfill** `tenantId` cho project/form/workflow/submission/preset → đổi unique index (`ownerId+slug`
   → `tenantId+slug`, tương tự các unique khác) → **test dữ liệu cũ vẫn truy cập được** (bootstrap admin
   id="local" ∈ tenant mặc định). Migration additive, không phá JSON đã lưu.
+  > **✅ ĐÃ LÀM (2026-07-03) — tenant WRITES; owner chốt 3 fork: picker per-create (không active-tenant
+  > switcher) · editor+ được tạo · ⚠️ DEVIATION: BỎ "gắn tenantId mọi bảng + backfill"** — B3 chứng minh
+  > chokepoint `projectId→Project.tenantId` đủ enforcement; tenantId per-table là denormalize thừa (chỉ
+  > cần nếu sau này query trực-tiếp-theo-tenant không qua project). B4 thực tế = unique index + create-path:
+  > - **Migration `20260703000000_change_project_unique_tenant_slug`:** `@@unique([ownerId,slug])` →
+  >   `@@unique([tenantId,slug])`; index `[tenantId]` → `[ownerId]` (unique mới cover prefix tenantId;
+  >   `list(ownerId)` vẫn cần index). An toàn: data hiện có tenant 1:1 owner → không thể đụng unique
+  >   (CREATE fail loudly nếu giả định sai). `ensureUnfiled` upsert theo `tenantId_slug`.
+  > - **Create-path:** `POST /projects` +`tenantId?` — target ≠ personal → cần role ≥ editor qua
+  >   `projectRoleFromFunctions(resolveFunctions)` (REUSE B3): non-member 404 · viewer 403; slug taken-set
+  >   từ `listByTenants([target])` → **slug unique per-tenant xuyên creator** (`hr`→`hr-2`). Creator giữ
+  >   `ownerId` (owner role Track-W).
+  > - **`GET /tenants` mới (`modules/tenants/`):** memberships oldest-first → `{id,name,kind,personal,
+  >   projectRole}` (personal = slug `personal-<userId>`); FE lọc editor+ cho picker.
+  > - **Builder:** modal New-project + antd `Select` workspace (chỉ hiện khi >1 tenant đủ quyền, default
+  >   Personal, chỉ gửi tenantId khi chọn team); `useMyTenants` + `qk.myTenants` + client `listMyTenants`.
+  > - **Verify:** api typecheck·**195 test**(+6) · builder typecheck·**381 test**(+2) · biome · reviewer
+  >   PASS (1 nit comment đã sửa) · **live-smoke Postgres 16/16** (GET /tenants shape/role · editor tạo
+  >   vào team 201 + admin thấy · slug -2 xuyên owner · viewer 403 · outsider 404 · default personal) ·
+  >   **UI smoke MCP** (member login → New project → Select "Personal workspace"/"Administrator" → tạo vào
+  >   team → psql xác nhận `tnt_local`+ownerId member → admin thấy; console sạch). KHÔNG changeset.
+  > - **⚠️ Known-gap:** tenant `name` xấu (= ownerId/backfill) — rename tenant UI thuộc admin phase sau;
+  >   active-tenant selection vẫn chưa có (`/rbac`,`/org-units` personal-first); member rời tenant chưa có UI.
 
 ### Phase C — RBAC data-driven (phân quyền chức năng + dữ liệu, cấu hình được) ⭐⭐ Δ [C1+C2+C4 ✅ DONE 2026-07-02; C3/C5-custom 📋 PLANNED] [crux]
 Phỏng mô hình EVN nhưng bằng Prisma; **KHÔNG hardcode role** — client tự cấu hình:

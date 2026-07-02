@@ -9,9 +9,9 @@ export function slugify(name: string): string {
 }
 
 /**
- * Given a desired `base` slug and the set of slugs already `taken` (for the same owner — the DB
- * enforces `@@unique([ownerId, slug])`), return `base` if free, else `base-2`, `base-3`, … The
- * service computes `taken` from the owner's existing projects before inserting.
+ * Given a desired `base` slug and the set of slugs already `taken` (for the same tenant — the DB
+ * enforces `@@unique([tenantId, slug])`, B4), return `base` if free, else `base-2`, `base-3`, … The
+ * service computes `taken` from the target tenant's existing projects before inserting.
  */
 export function ensureUniqueSlug(base: string, taken: Iterable<string>): string {
   const set = new Set(taken);

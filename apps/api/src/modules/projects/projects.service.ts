@@ -59,13 +59,26 @@ export class ProjectsService {
 
   async create(ownerId: string, dto: CreateProjectDto): Promise<ProjectRecord> {
     if (!dto.name?.trim()) throw new BadRequestException("Project name is required");
-    const existing = await this.projects.list(ownerId);
+    const personal = await this.tenants.ensureTenantForOwner(ownerId);
+    const tenantId = dto.tenantId ?? personal;
+    if (tenantId !== personal) {
+      // B4: creating into a team tenant needs an editor-level role there (same mapping as B3
+      // reads). Not a member → 404 (no existence leak); member below editor → 403.
+      const role = projectRoleFromFunctions(await this.rbac.resolveFunctions(ownerId, tenantId));
+      if (!role) throw new NotFoundException(`Tenant not found: ${tenantId}`);
+      if (!roleSatisfies(role, "editor")) {
+        throw new ForbiddenException(`Requires editor role in tenant: ${tenantId}`);
+      }
+    }
+    // Slugs are unique per tenant (B4) — derive the taken set from the whole target tenant.
+    const existing = await this.projects.listByTenants([tenantId]);
     const slug = ensureUniqueSlug(
       slugify(dto.name),
       existing.map((p) => p.slug),
     );
     return this.projects.create({
       ownerId,
+      tenantId,
       name: dto.name.trim(),
       slug,
       description: dto.description ?? null,

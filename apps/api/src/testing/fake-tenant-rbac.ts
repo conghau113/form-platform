@@ -4,7 +4,7 @@ import type {
   TenantUserRecord,
 } from "../persistence/repositories/rbac.repo.js";
 import { RbacRepo } from "../persistence/repositories/rbac.repo.js";
-import { TenantRepo } from "../persistence/repositories/tenant.repo.js";
+import { type TenantRecord, TenantRepo } from "../persistence/repositories/tenant.repo.js";
 
 /**
  * In-memory {@link TenantRepo} for service tests (B3). Personal tenants use the deterministic id
@@ -34,6 +34,22 @@ export class FakeTenantRepo extends TenantRepo {
   }
   async listTenantIdsForUser(userId: string): Promise<string[]> {
     return this.memberships.get(userId) ?? [];
+  }
+  async listTenantsForUser(userId: string): Promise<TenantRecord[]> {
+    // Synthesise records from the deterministic id shape: `tnt_<owner>` ↔ slug `personal-<owner>`
+    // (mirrors the B1 backfill), so the `personal` flag resolves without a registry.
+    return (this.memberships.get(userId) ?? []).map((tenantId) => {
+      const owner = tenantId.replace(/^tnt_/, "");
+      const at = new Date(0);
+      return {
+        id: tenantId,
+        name: owner,
+        slug: `personal-${owner}`,
+        kind: "personal",
+        createdAt: at,
+        updatedAt: at,
+      };
+    });
   }
   async isMember(userId: string, tenantId: string): Promise<boolean> {
     return (this.memberships.get(userId) ?? []).includes(tenantId);

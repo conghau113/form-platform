@@ -9,4 +9,10 @@ export class CreateProjectDto {
   @IsOptional()
   @IsString()
   description?: string | null;
+
+  /** Target tenant (B4). Omitted → the caller's personal tenant. The service authorises:
+   *  the caller needs an editor-level role in the tenant (404 when not a member at all). */
+  @IsOptional()
+  @IsString()
+  tenantId?: string;
 }

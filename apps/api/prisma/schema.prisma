@@ -152,8 +152,9 @@ model AuditLog {
 model Project {
   id          String          @id @default(cuid())
   ownerId     String
-  /// Owning tenant (B1). Derived from `ownerId` (1:1 personal tenant) at write time; populated on
-  /// every row by the B1 backfill. `ownerId` stays the canonical creator + Track-W project-owner role.
+  /// Owning tenant (B1). Defaults to the creator's personal tenant; B4 lets an editor+ member
+  /// create into a team tenant instead. `ownerId` stays the canonical creator + Track-W
+  /// project-owner role; slugs are unique per tenant (B4 moved the unique off `ownerId`).
   tenantId    String
   name        String
   slug        String
@@ -171,8 +172,8 @@ model Project {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
-  @@unique([ownerId, slug])
-  @@index([tenantId])
+  @@unique([tenantId, slug])
+  @@index([ownerId])
 }
 
 /// Sharing grant for a collaborator (W5). The canonical owner stays `Project.ownerId` (always

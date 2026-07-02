@@ -37,11 +37,11 @@ export class PrismaProjectRepo extends ProjectRepo {
   }
 
   async ensureUnfiled(ownerId: string): Promise<ProjectRecord> {
-    // Derive the owning tenant from the owner (1:1 personal tenant, B1); idempotent, and membership-
-    // free so it works for owners without a User row (e.g. the import script / legacy data).
+    // The "Unfiled" landing project lives in the owner's personal tenant (1:1, B1); idempotent, and
+    // membership-free so it works for owners without a User row (e.g. the import script / legacy data).
     const tenantId = await this.tenants.ensureTenantForOwner(ownerId);
     const project = await this.prisma.project.upsert({
-      where: { ownerId_slug: { ownerId, slug: UNFILED_SLUG } },
+      where: { tenantId_slug: { tenantId, slug: UNFILED_SLUG } },
       update: {},
       create: { ownerId, tenantId, slug: UNFILED_SLUG, name: "Unfiled" },
     });
@@ -49,7 +49,8 @@ export class PrismaProjectRepo extends ProjectRepo {
   }
 
   async create(input: ProjectCreateInput): Promise<ProjectRecord> {
-    const tenantId = await this.tenants.ensureTenantForOwner(input.ownerId);
+    // B4: an explicit target tenant wins (the service authorises it); default stays personal.
+    const tenantId = input.tenantId ?? (await this.tenants.ensureTenantForOwner(input.ownerId));
     const project = await this.prisma.project.create({
       data: {
         ownerId: input.ownerId,

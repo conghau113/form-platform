@@ -90,8 +90,8 @@ describe.skipIf(!hasDocker())("importFilesToDb", () => {
     const result = await importFilesToDb(dataDir, prisma);
     expect(result).toMatchObject({ forms: 1, themes: 1, presets: 1 });
 
-    const project = await prisma.project.findUniqueOrThrow({
-      where: { ownerId_slug: { ownerId: SEED_OWNER_ID, slug: UNFILED_SLUG } },
+    const project = await prisma.project.findFirstOrThrow({
+      where: { ownerId: SEED_OWNER_ID, slug: UNFILED_SLUG },
     });
     const form = await prisma.formRecord.findUniqueOrThrow({ where: { id: "fixture-form" } });
     expect(form.projectId).toBe(project.id);

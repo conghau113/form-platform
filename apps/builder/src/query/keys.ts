@@ -13,6 +13,8 @@ export const qk = {
   rbacRoles: ["rbac", "roles"] as const,
   rbacUsers: ["rbac", "users"] as const,
   projects: ["projects"] as const,
+  // The user's tenant memberships (B4): powers the New-project workspace picker.
+  myTenants: ["tenants", "mine"] as const,
   projectTree: (projectId: string) => ["projects", projectId, "tree"] as const,
   presets: (projectId?: string) => ["presets", projectId ?? null] as const,
   form: (formId: string) => ["forms", formId] as const,

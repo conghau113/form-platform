@@ -9,6 +9,7 @@ import type {
   ProjectMembersView,
   ProjectRecord,
   ProjectTree,
+  TenantSummary,
 } from "./types";
 
 /**
@@ -39,6 +40,8 @@ export async function listProjects(): Promise<ProjectRecord[]> {
 export async function createProject(input: {
   name: string;
   description?: string | null;
+  /** Target tenant (B4). Omitted → the user's personal tenant. */
+  tenantId?: string;
 }): Promise<ProjectRecord> {
   const res = await apiFetch(`${API_BASE}/projects`, {
     method: "POST",
@@ -76,6 +79,15 @@ export async function getProjectTree(id: string): Promise<ProjectTree> {
   });
   if (!res.ok) throw new Error(`Load project failed: ${await readError(res)}`);
   return (await res.json()) as ProjectTree;
+}
+
+// --- Tenants (B4) -------------------------------------------------------------
+
+/** The user's tenants + the project role they hold in each (powers the workspace picker). */
+export async function listMyTenants(): Promise<TenantSummary[]> {
+  const res = await apiFetch(`${API_BASE}/tenants`, { headers: ownerHeaders() });
+  if (!res.ok) throw new Error(`List tenants failed: ${await readError(res)}`);
+  return (await res.json()) as TenantSummary[];
 }
 
 // --- Folders ----------------------------------------------------------------

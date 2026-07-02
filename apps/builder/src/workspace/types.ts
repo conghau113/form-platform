@@ -7,11 +7,24 @@
 export interface ProjectRecord {
   id: string;
   ownerId: string;
+  /** Owning tenant (B3/B4). */
+  tenantId: string;
   name: string;
   slug: string;
   description: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** `GET /tenants` item (B4): a tenant the user belongs to + what they may do there. */
+export interface TenantSummary {
+  id: string;
+  name: string;
+  kind: string;
+  /** Whether this is the user's own personal tenant. */
+  personal: boolean;
+  /** The project role the user's RBAC functions confer in this tenant, or null. */
+  projectRole: "owner" | "editor" | "viewer" | null;
 }
 
 export interface FolderRecord {
