@@ -67,11 +67,12 @@ Ký hiệu: 🔒 = phụ thuộc ngoài (owner phải cung cấp) · ⭐ = nền
 
 > **⚠️ TRẠNG THÁI SOURCE (đọc kỹ — phân biệt "đã có" vs "planned"):** chỉ những gì đánh dấu **[đã có]** là
 > hiện hữu trong repo hôm nay (2026-07-01). **Mọi model/bảng/guard/route từ Phase A trở đi là 📋 PLANNED**
-> — `Tenant`,`Membership`,`UserRole`,`DataScope`,`RefreshToken`,`Session`,`Function`,`Role`,`RoleFunction`,
+> — `Tenant`,`Membership`,`UserRole`,`DataScope`,`Function`,`Role`,`RoleFunction`,
 > `@RequireFunction`,`FunctionGuard`,`VITE_BASE_PATH`/router-basename/nginx-base — **CHƯA tồn tại**, là thiết
 > kế phỏng từ reference ngoài (EVN/web-admin/estd). Xem **§7 Evidence ledger** để biết cái gì đọc-từ-source
-> vs suy-luận. Repo hiện chỉ có: `/api` proxy (2B), `User`(id/email/passwordHash/displayName), project-member
-> role (editor/viewer), form-core datasource/reactions/conditions, workflow engine, cookie-auth.
+> vs suy-luận. Repo hiện có: `/api` proxy (2B), `User`(id/email/passwordHash/displayName), **`RefreshToken`
+> (A1 ✅ rotating + revocable)**, project-member role (editor/viewer), form-core datasource/reactions/conditions,
+> workflow engine, cookie-auth (access **15m** + refresh **30d** — A1).
 
 ### Phase 0 — Nền tảng môi trường & cấu hình (LÀM NGAY — owner yêu cầu) ⭐ ✅ DONE (2026-07-01)
 Mục tiêu: 3 môi trường **dev / test / production** cho cả `api` (NestJS) và `builder` (Vite), base-path
@@ -105,10 +106,35 @@ env-driven, secret CHỈ ở `.env` phía API.
   live-smoke login trên base-path dev.
 - ⚠️ Không đọc lại được `.env` (deny Read) → verify gián tiếp qua boot/build + không echo secret.
 
-### Phase A — Kiện toàn bộ Auth (tiếp nối 2B) — 📋 PLANNED (chưa có trong source)
-- **A1 — Refresh token** ⭐ (self-host, KHÔNG phụ thuộc ngoài → làm trước): access-token ngắn (15m) +
-  refresh-token dài (HttpOnly cookie riêng, xoay vòng + revoke được, bảng `RefreshToken`/`Session`).
-  `POST /auth/refresh`, `/auth/logout` thu hồi. Nền cho hết-hạn-phiên mượt + "đăng xuất mọi thiết bị".
+### Phase A — Kiện toàn bộ Auth (tiếp nối 2B) — A1 ✅ DONE (2026-07-02); A2/A3 📋 PLANNED
+- **A1 — Refresh token** ⭐ ✅ DONE (2026-07-02): access-token ngắn (`JWT_ACCESS_EXPIRES_IN`, mặc định
+  **15m**) + refresh-token dài (`JWT_REFRESH_EXPIRES_IN`, mặc định **30d**) trong cookie HttpOnly RIÊNG
+  (`refresh_token`, xoay vòng + revoke được). `POST /auth/refresh`, `/auth/logout` thu hồi, thêm
+  `POST /auth/logout-all` ("đăng xuất mọi thiết bị"). Nền cho hết-hạn-phiên mượt.
+  > **✅ ĐÃ LÀM (2026-07-02):**
+  > - **Backend (`apps/api`, additive):** model Prisma `RefreshToken` (chỉ lưu **SHA-256 hash** — rò DB
+  >   không mint được phiên; `tokenHash @unique`, `revokedAt`, `onDelete:Cascade`) + migration
+  >   `20260702025806_add_refresh_token`; `RefreshTokenRepo` interface + `PrismaRefreshTokenRepo` wire
+  >   vào `persistence.module`. `auth.service`: refresh token **opaque** (`randomBytes(32)`); `issue`
+  >   phát access+refresh; `refresh()` **rotate** (revoke cũ→cấp mới); **reuse-detection** (replay token
+  >   đã-revoked → `revokeAllForUser` = coi như bị đánh cắp); `logout()`/`logoutAll()`. Controller set/clear
+  >   2 cookie (`authCookieOptions` dùng chung, path `/`), `/auth/refresh` là `@Public` (access có thể đã
+  >   hết hạn). Env: `JWT_ACCESS_EXPIRES_IN`/`JWT_REFRESH_EXPIRES_IN` thay `JWT_EXPIRES_IN` (env.example +
+  >   `.env`/`.env.production` + docker-compose).
+  > - **Frontend (`apps/builder`):** `src/lib/apiFetch.ts` — wrapper cùng chữ ký `fetch`: gặp 401 (endpoint
+  >   không phải auth) → **dedup 1** `POST /auth/refresh` (tránh rotation-race → false reuse-alarm) rồi
+  >   retry 1 lần; refresh fail → trả 401 gốc + gọi `setSessionExpiredHandler`. 9 client.ts (+`fetchMe`)
+  >   route qua apiFetch (login/register/logout giữ raw `fetch`). `useAuth` đăng ký session-expired → set
+  >   cache `me`=null → RequireAuth về login. Phiên nay **sống qua reload** quá hạn access.
+  > - **Verify ALL PASS:** typecheck api+builder · api 150 test (auth service +6 refresh) · builder 371 test
+  >   (apiFetch +5) · biome sạch (24 file) · reviewer **PASS** (no required fix) · **live-smoke HTTP thật**
+  >   (built dist + `node dist`, access 3s): **18/18** — login set 2 cookie → me 200 → access hết hạn 401 →
+  >   refresh rotate (token đổi) → me 200 → reuse token cũ 401 + family revoked → logout revoke → logout-all
+  >   revoke cả 2 phiên. KHÔNG changeset (chỉ app private, theo lệ 2A/2B).
+  > - **⚠️ Known-gap (advisory reviewer, để hardening sau):** rotation `findByHash→revoke→create` **chưa
+  >   atomic** — 2 refresh THẬT-song-song cùng 1 token còn-hạn (khác tab, mỗi tab 1 `refreshInFlight`) có thể
+  >   cùng qua check → nhân đôi token sống (fail-safe: KHÔNG báo trộm nhầm; replay sau vẫn bắt qua `revokedAt`).
+  >   Nếu siết: compare-and-revoke atomic (`updateMany where revokedAt:null` + xét count) trong transaction.
 - **A2 — Quên/đặt lại mật khẩu + Xác minh email** 🔒 SMTP: `forgot-password`/`reset-password`/
   `set-password` + `verify-email`; token 1-lần hết-hạn (bảng `VerificationToken`); `modules/mail`
   (Nodemailer, cấu hình SMTP_*). Cần **SMTP** (self-host: MailHog cho dev; SMTP thật cho prod).

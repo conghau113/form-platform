@@ -1,3 +1,4 @@
+import { apiFetch } from "../lib/apiFetch";
 import { API_BASE } from "../presets/config";
 import type { UserProfile } from "./types";
 
@@ -15,9 +16,13 @@ async function readError(res: Response): Promise<string> {
 
 const jsonHeaders: Record<string, string> = { "content-type": "application/json" };
 
-/** Resolve the current session's profile, or `null` when unauthenticated (401). Throws otherwise. */
+/**
+ * Resolve the current session's profile, or `null` when unauthenticated (401). Throws otherwise.
+ * Goes through {@link apiFetch}, so a merely-expired access token is silently refreshed and the
+ * probe still resolves the profile — the session survives a page reload past the access lifetime.
+ */
 export async function fetchMe(): Promise<UserProfile | null> {
-  const res = await fetch(`${API_BASE}/auth/me`);
+  const res = await apiFetch(`${API_BASE}/auth/me`);
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`Session check failed: ${await readError(res)}`);
   return (await res.json()) as UserProfile;

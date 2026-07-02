@@ -3,6 +3,10 @@ import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SEED_OWNER_ID } from "../../common/constants.js";
+import {
+  type RefreshTokenRecord,
+  RefreshTokenRepo,
+} from "../../persistence/repositories/refresh-token.repo.js";
 import { type UserRecord, UserRepo } from "../../persistence/repositories/user.repo.js";
 import { AuthService } from "./auth.service.js";
 
@@ -40,17 +44,52 @@ class FakeUserRepo extends UserRepo {
   }
 }
 
+/** In-memory RefreshTokenRepo — mirrors the Prisma unique `tokenHash` + revoke semantics. */
+class FakeRefreshTokenRepo extends RefreshTokenRepo {
+  readonly rows: RefreshTokenRecord[] = [];
+
+  async create(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<RefreshTokenRecord> {
+    if (this.rows.some((r) => r.tokenHash === input.tokenHash)) throw new Error("unique tokenHash");
+    const row: RefreshTokenRecord = {
+      id: `rt${++seq}`,
+      userId: input.userId,
+      tokenHash: input.tokenHash,
+      expiresAt: input.expiresAt,
+      revokedAt: null,
+      createdAt: new Date(),
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async findByHash(tokenHash: string): Promise<RefreshTokenRecord | null> {
+    return this.rows.find((r) => r.tokenHash === tokenHash) ?? null;
+  }
+  async revoke(id: string): Promise<void> {
+    const row = this.rows.find((r) => r.id === id);
+    if (row) row.revokedAt = new Date();
+  }
+  async revokeAllForUser(userId: string): Promise<void> {
+    for (const r of this.rows) if (r.userId === userId && !r.revokedAt) r.revokedAt = new Date();
+  }
+}
+
 describe("AuthService", () => {
   const jwt = new JwtService({
     secret: "test-secret-at-least-16-chars",
     signOptions: { expiresIn: "1h" },
   });
   let users: FakeUserRepo;
+  let refreshTokens: FakeRefreshTokenRepo;
   let service: AuthService;
 
   beforeEach(() => {
     users = new FakeUserRepo();
-    service = new AuthService(users, jwt);
+    refreshTokens = new FakeRefreshTokenRepo();
+    service = new AuthService(users, jwt, refreshTokens);
   });
 
   afterEach(() => {
@@ -71,10 +110,16 @@ describe("AuthService", () => {
     expect(stored.passwordHash).not.toBe("supersecret");
     expect(await bcrypt.compare("supersecret", stored.passwordHash)).toBe(true);
 
-    // Token carries sub = user id.
-    const payload = await jwt.verifyAsync<{ sub: string; email: string }>(res.token);
+    // Access token carries sub = user id.
+    const payload = await jwt.verifyAsync<{ sub: string; email: string }>(res.accessToken);
     expect(payload.sub).toBe(res.user.id);
     expect(payload.email).toBe("alice@example.com");
+
+    // A refresh token is issued and stored hashed (never in plaintext).
+    expect(res.refreshToken).toBeTruthy();
+    expect(refreshTokens.rows).toHaveLength(1);
+    expect(refreshTokens.rows[0].tokenHash).not.toBe(res.refreshToken);
+    expect(refreshTokens.rows[0].userId).toBe(res.user.id);
   });
 
   it("rejects a duplicate email", async () => {
@@ -88,7 +133,8 @@ describe("AuthService", () => {
     await service.register("carol@example.com", "hunter2pass");
     const res = await service.login("Carol@Example.com", "hunter2pass");
     expect(res.user.email).toBe("carol@example.com");
-    expect(res.token).toBeTruthy();
+    expect(res.accessToken).toBeTruthy();
+    expect(res.refreshToken).toBeTruthy();
   });
 
   it("rejects a wrong password and an unknown email with the same generic error", async () => {
@@ -105,6 +151,72 @@ describe("AuthService", () => {
     const { user } = await service.register("erin@example.com", "password1");
     expect((await service.me(user.id)).email).toBe("erin@example.com");
     await expect(service.me("ghost")).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  describe("refresh tokens (A1)", () => {
+    it("rotates: issues a new pair, revokes the old token, and keeps the new one usable", async () => {
+      const first = await service.register("frank@example.com", "password1");
+      const second = await service.refresh(first.refreshToken);
+
+      // A fresh, different refresh token was issued...
+      expect(second.refreshToken).not.toBe(first.refreshToken);
+      expect(second.user.id).toBe(first.user.id);
+      // ...the old row is revoked, the new one is live.
+      expect(refreshTokens.rows).toHaveLength(2);
+      expect(refreshTokens.rows[0].revokedAt).not.toBeNull();
+      expect(refreshTokens.rows[1].revokedAt).toBeNull();
+
+      // The new token refreshes again; the old one is now spent (see reuse test).
+      const third = await service.refresh(second.refreshToken);
+      expect(third.refreshToken).toBeTruthy();
+    });
+
+    it("rejects an unknown token", async () => {
+      await expect(service.refresh("not-a-real-token")).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it("detects reuse: replaying a rotated token revokes every session for that user", async () => {
+      const first = await service.register("grace@example.com", "password1");
+      const second = await service.refresh(first.refreshToken); // rotates → first now revoked
+
+      // Replaying the already-rotated token is treated as theft.
+      await expect(service.refresh(first.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      // ...and nukes the whole family, so even the legitimate current token is now dead.
+      await expect(service.refresh(second.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(refreshTokens.rows.every((r) => r.revokedAt !== null)).toBe(true);
+    });
+
+    it("rejects an expired token", async () => {
+      const res = await service.register("heidi@example.com", "password1");
+      // Force the just-issued token to be already expired.
+      refreshTokens.rows[0].expiresAt = new Date(Date.now() - 1000);
+      await expect(service.refresh(res.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it("logout revokes the presented token; logout-all revokes every session", async () => {
+      const a = await service.register("ivan@example.com", "password1");
+      const b = await service.refresh(a.refreshToken); // second live session (a revoked)
+
+      await service.logout(b.refreshToken);
+      expect(refreshTokens.rows.every((r) => r.revokedAt !== null)).toBe(true);
+      // A revoked token can no longer refresh.
+      await expect(service.refresh(b.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
+
+      // logout-all is a no-op-safe sweep over all of a user's tokens.
+      const c = await service.login("ivan@example.com", "password1");
+      await service.logoutAll(c.user.id);
+      await expect(service.refresh(c.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it("logout is a no-op when no token is presented", async () => {
+      await expect(service.logout(undefined)).resolves.toBeUndefined();
+    });
   });
 
   describe("bootstrap admin", () => {
@@ -130,7 +242,7 @@ describe("AuthService", () => {
       delete process.env.AUTH_BOOTSTRAP_EMAIL;
       delete process.env.AUTH_BOOTSTRAP_PASSWORD;
       const users2 = new FakeUserRepo();
-      await new AuthService(users2, jwt).onModuleInit();
+      await new AuthService(users2, jwt, new FakeRefreshTokenRepo()).onModuleInit();
       expect(users2.rows).toHaveLength(0);
     });
   });

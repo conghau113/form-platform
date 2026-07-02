@@ -1,5 +1,6 @@
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import { type AiCreds, aiHeaders } from "../../ai/creds";
+import { apiFetch } from "../../lib/apiFetch";
 import { API_BASE, ownerHeaders } from "../../workspace/config";
 
 /**
@@ -47,7 +48,7 @@ async function postAi(
   creds: AiCreds,
   fallback: string,
 ): Promise<GenerateWorkflowResult> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await apiFetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json", ...ownerHeaders(), ...aiHeaders(creds) },
     body: JSON.stringify(body),

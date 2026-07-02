@@ -1,4 +1,5 @@
 import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema";
+import { apiFetch } from "../lib/apiFetch";
 import { API_BASE, ownerHeaders } from "../workspace/config";
 import type { WorkflowInstanceSummary, WorkflowSummary } from "../workspace/types";
 
@@ -26,13 +27,13 @@ export async function listWorkflows(
 ): Promise<WorkflowSummary[]> {
   const params = new URLSearchParams({ projectId });
   if (folderId) params.set("folderId", folderId);
-  const res = await fetch(`${API_BASE}/workflows?${params}`, { headers: ownerHeaders() });
+  const res = await apiFetch(`${API_BASE}/workflows?${params}`, { headers: ownerHeaders() });
   if (!res.ok) throw new Error(`List workflows failed: ${await readError(res)}`);
   return (await res.json()) as WorkflowSummary[];
 }
 
 export async function loadWorkflow(id: string): Promise<WorkflowDefinition> {
-  const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${API_BASE}/workflows/${encodeURIComponent(id)}`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load workflow failed: ${await readError(res)}`);
@@ -48,7 +49,7 @@ export async function saveWorkflow(
   if (placement?.projectId) params.set("projectId", placement.projectId);
   if (placement?.folderId) params.set("folderId", placement.folderId);
   const query = params.toString();
-  const res = await fetch(`${API_BASE}/workflows${query ? `?${query}` : ""}`, {
+  const res = await apiFetch(`${API_BASE}/workflows${query ? `?${query}` : ""}`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify(body),
@@ -59,7 +60,7 @@ export async function saveWorkflow(
 
 /** Move a workflow to another folder (`folderId: null` → project root). */
 export async function moveWorkflow(id: string, folderId: string | null): Promise<WorkflowSummary> {
-  const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(id)}/move`, {
+  const res = await apiFetch(`${API_BASE}/workflows/${encodeURIComponent(id)}/move`, {
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify({ folderId }),
@@ -69,7 +70,7 @@ export async function moveWorkflow(id: string, folderId: string | null): Promise
 }
 
 export async function deleteWorkflow(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${API_BASE}/workflows/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: ownerHeaders(),
   });
@@ -87,7 +88,7 @@ export async function startInstance(
   workflowId: string,
   data?: Record<string, unknown>,
 ): Promise<WorkflowInstance> {
-  const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/instances`, {
+  const res = await apiFetch(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/instances`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify({ data }),
@@ -98,7 +99,7 @@ export async function startInstance(
 
 /** List a workflow's cases (summaries, no body), newest first. */
 export async function listInstances(workflowId: string): Promise<WorkflowInstanceSummary[]> {
-  const res = await fetch(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/instances`, {
+  const res = await apiFetch(`${API_BASE}/workflows/${encodeURIComponent(workflowId)}/instances`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`List cases failed: ${await readError(res)}`);
@@ -107,7 +108,7 @@ export async function listInstances(workflowId: string): Promise<WorkflowInstanc
 
 /** Load a single running case by id. */
 export async function getInstance(instanceId: string): Promise<WorkflowInstance> {
-  const res = await fetch(`${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}`, {
+  const res = await apiFetch(`${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load case failed: ${await readError(res)}`);
@@ -119,7 +120,7 @@ export async function advanceInstance(
   instanceId: string,
   input: { action: string; data?: Record<string, unknown>; roles?: string[] },
 ): Promise<WorkflowInstance> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/advance`,
     { method: "POST", headers: jsonHeaders(), body: JSON.stringify(input) },
   );

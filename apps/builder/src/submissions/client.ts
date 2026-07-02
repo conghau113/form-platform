@@ -1,4 +1,5 @@
 import type { Submission } from "@org/form-schema";
+import { apiFetch } from "../lib/apiFetch";
 import { API_BASE, ownerHeaders } from "../workspace/config";
 import type { SubmissionSummary } from "../workspace/types";
 
@@ -25,7 +26,7 @@ export async function submitForm(
   data: Record<string, unknown>,
   roles?: string[],
 ): Promise<Submission> {
-  const res = await fetch(`${API_BASE}/forms/${encodeURIComponent(formId)}/submissions`, {
+  const res = await apiFetch(`${API_BASE}/forms/${encodeURIComponent(formId)}/submissions`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify({ data, roles }),
@@ -36,7 +37,7 @@ export async function submitForm(
 
 /** List a form's submissions (summaries, no body). */
 export async function listSubmissions(formId: string): Promise<SubmissionSummary[]> {
-  const res = await fetch(`${API_BASE}/forms/${encodeURIComponent(formId)}/submissions`, {
+  const res = await apiFetch(`${API_BASE}/forms/${encodeURIComponent(formId)}/submissions`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`List submissions failed: ${await readError(res)}`);
@@ -47,7 +48,7 @@ export async function listSubmissions(formId: string): Promise<SubmissionSummary
  *  declared domain roles (FS2) — fields they can't view are masked out of `data` server-side. */
 export async function getSubmission(id: string, roles?: string[]): Promise<Submission> {
   const query = roles && roles.length > 0 ? `?roles=${encodeURIComponent(roles.join(","))}` : "";
-  const res = await fetch(`${API_BASE}/submissions/${encodeURIComponent(id)}${query}`, {
+  const res = await apiFetch(`${API_BASE}/submissions/${encodeURIComponent(id)}${query}`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load submission failed: ${await readError(res)}`);

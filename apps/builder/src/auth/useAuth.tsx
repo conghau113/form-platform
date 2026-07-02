@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
+import { setSessionExpiredHandler } from "../lib/apiFetch";
 import { qk } from "../query";
 import * as api from "./client";
 import type { UserProfile } from "./types";
@@ -25,6 +26,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const query = useQuery({ queryKey: qk.me, queryFn: api.fetchMe, staleTime: 5 * 60_000 });
+
+  // When a background refresh fails (session truly over), drop to anon so RequireAuth redirects.
+  useEffect(() => {
+    setSessionExpiredHandler(() => qc.setQueryData(qk.me, null));
+    return () => setSessionExpiredHandler(null);
+  }, [qc]);
 
   const setUser = (user: UserProfile) => qc.setQueryData(qk.me, user);
 

@@ -24,8 +24,17 @@ export const envSchema = z
      * auth vulnerability, so we fail fast rather than fall back to a guessable default.
      */
     JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
-    /** Access-token lifetime, as accepted by `@nestjs/jwt` (`"7d"`, `"12h"`, or seconds). */
-    JWT_EXPIRES_IN: z.string().default("7d"),
+    /**
+     * Access-token lifetime (production-hardening A1), as accepted by `@nestjs/jwt` (`"15m"`,
+     * `"12h"`, or seconds). Deliberately short — the refresh token below extends the session so a
+     * leaked access token expires fast.
+     */
+    JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
+    /**
+     * Refresh-token lifetime (A1). Long-lived, rotating, revocable; sets both the DB row's
+     * `expiresAt` and the `refresh_token` cookie `maxAge`, so the two expire together.
+     */
+    JWT_REFRESH_EXPIRES_IN: z.string().default("30d"),
     /**
      * Set the `Secure` flag on the auth cookie (production-hardening 2B). Keep `false` for local
      * plain-HTTP dev; set `true` in production so the browser only sends the cookie over HTTPS.
@@ -80,8 +89,8 @@ const DURATION_UNIT_MS: Record<string, number> = {
 
 /**
  * Convert a JWT-style lifetime (`"7d"`, `"12h"`, `"3600s"`, or a bare number = seconds) to
- * milliseconds — used to give the auth cookie the same `maxAge` as the token. Unparseable input
- * falls back to 7 days (matching the `JWT_EXPIRES_IN` default) rather than throwing at request time.
+ * milliseconds — used to give each auth cookie the same `maxAge` as its token. Unparseable input
+ * falls back to 7 days rather than throwing at request time.
  */
 export function durationToMs(value: string): number {
   const match = /^(\d+)\s*(ms|s|m|h|d)?$/.exec(value.trim());

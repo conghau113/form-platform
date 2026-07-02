@@ -1,5 +1,6 @@
 import type { PresetDraft } from "@org/form-ai";
 import { type AiCreds, aiHeaders } from "../../ai/creds";
+import { apiFetch } from "../../lib/apiFetch";
 import { ownerHeaders } from "../../workspace/config";
 import { API_BASE } from "../config";
 
@@ -38,7 +39,7 @@ export async function generatePreset(
   input: GeneratePresetInput,
   creds: AiCreds,
 ): Promise<GeneratePresetResult> {
-  const res = await fetch(`${API_BASE}/ai/presets/generate`, {
+  const res = await apiFetch(`${API_BASE}/ai/presets/generate`, {
     method: "POST",
     headers: { "content-type": "application/json", ...ownerHeaders(), ...aiHeaders(creds) },
     body: JSON.stringify(input),

@@ -1,4 +1,5 @@
 import type { StatusCatalogEntry } from "@org/workflow-schema";
+import { apiFetch } from "../../lib/apiFetch";
 import { API_BASE, ownerHeaders } from "../../workspace/config";
 
 /**
@@ -21,14 +22,14 @@ const jsonHeaders = (): Record<string, string> => ({
 /** GET /status-catalog — the owner's global statuses, plus `projectId`'s statuses when given. */
 export async function listStatusCatalog(projectId?: string): Promise<StatusCatalogEntry[]> {
   const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
-  const res = await fetch(`${API_BASE}/status-catalog${query}`, { headers: ownerHeaders() });
+  const res = await apiFetch(`${API_BASE}/status-catalog${query}`, { headers: ownerHeaders() });
   if (!res.ok) throw new Error(`List status catalog failed: ${await readError(res)}`);
   return (await res.json()) as StatusCatalogEntry[];
 }
 
 /** POST /status-catalog — create or update a status entry; returns the normalized entry. */
 export async function saveStatusEntry(entry: StatusCatalogEntry): Promise<StatusCatalogEntry> {
-  const res = await fetch(`${API_BASE}/status-catalog`, {
+  const res = await apiFetch(`${API_BASE}/status-catalog`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify(entry),
@@ -39,7 +40,7 @@ export async function saveStatusEntry(entry: StatusCatalogEntry): Promise<Status
 
 /** POST /status-catalog/:code/promote — make a project status global; returns the promoted entry. */
 export async function promoteStatusEntry(code: string): Promise<StatusCatalogEntry> {
-  const res = await fetch(`${API_BASE}/status-catalog/${encodeURIComponent(code)}/promote`, {
+  const res = await apiFetch(`${API_BASE}/status-catalog/${encodeURIComponent(code)}/promote`, {
     method: "POST",
     headers: ownerHeaders(),
   });
@@ -49,7 +50,7 @@ export async function promoteStatusEntry(code: string): Promise<StatusCatalogEnt
 
 /** DELETE /status-catalog/:code — remove a saved status entry. */
 export async function deleteStatusEntry(code: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/status-catalog/${encodeURIComponent(code)}`, {
+  const res = await apiFetch(`${API_BASE}/status-catalog/${encodeURIComponent(code)}`, {
     method: "DELETE",
     headers: ownerHeaders(),
   });

@@ -1,4 +1,5 @@
 import type { FormSchema, FormVersion } from "@org/form-schema";
+import { apiFetch } from "../lib/apiFetch";
 import { API_BASE, ownerHeaders } from "../workspace/config";
 import type { FormVersionSummary } from "../workspace/types";
 
@@ -18,7 +19,7 @@ const id = (s: string): string => encodeURIComponent(s);
 
 /** Freeze the current saved draft into a new immutable published version (returns its summary). */
 export async function publishForm(formId: string): Promise<FormVersionSummary> {
-  const res = await fetch(`${API_BASE}/forms/${id(formId)}/publish`, {
+  const res = await apiFetch(`${API_BASE}/forms/${id(formId)}/publish`, {
     method: "POST",
     headers: ownerHeaders(),
   });
@@ -28,14 +29,16 @@ export async function publishForm(formId: string): Promise<FormVersionSummary> {
 
 /** List a form's published versions (summaries, no body), newest first. */
 export async function listVersions(formId: string): Promise<FormVersionSummary[]> {
-  const res = await fetch(`${API_BASE}/forms/${id(formId)}/versions`, { headers: ownerHeaders() });
+  const res = await apiFetch(`${API_BASE}/forms/${id(formId)}/versions`, {
+    headers: ownerHeaders(),
+  });
   if (!res.ok) throw new Error(`List versions failed: ${await readError(res)}`);
   return (await res.json()) as FormVersionSummary[];
 }
 
 /** Load one published version (with its frozen body) by sequence number. */
 export async function getVersion(formId: string, version: number): Promise<FormVersion> {
-  const res = await fetch(`${API_BASE}/forms/${id(formId)}/versions/${version}`, {
+  const res = await apiFetch(`${API_BASE}/forms/${id(formId)}/versions/${version}`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load version failed: ${await readError(res)}`);
@@ -46,7 +49,7 @@ export async function getVersion(formId: string, version: number): Promise<FormV
  *  server returns an empty body for "never published" (a normal state), so an empty/204 read maps
  *  to `null` rather than an error. */
 export async function getActiveVersion(formId: string): Promise<FormVersion | null> {
-  const res = await fetch(`${API_BASE}/forms/${id(formId)}/active-version`, {
+  const res = await apiFetch(`${API_BASE}/forms/${id(formId)}/active-version`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load active version failed: ${await readError(res)}`);
@@ -56,7 +59,7 @@ export async function getActiveVersion(formId: string): Promise<FormVersion | nu
 
 /** Roll a past version back into the editable draft (returns the new draft). */
 export async function cloneDraft(formId: string, version: number): Promise<FormSchema> {
-  const res = await fetch(`${API_BASE}/forms/${id(formId)}/versions/${version}/clone-draft`, {
+  const res = await apiFetch(`${API_BASE}/forms/${id(formId)}/versions/${version}/clone-draft`, {
     method: "POST",
     headers: ownerHeaders(),
   });

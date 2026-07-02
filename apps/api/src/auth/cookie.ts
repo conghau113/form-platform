@@ -9,6 +9,13 @@
 /** Name of the HttpOnly access-token cookie. Kept in one place so the guard and controller agree. */
 export const AUTH_COOKIE_NAME = "access_token";
 
+/**
+ * Name of the HttpOnly refresh-token cookie (production-hardening A1). Shares {@link authCookieOptions}
+ * (HttpOnly + SameSite=Strict + `path:/`); only its `maxAge` differs (the longer refresh lifetime).
+ * Kept at `path:/` like the access cookie so the same-origin `/api` proxy path never mismatches it.
+ */
+export const REFRESH_COOKIE_NAME = "refresh_token";
+
 /** The cookie attributes we set the token with. `secure`/`maxAge` come from config at call time. */
 export interface AuthCookieOptions {
   httpOnly: true;

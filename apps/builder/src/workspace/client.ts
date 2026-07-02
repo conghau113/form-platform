@@ -1,4 +1,5 @@
 import type { FormSchema } from "@org/form-schema";
+import { apiFetch } from "../lib/apiFetch";
 import { API_BASE, ownerHeaders } from "./config";
 import type {
   FolderRecord,
@@ -30,7 +31,7 @@ const jsonHeaders = (): Record<string, string> => ({
 // --- Projects ---------------------------------------------------------------
 
 export async function listProjects(): Promise<ProjectRecord[]> {
-  const res = await fetch(`${API_BASE}/projects`, { headers: ownerHeaders() });
+  const res = await apiFetch(`${API_BASE}/projects`, { headers: ownerHeaders() });
   if (!res.ok) throw new Error(`List projects failed: ${await readError(res)}`);
   return (await res.json()) as ProjectRecord[];
 }
@@ -39,7 +40,7 @@ export async function createProject(input: {
   name: string;
   description?: string | null;
 }): Promise<ProjectRecord> {
-  const res = await fetch(`${API_BASE}/projects`, {
+  const res = await apiFetch(`${API_BASE}/projects`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify(input),
@@ -52,7 +53,7 @@ export async function updateProject(
   id: string,
   patch: { name?: string; description?: string | null },
 ): Promise<ProjectRecord> {
-  const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${API_BASE}/projects/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify(patch),
@@ -62,7 +63,7 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${API_BASE}/projects/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: ownerHeaders(),
   });
@@ -70,7 +71,7 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export async function getProjectTree(id: string): Promise<ProjectTree> {
-  const res = await fetch(`${API_BASE}/projects/${encodeURIComponent(id)}/tree`, {
+  const res = await apiFetch(`${API_BASE}/projects/${encodeURIComponent(id)}/tree`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load project failed: ${await readError(res)}`);
@@ -84,7 +85,7 @@ export async function createFolder(input: {
   parentId?: string | null;
   name: string;
 }): Promise<FolderRecord> {
-  const res = await fetch(`${API_BASE}/folders`, {
+  const res = await apiFetch(`${API_BASE}/folders`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify(input),
@@ -98,7 +99,7 @@ export async function updateFolder(
   id: string,
   patch: { name?: string; parentId?: string | null; order?: number },
 ): Promise<FolderRecord> {
-  const res = await fetch(`${API_BASE}/folders/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${API_BASE}/folders/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify(patch),
@@ -110,7 +111,7 @@ export async function updateFolder(
 /** Delete a folder; non-empty → 409 unless `cascade` (sub-folders cascade, forms fall to root). */
 export async function deleteFolder(id: string, cascade = false): Promise<void> {
   const url = `${API_BASE}/folders/${encodeURIComponent(id)}${cascade ? "?cascade=true" : ""}`;
-  const res = await fetch(url, { method: "DELETE", headers: ownerHeaders() });
+  const res = await apiFetch(url, { method: "DELETE", headers: ownerHeaders() });
   if (!res.ok) throw new Error(`Delete folder failed: ${await readError(res)}`);
 }
 
@@ -119,13 +120,13 @@ export async function deleteFolder(id: string, cascade = false): Promise<void> {
 export async function listForms(projectId: string, folderId?: string): Promise<FormSummary[]> {
   const params = new URLSearchParams({ projectId });
   if (folderId) params.set("folderId", folderId);
-  const res = await fetch(`${API_BASE}/forms?${params}`, { headers: ownerHeaders() });
+  const res = await apiFetch(`${API_BASE}/forms?${params}`, { headers: ownerHeaders() });
   if (!res.ok) throw new Error(`List forms failed: ${await readError(res)}`);
   return (await res.json()) as FormSummary[];
 }
 
 export async function loadForm(id: string): Promise<FormSchema> {
-  const res = await fetch(`${API_BASE}/forms/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${API_BASE}/forms/${encodeURIComponent(id)}`, {
     headers: ownerHeaders(),
   });
   if (!res.ok) throw new Error(`Load form failed: ${await readError(res)}`);
@@ -141,7 +142,7 @@ export async function saveForm(
   if (placement?.projectId) params.set("projectId", placement.projectId);
   if (placement?.folderId) params.set("folderId", placement.folderId);
   const query = params.toString();
-  const res = await fetch(`${API_BASE}/forms${query ? `?${query}` : ""}`, {
+  const res = await apiFetch(`${API_BASE}/forms${query ? `?${query}` : ""}`, {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify(body),
@@ -152,7 +153,7 @@ export async function saveForm(
 
 /** Move a form to another folder (`folderId: null` → project root). */
 export async function moveForm(id: string, folderId: string | null): Promise<FormSummary> {
-  const res = await fetch(`${API_BASE}/forms/${encodeURIComponent(id)}/move`, {
+  const res = await apiFetch(`${API_BASE}/forms/${encodeURIComponent(id)}/move`, {
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify({ folderId }),
@@ -162,7 +163,7 @@ export async function moveForm(id: string, folderId: string | null): Promise<For
 }
 
 export async function deleteForm(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/forms/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`${API_BASE}/forms/${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: ownerHeaders(),
   });
@@ -177,7 +178,7 @@ function membersUrl(projectId: string, userId?: string): string {
 }
 
 export async function listMembers(projectId: string): Promise<ProjectMembersView> {
-  const res = await fetch(membersUrl(projectId), { headers: ownerHeaders() });
+  const res = await apiFetch(membersUrl(projectId), { headers: ownerHeaders() });
   if (!res.ok) throw new Error(`List members failed: ${await readError(res)}`);
   return (await res.json()) as ProjectMembersView;
 }
@@ -188,7 +189,7 @@ export async function grantMember(
   userId: string,
   role: MemberRole,
 ): Promise<ProjectMember> {
-  const res = await fetch(membersUrl(projectId), {
+  const res = await apiFetch(membersUrl(projectId), {
     method: "POST",
     headers: jsonHeaders(),
     body: JSON.stringify({ userId, role }),
@@ -203,7 +204,7 @@ export async function updateMemberRole(
   userId: string,
   role: MemberRole,
 ): Promise<ProjectMember> {
-  const res = await fetch(membersUrl(projectId, userId), {
+  const res = await apiFetch(membersUrl(projectId, userId), {
     method: "PATCH",
     headers: jsonHeaders(),
     body: JSON.stringify({ role }),
@@ -214,7 +215,7 @@ export async function updateMemberRole(
 
 /** Revoke a collaborator's access. Owner only. */
 export async function revokeMember(projectId: string, userId: string): Promise<void> {
-  const res = await fetch(membersUrl(projectId, userId), {
+  const res = await apiFetch(membersUrl(projectId, userId), {
     method: "DELETE",
     headers: ownerHeaders(),
   });

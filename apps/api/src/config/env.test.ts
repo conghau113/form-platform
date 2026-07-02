@@ -21,13 +21,14 @@ describe("validateEnv", () => {
     expect(() => validateEnv({ ...base, JWT_SECRET: "short" })).toThrow(/JWT_SECRET/);
   });
 
-  it("applies defaults for PORT, CORS_ORIGINS, throttle window, JWT_EXPIRES_IN when omitted", () => {
+  it("applies defaults for PORT, CORS_ORIGINS, throttle window, JWT token lifetimes when omitted", () => {
     const env = validateEnv({ ...base });
     expect(env.PORT).toBe(3001);
     expect(env.CORS_ORIGINS).toBe("http://localhost:5173");
     expect(env.THROTTLE_TTL).toBe(60_000);
     expect(env.THROTTLE_LIMIT).toBe(120);
-    expect(env.JWT_EXPIRES_IN).toBe("7d");
+    expect(env.JWT_ACCESS_EXPIRES_IN).toBe("15m");
+    expect(env.JWT_REFRESH_EXPIRES_IN).toBe("30d");
     expect(env.NODE_ENV).toBe("development");
   });
 
