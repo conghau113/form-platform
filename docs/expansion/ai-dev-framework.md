@@ -100,8 +100,8 @@ Total ~18–22 phases.
 | E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ✅ | cb98374 |
 | **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ✅ | 8c820d9 |
 | E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ✅ | 49fc43e |
-| E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ✅ | _pending_ |
-| E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ⬜ | — |
+| E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ✅ | 99a01cc |
+| E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ✅ | _pending_ |
 | E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ⬜ | — |
 | E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ⬜ | — |
 | E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ⬜ | — |
@@ -230,8 +230,25 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   E1. `accuracy-first` = behavioral binding (cited when regenerated in E5). Normative header w/
   traceability to constitution §5/§6/§7/§9. Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.2.1
   hash `49fc43e`. ⚠️ T1.2.2 own row `_pending_` → backfill T1.2.3. NEXT = T1.2.3 (M) review-workflow.
-- **T1.2.3 (M):** `policies/review-workflow.md` (propose → classify → route → review → approve →
-  version → deprecate → migrate + nature checklists + 6-step disposal as general policy).
+- **T1.2.3 (M):** `policies/review-workflow.md` — DONE. The full lifecycle of a governed change
+  **after intake**, and the permanent home of two things the other policies only referenced: the
+  **per-nature review checklists** (§2 — what a reviewer actually checks, vs. change-approval's
+  routing which says who/floor) and the **6-step disposal door** (§5, ADR-0007). Framing:
+  change-approval = the door in; this = the path through the house. Sections: (1) 8-stage lifecycle
+  table (propose/classify/route → change-approval; review/approve/version/deprecate/migrate/dispose →
+  here); (2) four nature checklists — normative (traceability · single nature · header · freeze-gate ·
+  manifest · precedence-safe; owner deep-read = real gate, isolated spawn only high-stakes),
+  descriptive (claims trace to L0 this session · freshness contract current · method re-verifies),
+  executable (runs green now = the review · advisory-first · CI-preference), evidence (append-only ·
+  honest · no ruling); (3) approve & version (outcome vocab → change-approval; lifecycle transition;
+  content-edit bumps own semver-lite, **shape change bumps FRAMEWORK_VERSION** per §12.4); (4)
+  deprecate/supersede/migrate (supersession-over-deletion · migrate dependents via manifest ·
+  traceability preserved); (5) the 6-step disposal door as GENERAL policy — Verify→Extract→Review→
+  **Commit-BEFORE-Delete**→Archive(sha1-validated + disposal record)→Delete; T0.3.2 = first live use
+  / reference example; mitigates program risk P8. Normative header w/ traceability to constitution
+  §5/§6/§9/§12 + change-approval + dor-dod + ADR-0007. Doc-only ⇒ no changeset/typecheck/test.
+  Backfilled T1.2.2 hash `99a01cc`. ⚠️ T1.2.3 own row `_pending_` → backfill in T1.2.4.
+  NEXT = T1.2.4 (S) `policies/verification.md`.
 - **T1.2.4 (S):** `policies/verification.md` (evidence floors per claim; accuracy-first normative).
 - **T1.3.1 (S):** ADR conventions (lifecycle · numbering · compact retroactive template) into README.
 - **T1.3.2 (M):** retro-ADR batch 1, contract layer: additive/formVersion · no-eval · peerDeps ·
