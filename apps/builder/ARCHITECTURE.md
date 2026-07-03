@@ -1,39 +1,61 @@
 # builder — architecture
 
+> _Verified against `src/` on 2026-07-03 (framework T0.2.2); folder set + `fetch`/`apiFetch`
+> callsites checked via `ls`/`grep`. Provisional stamp pending the E2 freshness contract._
+
 The drag-drop form editor (Vite + antd + dnd-kit). Authors a schema tree, previews it
-via `@org/form-renderer-web`, and saves through `@app/api`.
+via `@org/form-renderer-web`, and saves through `@app/api`. The whole SPA sits behind auth
+(`RequireAuth` → `/login`) inside an adaptive app shell (persistent nav rail + routed section).
 
 ## Top-level layout (`src/`)
 Every feature is a **folder with an `index.ts` barrel** (refactor R1–R5). The only files allowed at
-the root of `src/` are `App.tsx` (the shell) and `main.tsx` (the entry); a new feature goes in a new
-folder, never a new top-level `*.tsx` (the `feature-module` skill rule #1, enforced by
+the root of `src/` are `App.tsx` (the editor 3-pane) and `main.tsx` (the entry); a new feature goes
+in a new folder, never a new top-level `*.tsx` (the `feature-module` skill rule #1, enforced by
 `structure.test.ts`).
 
 | Concern | Folder / file |
 |---|---|
-| App shell — wiring + 3-pane layout only (logic lives in `editor/`) | `App.tsx` |
-| Entry — router (`createBrowserRouter`) + `QueryClientProvider` | `main.tsx` |
-| Editor state + persistence hooks + the only form/theme `fetch` | `editor/` (`useFormEditor`, `useEditorShortcuts`, `useFormPersistence`, `useNavigationGuard`, `history`, `client.ts`) |
+| Editor 3-pane (canvas + property panel + workbench + AI drawer + publish); rendered by `workspace/EditorRoute` | `App.tsx` |
+| Entry — antd `ConfigProvider`(locale vi) + `App` context · `QueryClientProvider` · `AuthProvider` · data router (`createBrowserRouter`, for `useBlocker`) | `main.tsx` |
+| Auth — `LoginPage`, `AuthProvider`/`useAuth`, `RequireAuth` route guard, function-gated nav (`functions.ts`), `UserMenu`; `client.ts` = login/register/logout | `auth/` |
+| Adaptive app shell — persistent nav rail + routed section (layout route) | `shell/` (`AppShell`, `NavRail`, `nav.ts`, `SettingsPage`) |
+| Admin console — data-driven RBAC roles + users panels | `admin/` (`AdminPage`, `RolesPanel`, `UsersPanel`, `useAdmin`) |
+| Editor state + persistence hooks (form/theme save) | `editor/` (`useFormEditor`, `useEditorShortcuts`, `useFormPersistence`, `useNavigationGuard`, `history`, `client.ts`) |
 | Design canvas + `DesignerContext` + dnd-kit drag controller | `canvas/` (`DesignCanvas`, `DesignerContext`, `useDragon`) |
 | Palette of draggable field types | `palette/` |
-| Preset gallery + linked-field control + `fetch` client | `presets/` |
-| Workspace explorer (projects/folders), routes + `fetch` client | `workspace/` |
+| Preset gallery + linked-field control (+ AI preset modal) | `presets/` (+ `presets/ai/`) |
+| Workspace explorer (projects/folders) + routes | `workspace/` (`ProjectsPage`, `ProjectWorkspace`, `EditorRoute`, `client.ts`) |
+| Form submissions — submit + list + detail (field-level RBAC "acting as") | `submissions/` (`SubmissionsRoute`, `form-roles`, `useSubmissions`) |
+| Form versions — publish + version history + field-level diff | `versions/` (`VersionsRoute`, `PublishControl`, `diff`, `useVersions`) |
+| AI assistant — generate/refine a form (BYOK credentials) | `ai/` (`AiAssistantDrawer`, `creds`, `diff`, `useGenerateForm`) |
+| Workflow editor (xyflow) + AI drawer + status catalog | `workflow/` (+ `workflow/ai/`, `workflow/status-catalog/`) |
 | react-query — `QueryClient`, `qk` key factory, test helpers | `query/` |
-| Theme editor · templates gallery · workflow editor (early) | `theme/` · `templates/` · `workflow/` |
+| Theme editor · templates gallery | `theme/` · `templates/` |
 | Bespoke editors reused by the panel | `datasource/`, `reactions/` |
-| Undo/redo wrapper + JSON import/export + UI pins | `lib/` (`io`, `pins`) |
+| Central `apiFetch` (401 → refresh → retry) + undo/redo wrapper + JSON import/export + UI pins | `lib/` (`apiFetch`, `io`, `pins`) |
 | Tree engine (immutable node ops, paths, insert guard, geometry) | `engine/` |
 | Outline / JSON / settings / view side panels | `workbench/` |
 | **Component registry** (meta: palette/seed/settings/behavior) | `field-registry/` |
 | **Property panel** (the right-hand field editor) | `PropertyPanel/` |
 
-## Data fetching — react-query only
-Server state (workspace, presets, form/theme save) goes through react-query: a feature's
-`client.ts` (the **only** place `fetch` is allowed) → a `useQuery`/`useMutation` hook → the
-component. Keys come from `query/keys.ts` (`qk`); mutations `invalidateQueries` rather than
-re-fetching by hand. There is no `useState`+`useEffect`+`alive`-flag fetching and no manual
-`reload()` left in the tree (refactor R4/R5). `fetch(` appears only in `editor/client.ts`,
-`workspace/client.ts`, and `presets/client.ts`.
+## Data fetching — react-query over a shared `apiFetch`
+Server state (workspace, presets, forms/themes, workflows, submissions, versions, admin/RBAC, AI)
+goes through react-query: a feature's `client.ts` → a `useQuery`/`useMutation` hook → the component.
+Keys come from `query/keys.ts` (`qk`); mutations `invalidateQueries` rather than re-fetching by hand.
+No `useState`+`useEffect`+`alive`-flag fetching, no manual `reload()` (refactor R4/R5).
+
+Every feature `client.ts` calls **`apiFetch`** (`lib/apiFetch.ts`), the shared wrapper — not raw
+`fetch`. `apiFetch` keeps a session alive across access-token expiry (production-hardening A1): on a
+`401` it fires a **single de-duplicated** `POST /auth/refresh` (concurrent 401s share one in-flight
+refresh, so token rotation never sees a replay), then transparently retries the original request. If
+the refresh fails the session is over — it surfaces the original 401 and notifies the auth layer via
+`setSessionExpiredHandler`, dropping the app to the login screen.
+
+> **The only raw `fetch(` in the tree** is inside `lib/apiFetch.ts` itself and `auth/client.ts`
+> (login/register/logout — the cookie-setting endpoints that must bypass the refresh-retry, listed
+> in `apiFetch`'s `AUTH_BYPASS`). The invariant is now: **feature I/O flows through `apiFetch` via
+> each `client.ts`; raw `fetch` lives only in `apiFetch` + the auth entry points** — the update of
+> the old "`fetch` only in `client.ts`" rule.
 
 ## `field-registry/` — the meta-driven registry
 Single source of truth the builder derives palette, model factories, property panel,
@@ -64,6 +86,13 @@ Import via `../PropertyPanel` (resolves to `index.ts`). Public surface: `Propert
 | `ItemFieldsEditor.tsx` | array `itemFields` editor (columns + variant) |
 | `StepsEditor.tsx` | wizard step list (writes via the tree, not `set`) |
 | `OptionsEditor.tsx` | static `{label,value}` list editor (also imported by DataSourceEditor/ReactionsEditor) |
+| `KeyValueEditor.tsx` | controlled ordered `{ key, value }` pair list editor |
+| `JsonEditor.tsx` | pretty-printed JSON control for a raw model value |
+| `PresetLink.tsx` | field-level "linked preset" control (Track W4: link/override/unlink) |
+| `TranslationsEditor.tsx` | node's per-attribute, per-locale `i18n` overrides editor |
+| `TranslatePopover.tsx` | compact 🌐 popover editing one string's per-locale translations |
+| `translatable.ts` | the translatable string attributes a node can carry (display order + labels) |
+| `sections.ts` | `PANEL_SECTIONS` — section identity + search keywords (G3 panel search) |
 | `rules.ts` | pure JSONLogic readers: `readEqualsRule`, `readSimpleRule`, `CROSS_OPS`, `coerceLiteral` |
 | `helpers.ts` | `nodeName`/`nodeLabel`/`csv`/`parseCsv`/`prop`/`mergePermissions` |
 | `types.ts` | `AuthoredField`, `SelectedNode`, `Patch`, `ColKey`/`COL_KEYS` |

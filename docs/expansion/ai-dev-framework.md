@@ -92,8 +92,8 @@ Total ~18–22 phases.
 |---|---|---|---|---|---|
 | **E0** | T0.1.1 | S | Materialize roadmap → governed tracker + record blueprint-approval/freeze/freeze-rule | ✅ | f0aef83 |
 | E0 | T0.1.2 | S | Finalize ADR statuses (8 Accepted / 5 Open) + commit `decision-records/` | ✅ | e305d27 |
-| E0 | T0.2.1 | M | Remediate `apps/api/ARCHITECTURE.md` (auth/refresh · tenancy · RBAC · 14 modules · endpoints · Postgres) | ✅ | _pending_ |
-| E0 | T0.2.2 | S | Remediate `apps/builder/ARCHITECTURE.md` (+auth/admin/shell/submissions/versions/ai; apiFetch exception) | ⬜ | — |
+| E0 | T0.2.1 | M | Remediate `apps/api/ARCHITECTURE.md` (auth/refresh · tenancy · RBAC · 14 modules · endpoints · Postgres) | ✅ | 2854251 |
+| E0 | T0.2.2 | S | Remediate `apps/builder/ARCHITECTURE.md` (+auth/admin/shell/submissions/versions/ai; apiFetch exception) | ✅ | _pending_ |
 | E0 | T0.2.3 | S | Remediate `docs/usage.md` (stale auth, counts) + `production-hardening.md` (2C/2D superseded) | ⬜ | — |
 | E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt (ADR-0007; ask owner on OQ2 language) | ⬜ | — |
 | E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (Verify→Extract→Review→Commit→Archive→Delete) | ⬜ | — |
