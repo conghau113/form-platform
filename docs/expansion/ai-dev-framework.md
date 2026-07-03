@@ -95,8 +95,8 @@ Total ~18–22 phases.
 | E0 | T0.2.1 | M | Remediate `apps/api/ARCHITECTURE.md` (auth/refresh · tenancy · RBAC · 14 modules · endpoints · Postgres) | ✅ | 2854251 |
 | E0 | T0.2.2 | S | Remediate `apps/builder/ARCHITECTURE.md` (+auth/admin/shell/submissions/versions/ai; apiFetch exception) | ✅ | 8fe785d |
 | E0 | T0.2.3 | S | Remediate `docs/usage.md` (stale auth, counts) + `production-hardening.md` (2C/2D superseded) | ✅ | 30b3cab |
-| E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt EN (ADR-0007; owner: engineering→English; fixed 14-modules + nested routes + ER omissions) | ✅ | _pending_ |
-| E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (Verify→Extract→Review→Commit→Archive→Delete) | ⬜ | — |
+| E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt EN (ADR-0007; owner: engineering→English; fixed 14-modules + nested routes + ER omissions) | ✅ | 91f544e |
+| E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (all items absorbed/stale → 0 ported; archived + disposal record) | ✅ | _pending_ |
 | E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ⬜ | — |
 | **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ⬜ | — |
 | E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ⬜ | — |
@@ -172,9 +172,15 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   (c) §7 ER omitted AuditLog / RefreshToken / StatusCatalogEntry → added a note (21 models).
   Everything else verified accurate against source (packages, form-core modules, all §8
   versions, §9 ports). Provisional `verified-on: 2026-07-03` + drift cadence stamped.
-- **T0.3.2 (S):** dispose of `suggestions.txt` via the 6-step workflow: Verify → Extract →
-  Review → Commit (file into git FIRST) → Archive (`reports/archive/` + dated disposal record)
-  → Delete only after validating the archive diff is identical to the original.
+- **T0.3.2 (S):** dispose of `suggestions.txt` via the 6-step workflow — DONE, first live use
+  of the ADR-0007 disposal door. **Verify+Extract:** every item checked against the current
+  `product-roadmap.md` — all absorbed/shipped (evidence ledger §7 · migration B4 · governance
+  C5 · audit D1 · test-plan §8 · AppShell §6 · numbering fix) or now-stale (the "Tenant… not
+  in source" claim is false) → **0 items ported**. **Commit** (safety net, raw file tracked)
+  `1bb4d4e`. **Archive:** `reports/archive/suggestions-2026-07-03.txt` (verbatim, sha1
+  validated identical) + `reports/archive/DISPOSAL-2026-07-03-suggestions.md` (absorption
+  ledger). **Delete:** original removed only after the archive diff validated identical.
+  Note: this task legitimately spans 2 commits — the disposal door mandates Commit-before-Delete.
 - **T0.4.1 (S):** native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note),
   per ADR-0006.
 - **Epic DoD:** zero stale claims across the four docs; provisional `verified-on` stamps;
