@@ -99,8 +99,8 @@ Total ~18–22 phases.
 | E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (all items absorbed/stale → 0 ported; archived + disposal record) | ✅ | 25038fe |
 | E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ✅ | cb98374 |
 | **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ✅ | 8c820d9 |
-| E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ✅ | _pending_ |
-| E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ⬜ | — |
+| E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ✅ | 49fc43e |
+| E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ✅ | _pending_ |
 | E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ⬜ | — |
 | E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ⬜ | — |
 | E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ⬜ | — |
@@ -220,8 +220,16 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   tracker + memory; supersede-not-erase). Normative header w/ traceability to constitution sections.
   Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.1.1 hash `8c820d9`. ⚠️ T1.2.1 own row
   `_pending_` → backfill in T1.2.2. NEXT = T1.2.2 (S) `policies/dor-dod.md`.
-- **T1.2.2 (S):** `policies/dor-dod.md` (evidence-typed per work-class: bug = E1 repro ·
-  feature = E2 contract reads).
+- **T1.2.2 (S):** `policies/dor-dod.md` — DONE. Permanent home of the Global DoR/DoD (tracker
+  stated it operationally). Key rule: **evidence floor typed by work-class.** Global DoR (ADR-gate ·
+  nature declared · work-class floor met before writing, extraction reads L0 not docs · upstream
+  merged) + Global DoD (header matches nature · index.yaml from E2 · review per routing matrix ·
+  commit+tracker+memory, checks green). Work-class table: bug→**E1 repro**, feature→**E2 contract
+  reads** + E1 live-smoke, refactor→E1 suite green before/after, doc/extraction→E2 vs L0 + verified-on,
+  governance→traceability + owner ratify + manifest discharged, verification→E1 run. Behavior always
+  E1. `accuracy-first` = behavioral binding (cited when regenerated in E5). Normative header w/
+  traceability to constitution §5/§6/§7/§9. Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.2.1
+  hash `49fc43e`. ⚠️ T1.2.2 own row `_pending_` → backfill T1.2.3. NEXT = T1.2.3 (M) review-workflow.
 - **T1.2.3 (M):** `policies/review-workflow.md` (propose → classify → route → review → approve →
   version → deprecate → migrate + nature checklists + 6-step disposal as general policy).
 - **T1.2.4 (S):** `policies/verification.md` (evidence floors per claim; accuracy-first normative).
