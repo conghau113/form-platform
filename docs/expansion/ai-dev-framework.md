@@ -102,8 +102,8 @@ Total ~18–22 phases.
 | E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ✅ | 49fc43e |
 | E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ✅ | 99a01cc |
 | E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ✅ | ad1bbc3 |
-| E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ✅ | _pending_ |
-| E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ⬜ | — |
+| E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ✅ | c7d786d |
+| E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ✅ | _pending_ |
 | E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ⬜ | — |
 | E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ⬜ | — |
 | **E2** | T2.1.1 | M | `knowledge/index.yaml` schema (class/scope-globs/verified-on/executable method/cadence/owner) + register remediated docs + AGENTS.md | ⬜ | — |
@@ -266,7 +266,26 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   Backfilled T1.2.3 hash `ad1bbc3`. ⚠️ T1.2.4 own row `_pending_` → backfill in T1.3.1.
   **This completes the 4 E1 policies (change-approval · dor-dod · review-workflow · verification).**
   NEXT = T1.3.1 (S) ADR conventions into README.
-- **T1.3.1 (S):** ADR conventions (lifecycle · numbering · compact retroactive template) into README.
+- **T1.3.1 (S):** ADR conventions into `decision-records/README.md` — DONE. Added a durable
+  **"Conventions — lifecycle · numbering · templates"** section (after the round-specific
+  "How to review"), codifying the practice decided in ADR-0012 and instantiating constitution
+  §3/§6/§11 for the ADR artifact specifically. Four parts: (1) **numbering & identity** —
+  sequential zero-padded `ADR-NNNN`, permanent/never-reused (a Rejected number is a real record,
+  not a free slot), next free = 0014, retroactive backfills take next numbers going forward (NOT
+  renumbered into the past); (2) **status lifecycle** table — ADR uses the decision-relevant subset
+  of §6 (`Draft→Proposed→Accepted→…→Superseded`), skips **Active** (a living-doc state; an Accepted
+  ADR *is* in force), notes this repo writes an undecided task-gating ADR as **`Open (gate → Tx.y.z)`**
+  = same as Proposed but task-linked, adds **Rejected** (kept with its number so options aren't
+  silently re-proposed); (3) **immutability & supersession** — Accepted ADR immutable (change-of-mind
+  = new superseding ADR, not an edit; only typo/link fixes in-place), never deleted, owner-only sets
+  Accepted/Rejected/Superseded per §3; (4) **templates** — the standard 11-section template (forward
+  decisions) + the **compact retroactive template** (ADR-0012 Option C, for T1.3.2/T1.3.3 backfill of
+  living constraints): `Accepted (retroactive)` header + Context/**Decision**/**Rationale**/Evidence,
+  the verbatim **reconstruction marker** *"Rationale reconstructed from repository evidence; ratified
+  by owner"* (owner ratify = authority step §3), and the rule to say-so rather than invent when a
+  `why` can't be recovered. Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.2.4 hash `c7d786d`.
+  ⚠️ T1.3.1 own row `_pending_` → backfill in T1.3.2. NEXT = T1.3.2 (M) retro-ADR batch 1 (contract
+  layer): additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory.
 - **T1.3.2 (M):** retro-ADR batch 1, contract layer: additive/formVersion · no-eval · peerDeps ·
   validateGraph-hard vs lintGraph-advisory.
 - **T1.3.3 (M):** retro-ADR batch 2, product/arch: vendor↔client no-hardcode-EVN ·

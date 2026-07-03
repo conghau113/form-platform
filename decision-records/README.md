@@ -61,3 +61,81 @@ For each ADR: read Context → Options → Recommendation. Reply per ADR with on
 
 Answers to the Open Questions sections can be given inline; unanswered open
 questions block only their own ADR, not the others.
+
+## Conventions — lifecycle · numbering · templates
+
+These are the standing rules for authoring and maintaining decision records. They
+instantiate constitution §6 (artifact lifecycle) and §3 (authority) for the ADR
+artifact specifically, and codify the practice decided in
+[ADR-0012](ADR-0012-adr-practice-and-backfill.md). Traceability: constitution §3, §6,
+§11 · ADR-0012.
+
+### Numbering & identity
+
+- ADRs are numbered sequentially and zero-padded to four digits: `ADR-NNNN`. The number
+  is permanent and never reused, even if the ADR is later Rejected or Superseded — a
+  Rejected number is a real historical record, not a free slot.
+- Filename: `ADR-NNNN-kebab-topic.md`. The first line is `# ADR-NNNN: <topic>`.
+- The next free number is one above the highest in this directory (currently 0013 →
+  next is 0014). Retroactive backfill records also take the next free numbers going
+  forward; they are **not** renumbered into the past.
+
+### Status lifecycle
+
+An ADR is a point-in-time decision record, so it uses the decision-relevant subset of
+the constitution §6 lifecycle (`Draft → Proposed → Accepted → Active → Deprecated →
+Superseded`). Living normative documents (the constitution, policies) additionally pass
+through **Active**; a decision record does not — once Accepted it *is* in force.
+
+| Status | Meaning | Set by |
+|---|---|---|
+| **Draft** | Being written; not authoritative. | Author (AI or human) |
+| **Proposed** | Complete, awaiting the owner. In this repo's index an undecided ADR that gates a downstream task is written **`Open (gate → Tx.y.z)`** — same state, task-linked. | Author |
+| **Accepted** | Owner decided in favour; in force. Header records `Accepted (owner, <date>)`. Variants: `Accepted (with modification)`, `Accepted (retroactive)`. | **Owner only** (§3) |
+| **Rejected** | Owner declined. Retained with its number; the rationale stays on record so the option is not silently re-proposed. | **Owner only** |
+| **Deprecated** | Still readable, no longer the current guidance, no direct replacement. | Owner |
+| **Superseded** | Replaced by a newer ADR. Header reads `Superseded by ADR-MMMM (<date>)`; the superseding record back-links `Supersedes ADR-NNNN`. | Owner |
+
+### Immutability & supersession
+
+- An **Accepted ADR is immutable.** You do not edit its decision to change your mind —
+  you write a new ADR that supersedes it (constitution §6, §10 "supersession over
+  deletion"). Typo/link fixes to a settled record are the only permitted in-place edits.
+- ADRs are **never deleted.** Superseded and Rejected records are kept for history and
+  traceability. Deletion of a governed artifact would itself require a decision record.
+- Only the owner sets `Accepted` / `Rejected` / `Superseded` (constitution §3: L1
+  normative and ADR acceptance are owner-only; the AI drafts and recommends, never
+  self-ratifies).
+
+### Templates
+
+**Standard template** (new forward decisions) — the mandated 11 sections:
+
+> Context · Problem · Constraints · Options (each with pros/cons, affected areas,
+> maintenance cost, migration risk) · Risks · Recommendation · Confidence · Evidence ·
+> Open Questions
+
+Header block: `Status` · `Date` · `Deciders` · `Source`. See ADR-0001–0013 for the shape.
+
+**Compact retroactive template** (backfilling a *living constraint* already in force —
+per ADR-0012 Option C; used by roadmap tasks T1.3.2 / T1.3.3). A settled decision does
+not need the full deliberation scaffold; the option analysis already happened in history.
+Required sections only:
+
+> **Header** — `Status: Accepted (retroactive)`, `Date` (of the *original* decision if
+> known, else the backfill date, labelled), `Deciders`, `Source` (the tracker/commit/
+> memory where the decision actually lives).
+> **Context** — what the constraint is and where it operates.
+> **Decision** — the rule, stated as it is enforced today.
+> **Rationale** — *why*, reconstructed from evidence. This is the whole point of the
+> backfill: the rule already exists in AGENTS.md / code; the missing durable asset is the
+> reason.
+> **Evidence** — concrete pointers (commit SHAs, tracker lines, file:line) that anchor
+> the reconstruction to the repo, not to memory.
+> **Reconstruction marker** — every retroactive ADR carries, verbatim near the top:
+> *"Rationale reconstructed from repository evidence; ratified by owner."* The owner's
+> ratification is the authority step (constitution §3), exactly as for a forward ADR.
+
+Reconstructed rationale can be subtly wrong (inferring *why* from *what*); the marker plus
+owner review is the mitigation (ADR-0012 Risks). If a `why` genuinely cannot be recovered
+from evidence, say so explicitly rather than inventing a plausible one.
