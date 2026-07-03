@@ -4,7 +4,10 @@ globs: packages/form-renderer-web/**,packages/form-renderer-native/**
 ---
 - Shared behavior (migrate, isVisible, RBAC) comes from `form-core`. Do not reimplement.
 - Only the leaf component mapping + layout interpretation is platform-specific.
-- Web: responsive via antd 24-col (xs/sm/md/lg). Native: single column; honor only
-  `hideOnMobile` / `mobileOrder`.
+- Web: responsive via antd 24-col (xs/sm/md/lg).
+- Native (`form-renderer-native`): FROZEN, deferred (ADR-0006). Conventions preserved for
+  resumption — single column; honor only `hideOnMobile` / `mobileOrder`. Do NOT extend the
+  package without an explicit unfreeze decision (new ADR / owner sign-off); it has no tests,
+  so CI typecheck/build is its only guard and reviews do not assess native parity.
 - All changes must be additive — older schema versions must keep rendering.
 - `react` / `antd` / `react-native` are peerDependencies, never dependencies.

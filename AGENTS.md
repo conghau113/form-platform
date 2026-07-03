@@ -25,7 +25,7 @@ packages/
   form-schema       contract: types, Zod, formVersion + migrations (zod only, tiny)
   form-core         shared runtime: JSONLogic conditions, RBAC, registry interface
   form-renderer-web    antd renderer, responsive (24-col xs/sm/md/lg)
-  form-renderer-native React Native renderer, single column — DEFERRED (web first)
+  form-renderer-native React Native renderer, single column — FROZEN, deferred (ADR-0006)
   workflow-schema   (later) state machine contract; nodes reference forms by id
   workflow-core     (later) engine, runs on FE AND NestJS BE
 apps/
@@ -38,6 +38,10 @@ apps/
   file cheap for an agent to read.
 - Tooling: pnpm + Turborepo, Biome (lint+format), Vitest (test), Changesets (release).
 - Renderer changes must be ADDITIVE — older schema versions keep rendering.
+- `form-renderer-native` is FROZEN (ADR-0006): reviews do NOT assess native parity; CI
+  typecheck/build is its only guard. Its conventions (single column, `hideOnMobile` /
+  `mobileOrder`) are preserved for future resumption. Any commit touching the package
+  requires an explicit unfreeze decision first — a new ADR or owner sign-off.
 - App structure: each app has an `ARCHITECTURE.md` (`apps/builder`, `apps/api`); the conventions +
   phased plan live in `docs/refactor/{frontend-architecture,refactor-plan}.md` and the
   `feature-module` skill. Builder = feature folders (no new root `src/*.tsx`) + react-query

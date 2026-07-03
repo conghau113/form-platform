@@ -96,8 +96,8 @@ Total ~18–22 phases.
 | E0 | T0.2.2 | S | Remediate `apps/builder/ARCHITECTURE.md` (+auth/admin/shell/submissions/versions/ai; apiFetch exception) | ✅ | 8fe785d |
 | E0 | T0.2.3 | S | Remediate `docs/usage.md` (stale auth, counts) + `production-hardening.md` (2C/2D superseded) | ✅ | 30b3cab |
 | E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt EN (ADR-0007; owner: engineering→English; fixed 14-modules + nested routes + ER omissions) | ✅ | 91f544e |
-| E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (all items absorbed/stale → 0 ported; archived + disposal record) | ✅ | _pending_ |
-| E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ⬜ | — |
+| E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (all items absorbed/stale → 0 ported; archived + disposal record) | ✅ | 25038fe |
+| E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ✅ | _pending_ |
 | **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ⬜ | — |
 | E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ⬜ | — |
 | E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ⬜ | — |
@@ -181,8 +181,14 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   validated identical) + `reports/archive/DISPOSAL-2026-07-03-suggestions.md` (absorption
   ledger). **Delete:** original removed only after the archive diff validated identical.
   Note: this task legitimately spans 2 commits — the disposal door mandates Commit-before-Delete.
-- **T0.4.1 (S):** native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note),
-  per ADR-0006.
+- **T0.4.1 (S):** native-renderer freeze marker — DONE, per ADR-0006 Option A. Re-verified the
+  premise (`ls packages/form-renderer-native/src` → 2 files; `package.json` scripts = build +
+  typecheck, NO test). Marked `form-renderer-native` FROZEN in three places: AGENTS.md Layout
+  line + a new Conventions bullet (reviews do not assess native parity; CI typecheck/build is the
+  only guard; unfreeze needs a new ADR / owner sign-off) and the `.cursor/rules/renderers.mdc`
+  native line (same marker, conventions preserved for resumption). Doc-only, no package touched ⇒
+  no changeset / typecheck / test. Backfilled T0.3.2 hash `25038fe`. This is the LAST task of E0 ⇒
+  **E0 COMPLETE.** (T0.4.1's own hash committed `_pending_`; backfill in T1.1.1 — amend fixed-point.)
 - **Epic DoD:** zero stale claims across the four docs; provisional `verified-on` stamps;
   `decision-records/` committed; disposal record archived. Validation: executable checks
   (count modules/endpoints/folders via `ls`/`grep` vs the doc's claims).
