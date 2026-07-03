@@ -101,8 +101,8 @@ Total ~18–22 phases.
 | **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ✅ | 8c820d9 |
 | E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ✅ | 49fc43e |
 | E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ✅ | 99a01cc |
-| E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ✅ | _pending_ |
-| E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ⬜ | — |
+| E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ✅ | ad1bbc3 |
+| E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ✅ | _pending_ |
 | E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ⬜ | — |
 | E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ⬜ | — |
 | E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ⬜ | — |
@@ -249,7 +249,23 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   §5/§6/§9/§12 + change-approval + dor-dod + ADR-0007. Doc-only ⇒ no changeset/typecheck/test.
   Backfilled T1.2.2 hash `99a01cc`. ⚠️ T1.2.3 own row `_pending_` → backfill in T1.2.4.
   NEXT = T1.2.4 (S) `policies/verification.md`.
-- **T1.2.4 (S):** `policies/verification.md` (evidence floors per claim; accuracy-first normative).
+- **T1.2.4 (S):** `policies/verification.md` — DONE. The **L1 home of the `accuracy-first` working
+  contract**: that skill states real rules but is L3, and a rule stated only in a prompt/binding is a
+  bug in L3 (constitution §2) — so the rules originate here and the skill becomes their regenerable
+  binding (E5 T5.1.1, cites this + verbatim per ADR-0001). Distinct from `dor-dod.md`: dor-dod types
+  the floor by **work-class** (task gate); this types it by **claim** (every individual assertion).
+  Sections: (1) evidence floor per claim-type table — behavior→**E1**, structure/count→E1|E2,
+  version/config→E2, derived→E3, "done"→E1; E5-recall never satisfies alone, an unmeetable floor →
+  claim downgraded to explicit "unverified" not made; (2) the 5-rule verification loop stated
+  normatively (investigate-before-acting · reproduce-empirically · fix-root-cause · **verify-by-running
+  not-claiming** · report-faithfully = never round "tests fail"/"didn't run" up to "done"); (3)
+  confidence=f(class,age) decay — a stale E1 past verify-by is treated as E5 until re-run (§7/§10);
+  (4) relationship map to dor-dod (task-level) / review-workflow §2 (checklists use these floors) /
+  change-approval Step3 (names floor per nature at intake, points here). Normative header, traceability
+  to constitution §7/§10 + dor-dod + accuracy-first skill. Doc-only ⇒ no changeset/typecheck/test.
+  Backfilled T1.2.3 hash `ad1bbc3`. ⚠️ T1.2.4 own row `_pending_` → backfill in T1.3.1.
+  **This completes the 4 E1 policies (change-approval · dor-dod · review-workflow · verification).**
+  NEXT = T1.3.1 (S) ADR conventions into README.
 - **T1.3.1 (S):** ADR conventions (lifecycle · numbering · compact retroactive template) into README.
 - **T1.3.2 (M):** retro-ADR batch 1, contract layer: additive/formVersion · no-eval · peerDeps ·
   validateGraph-hard vs lintGraph-advisory.
