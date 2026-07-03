@@ -103,8 +103,8 @@ Total ~18–22 phases.
 | E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ✅ | 99a01cc |
 | E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ✅ | ad1bbc3 |
 | E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ✅ | c7d786d |
-| E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ✅ | _pending_ |
-| E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ⬜ | — |
+| E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ✅ | 420c546 |
+| E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ✅ | _pending_ |
 | E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ⬜ | — |
 | **E2** | T2.1.1 | M | `knowledge/index.yaml` schema (class/scope-globs/verified-on/executable method/cadence/owner) + register remediated docs + AGENTS.md | ⬜ | — |
 | E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc | ⬜ | — |
@@ -286,8 +286,28 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   `why` can't be recovered. Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.2.4 hash `c7d786d`.
   ⚠️ T1.3.1 own row `_pending_` → backfill in T1.3.2. NEXT = T1.3.2 (M) retro-ADR batch 1 (contract
   layer): additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory.
-- **T1.3.2 (M):** retro-ADR batch 1, contract layer: additive/formVersion · no-eval · peerDeps ·
-  validateGraph-hard vs lintGraph-advisory.
+- **T1.3.2 (M):** retro-ADR batch 1, contract layer — DONE. Wrote **four** retroactive ADRs
+  (`ADR-0014`…`ADR-0017`) using the compact template from T1.3.1, converting load-bearing tribal
+  constraints into durable repo knowledge (ADR-0012 Option C hazard: rules whose *why* lived only in
+  AGENTS.md/code/memory). Each = `Accepted (retroactive)` + verbatim reconstruction marker + Context/
+  **Decision**/**Rationale**/Evidence, every rationale anchored to real `file:line` + origin commit
+  (NOT memory). (1) **ADR-0014** additive schema & formVersion decoupling — old saved JSON must never
+  break; `CURRENT_FORM_VERSION=3` ≠ npm version; shape-change = bump + migration N→N+1 + fixture
+  migrate-test; evidence `schema.ts:9`, `migrate.ts:13-64`, origin `180d921`. (2) **ADR-0015** JSONLogic
+  never eval()/new Function() — schema expressions are DATA (evaluated server-side too → eval = RCE
+  vector); single choke point `evalRule`; evidence `conditions.ts:4-20`, origin `2a934d2`. (3)
+  **ADR-0016** framework libs as renderer peerDependencies — no duplicate React/antd instance in host
+  apps (portability Track V); `react/react-dom/antd/@ant-design-icons/@tanstack-react-query` peer, not
+  bundled; evidence `form-renderer-web/package.json:28-34`, origin `236d587`. (4) **ADR-0017**
+  validateGraph hard-gate vs lintGraph advisory — kept SEPARATE on purpose (validateGraph = editor
+  save-block + AI-moat fatal check + eval parse-rate; lintGraph = amber advisory, never gates/never in
+  repair loop; new soft checks go to lintGraph); near-miss recorded (WE5a almost extended validateGraph);
+  evidence `graph.ts:16-144`, `WorkflowEditor.tsx:318-654`, `pipeline.ts:15-20`, origin `a057961`+split
+  `e6e7c6f`. Registered all four in README index (new "Retroactive records" subtable) + bumped next-free
+  number note 0013→0017. **Owner-ratification (README marker + owner review) = the authority step per
+  constitution §3** — these ship as recommendations pending owner deep-read like all L1. Doc-only ⇒ no
+  changeset/typecheck/test. Backfilled T1.3.1 hash `420c546`. ⚠️ T1.3.2 own row `_pending_` → backfill
+  in T1.3.3. NEXT = T1.3.3 (M) retro-ADR batch 2 (product/arch).
 - **T1.3.3 (M):** retro-ADR batch 2, product/arch: vendor↔client no-hardcode-EVN ·
   Prisma-not-TypeORM · tenancy chokepoint projectId→tenantId · RBAC data-driven + `*` ·
   adaptive shell · scoped-biome.

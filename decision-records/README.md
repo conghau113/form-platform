@@ -51,6 +51,20 @@ The recommendation in each ADR is advisory. The decision belongs to the owner.
 | [ADR-0012](ADR-0012-adr-practice-and-backfill.md) | ADR practice | Numbering, lifecycle, and retroactive backfill of past decisions? | Accepted |
 | [ADR-0013](ADR-0013-doc-drift-remediation-timing.md) | Drift remediation timing | Fix known-stale docs now, or after the drift detector exists? | Accepted |
 
+### Retroactive records (backfilled living constraints — ADR-0012 Option C)
+
+ADR-0014 onward are **retroactive** backfills of constraints that were already in force
+before ADR practice existed. Each uses the compact retroactive template and carries the
+reconstruction marker; the decision was made at the origin commit cited in its Evidence,
+not on the backfill date. Batch 1 (below) covers the contract layer.
+
+| # | Constraint | What it fixes | Status |
+|---|---|---|---|
+| [ADR-0014](ADR-0014-additive-schema-formversion.md) | Additive schema & formVersion decoupling | Old saved form JSON must never break; data-version ≠ package-version. | Accepted (retroactive) |
+| [ADR-0015](ADR-0015-no-eval-jsonlogic.md) | JSONLogic, never eval()/new Function() | Schema-provided expressions are data, not code — no RCE via stored rules. | Accepted (retroactive) |
+| [ADR-0016](ADR-0016-renderer-peer-dependencies.md) | Framework libs as renderer peerDependencies | No duplicate React/antd instance in host apps; renderers stay portable. | Accepted (retroactive) |
+| [ADR-0017](ADR-0017-validategraph-hard-vs-lintgraph-advisory.md) | validateGraph hard-gate vs lintGraph advisory | Keep a sharp definition of graph validity for the save-gate + AI repair loop. | Accepted (retroactive) |
+
 ## How to review
 
 For each ADR: read Context → Options → Recommendation. Reply per ADR with one of:
@@ -76,8 +90,8 @@ artifact specifically, and codify the practice decided in
   is permanent and never reused, even if the ADR is later Rejected or Superseded — a
   Rejected number is a real historical record, not a free slot.
 - Filename: `ADR-NNNN-kebab-topic.md`. The first line is `# ADR-NNNN: <topic>`.
-- The next free number is one above the highest in this directory (currently 0013 →
-  next is 0014). Retroactive backfill records also take the next free numbers going
+- The next free number is one above the highest in this directory (currently 0017 →
+  next is 0018). Retroactive backfill records also take the next free numbers going
   forward; they are **not** renumbered into the past.
 
 ### Status lifecycle
