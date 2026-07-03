@@ -50,6 +50,7 @@ export function ToolbarPanel({
       style={{
         display: "flex",
         alignItems: "center",
+        flexWrap: "wrap",
         gap: 12,
         justifyContent: "space-between",
         padding: "8px 12px",

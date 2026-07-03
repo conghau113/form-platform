@@ -251,6 +251,7 @@ export function App({
           style={{
             display: "flex",
             alignItems: "center",
+            flexWrap: "wrap",
             gap: 12,
             padding: "12px 16px",
             borderBottom: "1px solid rgba(0,0,0,0.08)",
@@ -265,7 +266,7 @@ export function App({
           <Typography.Title level={4} style={{ margin: 0, whiteSpace: "nowrap" }}>
             Builder
           </Typography.Title>
-          <Space style={{ marginLeft: "auto" }}>
+          <Space wrap style={{ marginLeft: "auto" }}>
             <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
             <Button onClick={() => setGalleryOpen(true)}>Templates</Button>
             <Button onClick={onExportForm}>Export</Button>
@@ -307,7 +308,9 @@ export function App({
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
             <aside
               style={{
-                width: 260,
+                // Shrinks toward 220px on narrow viewports so the canvas keeps room.
+                width: "clamp(220px, 18vw, 260px)",
+                flexShrink: 0,
                 borderRight: "1px solid rgba(0,0,0,0.08)",
                 minHeight: 0,
                 overflow: "hidden",

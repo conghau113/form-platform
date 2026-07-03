@@ -406,7 +406,8 @@ export function ExplorerRail({
   return (
     <aside
       style={{
-        width: 280,
+        // Shrinks toward 220px on narrow viewports so the canvas keeps room.
+        width: "clamp(220px, 20vw, 280px)",
         flexShrink: 0,
         borderRight: "1px solid rgba(0,0,0,0.08)",
         display: "flex",
@@ -442,7 +443,7 @@ export function ExplorerRail({
           options={projects.map((p) => ({ value: p.id, label: p.name }))}
           onChange={(value) => navigate(`/projects/${value}`)}
         />
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <Button
             size="small"
             icon={<FolderAddOutlined />}

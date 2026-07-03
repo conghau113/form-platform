@@ -47,7 +47,9 @@ export function SettingsPanel({
   return (
     <aside
       style={{
-        width: 340,
+        // Shrinks toward 280px on narrow viewports so the canvas keeps room.
+        width: "clamp(280px, 25vw, 340px)",
+        flexShrink: 0,
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
