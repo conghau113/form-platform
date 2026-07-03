@@ -97,8 +97,8 @@ Total ~18–22 phases.
 | E0 | T0.2.3 | S | Remediate `docs/usage.md` (stale auth, counts) + `production-hardening.md` (2C/2D superseded) | ✅ | 30b3cab |
 | E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt EN (ADR-0007; owner: engineering→English; fixed 14-modules + nested routes + ER omissions) | ✅ | 91f544e |
 | E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (all items absorbed/stale → 0 ported; archived + disposal record) | ✅ | 25038fe |
-| E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ✅ | _pending_ |
-| **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ⬜ | — |
+| E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ✅ | cb98374 |
+| **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ✅ | _pending_ |
 | E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ⬜ | — |
 | E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ⬜ | — |
 | E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ⬜ | — |
@@ -195,9 +195,20 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 
 ## E1 — Governance Core
 
-- **T1.1.1 (M):** `governance/constitution.md` — precedence stack · authority model · E1–E5
-  evidence classes · enforcement ladder · natures + lifecycle · freeze-amendment rule (5
-  elements) · `FRAMEWORK_VERSION=1`.
+- **T1.1.1 (M):** `governance/constitution.md` — DONE. First L1 artifact; created `governance/`.
+  15 sections materializing the approved blueprint/meta-architecture (freeze rule forbids new
+  mechanisms, so this is faithful transcription, not design): self-similarity · 4 layers +
+  downward-only + replacement test · authority model · precedence stack (7 levels) · 4 natures
+  (never mixed) · lifecycle (Draft→Superseded; L3-from-Active-only) · E1–E5 evidence + confidence=
+  f(class,age) · enforcement ladder (4 rungs, climb-on-evidence, rung-3 CI-preference, advisory-
+  first) · impact manifest + conformance · freshness contract (scope/verified-on/method + 3
+  triggers, drift=defect) · **freeze-amendment rule (5 elements verbatim from README)** ·
+  backward-compat 4 guarantees + `FRAMEWORK_VERSION=1` decoupled à la formVersion · operating loop +
+  health metrics · anti-bureaucracy · self-amendment. Normative header (Active, v1.0, owner-authority,
+  verified-on). Tool-agnostic (no Claude specifics — those are L3). Added a pointer in
+  `decision-records/README.md` freeze section (constitutional home now exists → §11). Doc-only ⇒ no
+  changeset/typecheck/test. Backfilled T0.4.1 hash `cb98374`. ⚠️ T1.1.1 own row `_pending_` → backfill
+  in T1.2.1 (amend fixed-point). NEXT = T1.2.1 (S) change-approval policy.
 - **T1.2.1 (S):** `policies/change-approval.md` (routing matrix + freeze intake check).
 - **T1.2.2 (S):** `policies/dor-dod.md` (evidence-typed per work-class: bug = E1 repro ·
   feature = E2 contract reads).

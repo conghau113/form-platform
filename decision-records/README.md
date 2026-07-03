@@ -16,7 +16,10 @@ A proposal missing any of the five is not reviewable and must be rejected at int
 This rule applies to AI agents and humans alike, including improvement suggestions
 arising mid-implementation — they are filed as proposals, never acted on inline.
 Permanent home: the framework constitution (roadmap task T1.1.1) and the
-change-approval policy (T1.2.1); this section is the binding interim record.
+change-approval policy (T1.2.1). **The constitutional home now exists —
+`governance/constitution.md` §11 (Active, 2026-07-03) hosts the binding text;**
+this section remains as a pointer until the change-approval policy (T1.2.1) adds
+the operational intake form.
 
 Decision phase output (2026-07-03). One ADR per unresolved topic identified by the
 assumption-register audit. **Statuses finalized 2026-07-03 (roadmap task T0.1.2).**
