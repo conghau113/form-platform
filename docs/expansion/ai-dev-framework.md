@@ -43,12 +43,12 @@
 
 ### ADR ledger (statuses finalized + committed in T0.1.2)
 
-Decision approvals from blueprint/roadmap approval (Phase 6/7). ADR files currently carry
-`Proposed` headers pending the T0.1.2 finalization commit.
+Decision approvals from blueprint/roadmap approval (Phase 6/7). Status headers finalized and
+`decision-records/` committed in T0.1.2 (2026-07-03).
 
 | Status | ADRs |
 |---|---|
-| **Accepted** (pending header finalization) | 0001, 0002, 0004, 0006, 0007 (w/ modification), 0011, 0012, 0013 |
+| **Accepted** | 0001, 0002 (w/ modification), 0004, 0006, 0007 (w/ modification), 0011, 0012, 0013 |
 | **Open** (DoR gates for downstream items) | 0003, 0005, 0008, 0009, 0010 |
 
 Open-ADR dependencies: 0003 → T3.3.1 · 0005 → T3.5.1 · 0008 → E7 · 0009 → T3.4.x ·
@@ -90,8 +90,8 @@ Total ~18–22 phases.
 
 | Epic | Task | Cx | Content | Status | Commit |
 |---|---|---|---|---|---|
-| **E0** | T0.1.1 | S | Materialize roadmap → governed tracker + record blueprint-approval/freeze/freeze-rule | 🟡 | — |
-| E0 | T0.1.2 | S | Finalize ADR statuses (8 Accepted / 5 Open) + commit `decision-records/` | ⬜ | — |
+| **E0** | T0.1.1 | S | Materialize roadmap → governed tracker + record blueprint-approval/freeze/freeze-rule | ✅ | f0aef83 |
+| E0 | T0.1.2 | S | Finalize ADR statuses (8 Accepted / 5 Open) + commit `decision-records/` | ✅ | _pending_ |
 | E0 | T0.2.1 | M | Remediate `apps/api/ARCHITECTURE.md` (auth/refresh · tenancy · RBAC · 15 modules · endpoints · Postgres) | ⬜ | — |
 | E0 | T0.2.2 | S | Remediate `apps/builder/ARCHITECTURE.md` (+auth/admin/shell/submissions/versions/ai; apiFetch exception) | ⬜ | — |
 | E0 | T0.2.3 | S | Remediate `docs/usage.md` (stale auth, counts) + `production-hardening.md` (2C/2D superseded) | ⬜ | — |
