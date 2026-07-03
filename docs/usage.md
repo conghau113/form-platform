@@ -3,9 +3,12 @@
 Runbook vận hành: cài đặt, chạy dev, kiểm thử, và self-host bằng Docker Compose.
 Bổ sung cho `README.md` (kiến trúc/versioning) và `AGENTS.md` (quy ước cho agent).
 
-> Cập nhật theo Phase 1A–1D của track production-hardening
-> (`docs/expansion/production-hardening.md`). DB đã chuyển **SQLite → PostgreSQL**;
-> API có validate env (fail-fast), CORS allowlist, helmet, rate-limit, và `GET /health`.
+> Cập nhật theo track production-hardening (Phase 1A–2B) + product-roadmap
+> (`docs/expansion/{production-hardening,product-roadmap}.md`). DB đã chuyển **SQLite → PostgreSQL**;
+> API có validate env (fail-fast), CORS allowlist, helmet, rate-limit, `GET /health`, và **auth thật**
+> (JWT, HttpOnly cookie + refresh token) — mọi route cần đăng nhập trừ `/health` và `/auth/*`.
+>
+> _verified-on 2026-07-03 (framework T0.2.3) — env vars đối chiếu `apps/api/{config/env.ts,env.example}`._
 
 ---
 
@@ -70,6 +73,9 @@ pnpm dev
 | API | http://localhost:3001 |
 | Health check | http://localhost:3001/health → `{"status":"ok","db":"up"}` |
 
+> Lần đầu mở Builder sẽ chuyển tới `/login` — bấm **Create account** để tạo tài khoản rồi đăng nhập;
+> mọi trang khác nằm sau `RequireAuth`. Có thể seed sẵn admin qua `AUTH_BOOTSTRAP_*` (xem §5).
+
 Dừng Postgres khi xong:
 
 ```bash
@@ -86,7 +92,7 @@ docker compose stop postgres
 ```bash
 pnpm typecheck                      # turbo typecheck toàn repo
 pnpm test                           # toàn bộ test (cần Docker cho 1 test DB)
-pnpm --filter @app/api test         # chỉ test backend (121 test)
+pnpm --filter @app/api test         # chỉ test backend
 
 # Biome: KHÔNG chạy --write toàn repo (baseline chưa sạch). Chỉ kiểm file đang sửa:
 pnpm biome check apps/api/src/<file-bạn-sửa>.ts
@@ -151,10 +157,16 @@ Khi khởi động, API validate env bằng Zod — thiếu/sai biến bắt bu�
 | `CORS_ORIGINS` | | `http://localhost:5173` | allowlist origin (phẩy ngăn cách); rỗng = chặn cross-origin |
 | `THROTTLE_TTL` | | `60000` | cửa sổ rate-limit (ms) |
 | `THROTTLE_LIMIT` | | `120` | số request/IP trong cửa sổ |
+| `JWT_SECRET` | ✅ | — | khóa ký access-token (≥ 16 ký tự; thiếu ⇒ fail-fast) |
+| `JWT_ACCESS_EXPIRES_IN` | | `15m` | tuổi thọ access-token (ngắn) |
+| `JWT_REFRESH_EXPIRES_IN` | | `30d` | tuổi thọ refresh-token (xoay vòng, thu hồi được) |
+| `AUTH_COOKIE_SECURE` | | `false` | đặt `Secure` cho cookie auth — **prod HTTPS = `true`** |
+| `AUTH_BOOTSTRAP_EMAIL` / `_PASSWORD` | | — | (tùy chọn) seed admin lúc boot cho dữ liệu pre-auth |
 | `AI_*` | | — | cấu hình AI (BYOK, tùy chọn) — xem `apps/api/env.example` |
 
-> Lưu ý bảo mật: `x-owner-id` và `?roles=` hiện là **operator-declared**, CHƯA phải
-> ranh giới bảo mật (auth thật ở Phase 2).
+> Lưu ý bảo mật: danh tính giờ **đã xác thực** — API lấy người gọi từ JWT (`sub`) trong HttpOnly
+> cookie (hoặc header `Bearer` cho API client), không còn `x-owner-id`. Chỉ còn `?roles=` ("acting as"
+> cho field-level RBAC lúc submit) là operator-declared. Prod: đặt `AUTH_COOKIE_SECURE=true` + HTTPS.
 
 ---
 

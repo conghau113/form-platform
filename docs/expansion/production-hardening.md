@@ -35,9 +35,14 @@ Jenkins/SonarQube/BlackDuck/GitLab; đang dùng GitHub + Vercel).
 | **1E** | CI/CD (GitHub Actions + CodeQL + Dependabot + SonarCloud + gitleaks + Trivy + changeset gate) | ✅ DONE | `47934a8` |
 | **2A** | Auth backend (self-managed JWT: User model, register/login/me, guard, bootstrap) | ✅ DONE | `dd26fb5` |
 | **2B** | Builder auth UI (HttpOnly cookie + same-origin proxy, login/register/logout, route guard) | ✅ DONE | — |
-| **2C/2D** | Server-side authz (`?roles`/ProjectMember thật) + refresh/hardening | ⬜ LATER | — |
+| **2C/2D** | Server-side authz (`?roles`/ProjectMember thật) + refresh/hardening | ⏭️ SUPERSEDED | — |
 
-Legend: ✅ done · 🟡 đang làm · ⬜ chưa · ⏭️ later.
+Legend: ✅ done · 🟡 đang làm · ⬜ chưa · ⏭️ superseded/later.
+
+> **2C/2D superseded (ghi nhận 2026-07-03).** Server-side authorization đã ship ở **product-roadmap
+> Phase B3/C** (tenant-scoping reads + data-driven RBAC `FunctionGuard`/`@RequireFunction`, `fed779e`)
+> và refresh-token/hardening ở **product-roadmap A1** (`8dffe34`, rotating/revocable + `apiFetch`
+> 401-retry). Track này dừng ở 2B; phần còn lại sống trong `docs/expansion/product-roadmap.md`.
 
 ---
 
@@ -137,9 +142,12 @@ Self-managed JWT cho `apps/api` (chỉ api code + config; KHÔNG đụng contrac
 - **⚠️ Gotcha 2B:** (1) tsx/build gotcha 2A vẫn áp dụng (live-smoke `node dist`). (2) `res.cookie`/`clearCookie` là Express native — KHÔNG cần cookie-parser; đọc cookie parse thủ công trong guard. (3) `AUTH_COOKIE_SECURE` dùng `z.preprocess` (KHÔNG `z.coerce.boolean` — nó coerce "false"→true). (4) nginx upstream `api` literal ⇒ builder `depends_on api service_healthy` để resolve lúc boot. (5) `@prisma/client` tự load `apps/api/.env` (gotcha 1D) — dùng DATABASE_URL env override khi smoke.
 - **⚠️ Known gaps → 2C/2D:** `?roles`/ProjectMember vẫn owner-declared (2C); ShareDialog vẫn grant theo user-id-string (cần lookup email ở 2C); chưa refresh-token/CSRF-token (SameSite=Strict đã chặn CSRF; refresh = 2D); prod phải `AUTH_COOKIE_SECURE=true` + HTTPS.
 
-### Phase 2 (còn lại — phác thảo)
-- [ ] **2C** — Authorization server-side thật cho `?roles=`/ProjectMember (hiện owner tự khai — xem FS2). Multi-tenant hóa quanh user registry thật + lookup collaborator theo email.
-- [ ] **2D (optional)** — refresh token / hardening; Error tracking: Sentry free / GlitchTip self-host.
+### Phase 2 (còn lại — ⏭️ SUPERSEDED bởi product-roadmap)
+- [x] **2C** — Authorization server-side cho `?roles=`/ProjectMember → **đã ship ở product-roadmap
+  Phase B3/C** (`fed779e`): tenant-scoping reads + data-driven RBAC (`FunctionGuard`/`@RequireFunction`,
+  wildcard `*`), multi-tenant quanh user registry thật. Xem `docs/expansion/product-roadmap.md`.
+- [x] **2D** — refresh token / hardening → **đã ship ở product-roadmap A1** (`8dffe34`): refresh xoay
+  vòng/thu hồi + `apiFetch` 401→refresh→retry. (Error tracking Sentry/GlitchTip vẫn optional, chưa làm.)
 
 ---
 
@@ -163,7 +171,9 @@ Self-managed JWT cho `apps/api` (chỉ api code + config; KHÔNG đụng contrac
 - **Test/DB:** chỉ `import-files-to-db.test.ts` chạm DB (Testcontainers Postgres, `skipIf(!hasDocker())`); còn lại FakeRepo in-memory; `preset.live.test.ts` (form-ai) tự `skipIf`.
 - **Security deps:** ~~CHƯA có~~ → **ĐÃ thêm 1D**: `@nestjs/config@3.3`, `helmet@8.2`, `@nestjs/throttler@6.5`, `zod@3.25` (deps của `apps/api`). `@nestjs/terminus` KHÔNG dùng (health tự viết `$queryRaw`).
 - **`apps/api/.env` (gitignored):** còn `DATABASE_URL="file:../.data/workspace.db"` (sót pre-1B) — `@prisma/client` tự load lúc import ⇒ poison fail-fast test cục bộ. Docker bỏ qua (compose set env). Owner nên đổi sang Postgres URL hoặc xóa.
-- **Auth hiện tại:** `auth/current-owner.decorator.ts` đọc `x-owner-id` default `"local"` — KHÔNG phải auth.
+- **Auth hiện tại:** ~~`x-owner-id` default `"local"`~~ → **2A/2B đã ship JWT auth thật**:
+  `current-owner.decorator.ts` đọc verified `req.user.sub`; global `JwtAuthGuard` (cookie/Bearer).
+  Server-side RBAC + refresh ship sau ở product-roadmap (B3/C `fed779e`, A1 `8dffe34`).
 - **CRLF:** `core.autocrlf=true`, không `.gitattributes` → biome local báo CRLF nhưng commit LF (ứng viên cải thiện sau: `.gitattributes eol=lf`, nhưng renormalize cả repo → để riêng).
 - **settings.json:** deny `**/.env.*` (chặn `.env.example` → dùng `env.example`); đang modified — KHÔNG commit (để nguyên).
 - **Changeset:** apps (api/builder/mcp) nằm trong `.changeset/config.json` `ignore` → chỉ cần changeset khi đụng `packages/*`.
