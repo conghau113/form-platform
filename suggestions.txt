@@ -1,0 +1,18 @@
+Bản mới đã bổ sung đúng các điểm quan trọng: vendor/client, tenant trước RBAC, adaptive shell và P1/P2. Mình kiểm thêm các file cấu hình/router để đánh dấu phần nào đã có căn cứ trong source và phần nào vẫn là proposal.
+
+Roadmap bản mới tốt hơn rõ rệt: đã tách đúng Tenant + Org/Department trước RBAC, phân biệt vendor-admin/client-admin, không hardcode EVN, và thêm P1/P2 bằng adaptive shell. Các điểm này hợp hướng mở rộng.
+
+Những phần cần ghi rõ hơn để “không bịa”:
+
+Claim về EVN/web-admin/estd là căn cứ ngoài repo hiện tại. Nếu muốn chặt, thêm mục “Evidence ledger”: source path, file/module đã đọc, ngày đọc, kết luận rút ra. Ví dụ E:\web\web-admin\... menu gating, E:\web\evn\core-service\... RBAC entities.
+VITE_BASE_PATH, router basename, nginx base-path trong Phase 0 chưa có trong source hiện tại. Source chỉ có /api proxy, router chưa có basename, vite.config.ts chưa đọc VITE_BASE_PATH.
+Tenant, Membership, UserRole, DataScope, RefreshToken, Session, RequireFunction, FunctionGuard đều là planned, chưa tồn tại trong Prisma/source. Roadmap đang viết đúng dạng phase, nhưng nên thêm nhãn “planned, not in source yet” ở đầu Phase A/B/C.
+Link [[session-resume-ai-agent-native]] không phải căn cứ đọc được trong repo. Nếu giữ, nên đổi thành link transcript/tham chiếu cụ thể hoặc bỏ.
+Có thể mở rộng thêm vào roadmap:
+
+Migration strategy ownerId → tenantId: tạo tenant mặc định, backfill project/form/workflow/submission/preset, đổi unique index như ownerId+slug sang tenantId+slug, test dữ liệu cũ vẫn vào được.
+Function catalog governance: quy ước mã quyền ổn định (form.read, form.manage, workflow.run, user.admin), seed bộ mặc định, policy client được mở rộng gì và không được override gì.
+Audit log: rất nên có cho admin/RBAC/work-order: ai đổi role, ai publish form, ai approve, ai chuyển ticket. Đây là nền cho enterprise.
+Test plan riêng cho tenant/RBAC: test cross-tenant leak, data-scope theo department, multi-role union permission, UI ẩn nav nhưng API vẫn chặn.
+Rollout plan cho AppShell: roadmap nói dựng sớm là đúng, nhưng cần ghi là shell trước chỉ wrap route hiện tại /projects, chưa bật admin/operate thật.
+Lưu ý nhỏ: mục đánh số đang có 6.7 trước 6.6; nên sửa lại cho sạch. Overall: roadmap hiện khả thi và có căn cứ tốt, chỉ cần phân biệt thật rõ “đã có trong source” vs “planned từ reference ngoài”.
