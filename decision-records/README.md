@@ -56,7 +56,7 @@ The recommendation in each ADR is advisory. The decision belongs to the owner.
 ADR-0014 onward are **retroactive** backfills of constraints that were already in force
 before ADR practice existed. Each uses the compact retroactive template and carries the
 reconstruction marker; the decision was made at the origin commit cited in its Evidence,
-not on the backfill date. Batch 1 (below) covers the contract layer.
+not on the backfill date. Batch 1 covers the contract layer; batch 2 the product/architecture layer.
 
 | # | Constraint | What it fixes | Status |
 |---|---|---|---|
@@ -64,6 +64,12 @@ not on the backfill date. Batch 1 (below) covers the contract layer.
 | [ADR-0015](ADR-0015-no-eval-jsonlogic.md) | JSONLogic, never eval()/new Function() | Schema-provided expressions are data, not code — no RCE via stored rules. | Accepted (retroactive) |
 | [ADR-0016](ADR-0016-renderer-peer-dependencies.md) | Framework libs as renderer peerDependencies | No duplicate React/antd instance in host apps; renderers stay portable. | Accepted (retroactive) |
 | [ADR-0017](ADR-0017-validategraph-hard-vs-lintgraph-advisory.md) | validateGraph hard-gate vs lintGraph advisory | Keep a sharp definition of graph validity for the save-gate + AI repair loop. | Accepted (retroactive) |
+| [ADR-0018](ADR-0018-vendor-client-no-hardcoded-business.md) | Vendor↔client — no hardcoded client (EVN) business | Product stays multi-client; client domain is data, not vendor code. | Accepted (retroactive) |
+| [ADR-0019](ADR-0019-prisma-not-typeorm.md) | Prisma, not TypeORM | Emulate the EVN model on the vendor's own stack, behind repo interfaces. | Accepted (retroactive) |
+| [ADR-0020](ADR-0020-shared-db-tenancy-chokepoint.md) | Shared-DB tenancy via access chokepoint | No cross-tenant leakage; access funnels through `requireAccess` (404-not-403). | Accepted (retroactive) |
+| [ADR-0021](ADR-0021-data-driven-rbac-wildcard.md) | Data-driven RBAC + `*` sentinel | No hardcoded roles; clients define roles as data; one authorization path. | Accepted (retroactive) |
+| [ADR-0022](ADR-0022-single-adaptive-appshell.md) | One adaptive AppShell, not portals | One coherent surface; capabilities are sections, nav follows RBAC. | Accepted (retroactive) |
+| [ADR-0023](ADR-0023-scoped-biome.md) | Scoped Biome, never repo-wide --write | Diffs stay surgical; no tree-wide reformat over an unclean baseline. | Accepted (retroactive) |
 
 ## How to review
 
@@ -90,8 +96,8 @@ artifact specifically, and codify the practice decided in
   is permanent and never reused, even if the ADR is later Rejected or Superseded — a
   Rejected number is a real historical record, not a free slot.
 - Filename: `ADR-NNNN-kebab-topic.md`. The first line is `# ADR-NNNN: <topic>`.
-- The next free number is one above the highest in this directory (currently 0017 →
-  next is 0018). Retroactive backfill records also take the next free numbers going
+- The next free number is one above the highest in this directory (currently 0023 →
+  next is 0024). Retroactive backfill records also take the next free numbers going
   forward; they are **not** renumbered into the past.
 
 ### Status lifecycle

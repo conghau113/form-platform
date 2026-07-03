@@ -104,8 +104,8 @@ Total ~18–22 phases.
 | E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ✅ | ad1bbc3 |
 | E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ✅ | c7d786d |
 | E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ✅ | 420c546 |
-| E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ✅ | _pending_ |
-| E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ⬜ | — |
+| E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ✅ | 63cefc3 |
+| E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ✅ | _pending_ |
 | **E2** | T2.1.1 | M | `knowledge/index.yaml` schema (class/scope-globs/verified-on/executable method/cadence/owner) + register remediated docs + AGENTS.md | ⬜ | — |
 | E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc | ⬜ | — |
 | E2 | T2.3.1 | M | `knowledge/runbook/` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointers | ⬜ | — |
@@ -308,9 +308,31 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   constitution §3** — these ship as recommendations pending owner deep-read like all L1. Doc-only ⇒ no
   changeset/typecheck/test. Backfilled T1.3.1 hash `420c546`. ⚠️ T1.3.2 own row `_pending_` → backfill
   in T1.3.3. NEXT = T1.3.3 (M) retro-ADR batch 2 (product/arch).
-- **T1.3.3 (M):** retro-ADR batch 2, product/arch: vendor↔client no-hardcode-EVN ·
-  Prisma-not-TypeORM · tenancy chokepoint projectId→tenantId · RBAC data-driven + `*` ·
-  adaptive shell · scoped-biome.
+- **T1.3.3 (M):** retro-ADR batch 2, product/arch — DONE. Wrote **six** retroactive ADRs
+  (`ADR-0018`…`ADR-0023`), same compact template + reconstruction marker + rationale anchored to real
+  `file:line` + origin commit. (1) **ADR-0018** vendor↔client no-hardcoded-EVN — platform holds NO
+  client business logic (org/roles/functions/forms = tenant DATA); EVN = reference to emulate not copy;
+  ROOT principle of ADR-0020/0021; evidence roadmap §1.1 `24-42`, OrgUnit-unify `181-187`, origin is the
+  §1.1 owner ruling 2026-07-01. (2) **ADR-0019** Prisma-not-TypeORM — emulate EVN model on vendor stack;
+  services behind abstract `*Repo` (Prisma = swappable adapter); `schema.prisma:5-12`, `rbac.repo.ts:1-7`,
+  origin `9476f80`. (3) **ADR-0020** shared-DB tenancy chokepoint — row-scoped by `tenantId` through ONE
+  door `ProjectsService.requireAccess` (project.tenantId→resolveFunctions→role; no-access=**404** not 403
+  = no existence leak); B4 projectId→tenantId; `schema.prisma:14-29`, `projects.service.ts:40-48/170-183`,
+  origin `8a12adc`+`2ff4170`. (4) **ADR-0021** data-driven RBAC + `*` — permissions are DATA
+  (functions→roles→users union via `resolveFunctions`), `FunctionGuard` any-of, superadmin = sentinel
+  code `*` (`WILDCARD_FUNCTION`) NOT a role-name check (replaces EVN `code==='ADMIN'`); server = real
+  boundary; `rbac.repo.ts:9-13/90-96`, `function.guard.ts:17-51`, origin `fed779e`. (5) **ADR-0022** one
+  adaptive AppShell not portals — sections slot into one shell, nav follows RBAC data; vendor console =
+  the ONE deliberate exception (system-function gated); `AppShell.tsx:4-18`, roadmap `447`, origin
+  `70c803d`. (6) **ADR-0023** scoped Biome never repo-wide `--write` — baseline NOT clean → PostToolUse
+  hook biomes ONLY the edited file (surgical diffs, no owning pre-existing violations); the *why* had
+  lived only in machine-local memory = exact ADR-0012 hazard; `.claude/settings.json` hook + memory
+  `biome-not-clean-at-baseline`, origin `b1b7176`. Registered all six in README index + bumped next-free
+  note 0017→0023 (next=0024). Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.3.2 hash `63cefc3`.
+  ⚠️ T1.3.3 own row `_pending_` → backfill in the next E1 task. **This completes the retro-ADR backfill
+  (ADR-0012 Option C): 10 living constraints, 0014–0023, now durable.** NEXT = owner deep-read of E1
+  (constitution + 4 policies + ADR conventions + 10 retro-ADRs), then E2 Knowledge Infrastructure (T2.1.1
+  `knowledge/index.yaml`).
 - Owner deep-reads the constitution + policies (the only epic the owner reviews deeply,
   not batched).
 
