@@ -98,8 +98,8 @@ Total ~18–22 phases.
 | E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt EN (ADR-0007; owner: engineering→English; fixed 14-modules + nested routes + ER omissions) | ✅ | 91f544e |
 | E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (all items absorbed/stale → 0 ported; archived + disposal record) | ✅ | 25038fe |
 | E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ✅ | cb98374 |
-| **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ✅ | _pending_ |
-| E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ⬜ | — |
+| **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ✅ | 8c820d9 |
+| E1 | T1.2.1 | S | `policies/change-approval.md` (routing matrix + freeze intake check) | ✅ | _pending_ |
 | E1 | T1.2.2 | S | `policies/dor-dod.md` (evidence-typed per work-class) | ⬜ | — |
 | E1 | T1.2.3 | M | `policies/review-workflow.md` (propose→classify→route→review→approve→version→deprecate→migrate + nature checklists + 6-step disposal) | ⬜ | — |
 | E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ⬜ | — |
@@ -209,7 +209,17 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   `decision-records/README.md` freeze section (constitutional home now exists → §11). Doc-only ⇒ no
   changeset/typecheck/test. Backfilled T0.4.1 hash `cb98374`. ⚠️ T1.1.1 own row `_pending_` → backfill
   in T1.2.1 (amend fixed-point). NEXT = T1.2.1 (S) change-approval policy.
-- **T1.2.1 (S):** `policies/change-approval.md` (routing matrix + freeze intake check).
+- **T1.2.1 (S):** `policies/change-approval.md` — DONE. Created `governance/policies/`. Operational
+  intake form of constitution §3/§5/§9/§11 (NOT a restatement — a 6-step procedure an agent runs at
+  the DoR boundary): Step1 classify (nature × layer × architectural?) · Step2 freeze intake gate (5-
+  element hard checklist, only if architectural; miss any → reject-at-intake, mid-impl ideas = filed
+  proposals) · Step3 routing matrix (nature → decider/evidence-floor/review; normative→owner-deep-read
+  + isolated-spawn-only-high-stakes; descriptive→reviewer E1/E2 vs L0 + freshness; executable→run-it;
+  evidence→append-only) · Step4 impact manifest (normative accepted only when discharged) · Step5
+  decide (Accept / Accept-w-changes / Choose-X / Reject-defer, = ADR vocab) · Step6 record (commit +
+  tracker + memory; supersede-not-erase). Normative header w/ traceability to constitution sections.
+  Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.1.1 hash `8c820d9`. ⚠️ T1.2.1 own row
+  `_pending_` → backfill in T1.2.2. NEXT = T1.2.2 (S) `policies/dor-dod.md`.
 - **T1.2.2 (S):** `policies/dor-dod.md` (evidence-typed per work-class: bug = E1 repro ·
   feature = E2 contract reads).
 - **T1.2.3 (M):** `policies/review-workflow.md` (propose → classify → route → review → approve →
