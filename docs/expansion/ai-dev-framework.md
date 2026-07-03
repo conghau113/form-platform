@@ -94,8 +94,8 @@ Total ~18–22 phases.
 | E0 | T0.1.2 | S | Finalize ADR statuses (8 Accepted / 5 Open) + commit `decision-records/` | ✅ | e305d27 |
 | E0 | T0.2.1 | M | Remediate `apps/api/ARCHITECTURE.md` (auth/refresh · tenancy · RBAC · 14 modules · endpoints · Postgres) | ✅ | 2854251 |
 | E0 | T0.2.2 | S | Remediate `apps/builder/ARCHITECTURE.md` (+auth/admin/shell/submissions/versions/ai; apiFetch exception) | ✅ | 8fe785d |
-| E0 | T0.2.3 | S | Remediate `docs/usage.md` (stale auth, counts) + `production-hardening.md` (2C/2D superseded) | ✅ | _pending_ |
-| E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt (ADR-0007; ask owner on OQ2 language) | ⬜ | — |
+| E0 | T0.2.3 | S | Remediate `docs/usage.md` (stale auth, counts) + `production-hardening.md` (2C/2D superseded) | ✅ | 30b3cab |
+| E0 | T0.3.1 | M | `system-overview.md` row-by-row verify → adopt EN (ADR-0007; owner: engineering→English; fixed 14-modules + nested routes + ER omissions) | ✅ | _pending_ |
 | E0 | T0.3.2 | S | `suggestions.txt` via 6-step disposal (Verify→Extract→Review→Commit→Archive→Delete) | ⬜ | — |
 | E0 | T0.4.1 | S | Native-renderer freeze marker (AGENTS.md + renderers rule + unfreeze-gate note) | ⬜ | — |
 | **E1** | T1.1.1 | M | `governance/constitution.md` (precedence · authority · E1–E5 evidence · enforcement ladder · natures+lifecycle · freeze-amendment rule · FRAMEWORK_VERSION=1) | ⬜ | — |
@@ -159,8 +159,19 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   versions/ai folders + the `apiFetch` `fetch()`-in-client.ts exception.
 - **T0.2.3 (S):** remediate `docs/usage.md` (stale auth note, counts) +
   `docs/expansion/production-hardening.md` (2C/2D superseded, not ticked).
-- **T0.3.1 (M):** verify `docs/architecture/system-overview.md` row-by-row → adopt per ADR-0007
-  (ask owner about ADR-0007 OQ2 language classification).
+- **T0.3.1 (M):** verify `docs/architecture/system-overview.md` row-by-row → adopt per ADR-0007.
+  **Owner rulings (2026-07-03):** OQ1 provenance — follow recommendation, adopt (Option A);
+  OQ2 language — engineering artifact → **translate to English** (owner note: the *product*
+  web trends multilingual/Vietnamese-default, but that is a separate product-UI decision per
+  ADR-0003, not this doc's classification); OQ3 structure — keep per-app `ARCHITECTURE.md`
+  separate, overview **links down**. Verification found 3 drifts, now fixed on adoption:
+  (a) §6 listed 16 api "modules" incl. `form-versions`/`workflow-instances` → corrected to
+  **14 modules** (form-versions ∈ forms, workflow-instances ∈ workflows, 17 repos);
+  (b) §6 builder routes shown top-level → corrected to **nested** under
+  `/projects/:projectId/forms/:formId/…` and `/projects/:projectId/workflows/:workflowId/…`;
+  (c) §7 ER omitted AuditLog / RefreshToken / StatusCatalogEntry → added a note (21 models).
+  Everything else verified accurate against source (packages, form-core modules, all §8
+  versions, §9 ports). Provisional `verified-on: 2026-07-03` + drift cadence stamped.
 - **T0.3.2 (S):** dispose of `suggestions.txt` via the 6-step workflow: Verify → Extract →
   Review → Commit (file into git FIRST) → Archive (`reports/archive/` + dated disposal record)
   → Delete only after validating the archive diff is identical to the original.
