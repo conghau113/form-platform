@@ -1,7 +1,18 @@
 import { FormRenderer } from "@org/form-renderer-web";
 import type { FormSchema } from "@org/form-schema";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Empty, Modal, message, Space, Spin, Tag, Typography } from "antd";
+import {
+  Alert,
+  App as AntApp,
+  Button,
+  Card,
+  Empty,
+  Modal,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from "antd";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { qk } from "../query";
@@ -24,6 +35,7 @@ export function VersionsRoute() {
 }
 
 function VersionsPanel({ formId }: { formId: string }) {
+  const { message, modal } = AntApp.useApp();
   const { versions, loading } = useFormVersions(formId);
   const publish = usePublishForm(formId);
   const cloneDraft = useCloneDraft(formId);
@@ -64,7 +76,7 @@ function VersionsPanel({ formId }: { formId: string }) {
   };
 
   const onRollback = (version: number) => {
-    Modal.confirm({
+    modal.confirm({
       title: `Khôi phục phiên bản v${version}?`,
       content:
         "Nội dung của phiên bản này sẽ ghi đè bản nháp hiện tại. Hãy publish lại để kích hoạt.",

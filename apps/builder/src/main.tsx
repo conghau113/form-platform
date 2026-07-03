@@ -2,6 +2,8 @@ import "antd/dist/reset.css";
 import "@xyflow/react/dist/style.css";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { App as AntApp, ConfigProvider } from "antd";
+import viVN from "antd/locale/vi_VN";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
@@ -67,13 +69,21 @@ if (!root) throw new Error("Missing #root element");
 
 const queryClient = createQueryClient();
 
+// `ConfigProvider` sets the antd locale (built-in texts: Modal buttons, pagination, empty states)
+// and is the single seam for future theme tokens. antd `<App>` provides the context-aware
+// `message`/`modal`/`notification` instances consumed via `App.useApp()` — the static functions
+// cannot pick up ConfigProvider context (antd warns about exactly this).
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
-    </QueryClientProvider>
+    <ConfigProvider locale={viVN}>
+      <AntApp style={{ height: "100%" }}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
+          {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+        </QueryClientProvider>
+      </AntApp>
+    </ConfigProvider>
   </StrictMode>,
 );

@@ -1,5 +1,16 @@
 import type { Preset } from "@org/form-schema";
-import { Alert, Button, Checkbox, Empty, Modal, message, Space, Spin, Tag, Typography } from "antd";
+import {
+  Alert,
+  App as AntApp,
+  Button,
+  Checkbox,
+  Empty,
+  Modal,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+} from "antd";
 import { useState } from "react";
 import { useProjectTree } from "../workspace/useWorkspace";
 import { useApplyPreset } from "./useApplyPreset";
@@ -20,6 +31,7 @@ export interface ApplyPresetModalProps {
  * `resolveLinkedFields`. Per-form results are reported; partial success is fine.
  */
 export function ApplyPresetModal({ open, onClose, preset, projectId }: ApplyPresetModalProps) {
+  const { message } = AntApp.useApp();
   // Rendered only while a preset is being applied (PresetSection mounts it on demand), so
   // each open is a fresh mount — no reset effect needed.
   const { tree, loading } = useProjectTree(projectId);

@@ -1,7 +1,7 @@
 import { FormRenderer } from "@org/form-renderer-web";
 import type { FormSchema } from "@org/form-schema";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Empty, message, Select, Space, Spin, Typography } from "antd";
+import { Alert, App as AntApp, Button, Card, Empty, Select, Space, Spin, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { qk } from "../query";
@@ -72,6 +72,7 @@ function SubmissionLauncher({
   projectId: string | undefined;
   formId: string;
 }) {
+  const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const formQuery = useQuery({
     queryKey: qk.form(formId),

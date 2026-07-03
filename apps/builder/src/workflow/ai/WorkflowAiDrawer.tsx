@@ -1,11 +1,11 @@
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import {
   Alert,
+  App as AntApp,
   Button,
   Collapse,
   Drawer,
   Input,
-  message,
   Segmented,
   Space,
   Spin,
@@ -67,6 +67,7 @@ export function WorkflowAiDrawer({
   currentWorkflow,
   onApply,
 }: WorkflowAiDrawerProps) {
+  const { message } = AntApp.useApp();
   const [prompt, setPrompt] = useState("");
   const [guidance, setGuidance] = useState("");
   const [creds, setCreds] = useState<AiCreds>(() => loadAiCreds());

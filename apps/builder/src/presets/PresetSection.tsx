@@ -10,7 +10,7 @@ import {
 } from "@ant-design/icons";
 import { Icon } from "@org/form-renderer-web";
 import type { FieldNode, Preset } from "@org/form-schema";
-import { Button, Input, Modal, message, Segmented, Space, Tooltip, Typography } from "antd";
+import { App as AntApp, Button, Input, Modal, Segmented, Space, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { useDesigner } from "../canvas/DesignerContext";
 import { usePins } from "../lib";
@@ -115,6 +115,7 @@ function SaveButton({
   projectId?: string;
   onSave: (p: Preset) => Promise<void>;
 }) {
+  const { message } = AntApp.useApp();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [scope, setScope] = useState<"project" | "global">(projectId ? "project" : "global");
@@ -230,6 +231,7 @@ export function PresetSection({
   /** Shared preset store, lifted to App (W4) so this gallery + the preview agree. */
   presets: PresetStore;
 }) {
+  const { message } = AntApp.useApp();
   const { builtin, user, save, remove, promote } = presets;
   const { order, pinned, isPinned, toggle } = usePins(PINNED_PRESETS_KEY);
   // The preset currently being applied across the project (drives ApplyPresetModal).

@@ -2,11 +2,11 @@ import { FormRenderer } from "@org/form-renderer-web";
 import type { FormSchema } from "@org/form-schema";
 import {
   Alert,
+  App as AntApp,
   Button,
   Collapse,
   Drawer,
   Input,
-  message,
   Segmented,
   Space,
   Spin,
@@ -93,6 +93,7 @@ export function AiAssistantDrawer({
   currentSchema,
   onApply,
 }: AiAssistantDrawerProps) {
+  const { message } = AntApp.useApp();
   const [prompt, setPrompt] = useState("");
   const [guidance, setGuidance] = useState("");
   const [image, setImage] = useState<AttachedImage | null>(null);

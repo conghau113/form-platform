@@ -1,5 +1,5 @@
 import { UserAddOutlined } from "@ant-design/icons";
-import { Button, Input, Modal, message, Select, Space, Table, Tag, Typography } from "antd";
+import { App as AntApp, Button, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import { useState } from "react";
 import { useAuth } from "../auth";
 import type { RoleWithFunctions, TenantUser } from "./client";
@@ -11,6 +11,7 @@ import { useMemberMutations, useTenantUsers } from "./useAdmin";
  * which the server also accepts for reading roles — any-of gate).
  */
 export function UsersPanel({ roles }: { roles: RoleWithFunctions[] }) {
+  const { message } = AntApp.useApp();
   const { user: me } = useAuth();
   const { users, loading } = useTenantUsers(true);
   const members = useMemberMutations();

@@ -6,13 +6,13 @@ import {
   ShareAltOutlined,
 } from "@ant-design/icons";
 import {
+  App as AntApp,
   Button,
   Card,
   Dropdown,
   Empty,
   Input,
   Modal,
-  message,
   Select,
   Space,
   Spin,
@@ -32,6 +32,7 @@ import { useMyTenants, useProjects } from "./useWorkspace";
  * {@link useProjects}.
  */
 export function ProjectsPage() {
+  const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { projects, loading, create, rename, remove } = useProjects();
@@ -75,7 +76,7 @@ export function ProjectsPage() {
   }
 
   function onDelete(project: ProjectRecord) {
-    Modal.confirm({
+    modal.confirm({
       title: `Delete project "${project.name}"?`,
       content: "This permanently deletes the project and every folder and form inside it.",
       okText: "Delete",

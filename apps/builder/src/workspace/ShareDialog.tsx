@@ -1,5 +1,5 @@
 import { DeleteOutlined, UserAddOutlined } from "@ant-design/icons";
-import { Button, Input, List, Modal, message, Select, Space, Tag, Typography } from "antd";
+import { App as AntApp, Button, Input, List, Modal, Select, Space, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import * as api from "./client";
@@ -22,6 +22,7 @@ export function ShareDialog({
   project: ProjectRecord | null;
   onClose: () => void;
 }) {
+  const { message } = AntApp.useApp();
   const [view, setView] = useState<ProjectMembersView | null>(null);
   const [loading, setLoading] = useState(false);
   const [newUserId, setNewUserId] = useState("");
@@ -41,7 +42,7 @@ export function ShareDialog({
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, message]);
 
   useEffect(() => {
     if (projectId) void reload();

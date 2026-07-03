@@ -3,10 +3,10 @@ import { deriveCaseLabel, localizeWorkflow } from "@org/workflow-core";
 import type { WorkflowDefinition } from "@org/workflow-schema";
 import {
   Alert,
+  App as AntApp,
   Button,
   Card,
   Empty,
-  message,
   Segmented,
   Select,
   Space,
@@ -120,6 +120,7 @@ function CaseLauncher({
   projectId: string | undefined;
   workflowId: string;
 }) {
+  const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const { instances, loading } = useWorkflowInstances(workflowId);
   const start = useStartInstance(workflowId);
@@ -265,6 +266,7 @@ function CaseRunner({
   workflowId: string;
   instanceId: string;
 }) {
+  const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const { instance, loading, error } = useWorkflowInstance(instanceId);
   const advance = useAdvanceInstance(instanceId, workflowId);

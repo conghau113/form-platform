@@ -1,5 +1,5 @@
 import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
-import { Avatar, Dropdown, message, Typography } from "antd";
+import { App as AntApp, Avatar, Dropdown, Typography } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./useAuth";
 
@@ -8,6 +8,7 @@ import { useAuth } from "./useAuth";
  * `compact` drops the name label (avatar only) so it fits the narrow AppShell rail.
  */
 export function UserMenu({ compact = false }: { compact?: boolean }) {
+  const { message } = AntApp.useApp();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   if (!user) return null;

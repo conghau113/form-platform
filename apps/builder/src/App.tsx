@@ -1,5 +1,5 @@
 import { toAntdTheme } from "@org/form-theme";
-import { Button, message, Space, Typography, Upload } from "antd";
+import { App as AntApp, Button, Space, Typography, Upload } from "antd";
 import { useMemo, useState } from "react";
 import { AiAssistantDrawer } from "./ai";
 import { DesignerProvider, type DesignerValue, useDragon } from "./canvas";
@@ -63,6 +63,7 @@ export function App({
   explorerCollapsed,
   onExplorerCollapsedChange,
 }: AppProps = {}) {
+  const { message } = AntApp.useApp();
   // The designer document (history / selection / clipboard) and everything derived from it.
   const editor = useFormEditor();
   const {

@@ -3,11 +3,11 @@ import { FormRenderer } from "@org/form-renderer-web";
 import { FIELD_CAPABILITIES, type Preset } from "@org/form-schema";
 import {
   Alert,
+  App as AntApp,
   Button,
   Collapse,
   Input,
   Modal,
-  message,
   Segmented,
   Select,
   Space,
@@ -48,6 +48,7 @@ const LEAF_TYPES = FIELD_CAPABILITIES.filter((c) => !c.isContainer);
  * `x-ai-*` seam (blank ⇒ server env defaults). Failures stay as an inline alert.
  */
 export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModalProps) {
+  const { message } = AntApp.useApp();
   const [prompt, setPrompt] = useState("");
   const [fieldType, setFieldType] = useState<string | undefined>(undefined);
   const [guidance, setGuidance] = useState("");

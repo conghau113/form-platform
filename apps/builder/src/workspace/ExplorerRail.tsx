@@ -13,7 +13,7 @@ import {
   ShareAltOutlined,
 } from "@ant-design/icons";
 import type { MenuProps, TreeDataNode, TreeProps } from "antd";
-import { Button, Dropdown, Input, Modal, message, Select, Spin, Tree, Typography } from "antd";
+import { App as AntApp, Button, Dropdown, Input, Select, Spin, Tree, Typography } from "antd";
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as wfApi from "../workflow/client";
@@ -98,6 +98,7 @@ export function ExplorerRail({
   activeWorkflowId,
   collapsed = false,
 }: ExplorerRailProps) {
+  const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const [editing, setEditing] = useState<Editing | null>(null);
   // Controlled expansion: `null` means "default — expand everything"; once the user (or an inline
@@ -186,7 +187,7 @@ export function ExplorerRail({
       .catch((e) => message.error((e as Error).message));
   }
   function deleteForm(id: string, title: string) {
-    Modal.confirm({
+    modal.confirm({
       title: `Delete form "${title}"?`,
       okText: "Delete",
       okButtonProps: { danger: true },
@@ -196,7 +197,7 @@ export function ExplorerRail({
 
   // --- folder actions (non-inline) ---
   function deleteFolder(id: string, name: string) {
-    Modal.confirm({
+    modal.confirm({
       title: `Delete folder "${name}"?`,
       content: "Sub-folders are deleted; forms inside move to the project root.",
       okText: "Delete",
@@ -217,7 +218,7 @@ export function ExplorerRail({
       .catch((e) => message.error((e as Error).message));
   }
   function deleteWorkflow(id: string, title: string) {
-    Modal.confirm({
+    modal.confirm({
       title: `Delete workflow "${title}"?`,
       okText: "Delete",
       okButtonProps: { danger: true },

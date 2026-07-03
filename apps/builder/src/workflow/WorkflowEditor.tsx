@@ -29,6 +29,7 @@ import {
 } from "@xyflow/react";
 import {
   Alert,
+  App as AntApp,
   Button,
   Divider,
   Drawer,
@@ -36,7 +37,6 @@ import {
   Input,
   List,
   Modal,
-  message,
   Select,
   Space,
   Spin,
@@ -165,6 +165,7 @@ function WorkflowEditorInner({
   onDirtyChange,
   provideSave,
 }: WorkflowEditorProps) {
+  const { message, modal } = AntApp.useApp();
   // Seed once from the loaded definition; the route remounts (key={workflowId}) to switch workflows.
   // Auto-tidy on load ONLY when no node carries a saved position (a fresh / AI-generated graph),
   // so a layout the user already arranged and saved is never overridden.
@@ -329,7 +330,7 @@ function WorkflowEditorInner({
       message.error((e as Error).message);
       return false;
     }
-  }, [onSave, onDirtyChange]);
+  }, [onSave, onDirtyChange, message]);
 
   useEffect(() => {
     provideSave?.(save);
@@ -563,7 +564,7 @@ function WorkflowEditorInner({
       }
       return true;
     },
-    [nodes, meta.start],
+    [nodes, meta.start, message],
   );
 
   const onNodesDelete = useCallback(
@@ -764,7 +765,7 @@ function WorkflowEditorInner({
         setCreating(false);
       }
     },
-    [projectId, patchNodeData, onFormsChanged],
+    [projectId, patchNodeData, onFormsChanged, message],
   );
 
   // After a save inside the Drawer, App's own persistence already invalidated `qk.form(id)` (so the
@@ -776,7 +777,7 @@ function WorkflowEditorInner({
 
   function closeFormDrawer() {
     if (formDirty) {
-      Modal.confirm({
+      modal.confirm({
         title: "Form chưa lưu",
         content: "Đóng trình chỉnh sửa form? Các thay đổi chưa lưu sẽ mất.",
         okText: "Đóng",
@@ -839,9 +840,7 @@ function WorkflowEditorInner({
             // (useBlocker) catches the navigation while dirty and offers Save / Discard / Cancel.
             <Button
               icon={<PlayCircleOutlined />}
-              onClick={() =>
-                navigate(`/projects/${projectId}/workflows/${definition.id}/run`)
-              }
+              onClick={() => navigate(`/projects/${projectId}/workflows/${definition.id}/run`)}
               title="Mở chế độ chạy"
             >
               Run
@@ -1609,6 +1608,7 @@ function StatusCatalogPanel({
   onRemove: (code: string) => Promise<void>;
   onPromote: (code: string) => Promise<void>;
 }) {
+  const { message } = AntApp.useApp();
   const [draft, setDraft] = useState<StatusDraft>(EMPTY_DRAFT);
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

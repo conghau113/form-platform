@@ -1,4 +1,4 @@
-import { Button, Card, Form, Input, message, Tabs, Typography } from "antd";
+import { App as AntApp, Button, Card, Form, Input, Tabs, Typography } from "antd";
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./useAuth";
@@ -23,6 +23,7 @@ function useRedirectTarget(): string {
  * we just navigate onward. An already-authenticated visitor is redirected away immediately.
  */
 export function LoginPage() {
+  const { message } = AntApp.useApp();
   const { status, login, register } = useAuth();
   const navigate = useNavigate();
   const target = useRedirectTarget();

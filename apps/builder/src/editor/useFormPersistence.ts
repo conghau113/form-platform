@@ -1,7 +1,7 @@
 import { type FormSchema, migrate } from "@org/form-schema";
 import { DEFAULT_TOKENS, type DesignTokens, migrateTheme } from "@org/form-theme";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { message } from "antd";
+import { App as AntApp } from "antd";
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { qk } from "../query";
 import { getForm, getTheme, postForm, postTheme } from "./client";
@@ -54,6 +54,7 @@ export function useFormPersistence({
   formId,
   onSaved,
 }: FormPersistenceArgs): FormPersistence {
+  const { message } = AntApp.useApp();
   const qc = useQueryClient();
   const [tokens, setTokens] = useState<DesignTokens>(DEFAULT_TOKENS);
   // History cursor / tokens at the last load/save — the clean baselines for the dirty check.

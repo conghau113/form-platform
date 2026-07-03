@@ -1,10 +1,10 @@
 import { PlusOutlined } from "@ant-design/icons";
 import {
+  App as AntApp,
   Button,
   Checkbox,
   Input,
   Modal,
-  message,
   Popconfirm,
   Space,
   Table,
@@ -21,6 +21,7 @@ import { useRbacFunctions, useRoleMutations } from "./useAdmin";
  * the `*` wildcard) is read-only — the server rejects edits, so the UI locks it too.
  */
 export function RolesPanel({ roles, loading }: { roles: RoleWithFunctions[]; loading: boolean }) {
+  const { message } = AntApp.useApp();
   const { functions: catalog } = useRbacFunctions(true);
   const mutations = useRoleMutations();
 

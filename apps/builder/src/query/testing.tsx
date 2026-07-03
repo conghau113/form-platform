@@ -5,6 +5,7 @@ import {
   render,
   renderHook,
 } from "@testing-library/react";
+import { App as AntApp } from "antd";
 import type { ReactElement, ReactNode } from "react";
 
 /**
@@ -21,23 +22,27 @@ function freshClient(): QueryClient {
   });
 }
 
-/** Render a component under a fresh QueryClientProvider. */
+/** Render a component under a fresh QueryClientProvider + antd `<App>` (for `App.useApp()`). */
 export function renderWithQuery(ui: ReactElement, options?: RenderOptions) {
   const client = freshClient();
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <AntApp>{children}</AntApp>
+    </QueryClientProvider>
   );
   return render(ui, { wrapper, ...options });
 }
 
-/** `renderHook` under a fresh QueryClientProvider (for hook unit tests). */
+/** `renderHook` under a fresh QueryClientProvider + antd `<App>` (for hook unit tests). */
 export function renderHookWithQuery<Result, Props>(
   callback: (props: Props) => Result,
   options?: RenderHookOptions<Props>,
 ) {
   const client = freshClient();
   const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <AntApp>{children}</AntApp>
+    </QueryClientProvider>
   );
   return renderHook(callback, { wrapper, ...options });
 }

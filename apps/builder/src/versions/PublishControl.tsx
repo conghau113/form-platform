@@ -1,6 +1,6 @@
 import { CloudUploadOutlined } from "@ant-design/icons";
 import type { FormSchema } from "@org/form-schema";
-import { Button, message, Space, Tag, Tooltip } from "antd";
+import { App as AntApp, Button, Space, Tag, Tooltip } from "antd";
 import { useMemo, useState } from "react";
 import { diffForms, hasFormChanges } from "./diff";
 import { useActiveVersion, usePublishForm } from "./useVersions";
@@ -21,6 +21,7 @@ export function PublishControl({
   schema: FormSchema;
   onSave: () => Promise<boolean>;
 }) {
+  const { message } = AntApp.useApp();
   const { active, loading } = useActiveVersion(formId);
   const publish = usePublishForm(formId);
   const [publishing, setPublishing] = useState(false);
