@@ -120,8 +120,8 @@ Total ~18–22 phases.
 | E3 | T3.4.2 | M | [ADR-0009/0010] Design/a11y normative proposals (benchmark distillation + WCAG 2.1 AA antd-scoped) → owner ratify | ⬜ | — |
 | E3 | T3.5.1 | S | [ADR-0005] Release thin gate + blocker register (94 changesets · push-cadence) | ⬜ | — |
 | **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | 9b9faec |
-| E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | _pending_ |
-| E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ⬜ | — |
+| E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | a1ee5c1 |
+| E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | _pending_ |
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ⬜ | — |
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ⬜ | — |
 | E5 | T5.1.2 | S | New skill bindings for new procedures | ⬜ | — |
@@ -533,9 +533,30 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   to the 4 policies + accuracy-first). **Not registered in `index.yaml`** (normative L1, not descriptive-of-
   L0). Self-verified by running (dogfood Step 5): all internal links resolve + cited anchors (review-workflow
   §2/§5, change-approval Steps 1/2/3/6) confirmed present in L0. Doc-only ⇒ no changeset/typecheck/test.
-  Backfilled T4.1.1 hash `9b9faec`. ⚠️ T4.2.1 own row `_pending_` → backfill in the next E4 task.
+  Backfilled T4.1.1 hash `9b9faec`. ⚠️ T4.2.1 own row `_pending_` → **backfilled in T4.2.2 → `a1ee5c1`.**
   NEXT = T4.2.2 (M) procedures drift-sweep + conformance-sweep.
-- **T4.2.2 (M):** procedures drift-sweep + conformance-sweep.
+- **T4.2.2 (M):** procedures drift-sweep + conformance-sweep — DONE. Added `governance/procedures/sweeps.md`
+  (one file, two named procedures — they share a skeleton, so colocating avoids duplicating it per §5/§14).
+  Both are **periodic, batch, repo-wide verifications producing append-only Evidence** (§5), differing only in
+  the axis: **drift-sweep** = a registered **L2 descriptive** artifact vs **L0** (*is the doc still true?* —
+  runs the `index.yaml` methods); **conformance-sweep** = **L0** vs a **normative rule** (*does the code still
+  obey the rule?* — repo-wide + retroactive, complements the per-diff reviewer which only guards changes at the
+  door). **Shared 5-step skeleton** (fix scope+method → batch-run → classify → fix-method-in-place/file-finding-
+  as-own-task → append-only report) + the **core discipline: false-positive (method too broad → narrow it, a
+  detector bug, NOT L0 drift) vs real finding (→ file per §10, never patch inline)** — grounded in real
+  mis-fires: drift (E2-validation `apiFetch`-only exclusion flagged sanctioned `auth/client.ts`) and
+  conformance (this-phase dry-run: `new Function`↔`new FunctionGuard`, bare `prisma\.`↔health/scripts, `eval(`↔
+  "never eval()" comment prose — all method-too-broad, 0 real violations). Per-sweep specifics: drift → calibration-
+  report (batch) / drift-report (single), no `verified-on` bump on a method-only batch; conformance → files like a
+  drift finding + rolls into the §13 audit (E8), authoring the *precise* per-rule methods (e.g. Prisma-confinement)
+  stays with the **standard** that owns the rule (T3.1.1), and `structure.test.ts` is a standing rung-3 conformance-
+  sweep. **Admission evidence (E4 ≥2× + dry-run):** drift = per-artifact calibration T2.1.1–T2.5.1 + batch
+  `acd9204`; conformance = assumption-register golden-rule verification 2026-07-03 + this-phase dry-run + standing
+  `structure.test.ts`. Updated `procedures/README.md` table (+2 rows). Normative headers (Active v1.0, owner
+  recommended 2026-07-04). **Not index-registered** (normative L1). Self-verified by running (dogfood Step 5 + the
+  drift/link check the sweep itself codifies): all 8 link targets + both README anchors resolve; the conformance
+  greps ran clean. Doc-only ⇒ no changeset/typecheck/test. Backfilled T4.2.1 hash `a1ee5c1`. ⚠️ T4.2.2 own row
+  `_pending_` → backfill in the next task (T4.2.3). NEXT = T4.2.3 (S) procedure knowledge-promotion (memory → L2).
 - **T4.2.3 (S):** procedure knowledge-promotion (memory → L2).
 - No procedure without ≥2 recurrences. Validation: dry-run one real phase before marking Active.
 
