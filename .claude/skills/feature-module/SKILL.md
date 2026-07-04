@@ -5,6 +5,13 @@ description: Scaffolding conventions for clean, maintainable code in apps/builde
 
 # feature-module — how to write code in this repo
 
+> **Layer:** L3 — Execution Adapter (skill binding). Originates no rule (constitution §2); it is the
+> copy-paste rendering of the coding conventions, which live in the source.
+> **Source:** [`knowledge/standards/coding-standard.md`](../../../knowledge/standards/coding-standard.md)
+> (the extracted L2 standard) + `docs/refactor/frontend-architecture.md` (cited below) + each app's
+> `ARCHITECTURE.md`. The additive-schema / no-`--write .` rules are L1 (ADR-0014 / ADR-0023).
+> **Regenerated:** E5 T5.1.1 · 2026-07-05 — verified against source, no drift.
+
 Authoritative source: [docs/refactor/frontend-architecture.md](../../../docs/refactor/frontend-architecture.md).
 Refactor sequencing: [docs/refactor/refactor-plan.md](../../../docs/refactor/refactor-plan.md).
 This skill is the **checklist + copy-paste templates**. Follow it before writing app code so

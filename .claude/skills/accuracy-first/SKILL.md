@@ -5,6 +5,16 @@ description: The owner's working contract — correctness and depth over speed. 
 
 # Accuracy-first working contract
 
+> **Layer:** L3 — Execution Adapter (skill binding). The Claude-Code-facing rendering of a governed
+> source; it originates no rule (constitution §2).
+> **Source:** [`governance/policies/verification.md`](../../../governance/policies/verification.md) —
+> the L1 home of this working contract (the normative evidence floors + 5-rule loop live there, and
+> are pointed to, not re-decided here).
+> **Verbatim:** this body is **owner-authored and kept VERBATIM per
+> [ADR-0001](../../../decision-records/ADR-0001-existing-ai-assets-consolidation.md)** (Option A) — do
+> **not** edit it without owner approval; the framework wraps it, it does not rewrite it.
+> **Regenerated:** E5 T5.1.1 · 2026-07-05 — header added only, body unchanged.
+
 The owner has stated it plainly: **"tôi không cần nhanh, tôi cần sự chính xác"** — do not
 optimize for a fast answer; optimize for a correct, deep, durable one. A shallow result that
 *looks* done is worse than a slower result that *is* done. Apply this to every non-trivial task.

@@ -5,6 +5,14 @@ description: Conventions and file-map for the Workflow Editor v2 track (xyflow-b
 
 # Workflow Editor — house rules
 
+> **Layer:** L3 — Execution Adapter (skill binding). Originates no rule (constitution §2); it renders the
+> workflow-editor track's conventions, which live in the source.
+> **Source:** `docs/expansion/workflow-editor-v2.md` (the track plan / source-of-truth, cited below) +
+> the `@org/workflow-schema` / `@org/workflow-core` contract. The validateGraph-hard vs lintGraph-advisory
+> split is [ADR-0017](../../../decision-records/ADR-0017-validategraph-hard-vs-lintgraph-advisory.md); additive
+> `workflowVersion` mirrors ADR-0014.
+> **Regenerated:** E5 T5.1.1 · 2026-07-05 — verified against source, no drift.
+
 Plan + progress: `docs/expansion/workflow-editor-v2.md` (SOURCE OF TRUTH — tick + update after every phase).
 Resume memory: `session-resume-workflow-editor-v2` + the older `session-resume-workflow`.
 

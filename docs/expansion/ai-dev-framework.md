@@ -119,12 +119,12 @@ Total ~18–22 phases.
 | E3 | T3.3.1 | S | [ADR-0003 ✅Accepted] Documentation standard (natures · freshness · language) | ✅ | ccbe963 |
 | E3 | T3.4.1 | M | [ADR-0009] Design baseline, descriptive (antd conventions · spacing · P1b breakpoints · locale) | ⬜ | — |
 | E3 | T3.4.2 | M | [ADR-0009/0010] Design/a11y normative proposals (benchmark distillation + WCAG 2.1 AA antd-scoped) → owner ratify | ⬜ | — |
-| E3 | T3.5.1 | S | [ADR-0005 ✅Accepted] Release thin gate + blocker register (94 changesets · push-cadence) | ✅ | _pending_ |
+| E3 | T3.5.1 | S | [ADR-0005 ✅Accepted] Release thin gate + blocker register (94 changesets · push-cadence) | ✅ | de1b668 |
 | **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | 9b9faec |
 | E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | a1ee5c1 |
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | c50ab94 |
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | 03f8a6c |
-| **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ⬜ | — |
+| **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | _pending_ |
 | E5 | T5.1.2 | S | New skill bindings for new procedures | ⬜ | — |
 | E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ⬜ | — |
 | E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ⬜ | — |
@@ -660,6 +660,29 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 - **T5.4.1 (S):** align memory conventions; slim framework-track memory to pointers.
 - DoR: EVERY source Active (a binding from a Draft source violates the frozen architecture).
   Validation: run one real product task end-to-end under the new bindings BEFORE the final merge.
+
+- **T5.1.1 (M) DONE `_pending_` (2026-07-05, started E5 with E3-partial — owner ruling):** the 4
+  `.claude/skills/*/SKILL.md` are now **traceable L3 bindings** — each carries a header block
+  (Layer L3 · Source+which-parts · originates-no-rule §2 · regen stamp). Sources chosen avoid the
+  ratification-pending E4 charters/procedures: **accuracy-first** ← `policies/verification.md` (E1,
+  deep-read-done) — **body kept VERBATIM (ADR-0001), header inserted only: `git diff` = 10 add / 0
+  del ✓**; **repo-map** ← system-overview/ARCHITECTUREs/AGENTS + golden rules L1; **feature-module**
+  ← `standards/coding-standard.md` (E3, in-force L2); **workflow-editor** ← workflow-editor-v2 plan +
+  ADR-0017. **repo-map regenerated-to-current** (fixed 3 live drifts that were poisoning context:
+  api "SQLite dev"→PostgreSQL · native "DEFERRED"→FROZEN ADR-0006 · Commands `biome --write .`→scoped
+  ADR-0023). Skills are L3 → **not index-registered** (like charters/procedures). All source links
+  verified to resolve. **FINDING (filed, not fixed — accuracy-first is owner-only VERBATIM text):**
+  its §5 also says `pnpm biome check --write .`, which contradicts ADR-0023 (never repo-wide) — owner
+  must decide whether to edit the verbatim contract. Review = in-session self-checklist + the
+  deterministic verbatim-diff proof; owner deep-read is the gate for E5-bindings (reviewer charter).
+  Doc-only ⇒ no changeset/typecheck/test. Backfilled T3.5.1 `de1b668`. ⚠️ T5.1.1 own row `_pending_`
+  → backfill next task. **E3-partial rationale:** T5.1.1 sources are E1 policies + in-force E3/L2
+  standards (NOT the design/a11y T3.4.x, orthogonal), so E5 can proceed with E3 at 4/6. **Remaining
+  E5:** T5.1.2 (skill bindings for the 3 new procedures) + T5.2.1 (agents from charters) both source
+  from the **ratification-pending E4 charters/procedures** → their DoR "EVERY source Active" needs an
+  owner ratify (or accept the Active-header) FIRST — flag before doing them. T5.3.1 (CLAUDE/AGENTS/
+  cursor pointers) + T5.4.1 (memory align) are not E4-gated. E5-close: run one real product task
+  end-to-end under the new bindings before any merge.
 
 ## E6 — Enforcement & Gates
 
