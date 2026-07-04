@@ -11,7 +11,9 @@
 > **Drift-check cadence:** re-verify whenever a package/app/module/model is added or
 > removed, or a major dependency is bumped; otherwise each release. This document is a
 > recurring drift surface — do not trust a claim past its verified-on date without a
-> re-check. (Provisional stamp pending the `knowledge/index.yaml` regime, roadmap E2.)
+> re-check. **Class:** E1. Registered in [`knowledge/index.yaml`](../../knowledge/index.yaml) as
+> `system-overview`; the executable re-verify method (10 packages · 14 api modules · 17 repos ·
+> 21 prisma models) lives in the index entry. Drift = defect, filed not silently fixed (§10).
 
 **Form Platform** is a **schema-driven** platform (a versioned JSON contract at its
 center) for designing forms, workflows, and submission runtimes. One versioned contract

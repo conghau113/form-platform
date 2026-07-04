@@ -4,6 +4,14 @@ Schema-driven form (and later workflow) builder. One versioned JSON contract
 drives many platform renderers. Read this fully; it is the single source of truth
 for every AI agent working in this repo.
 
+> **Freshness contract (descriptive surface only).** This file mixes normative rules with
+> descriptive facts. Its **descriptive** surface — the `## Layout` package roster + folder
+> structure — is registered in [`knowledge/index.yaml`](knowledge/index.yaml) as `agents-guide`
+> (**class** E1 · **verified-on** 2026-07-03 · **cadence** on any package add/remove/rename;
+> **method** in the index: each named package dir exists). Its **normative** golden rules are
+> L1-governed (constitution + ADR-0006/0014/0015/0016) and become pointers here in E5 (T5.3.1).
+> Drift in the descriptive surface = defect: file it, do not silently patch (constitution §10).
+
 ## Architecture (non-negotiable)
 - The JSON schema IS the contract. `packages/form-schema` (Zod + inferred types)
   is the single source of truth. Renderers CONSUME it; never duplicate validation

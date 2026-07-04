@@ -8,7 +8,14 @@ Bổ sung cho `README.md` (kiến trúc/versioning) và `AGENTS.md` (quy ước 
 > API có validate env (fail-fast), CORS allowlist, helmet, rate-limit, `GET /health`, và **auth thật**
 > (JWT, HttpOnly cookie + refresh token) — mọi route cần đăng nhập trừ `/health` và `/auth/*`.
 >
-> _verified-on 2026-07-03 (framework T0.2.3) — env vars đối chiếu `apps/api/{config/env.ts,env.example}`._
+>
+> **Freshness contract** — descriptive (L2), đăng ký trong
+> [`knowledge/index.yaml`](../knowledge/index.yaml) là `usage-runbook`. **Class:** E2 ·
+> **verified-on:** 2026-07-03 (framework T0.2.3) · **cadence:** kiểm lại khi env vars / lệnh
+> dev-test-docker / ports / mô hình auth đổi; else mỗi release. **Scope:**
+> `apps/api/src/config/env.ts`, `apps/api/.env.example`, `docker-compose.yml`, `package.json`.
+> Method re-verify (đối chiếu env vars của doc với source) nằm ở index entry. Drift = defect:
+> ghi nhận, không vá ngầm (constitution §10).
 
 ---
 

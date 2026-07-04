@@ -1,7 +1,12 @@
 # api — architecture
 
-> _Verified against `src/` on 2026-07-03 (framework T0.2.1); module/repo/endpoint counts checked
-> via `ls`/`grep`. Provisional stamp pending the E2 freshness contract._
+> **Freshness contract** — descriptive (L2), registered in
+> [`knowledge/index.yaml`](../../knowledge/index.yaml) as `api-architecture`. **Class:** E1 ·
+> **Verified-on:** 2026-07-03 (framework T0.2.1) · **Cadence:** re-verify when an api module /
+> repository / endpoint or the auth / tenancy / RBAC / DB-engine posture changes; else each release.
+> **Scope:** `apps/api/src/**`, `apps/api/prisma/schema.prisma`. The executable re-verify method
+> (14 modules · 17 repo interfaces · 17 Prisma impls · Postgres provider) lives in the index entry.
+> Drift = defect: file it, do not silently patch (constitution §10).
 
 NestJS backend for the form platform. **Prisma**-backed **PostgreSQL** persistence (behind a
 repository interface) for users, tenants, projects, folders, forms, form versions, themes, presets,
