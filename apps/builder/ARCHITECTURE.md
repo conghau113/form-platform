@@ -3,9 +3,10 @@
 > **Freshness contract** — descriptive (L2), registered in
 > [`knowledge/index.yaml`](../../knowledge/index.yaml) as `builder-architecture`. **Class:** E1 ·
 > **Verified-on:** 2026-07-03 (framework T0.2.2) · **Cadence:** re-verify when a builder feature
-> folder is added / removed or the fetch-only-in-`apiFetch.ts` convention changes; else each release.
+> folder is added / removed or the fetch-only-in-the-api-clients convention changes; else each release.
 > **Scope:** `apps/builder/src/**`. The executable re-verify method (documented feature folders all
-> present · `fetch(` confined to the sole file `lib/apiFetch.ts`) lives in the index entry.
+> present · `fetch(` confined to the two api-client files `lib/apiFetch.ts` + `auth/client.ts`) lives in
+> the index entry.
 > Drift = defect: file it, do not silently patch (constitution §10).
 
 The drag-drop form editor (Vite + antd + dnd-kit). Authors a schema tree, previews it

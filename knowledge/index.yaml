@@ -113,13 +113,14 @@ artifacts:
       for d in admin ai auth shell submissions versions editor workflow workspace query; do
         test -d apps/builder/src/$d && echo "ok $d" || echo "MISSING $d"
       done
-      # fetch() must remain confined to the api client (react-query convention).
-      # Expect exactly one hit: lib/apiFetch.ts (the sanctioned exception).
-      grep -rl 'fetch(' apps/builder/src --include=*.ts --include=*.tsx | grep -v 'apiFetch.ts'
+      # fetch() must remain confined to the api clients (react-query convention). The two
+      # sanctioned files are lib/apiFetch.ts and auth/client.ts — expect NO other hits.
+      grep -rl 'fetch(' apps/builder/src --include=*.ts --include=*.tsx | grep -vE 'apiFetch\.ts|client\.ts'
     notes: >-
-      Feature-folder presence re-calibrated 2026-07-04 — all present. The apiFetch
-      exception (fetch only in lib/apiFetch.ts) is the documented carve-out; the
-      confinement grep confirmed it is the sole file using fetch() (2026-07-04).
+      Feature-folder presence re-calibrated 2026-07-04 — all present. fetch() is confined to
+      the two api-client files lib/apiFetch.ts + auth/client.ts (the documented carve-out).
+      DETECTOR FIX (E2 validation 2026-07-04): the earlier method excluded only apiFetch.ts and
+      false-flagged auth/client.ts — corrected to exclude both client files.
 
   - id: usage-runbook
     path: docs/usage.md

@@ -111,7 +111,8 @@ Total ~18–22 phases.
 | E2 | T2.3.1 | M | `knowledge/runbook/dev-stack.md` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointer; register in index | ✅ | 55265f6 |
 | E2 | T2.4.1 | S | `registries/model-registry.yaml` + capability tiers (judgment/mechanical/recall); materializes ADR-0011; registered in index | ✅ | 953e662 |
 | E2 | T2.4.2 | S | `registries/gate-inventory.yaml` (16 gates: 9 CI + 6 local + 1 structural; rung labels §8; sonar advisory) | ✅ | f152298 |
-| E2 | T2.5.1 | S | `knowledge/templates/` (README + drift/review/audit/calibration reports + phase-plan; evidence-nature, not index-registered) | ✅ | _pending_ |
+| E2 | T2.5.1 | S | `knowledge/templates/` (README + drift/review/audit/calibration reports + phase-plan; evidence-nature, not index-registered) | ✅ | 16e10ff |
+| E2 | — | — | **E2 validation** (epic DoD): batch-ran all 8 index methods → first calibration-report; 7 pass + 1 detector-fix + 0 drift → **E2 DONE** | ✅ | this commit |
 | **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ⬜ | — |
 | E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ⬜ | — |
 | E3 | T3.3.1 | S | [ADR-0003] Documentation standard (natures · freshness · language) | ⬜ | — |
@@ -456,12 +457,23 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   reference (blank forms), not descriptive-of-L0, so they have no freshness scope — consistent with the
   owner's L2-descriptive-only ruling; the README states this. (Also tidied the E2 section: removed the
   leftover original stub bullets that the detailed write-ups above had superseded.) Doc-only ⇒ no
-  changeset/typecheck/test. Backfilled T2.4.2 hash `f152298`. ⚠️ T2.5.1 own row `_pending_` → backfill in the
-  E2-validation commit. **This is the LAST E2 BUILD task.**
-- **Validation (epic DoD — NEXT):** run EVERY `index.yaml` method once as a batch = the first calibration of
-  the detector; produce the first `calibration-report` (dogfooding the new template) under
-  `reports/calibration/`; it must pass on the just-registered artifacts, and any drift is filed. After that →
-  **E2 DONE**, on to E3 (Standards) ‖ E4 (Charters & Procedures).
+  changeset/typecheck/test. Backfilled T2.4.2 hash `f152298`. ⚠️ T2.5.1 own row `_pending_` → **backfilled in
+  the E2-validation commit → `16e10ff`.** **This is the LAST E2 BUILD task.**
+- **E2 validation (epic DoD) — DONE.** Ran all **8** `index.yaml` methods once as a batch = the first
+  calibration of the freshness detector; produced the first `calibration-report` (dogfooding the T2.5.1
+  template) at `reports/calibration/CALIBRATION-2026-07-04.md`. **Result: 8 run · 7 pass · 1 detector
+  false-positive (fixed) · 0 real L0 drift.** The false-positive: the `builder-architecture`
+  fetch-confinement method excluded only `apiFetch.ts` and false-flagged `apps/builder/src/auth/client.ts`
+  — a **second, sanctioned** api-client file (auth client). The builder doc was correct; the method's
+  exclusion was too narrow (seeded by the T2.1.1 "sole file" wording). **Fix:** exclude both client files
+  (`grep -vE 'apiFetch\.ts|client\.ts'` → clean), and corrected the "sole file" wording in the index note +
+  `apps/builder/ARCHITECTURE.md` stamp (no product code touched). No `verified-on` bumps (the batch validates
+  method correctness, not full doc re-verification). Two earlier findings remain open remediation tasks
+  (`production-hardening.md` "11 packages"; dotted `.env.example` duplicate) — recorded in the index. This is
+  a detector-bug fix, so it ships in the same validation commit (not a separate task per §10, which reserves
+  own-task remediation for *doc drift*, not method bugs). **→ E2 DONE.** NEXT = E3 (Standards Extraction) ‖
+  E4 (Charters & Procedures); E3 T3.1.1 (coding standard, whole-monorepo) is the clearest Fable-5 escalation
+  candidate per `registry-model`.
 
 ## E3 — Standards Extraction (‖ E4)
 
