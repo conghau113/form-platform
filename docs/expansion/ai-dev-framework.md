@@ -127,8 +127,8 @@ Total ~18–22 phases.
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | b3debca |
 | E5 | T5.1.2 | S | New skill bindings for new procedures | ⬜ | — |
 | E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ⬜ | — |
-| E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | _pending_ |
-| E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ⬜ | — |
+| E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | 173cc3f |
+| E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | _pending_ |
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ⬜ | — |
 | E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ⬜ | — |
 | E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ⬜ | — |
@@ -711,8 +711,34 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   self-checklist (governance-markdown gives an isolated reviewer no signal — the E5-binding gate is
   owner deep-read per the reviewer charter; consistent with every prior E-phase). Doc-only ⇒ no
   changeset/typecheck/test. `.claude/settings.json` + `projects.service.ts` kept OUT per convention.
-  Backfilled T5.1.1 hash `b3debca`. ⚠️ T5.3.1 own row `_pending_` → backfill next task. **Remaining
-  E5:** T5.4.1 (memory align — ungated, doable next) · T5.1.2 + T5.2.1 (owner-ratify-gated).
+  Backfilled T5.1.1 hash `b3debca`. ⚠️ T5.3.1 own row `_pending_` → **backfilled in T5.4.1 → `173cc3f`.**
+  **Remaining E5:** T5.4.1 (memory align — ungated, doable next) · T5.1.2 + T5.2.1 (owner-ratify-gated).
+- **T5.4.1 (S) DONE `_pending_` (2026-07-05):** the MEMORY binding — align machine-local memory to the
+  framework's memory conventions + slim the framework-track memory to a pointer. **Note the deliverable is
+  machine-local + un-versioned** (memory lives outside the repo at `.claude/projects/.../memory/`; per
+  `knowledge-promotion.md` memory is the "fast, private, un-versioned incubator"), so THIS commit only
+  records the tracker/status change — the memory edits themselves are not repo artifacts. Applied the
+  **knowledge-promotion Step-7 discipline** (thin-to-pointer; one home §5; never emptied — recall is why
+  memory exists): **(1)** the framework-track resume `session-resume-ai-dev-framework.md` went **786 → 73
+  lines (73.5KB → 5.6KB)** — the per-phase write-ups were a near-duplicate of THIS tracker (the durable
+  home), so they were replaced by a pointer to it, keeping only current-state + next/gates + session
+  discipline + open findings + cross-links. **(2)** the giant `MEMORY.md` index entry for the track (which
+  violated the file's own "one line per entry" rule and was the main over-budget driver) was cut to a true
+  one-liner → **MEMORY.md 26.9KB → 16.8KB, back under the ~24.4KB harness budget.** **(3) align memory
+  conventions:** the four convention-memories whose fact the framework now governs each gained a
+  "**Governed home (framework)**" pointer (one-home §5, additive, recall text kept) —
+  `biome-not-clean-at-baseline` → ADR-0023 · `form-platform-additive-schema-rule` → ADR-0014 +
+  coding-standard · `per-phase-commit-then-memory` → `procedures/phase-execution.md` (Steps 8–10) ·
+  `accuracy-over-speed` → `policies/verification.md` + accuracy-first L3 binding (`dev-stack-ports` was
+  already a pointer since T2.3.1). Review = in-session self-checklist (verified the tracker holds every
+  per-task write-up + hash before thinning, so no information lost; no repo product/test change). Doc-only ⇒
+  no changeset/typecheck/test. `.claude/settings.json` + `projects.service.ts` kept OUT per convention.
+  Backfilled T5.3.1 hash `173cc3f`. ⚠️ T5.4.1 own row `_pending_` → backfill next task. **⚠️ After T5.4.1
+  the framework track is OWNER-BLOCKED:** the only remaining E5 build tasks (T5.1.2 skill bindings for the 3
+  new procedures + T5.2.1 agents from charters) source from the E4 charters/procedures whose headers say
+  "Active v1.0 · ratification-pending §3" → their DoR "EVERY source Active" needs the **owner to ratify
+  the E4 charters/procedures** (or explicitly accept the Active-header as sufficient) FIRST. Alternatively
+  the owner supplies the ADR-0009/0010 grants (→ T3.4.x design/a11y) or interleaves the product track.
 
 ## E6 — Enforcement & Gates
 
