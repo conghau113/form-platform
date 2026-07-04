@@ -121,8 +121,8 @@ Total ~18–22 phases.
 | E3 | T3.5.1 | S | [ADR-0005] Release thin gate + blocker register (94 changesets · push-cadence) | ⬜ | — |
 | **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | 9b9faec |
 | E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | a1ee5c1 |
-| E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | _pending_ |
-| E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ⬜ | — |
+| E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | c50ab94 |
+| E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | _pending_ |
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ⬜ | — |
 | E5 | T5.1.2 | S | New skill bindings for new procedures | ⬜ | — |
 | E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ⬜ | — |
@@ -556,8 +556,30 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   recommended 2026-07-04). **Not index-registered** (normative L1). Self-verified by running (dogfood Step 5 + the
   drift/link check the sweep itself codifies): all 8 link targets + both README anchors resolve; the conformance
   greps ran clean. Doc-only ⇒ no changeset/typecheck/test. Backfilled T4.2.1 hash `a1ee5c1`. ⚠️ T4.2.2 own row
-  `_pending_` → backfill in the next task (T4.2.3). NEXT = T4.2.3 (S) procedure knowledge-promotion (memory → L2).
-- **T4.2.3 (S):** procedure knowledge-promotion (memory → L2).
+  `_pending_` → **backfilled in T4.2.3 → `c50ab94`.** NEXT = T4.2.3 (S) procedure knowledge-promotion (memory → L2).
+- **T4.2.3 (S):** procedure knowledge-promotion (memory → L2) — DONE. Added
+  `governance/procedures/knowledge-promotion.md` (+ README table row) — the third procedure, and the
+  **LAST E4 task**. Codifies the de-facto loop for **graduating a durable fact out of machine-local
+  session memory into a governed L2 artifact**: memory is the fast, private incubator; once a fact is
+  **proven durable (≥2× across sessions)** it must move to L2 (runbook / registry / index-registered
+  doc), get a freshness contract, and the memory entry be **thinned to a pointer** so there is exactly
+  one home (§5). **8 steps → verify:** identify candidate (≥2× — §8 climb-on-evidence) · classify
+  nature and **fork if not descriptive** (a normative rule / load-bearing decision promotes to **L1**
+  via ADR-0012 Option C, not here) · choose the one L2 home · **re-ground in L0, do NOT copy memory
+  text** (memory may be stale — verify against `env.ts` / `.github/workflows/` / `.claude/agents/`;
+  file memory-vs-L0 contradictions as findings §10) · apply the **≥2× filter per item** (the gotcha
+  sub-filter) · register the freshness contract in `index.yaml` (executable method, calibrated once) ·
+  **thin the memory to a pointer** (never delete, never leave the full copy) · commit & record (defer
+  to phase-execution Steps 8–10). Core discipline = *promote the lived fact not memory's phrasing* ·
+  *≥2× or it stays local* · *descriptive→L2, normative→L1*. **Admission evidence (≥2× + dry-run):**
+  T2.3.1 (`55265f6`) is the end-to-end dry-run (dev-stack memory + `usage.md` → `runbook/dev-stack.md`,
+  re-grounded in `env.ts`/`env.example`, registered, memory thinned) + its ≥2× gotcha sub-filter (6
+  promoted) + the standing `MEMORY.md` topic-file discipline. Normative header (Active v1.0, owner
+  recommended 2026-07-04). **Not index-registered** (normative L1). Self-verified by running (dogfood
+  phase-execution Step 5 + the drift/link check the sweeps codify): all 5 link targets + both README
+  anchors resolve; the 2 cited L0 anchors (`env.ts`, `env.example`) exist. Doc-only ⇒ no
+  changeset/typecheck/test. Backfilled T4.2.2 hash `c50ab94`. ⚠️ T4.2.3 own row `_pending_` → backfill
+  in the next task (E3 first commit). **This is the LAST E4 task ⇒ E4 DONE** (charters + 3 procedures).
 - No procedure without ≥2 recurrences. Validation: dry-run one real phase before marking Active.
 
 ## E5 — Execution Bindings (LAST)

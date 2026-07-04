@@ -22,3 +22,4 @@ have already lived, not what we imagine.
 | [phase-execution](phase-execution.md) | one governed phase, resume → plan → DoR → implement → verify → review → commit → record → stop | skill (T5.1.2) |
 | [drift-sweep](sweeps.md#a-drift-sweep--specifics) | batch-run the `index.yaml` methods; L2 doc vs L0; file drift, fix detector bugs | skill (T5.1.2) |
 | [conformance-sweep](sweeps.md#b-conformance-sweep--specifics) | batch-run the golden-rule / standard checks; L0 vs rule; complements the per-diff reviewer | skill (T5.1.2) |
+| [knowledge-promotion](knowledge-promotion.md) | graduate a durable fact from machine-local memory into a governed L2 artifact; thin the memory to a pointer | skill (T5.1.2) |
