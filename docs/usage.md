@@ -13,7 +13,7 @@ Bổ sung cho `README.md` (kiến trúc/versioning) và `AGENTS.md` (quy ước 
 > [`knowledge/index.yaml`](../knowledge/index.yaml) là `usage-runbook`. **Class:** E2 ·
 > **verified-on:** 2026-07-03 (framework T0.2.3) · **cadence:** kiểm lại khi env vars / lệnh
 > dev-test-docker / ports / mô hình auth đổi; else mỗi release. **Scope:**
-> `apps/api/src/config/env.ts`, `apps/api/.env.example`, `docker-compose.yml`, `package.json`.
+> `apps/api/src/config/env.ts`, `apps/api/env.example`, `docker-compose.yml`, `package.json`.
 > Method re-verify (đối chiếu env vars của doc với source) nằm ở index entry. Drift = defect:
 > ghi nhận, không vá ngầm (constitution §10).
 

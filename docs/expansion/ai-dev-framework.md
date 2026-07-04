@@ -107,8 +107,8 @@ Total ~18–22 phases.
 | E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ✅ | 63cefc3 |
 | E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ✅ | a7d3620 |
 | **E2** | T2.1.1 | M | `knowledge/index.yaml` (L2-descriptive-only registry: class/scope-globs/verified-on/executable method/cadence/owner) + register 5 descriptive docs; trackers excluded-by-design | ✅ | 360dbab |
-| E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc (5 docs → point to index entry; method stays authoritative in index) | ✅ | _pending_ |
-| E2 | T2.3.1 | M | `knowledge/runbook/` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointers | ⬜ | — |
+| E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc (5 docs → point to index entry; method stays authoritative in index) | ✅ | d6ff404 |
+| E2 | T2.3.1 | M | `knowledge/runbook/dev-stack.md` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointer; register in index | ✅ | _pending_ |
 | E2 | T2.4.1 | S | `registries/model-registry` + capability tiers (judgment/mechanical/recall) | ⬜ | — |
 | E2 | T2.4.2 | S | `registries/gate-inventory` (push-deny · biome hook · structure test · CI · changeset gate + rung labels) | ⬜ | — |
 | E2 | T2.5.1 | S | `templates/` (drift/review/audit/calibration reports + phase-plan) | ⬜ | — |
@@ -381,9 +381,30 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   (constitution + ADR-0006/0014/0015/0016), becoming pointers in E5 (T5.3.1). **verified-on carries
   2026-07-03** (the docs' last full-verification date), matching the index — today's calibration
   confirmed the stamp still holds; not a new full re-verification. Doc-only ⇒ no changeset/typecheck/test.
-  Backfilled T2.1.1 hash `360dbab`. ⚠️ T2.2.1 own row `_pending_` → backfill in T2.3.1 (amend
-  fixed-point). NEXT = T2.3.1 (M) `knowledge/runbook/` consolidate env/ports/gotchas (memory → pointers;
+  Backfilled T2.1.1 hash `360dbab`. ⚠️ T2.2.1 own row `_pending_` → **backfilled in T2.3.1 → `d6ff404`.**
+  NEXT = T2.3.1 (M) `knowledge/runbook/` consolidate env/ports/gotchas (memory → pointers;
   promote only gotchas seen ≥2×).
+- **T2.3.1 (M):** `knowledge/runbook/dev-stack.md` — DONE. First L2 **runbook**; created
+  `knowledge/runbook/`. Consolidates the dev-stack facts that previously lived only in machine-local
+  memory (`dev-stack-ports`) + the operational sections of `docs/usage.md` into one governed, freshness-
+  contracted artifact: **ports** (5173 builder · 3001 api · 5435 host→5432 postgres), **run** (`docker
+  compose up -d postgres` → `pnpm dev`; the api `dev` script is `tsc && node dist/main.js`, no watch),
+  **env** (grounded in `apps/api/src/config/env.ts` + the authoritative template `apps/api/env.example`,
+  not copied), and the **promoted gotchas**. **Promotion rule applied (constitution §8 climb-on-evidence):
+  only gotchas seen ≥2× across sessions** — 6 promoted (turbo-one-tree teardown · api-`dev`-no-watch →
+  live-smoke runs `dist` not tsx + kill stale :3001 first · Prisma EPERM DLL-lock on Windows · EADDRINUSE=
+  reuse · rebuild package `dist` after change · no `pnpm dev` + full `docker compose up` together); one-offs
+  stay in session memory. Registered in `knowledge/index.yaml` as `runbook-dev-stack` (descriptive, class
+  **E1**, **verified-on 2026-07-04** — freshly grounded in L0 today, method calibrated & passing: env
+  defaults 3001/5173/JWT≥16 · docker `postgres:16` + `${POSTGRES_PORT:-5435}:5432` · api dev script). Memory
+  `dev-stack-ports.md` **thinned to a pointer** at the runbook (kept only the fast-recall one-liner).
+  **2 FINDINGS filed (per §10, NOT fixed inline):** (a) `apps/api/.env.example` (dotted) is a **stale
+  SQLite-era duplicate** superseded by `apps/api/env.example` (no dot) — noted in the runbook + index; its
+  disposition (update or 6-step disposal) is a separate remediation task; (b) **corrected my own E2
+  artifacts** — the `usage-runbook` index scope + `usage.md` stamp had referenced the stale dotted file →
+  repointed to `env.example`. Doc/config-only ⇒ no changeset/typecheck/test. Backfilled T2.2.1 hash
+  `d6ff404`. ⚠️ T2.3.1 own row `_pending_` → backfill in T2.4.1 (amend fixed-point). NEXT = T2.4.1 (S)
+  `registries/model-registry` + capability tiers (judgment/mechanical/recall).
 - **T2.2.1 (M):** stamp freshness contracts on every registered doc.
 - **T2.3.1 (M):** `knowledge/runbook/` consolidate env/ports/gotchas (usage.md + memory:
   EPERM · port 3001 · dist-rebuild); memory → pointers. Promote only gotchas seen ≥2×.

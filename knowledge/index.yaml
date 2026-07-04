@@ -132,19 +132,21 @@ artifacts:
       change; else each release.
     scope:
       - apps/api/src/config/env.ts
-      - apps/api/.env.example
+      - apps/api/env.example
       - docker-compose.yml
       - package.json
       - apps/api/package.json
     method: |
       # Env vars documented in usage.md must match the source of truth.
-      # Compare the doc's env table against the validated schema + example file.
+      # Compare the doc's env table against the validated schema + authoritative template.
       cat apps/api/src/config/env.ts
-      cat apps/api/.env.example
+      cat apps/api/env.example
     notes: >-
-      Env vars were reconciled 2026-07-03 (E0 T0.2.3) against apps/api/config/env.ts
-      and .env.example (SQLite→PostgreSQL, real JWT+refresh auth). Not re-diffed
-      2026-07-04 — carries the 2026-07-03 stamp.
+      Env vars were reconciled 2026-07-03 (E0 T0.2.3) against apps/api/src/config/env.ts
+      and the authoritative env template (SQLite→PostgreSQL, real JWT+refresh auth). Scope
+      corrected 2026-07-04: the authoritative template is apps/api/env.example (no dot); the
+      dotted apps/api/.env.example is a stale SQLite-era duplicate, filed for disposal (see
+      the runbook-dev-stack entry). Not re-diffed 2026-07-04 — carries the 2026-07-03 stamp.
 
   - id: agents-guide
     path: AGENTS.md
@@ -167,6 +169,33 @@ artifacts:
       no-eval, additive schema, renderer peerDeps, native freeze) are governed at
       L1 by the constitution + ADR-0006/0014/0015/0016, and AGENTS.md becomes a
       pointer to them in E5 (T5.3.1). Registered scope re-verified 2026-07-04.
+
+  - id: runbook-dev-stack
+    path: knowledge/runbook/dev-stack.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-04
+    cadence: per-change when a port, a run script, or the env contract changes; else each release.
+    scope:
+      - apps/api/src/config/env.ts
+      - apps/api/env.example
+      - docker-compose.yml
+      - package.json
+      - apps/api/package.json
+    method: |
+      # Ports / run scripts / env defaults the runbook states must match L0.
+      grep -nE 'PORT|CORS_ORIGINS|JWT_SECRET' apps/api/src/config/env.ts   # 3001 default, 5173, >=16
+      grep -nE 'POSTGRES_PORT:-5435|postgres:16' docker-compose.yml        # host 5435 -> container 5432
+      node -e "console.log(require('./apps/api/package.json').scripts.dev)" # 'tsc && node dist/main.js'
+    claims:
+      api_port: 3001
+      builder_port: 5173
+      postgres_host_port: 5435
+    notes: >-
+      Consolidates dev-stack facts previously only in machine-local memory (dev-stack-ports)
+      + docs/usage.md operational sections. Only gotchas seen >=2x are promoted (constitution
+      §8 climb-on-evidence). First L2 runbook.
 
 # Descriptive docs deliberately NOT registered (kept here for traceability so the
 # omission is auditable, not accidental):
