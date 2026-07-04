@@ -1,0 +1,91 @@
+# Model Registry — L2 reference (capability tiers · model roster · escalation)
+#
+# Nature: descriptive/reference (L2). This registry does NOT decide model policy — the
+# NORMATIVE authority is [ADR-0011](../../decision-records/ADR-0011-model-cost-policy.md)
+# (Accepted; Option C = skills-first doctrine + minimal fixed roster + model tiering) plus
+# the endorsed model policy in the tracker (docs/expansion/ai-dev-framework.md, "Governance
+# status"). ADR-0011 explicitly says the tier table "should live in one governed doc so it
+# is cheap to revise" — this file IS that doc. Change the policy in the ADR/tracker; this
+# registry follows.
+#
+# HOW TO CONSUME: pick the capability tier of the work → use its `default` model+effort.
+# Leave the Opus-4.8-High default ONLY for a listed `escalation_triggers` case. The main
+# session's model stays owner-controlled and is never set by the framework (ADR-0011 OQ3).
+#
+# FRESHNESS: registered in knowledge/index.yaml as `registry-model` (class E2). The roster
+# is L0-verifiable (matches .claude/agents/*.md); the raw model IDs are E4/external (from the
+# harness environment + the claude-api skill) — re-verify when a new model family ships
+# (calibration gate) or the roster/policy changes.
+
+framework_version: 1
+schema_version: 1
+authority: decision-records/ADR-0011-model-cost-policy.md
+verified_on: 2026-07-04
+
+# Models available to the framework (facts; class E4 — harness environment + claude-api skill).
+models:
+  - id: claude-opus-4-8
+    family: Opus 4.8
+    strength: deep reasoning / judgment
+    default_effort: high
+    role: framework default (main session + reviewer agent)
+  - id: claude-fable-5
+    family: Fable 5
+    strength: deep reasoning with faster output
+    role: escalation target only (see escalation_triggers)
+  - id: claude-sonnet-4-6
+    family: Sonnet 4.6
+    strength: mid-tier; well-specified mechanical implementation if ever delegated
+    role: optional mechanical delegate
+  - id: claude-haiku-4-5-20251001
+    family: Haiku 4.5
+    strength: cheap/fast recall + search
+    role: explorer agent (disposable broad discovery)
+
+# Capability tiers classify WORK by cognitive demand; each maps to a model + effort.
+capability_tiers:
+  judgment:
+    what: review, architecture, correctness-judging, ambiguous decisions
+    default: "claude-opus-4-8 (effort: high)"
+    escalate_to: "claude-fable-5 (triggers 1, 4, 5)"
+    agents: [reviewer]
+  mechanical:
+    what: well-specified deterministic transformation (rename, scaffold, migrate)
+    default: "claude-opus-4-8 (effort: high — correctness-first per accuracy-first)"
+    delegate_option: "claude-sonnet-4-6 (only if fully specified and low-risk)"
+    escalate_to: "claude-fable-5 (triggers 2, 3 — bulk 50-100+ files)"
+  recall:
+    what: search / lookup / read-and-summarize; no correctness judgment
+    default: claude-haiku-4-5-20251001
+    agents: [explorer]
+
+# An agent exists ONLY where isolation itself is the value (ADR-0011 Option C: skills-first).
+# The main session executes the lifecycle via SKILLS, sharing its already-paid context.
+agent_roster:
+  - name: explorer
+    model: haiku
+    tier: recall
+    isolation_argument: disposable broad discovery — spend tokens in a throwaway context
+    file: .claude/agents/explorer.md
+  - name: reviewer
+    model: opus
+    tier: judgment
+    isolation_argument: objective review — a context that did not watch the implementation unfold
+    file: .claude/agents/reviewer.md
+
+new_agent_rule: >-
+  A new agent requires a documented isolation argument (ADR-lite): isolation must BE the
+  value; otherwise build the capability as a skill (ADR-0011 Option C). Main-session model
+  stays owner-controlled, never set by the framework (ADR-0011 OQ3).
+
+# The ONLY cases that leave the Opus-4.8-High default (tracker model policy, endorsed
+# 2026-07-03; seeds from ADR-0011). Trigger 5 is escalate-on-evidence, not speculative.
+escalation_triggers:
+  1: new architecture design (rare by construction — freeze rule, constitution §11)
+  2: whole-monorepo analysis (E3 T3.1.1 = the clearest candidate)
+  3: 50-100+ file migration
+  4: multi-hour deep research (E3 T3.4.2 benchmark)
+  5: Opus stuck after 1-2 rounds
+
+# Open, tracked in ADR-0011: budget ceiling stance (OQ1); whether growing review dimensions
+# (design/a11y/perf) extend the reviewer charter or add isolation-justified siblings (OQ2).

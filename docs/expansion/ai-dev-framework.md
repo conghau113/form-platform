@@ -108,8 +108,8 @@ Total ~18–22 phases.
 | E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ✅ | a7d3620 |
 | **E2** | T2.1.1 | M | `knowledge/index.yaml` (L2-descriptive-only registry: class/scope-globs/verified-on/executable method/cadence/owner) + register 5 descriptive docs; trackers excluded-by-design | ✅ | 360dbab |
 | E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc (5 docs → point to index entry; method stays authoritative in index) | ✅ | d6ff404 |
-| E2 | T2.3.1 | M | `knowledge/runbook/dev-stack.md` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointer; register in index | ✅ | _pending_ |
-| E2 | T2.4.1 | S | `registries/model-registry` + capability tiers (judgment/mechanical/recall) | ⬜ | — |
+| E2 | T2.3.1 | M | `knowledge/runbook/dev-stack.md` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointer; register in index | ✅ | 55265f6 |
+| E2 | T2.4.1 | S | `registries/model-registry.yaml` + capability tiers (judgment/mechanical/recall); materializes ADR-0011; registered in index | ✅ | _pending_ |
 | E2 | T2.4.2 | S | `registries/gate-inventory` (push-deny · biome hook · structure test · CI · changeset gate + rung labels) | ⬜ | — |
 | E2 | T2.5.1 | S | `templates/` (drift/review/audit/calibration reports + phase-plan) | ⬜ | — |
 | **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ⬜ | — |
@@ -403,8 +403,26 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   disposition (update or 6-step disposal) is a separate remediation task; (b) **corrected my own E2
   artifacts** — the `usage-runbook` index scope + `usage.md` stamp had referenced the stale dotted file →
   repointed to `env.example`. Doc/config-only ⇒ no changeset/typecheck/test. Backfilled T2.2.1 hash
-  `d6ff404`. ⚠️ T2.3.1 own row `_pending_` → backfill in T2.4.1 (amend fixed-point). NEXT = T2.4.1 (S)
+  `d6ff404`. ⚠️ T2.3.1 own row `_pending_` → **backfilled in T2.4.1 → `55265f6`.** NEXT = T2.4.1 (S)
   `registries/model-registry` + capability tiers (judgment/mechanical/recall).
+- **T2.4.1 (S):** `knowledge/registries/model-registry.yaml` — DONE. Created `knowledge/registries/`.
+  A **reference materialization** of the model policy, not a re-decision: the normative authority is
+  **ADR-0011** (Accepted; Option C = skills-first + minimal fixed roster + model tiering) + the tracker's
+  endorsed policy — ADR-0011 itself says the tier table "should live in one governed doc so it is cheap to
+  revise," which is exactly this file (§5 kept clean: registry = descriptive reference, policy = normative
+  in the ADR). Contents: **models** (`claude-opus-4-8` default/high · `claude-fable-5` escalation-only ·
+  `claude-sonnet-4-6` optional mechanical delegate · `claude-haiku-4-5-20251001` recall — IDs from the
+  harness environment + claude-api skill, class E4), **capability_tiers** (judgment → Opus-4.8-High,
+  escalate Fable 5 · mechanical → Opus-4.8-High default, Sonnet if delegated, Fable 5 for bulk 50-100+ ·
+  recall → Haiku), **agent_roster** (explorer→haiku/recall · reviewer→opus/judgment, each with its
+  isolation argument — verified against `.claude/agents/*.md`), **new_agent_rule** (isolation must BE the
+  value else make it a skill; main-session model owner-controlled), and the **5 Fable-5 escalation_triggers**
+  (new-arch · whole-monorepo · 50-100+ migration · multi-hour deep-research · Opus-stuck-after-1-2-rounds).
+  Registered in `knowledge/index.yaml` as `registry-model` (descriptive, class **E2**, verified-on
+  2026-07-04; method calibrated: roster `grep '^model:' .claude/agents/*` = haiku/opus · ADR-0011 names the
+  escalation · tracker carries the policy). Doc/config-only ⇒ no changeset/typecheck/test. Backfilled T2.3.1
+  hash `55265f6`. ⚠️ T2.4.1 own row `_pending_` → backfill in T2.4.2 (amend fixed-point). NEXT = T2.4.2 (S)
+  `registries/gate-inventory` (push-deny · biome hook · structure test · CI · changeset gate + rung labels).
 - **T2.2.1 (M):** stamp freshness contracts on every registered doc.
 - **T2.3.1 (M):** `knowledge/runbook/` consolidate env/ports/gotchas (usage.md + memory:
   EPERM · port 3001 · dist-rebuild); memory → pointers. Promote only gotchas seen ≥2×.

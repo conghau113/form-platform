@@ -197,6 +197,31 @@ artifacts:
       + docs/usage.md operational sections. Only gotchas seen >=2x are promoted (constitution
       §8 climb-on-evidence). First L2 runbook.
 
+  - id: registry-model
+    path: knowledge/registries/model-registry.yaml
+    nature: descriptive
+    class: E2
+    owner: agent+reviewer
+    verified_on: 2026-07-04
+    cadence: >-
+      re-verify when a new model family ships (calibration gate) or the agent roster / model
+      policy changes; else on framework-version bump.
+    scope:
+      - .claude/agents/explorer.md
+      - .claude/agents/reviewer.md
+      - decision-records/ADR-0011-model-cost-policy.md
+    method: |
+      # Roster must match L0 agent files (the model IDs themselves are E4/external — harness
+      # environment + the claude-api skill — and re-verify at-read when models ship).
+      grep -h '^model:' .claude/agents/explorer.md .claude/agents/reviewer.md   # haiku, opus
+      # Escalation policy must still match ADR-0011 + the tracker's endorsed model policy.
+      grep -l 'Fable 5' decision-records/ADR-0011-model-cost-policy.md   # authority still names the escalation
+      grep -c 'Opus 4.8' docs/expansion/ai-dev-framework.md             # tracker still carries the model policy
+    notes: >-
+      Reference materialization of the model policy — the NORMATIVE authority is ADR-0011 +
+      the tracker's endorsed policy; this registry does not re-decide it (§5: registry =
+      descriptive reference, policy = normative elsewhere).
+
 # Descriptive docs deliberately NOT registered (kept here for traceability so the
 # omission is auditable, not accidental):
 unregistered_by_design:
