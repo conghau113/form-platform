@@ -125,10 +125,10 @@ Total ~18–22 phases.
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | c50ab94 |
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | 03f8a6c |
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | b3debca |
-| E5 | T5.1.2 | S | New skill bindings for new procedures | ⬜ | — |
+| E5 | T5.1.2 | S | New skill bindings for new procedures (phase-execution · sweeps · knowledge-promotion) | ✅ | _pending_ |
 | E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ⬜ | — |
 | E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | 173cc3f |
-| E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | _pending_ |
+| E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | fa0a1f3 |
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ⬜ | — |
 | E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ⬜ | — |
 | E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ⬜ | — |
@@ -745,12 +745,25 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   already a pointer since T2.3.1). Review = in-session self-checklist (verified the tracker holds every
   per-task write-up + hash before thinning, so no information lost; no repo product/test change). Doc-only ⇒
   no changeset/typecheck/test. `.claude/settings.json` + `projects.service.ts` kept OUT per convention.
-  Backfilled T5.3.1 hash `173cc3f`. ⚠️ T5.4.1 own row `_pending_` → backfill next task. **⚠️ After T5.4.1
-  the framework track is OWNER-BLOCKED:** the only remaining E5 build tasks (T5.1.2 skill bindings for the 3
-  new procedures + T5.2.1 agents from charters) source from the E4 charters/procedures whose headers say
-  "Active v1.0 · ratification-pending §3" → their DoR "EVERY source Active" needs the **owner to ratify
-  the E4 charters/procedures** (or explicitly accept the Active-header as sufficient) FIRST. Alternatively
-  the owner supplies the ADR-0009/0010 grants (→ T3.4.x design/a11y) or interleaves the product track.
+  Backfilled T5.3.1 hash `173cc3f`. ⚠️ T5.4.1 own row `_pending_` → **backfilled in T5.1.2 → `fa0a1f3`.**
+  (At the time of this commit the track was owner-blocked on E4 ratification; the owner then chose Option 1
+  → E4 RATIFIED `39fb71b`, unblocking T5.1.2 + T5.2.1.)
+- **T5.1.2 (S) DONE `_pending_` (2026-07-05):** created **3 new L3 skill bindings**, one per new procedure,
+  now that E4 is ratified (DoR "EVERY source Active" met). Each `.claude/skills/<name>/SKILL.md` mirrors the
+  T5.1.1 binding-header shape (**Layer** L3 · **Source** = the L1 procedure · originates-no-rule §2 ·
+  **Regenerated** E5 T5.1.2 stamp) followed by a **condensed operational rendering that POINTS to the
+  procedure** for the full normative text (one home §5 — steps are summarized, not restated). Named **1:1
+  with the procedures** for clean traceability: **`phase-execution`** ← `procedures/phase-execution.md`
+  (10-step lifecycle + fixed-point patterns + scope-not) · **`sweeps`** ← `procedures/sweeps.md` (shared
+  5-step skeleton + false-positive-vs-real-finding core discipline + A drift / B conformance specifics) ·
+  **`knowledge-promotion`** ← `procedures/knowledge-promotion.md` (8-step memory→L2 + fork-normative-to-L1).
+  Skills are **L3 → NOT index-registered** (same as the T5.1.1 skills + charters/procedures). Self-verified:
+  all 3 harness-registered (appear in the Skill list) + all 3 `Source` links resolve to their procedure on
+  disk; no procedure text restated verbatim (condensed + pointer). Review = in-session self-checklist (the
+  real E5-binding gate is owner deep-read before merge). Doc-only ⇒ no changeset/typecheck/test.
+  `.claude/settings.json` + `projects.service.ts` kept OUT. Backfilled T5.4.1 hash `fa0a1f3`. ⚠️ T5.1.2 own
+  row `_pending_` → backfill next task. **Remaining E5:** T5.2.1 (regen `.claude/agents/{explorer,reviewer}`
+  from the charters) → then E5-CLOSE validation (one real product task end-to-end under the new bindings).
 
 ## E6 — Enforcement & Gates
 
