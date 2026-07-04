@@ -1,0 +1,113 @@
+# Gate Inventory — L2 reference (enforcement gates + ladder rungs)
+#
+# Nature: descriptive/reference (L2). This catalogs the repo's ACTUAL enforcement gates and
+# labels each with its enforcement-ladder rung. The NORMATIVE authority for the ladder is
+# [constitution §8](../../governance/constitution.md): (1) prose · (2) structural ·
+# (3) machine-gate · (4) isolated-review; constraints climb-on-evidence; **rung-3 CI-preference**
+# (a machine gate that could live in CI or a local hook should live in CI — it survives a tool
+# swap and a fresh clone); **advisory-first** (a new machine gate runs non-blocking ≥1 phase
+# before it may block, and disabling a *blocking* gate requires a decision record).
+#
+# HOW TO CONSUME: when adding a constraint, start at the lowest rung that works and prefer CI
+# over a local hook. This inventory is what the E6 gate-promotion work (T6.1.1/T6.2.x) reads.
+#
+# FRESHNESS: registered in knowledge/index.yaml as `registry-gate-inventory` (class E1 — every
+# entry was read from L0). Re-verify when a workflow, a hook, or a deny rule changes.
+
+framework_version: 1
+schema_version: 1
+authority: governance/constitution.md   # §8 enforcement ladder
+verified_on: 2026-07-04
+
+# ── CI machine gates (RUNG 3, the PREFERRED locus per §8) ──────────────────────────────
+# All live in .github/workflows/. Blocking = fails the check on the listed events.
+ci_gates:
+  - id: ci-biome
+    workflow: ci.yml (verify)
+    enforces: Biome lint/format on CHANGED files only (matches the local hook's scope)
+    events: [push, pull_request]
+    blocking: true
+    note: the durable copy of the local PostToolUse biome hook (§8 CI-preference).
+  - id: ci-typecheck
+    workflow: ci.yml (verify)
+    enforces: "pnpm turbo run typecheck (all packages/apps)"
+    events: [push, pull_request]
+    blocking: true
+  - id: ci-build
+    workflow: ci.yml (verify)
+    enforces: "pnpm turbo run build"
+    events: [push, pull_request]
+    blocking: true
+    note: also the FROZEN form-renderer-native's only guard (ADR-0006).
+  - id: ci-test
+    workflow: ci.yml (verify)
+    enforces: "pnpm turbo run test (vitest — includes structure.test.ts below)"
+    events: [push, pull_request]
+    blocking: true
+  - id: ci-changeset
+    workflow: ci.yml (changeset)
+    enforces: >-
+      a changeset must exist when packages/* change (apps @app/api, @app/builder, @app/mcp
+      are in .changeset ignore). `changeset status --since=base`.
+    events: [pull_request]
+    blocking: true
+    note: also stated as prose in the Global DoD (rung 1); this is its rung-3 copy.
+  - id: ci-codeql
+    workflow: codeql.yml
+    enforces: CodeQL SAST
+    events: [push, pull_request, schedule]
+    blocking: true
+  - id: ci-gitleaks
+    workflow: gitleaks.yml
+    enforces: secret scanning
+    events: [push, pull_request]
+    blocking: true
+  - id: ci-trivy
+    workflow: trivy.yml
+    enforces: Trivy vuln scan — fs (all events) + image (push/schedule only)
+    events: [push, pull_request, schedule]
+    blocking: true
+  - id: ci-sonarcloud
+    workflow: sonarcloud.yml
+    enforces: SonarCloud quality/security
+    events: [push, pull_request]
+    blocking: false
+    note: >-
+      INACTIVE/advisory — the job no-ops until the SONAR_TOKEN repo secret exists (it does not
+      fail the pipeline). A real advisory-first state; becomes active once the owner sets the secret.
+
+# ── Local guardrails (RUNG 3, harness-enforced via .claude/settings.json) ───────────────
+# Convenience / agent-safety. NOT durable across a tool swap → never the sole copy of a rule
+# that also matters in CI (§2 replacement test; §8 CI-preference).
+local_gates:
+  - id: hook-biome
+    kind: PostToolUse hook (matcher Edit|Write)
+    enforces: biome check --write on the just-edited file only (surgical, ADR-0023)
+    note: convenience mirror of ci-biome; baseline is not clean, so it never runs repo-wide.
+  - id: deny-push
+    kind: permission deny — Bash(git push:*)
+    enforces: no push; the branch is owner-gated (push is a human decision).
+  - id: deny-publish
+    kind: permission deny — Bash(pnpm publish:*), Bash(npm publish:*)
+    enforces: no accidental package publish (there are many unpublished changesets).
+  - id: deny-destructive
+    kind: permission deny — Bash(rm -rf:*), Bash(sudo:*)
+    enforces: block destructive/privileged shell commands.
+  - id: deny-secret-read
+    kind: permission deny — Read(**/*.pem), Read(**/secrets/**)
+    enforces: agent cannot read private keys / secret stores.
+  - id: deny-net
+    kind: permission deny — Bash(curl:*), Bash(wget:*)
+    enforces: no ad-hoc outbound fetch from the shell (use approved tools).
+
+# ── Structural (RUNG 2, enforced up to RUNG 3 by a test) ────────────────────────────────
+structural_gates:
+  - id: structure-feature-folders
+    rung: 2 (enforced at 3 by apps/builder/src/structure.test.ts, which runs in ci-test)
+    enforces: >-
+      no new `*.tsx` at the root of apps/builder/src (only App.tsx + main.tsx); every feature
+      is a folder with an index.ts barrel (feature-module skill rule #1).
+
+# NOTE on rungs: nearly everything here sits at rung 3 because this repo already hardened its
+# core checks into CI. Rung-1 (prose-only) constraints live in the governance docs, not here.
+# The advisory-first ladder still applies to any NEW gate the framework adds in E6.

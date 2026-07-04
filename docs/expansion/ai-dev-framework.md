@@ -109,8 +109,8 @@ Total ~18–22 phases.
 | **E2** | T2.1.1 | M | `knowledge/index.yaml` (L2-descriptive-only registry: class/scope-globs/verified-on/executable method/cadence/owner) + register 5 descriptive docs; trackers excluded-by-design | ✅ | 360dbab |
 | E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc (5 docs → point to index entry; method stays authoritative in index) | ✅ | d6ff404 |
 | E2 | T2.3.1 | M | `knowledge/runbook/dev-stack.md` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointer; register in index | ✅ | 55265f6 |
-| E2 | T2.4.1 | S | `registries/model-registry.yaml` + capability tiers (judgment/mechanical/recall); materializes ADR-0011; registered in index | ✅ | _pending_ |
-| E2 | T2.4.2 | S | `registries/gate-inventory` (push-deny · biome hook · structure test · CI · changeset gate + rung labels) | ⬜ | — |
+| E2 | T2.4.1 | S | `registries/model-registry.yaml` + capability tiers (judgment/mechanical/recall); materializes ADR-0011; registered in index | ✅ | 953e662 |
+| E2 | T2.4.2 | S | `registries/gate-inventory.yaml` (16 gates: 9 CI + 6 local + 1 structural; rung labels §8; sonar advisory) | ✅ | _pending_ |
 | E2 | T2.5.1 | S | `templates/` (drift/review/audit/calibration reports + phase-plan) | ⬜ | — |
 | **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ⬜ | — |
 | E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ⬜ | — |
@@ -421,8 +421,28 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   Registered in `knowledge/index.yaml` as `registry-model` (descriptive, class **E2**, verified-on
   2026-07-04; method calibrated: roster `grep '^model:' .claude/agents/*` = haiku/opus · ADR-0011 names the
   escalation · tracker carries the policy). Doc/config-only ⇒ no changeset/typecheck/test. Backfilled T2.3.1
-  hash `55265f6`. ⚠️ T2.4.1 own row `_pending_` → backfill in T2.4.2 (amend fixed-point). NEXT = T2.4.2 (S)
+  hash `55265f6`. ⚠️ T2.4.1 own row `_pending_` → **backfilled in T2.4.2 → `953e662`.** NEXT = T2.4.2 (S)
   `registries/gate-inventory` (push-deny · biome hook · structure test · CI · changeset gate + rung labels).
+- **T2.4.2 (S):** `knowledge/registries/gate-inventory.yaml` — DONE. Catalogs the repo's **16 actual
+  enforcement gates** with enforcement-ladder rung labels (authority = **constitution §8**), every entry
+  read from L0 (class **E1**). Three groups: **9 CI gates** (RUNG 3, the preferred locus §8) from
+  `.github/workflows/` — `ci.yml` verify (biome-changed-files · typecheck · build [also the FROZEN
+  native renderer's only guard, ADR-0006] · test) + `ci.yml` changeset (PR-only; packages/* only, apps
+  ignored) + codeql (SAST) + gitleaks (secrets) + trivy (fs all-events / image push-schedule) + **sonarcloud
+  = ADVISORY: the job no-ops until `SONAR_TOKEN` is set, does not fail the pipeline** (a genuine
+  advisory-first state, verified in the workflow); **6 local guardrails** (RUNG 3, harness-enforced via
+  `.claude/settings.json`, NOT durable across a tool swap) — the PostToolUse biome hook (scoped edited-file,
+  ADR-0023, = convenience mirror of ci-biome per §8 CI-preference) + denies push / publish / destructive
+  (rm-rf, sudo) / secret-read (*.pem, secrets/**) / net (curl, wget); **1 structural** (RUNG 2 enforced up
+  to 3 by `apps/builder/src/structure.test.ts` in ci-test) — no root `*.tsx`, feature-folders-with-barrel
+  (feature-module rule #1). Observations recorded in the file: nearly everything is already at rung 3 (this
+  repo hardened its core checks into CI); the changeset gate exists as BOTH prose (DoD, rung 1) and CI (rung
+  3); §8 advisory-first still governs any NEW gate E6 adds. Registered in `knowledge/index.yaml` as
+  `registry-gate-inventory` (E1, verified-on 2026-07-04; method calibrated: `ls .github/workflows/` · deny+
+  hooks from settings.json · structure.test present). This registry FEEDS the E6 gate-promotion work
+  (T6.1.1/T6.2.x). Doc/config-only ⇒ no changeset/typecheck/test. Backfilled T2.4.1 hash `953e662`. ⚠️ T2.4.2
+  own row `_pending_` → backfill in T2.5.1 (amend fixed-point). NEXT = T2.5.1 (S) `templates/` (drift / review
+  / audit / calibration reports + phase-plan).
 - **T2.2.1 (M):** stamp freshness contracts on every registered doc.
 - **T2.3.1 (M):** `knowledge/runbook/` consolidate env/ports/gotchas (usage.md + memory:
   EPERM · port 3001 · dist-rebuild); memory → pointers. Promote only gotchas seen ≥2×.

@@ -222,6 +222,27 @@ artifacts:
       the tracker's endorsed policy; this registry does not re-decide it (§5: registry =
       descriptive reference, policy = normative elsewhere).
 
+  - id: registry-gate-inventory
+    path: knowledge/registries/gate-inventory.yaml
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-04
+    cadence: re-verify when a CI workflow, a hook, or a permission deny rule changes; else each release.
+    scope:
+      - .github/workflows/**
+      - .claude/settings.json
+      - apps/builder/src/structure.test.ts
+    method: |
+      # Every catalogued gate must still exist in L0.
+      ls .github/workflows/                                              # ci, codeql, gitleaks, sonarcloud, trivy
+      node -e "const s=require('./.claude/settings.json'); console.log('deny:',s.permissions.deny.join(',')); console.log('hooks:',Object.keys(s.hooks||{}).join(','))"
+      test -f apps/builder/src/structure.test.ts && echo "structure test present"
+    notes: >-
+      Authority for the rung labels is constitution §8. Nearly all gates sit at rung 3 (CI) —
+      this repo already hardened its core checks. ci-sonarcloud is advisory (no-ops until
+      SONAR_TOKEN is set). Feeds the E6 gate-promotion work.
+
 # Descriptive docs deliberately NOT registered (kept here for traceability so the
 # omission is auditable, not accidental):
 unregistered_by_design:
