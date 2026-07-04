@@ -119,8 +119,8 @@ Total ~18–22 phases.
 | E3 | T3.4.1 | M | [ADR-0009] Design baseline, descriptive (antd conventions · spacing · P1b breakpoints · locale) | ⬜ | — |
 | E3 | T3.4.2 | M | [ADR-0009/0010] Design/a11y normative proposals (benchmark distillation + WCAG 2.1 AA antd-scoped) → owner ratify | ⬜ | — |
 | E3 | T3.5.1 | S | [ADR-0005] Release thin gate + blocker register (94 changesets · push-cadence) | ⬜ | — |
-| **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | _pending_ |
-| E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ⬜ | — |
+| **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | 9b9faec |
+| E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | _pending_ |
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ⬜ | — |
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ⬜ | — |
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ⬜ | — |
@@ -510,9 +510,31 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   normative-L1/contract/E5-binding). Normative headers (Active v1.0, owner-authority recommended 2026-07-04
   ratification-pending, traceability). **Not registered in `index.yaml`** (normative L1, not descriptive-of-L0
   — per the owner's ruling). Doc-only ⇒ no changeset/typecheck/test. Backfilled the E2-validation hash
-  `acd9204`. ⚠️ T4.1.1 own row `_pending_` → backfill in the next E4 task. NEXT = T4.2.1 (M) procedure
+  `acd9204`. ⚠️ T4.1.1 own row `_pending_` → **backfilled in T4.2.1 → `9b9faec`.** NEXT = T4.2.1 (M) procedure
   phase-execution (de-facto lifecycle → normative; richest ≥2× evidence — ~19 phases).
-- **T4.2.1 (M):** procedure phase-execution (de-facto lifecycle → normative).
+- **T4.2.1 (M):** procedure phase-execution — DONE. Created `governance/procedures/` (README + the
+  first L1 **procedure**) — Governance Core alongside constitution/policies/charters (constitution §2,
+  §4 precedence rung 5). A **procedure** = an L1 normative **runbook**: it *sequences* the policies into
+  the ordered lifecycle an agent lives for one governed phase and **points** to each rule at the step it
+  applies — it does NOT restate policy content (one home per rule; §5/§14). The **procedure↔skill split**
+  (same source-vs-binding shape as charter↔binding): the L3 skill regenerates FROM this in E5 (T5.1.2).
+  `phase-execution.md` codifies the de-facto loop lived across E0/E1/E2/E4 (≈19 phases = the ≥2× admission
+  evidence + its own dry-runs, per constitution §14): **10 steps → verify** — resume context (accuracy-
+  first + tracker + memory) · plan (phase-plan template) · DoR gate (change-approval Step1–2 + freeze-gate
+  if architectural + work-class floor before writing) · implement single-concern (extraction≠refactor P4;
+  mid-impl arch ideas = filed proposals §11; out-of-track edits stay uncommitted) · self-verify by running
+  (verification policy; behavior always E1; report faithfully) · review per routing matrix (review-workflow
+  §2; isolated spawn only high-stakes; owner deep-read = real L1 gate §3) · file-findings-not-fix (§10, P4) ·
+  commit (1 task=1 commit; own-row `_pending_` fixed-point; 6-step disposal if a file is removed) · record
+  (tracker + memory + MEMORY.md; backfill prior `_pending_`) · stop (context-cap P3). Also names the 3
+  **emergent fixed-point patterns** (own-row backfill · findings-filed-not-fixed · out-of-track-uncommitted)
+  and a **Scope-does-NOT** (not the architectural-change path, not a policy restatement, not sweeps/disposal/
+  release). Normative header (Active v1.0, owner recommended 2026-07-04 ratification-pending, traceability
+  to the 4 policies + accuracy-first). **Not registered in `index.yaml`** (normative L1, not descriptive-of-
+  L0). Self-verified by running (dogfood Step 5): all internal links resolve + cited anchors (review-workflow
+  §2/§5, change-approval Steps 1/2/3/6) confirmed present in L0. Doc-only ⇒ no changeset/typecheck/test.
+  Backfilled T4.1.1 hash `9b9faec`. ⚠️ T4.2.1 own row `_pending_` → backfill in the next E4 task.
+  NEXT = T4.2.2 (M) procedures drift-sweep + conformance-sweep.
 - **T4.2.2 (M):** procedures drift-sweep + conformance-sweep.
 - **T4.2.3 (S):** procedure knowledge-promotion (memory → L2).
 - No procedure without ≥2 recurrences. Validation: dry-run one real phase before marking Active.
