@@ -110,8 +110,8 @@ Total ~18–22 phases.
 | E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc (5 docs → point to index entry; method stays authoritative in index) | ✅ | d6ff404 |
 | E2 | T2.3.1 | M | `knowledge/runbook/dev-stack.md` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointer; register in index | ✅ | 55265f6 |
 | E2 | T2.4.1 | S | `registries/model-registry.yaml` + capability tiers (judgment/mechanical/recall); materializes ADR-0011; registered in index | ✅ | 953e662 |
-| E2 | T2.4.2 | S | `registries/gate-inventory.yaml` (16 gates: 9 CI + 6 local + 1 structural; rung labels §8; sonar advisory) | ✅ | _pending_ |
-| E2 | T2.5.1 | S | `templates/` (drift/review/audit/calibration reports + phase-plan) | ⬜ | — |
+| E2 | T2.4.2 | S | `registries/gate-inventory.yaml` (16 gates: 9 CI + 6 local + 1 structural; rung labels §8; sonar advisory) | ✅ | f152298 |
+| E2 | T2.5.1 | S | `knowledge/templates/` (README + drift/review/audit/calibration reports + phase-plan; evidence-nature, not index-registered) | ✅ | _pending_ |
 | **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ⬜ | — |
 | E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ⬜ | — |
 | E3 | T3.3.1 | S | [ADR-0003] Documentation standard (natures · freshness · language) | ⬜ | — |
@@ -441,17 +441,27 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   `registry-gate-inventory` (E1, verified-on 2026-07-04; method calibrated: `ls .github/workflows/` · deny+
   hooks from settings.json · structure.test present). This registry FEEDS the E6 gate-promotion work
   (T6.1.1/T6.2.x). Doc/config-only ⇒ no changeset/typecheck/test. Backfilled T2.4.1 hash `953e662`. ⚠️ T2.4.2
-  own row `_pending_` → backfill in T2.5.1 (amend fixed-point). NEXT = T2.5.1 (S) `templates/` (drift / review
-  / audit / calibration reports + phase-plan).
-- **T2.2.1 (M):** stamp freshness contracts on every registered doc.
-- **T2.3.1 (M):** `knowledge/runbook/` consolidate env/ports/gotchas (usage.md + memory:
-  EPERM · port 3001 · dist-rebuild); memory → pointers. Promote only gotchas seen ≥2×.
-- **T2.4.1 (S):** `registries/model-registry` + capability tiers (judgment/mechanical/recall).
-- **T2.4.2 (S):** `registries/gate-inventory` (push-deny · biome hook · structure test · CI ·
-  changeset gate + rung labels).
-- **T2.5.1 (S):** `templates/` (drift/review/audit/calibration reports + phase-plan).
-- Validation: run EVERY method once — must pass on the just-remediated docs (= first calibration
-  of the detector).
+  own row `_pending_` → **backfilled in T2.5.1 → `f152298`.** NEXT = T2.5.1 (S) `templates/` (drift / review /
+  audit / calibration reports + phase-plan).
+- **T2.5.1 (S):** `knowledge/templates/` — DONE. Created `knowledge/templates/` with a README + **5
+  templates**: `drift-report.md`, `review-report.md`, `audit-report.md`, `calibration-report.md`,
+  `phase-plan.md`. Reports are **Evidence** nature (constitution §5): append-only, no ratification, header
+  carries `date · method · result` + evidence class (§7); filed under `reports/{drift,reviews,audits,
+  calibration}/`, never edited (supersede with a new dated one). Each skeleton is grounded in the framework's
+  own concepts — drift in §10 (a drift claim needs E1); review in review-workflow §2 nature-checklists +
+  change-approval Step3 route / Step5 outcome vocab; audit in §13 health signals (computable-only) + blueprint
+  §9 metrics; calibration = run every `index.yaml` method as a batch (the detector calibrating itself);
+  phase-plan = the DoR/DoD boundary (dor-dod work-class floors + step→verify). Kept minimal (§14
+  anti-bureaucracy) — required fields, not ceremony. **Not registered in `index.yaml`:** templates are
+  reference (blank forms), not descriptive-of-L0, so they have no freshness scope — consistent with the
+  owner's L2-descriptive-only ruling; the README states this. (Also tidied the E2 section: removed the
+  leftover original stub bullets that the detailed write-ups above had superseded.) Doc-only ⇒ no
+  changeset/typecheck/test. Backfilled T2.4.2 hash `f152298`. ⚠️ T2.5.1 own row `_pending_` → backfill in the
+  E2-validation commit. **This is the LAST E2 BUILD task.**
+- **Validation (epic DoD — NEXT):** run EVERY `index.yaml` method once as a batch = the first calibration of
+  the detector; produce the first `calibration-report` (dogfooding the new template) under
+  `reports/calibration/`; it must pass on the just-registered artifacts, and any drift is filed. After that →
+  **E2 DONE**, on to E3 (Standards) ‖ E4 (Charters & Procedures).
 
 ## E3 — Standards Extraction (‖ E4)
 
