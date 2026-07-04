@@ -1,6 +1,6 @@
 # ADR-0005: Release-readiness governance for a product that has never released
 
-- **Status:** Open (as of 2026-07-03) — DoR gate for T3.5.1 (release thin gate); decide before E3, does not block E0–E2
+- **Status:** Accepted (owner, 2026-07-05) — Option C as recommended (thin grounded gate + blocker register; full governance deferred to the first real release; DoR gate for T3.5.1 now cleared)
 - **Date:** 2026-07-03
 - **Deciders:** Owner
 - **Source:** Assumption register B2, F6
@@ -102,11 +102,41 @@ were verified this session.
 - `production-hardening.md` line 95: `[ ] (Later) workflows/release.yml`.
 - `git log origin/main..HEAD` → 15 unpushed commits; `git push` in settings deny list.
 
+## Decision (2026-07-05)
+
+**Option C accepted** by the owner (delegated approval of the recommendation). Two artifacts
+are produced now, both grounded in current practice; full release governance is deferred until
+a first real release can validate it:
+
+1. **Thin release-readiness gate** — `knowledge/standards/release-readiness-standard.md` (L2,
+   descriptive). It defines "release-ready" by *composing existing, exercised gates* — the verify
+   bar, CI green, changeset consistency, reviewer, live-smoke — and points up to their normative
+   homes (`dor-dod.md`, `verification-standard`, `gate-inventory`). It **originates no new rule**
+   (constitution §2) and adds no pipeline.
+2. **Release-blocker register** — `knowledge/registries/release-blockers.yaml` (L2,
+   reference). An owner-visible, freshness-contracted list of the *present* release blockers so
+   they are visible decisions, not silent debt.
+
+**Re-grounded facts (2026-07-05, E1)** — the ADR's Evidence figures were re-verified against L0,
+not copied: **94** pending changesets; **no** `release.yml` (5 workflows: ci/codeql/gitleaks/
+sonarcloud/trivy); **47** commits ahead of `origin/main` (the ADR's "15" was 2026-07-03 — the
+exposure has grown); all **10** `packages/*` at `0.1.0`, publishable, never published.
+
+**Trigger for full governance:** the first real release event — an `npm publish` or a client
+deployment — is treated as a framework event that produces the full, evidence-grounded release
+governance (and, at that point, a superseding/expanding ADR). Until then the stage is
+*intentionally* thin.
+
 ## Open Questions
 
-1. Changeset backlog strategy: accept one large version event, or reset/squash the backlog
-   before first publish? (Needs an owner decision eventually; not blocking framework design.)
-2. Is the first "release" more likely an npm publish (embeddable SDK path) or a client
-   deployment (self-host path)? The thin gate's emphasis differs slightly.
-3. Should push-cadence policy (how long commits may stay local-only) be part of the thin
-   gate now?
+The three below are **not resolved here** — Option C's purpose is to make them owner-visible
+deferred decisions rather than silent debt. They are parked as open items in the blocker register
+(`release-blockers.yaml`), each with an owner-decision trigger:
+
+1. Changeset backlog strategy: accept one large version event, or reset/squash the 94-changeset
+   backlog before first publish? (Owner decision, due before first `changeset version`.)
+2. First "release" shape: npm publish (embeddable SDK path) vs client deployment (self-host path)?
+   The thin gate's emphasis differs slightly. (Owner decision, due at first release intent.)
+3. Push-cadence policy (how long commits may stay local-only): **parked, not adopted into the thin
+   gate now.** The 47-commit unpushed exposure is *recorded* as a blocker; formalizing a cadence
+   rule is left to owner choice so the thin gate stays purely extracted.

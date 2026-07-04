@@ -327,6 +327,58 @@ artifacts:
       over the index itself (all registered descriptive docs carry a freshness header); ran
       clean 2026-07-04 (10/10 ok).
 
+  - id: standard-release-readiness
+    path: knowledge/standards/release-readiness-standard.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-05
+    cadence: >-
+      re-verify when release.yml appears, the changeset config changes, or a package is first
+      published — AND graduate the standard (thin -> full) at the first real release; else each release.
+    scope:
+      - .github/workflows/
+      - .changeset/
+      - packages/*/package.json
+    method: |
+      # The thin gate's grounding facts must still hold. If release.yml appears OR any package
+      # leaves 0.x / publishes, the standard is stale and must graduate (ADR-0005 Option C).
+      ls .github/workflows/release.yml 2>/dev/null && echo "GRADUATE: release.yml exists" || echo "ok: no release pipeline yet"
+      node -e "const fs=require('fs'); const ps=fs.readdirSync('packages'); let pub=0; for(const p of ps){try{const j=require('./packages/'+p+'/package.json'); if(!j.private) pub++;}catch(e){}} console.log('publishable packages:',pub,'(all still 0.x — none published)')"
+    notes: >-
+      Thin release-readiness gate (ADR-0005 Accepted, Option C): composes existing exercised gates
+      (verify bar / CI / changeset / reviewer / live-smoke) and points to their homes
+      (dor-dod, verification-standard, gate-inventory); originates no rule. Full release governance
+      is deferred to the first real release. Blockers live in registry-release-blockers.
+
+  - id: registry-release-blockers
+    path: knowledge/registries/release-blockers.yaml
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-05
+    cadence: >-
+      volatile — re-verify whenever a release-relevant fact moves (changeset added/removed, a
+      commit is made or the branch is pushed, release.yml appears, a package publishes).
+    scope:
+      - .changeset/
+      - .github/workflows/
+      - packages/*/package.json
+    method: |
+      # Re-measure the three present blockers (counts are volatile).
+      ls .changeset/*.md | grep -v README | wc -l            # changeset-backlog (was 94)
+      ls .github/workflows/release.yml 2>/dev/null || echo "no-publish-pipeline: release.yml ABSENT"
+      git log --oneline origin/main..HEAD | wc -l            # unpushed-branch-exposure (was 47; resets on push)
+    claims:
+      changeset_backlog: 94
+      unpushed_commits: 47
+      publishable_packages_unpublished: 10
+    notes: >-
+      Owner-visible register of present release blockers + the 3 parked ADR-0005 open questions
+      (backlog strategy / npm-vs-deploy / push-cadence). Reference materialization; authority is
+      ADR-0005. Figures are volatile by nature — verified_on marks the last measurement, not a
+      stable fact. Pairs with standard-release-readiness (thin gate).
+
 # Descriptive docs deliberately NOT registered (kept here for traceability so the
 # omission is auditable, not accidental):
 unregistered_by_design:

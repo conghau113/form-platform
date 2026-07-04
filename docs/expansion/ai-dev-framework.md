@@ -48,12 +48,12 @@ Decision approvals from blueprint/roadmap approval (Phase 6/7). Status headers f
 
 | Status | ADRs |
 |---|---|
-| **Accepted** | 0001, 0002 (w/ modification), 0003 (Option A, 2026-07-04), 0004, 0006, 0007 (w/ modification), 0011, 0012, 0013 |
-| **Open** (DoR gates for downstream items) | 0005, 0008, 0009, 0010 |
+| **Accepted** | 0001, 0002 (w/ modification), 0003 (Option A, 2026-07-04), 0004, 0005 (Option C, 2026-07-05), 0006, 0007 (w/ modification), 0011, 0012, 0013 |
+| **Open** (DoR gates for downstream items) | 0008, 0009, 0010 |
 
-Open-ADR dependencies: 0005 → T3.5.1 · 0008 → E7 · 0009 → T3.4.x · 0010 → T3.4.2 benchmark.
+Open-ADR dependencies: 0008 → E7 · 0009 → T3.4.x · 0010 → T3.4.2 benchmark.
 Required before E3/E7; do NOT block E0/E1/E2/E4/E5/E6/E8. (0003 accepted 2026-07-04 → T3.3.1
-unblocked.)
+unblocked; 0005 accepted 2026-07-05 Option C → T3.5.1 done.)
 
 - **ADR-0007 modification:** Option A + owner mandate — do NOT delete a file immediately after
   extraction. Mandatory 6-step workflow: Verify → Extract → Review → Commit → Archive →
@@ -116,10 +116,10 @@ Total ~18–22 phases.
 | E2 | — | — | **E2 validation** (epic DoD): batch-ran all 8 index methods → first calibration-report; 7 pass + 1 detector-fix + 0 drift → **E2 DONE** | ✅ | acd9204 |
 | **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ✅ | e42add4 |
 | E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ✅ | 0fb694e |
-| E3 | T3.3.1 | S | [ADR-0003 ✅Accepted] Documentation standard (natures · freshness · language) | ✅ | _pending_ |
+| E3 | T3.3.1 | S | [ADR-0003 ✅Accepted] Documentation standard (natures · freshness · language) | ✅ | ccbe963 |
 | E3 | T3.4.1 | M | [ADR-0009] Design baseline, descriptive (antd conventions · spacing · P1b breakpoints · locale) | ⬜ | — |
 | E3 | T3.4.2 | M | [ADR-0009/0010] Design/a11y normative proposals (benchmark distillation + WCAG 2.1 AA antd-scoped) → owner ratify | ⬜ | — |
-| E3 | T3.5.1 | S | [ADR-0005] Release thin gate + blocker register (94 changesets · push-cadence) | ⬜ | — |
+| E3 | T3.5.1 | S | [ADR-0005 ✅Accepted] Release thin gate + blocker register (94 changesets · push-cadence) | ✅ | _pending_ |
 | **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | 9b9faec |
 | E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | a1ee5c1 |
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | c50ab94 |
@@ -543,7 +543,17 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   P1b breakpoints · locale).
 - **T3.4.2 (M) [ADR-0009/0010]:** design/a11y normative proposals (benchmark distillation via
   session-grant + WCAG 2.1 AA antd-scoped) → owner ratify.
-- **T3.5.1 (S) [ADR-0005]:** release thin gate + blocker register (94 changesets · push-cadence).
+- **T3.5.1 (S) [ADR-0005 ✅Accepted Option C, 2026-07-05] DONE `_pending_`:** thin release-readiness
+  gate + blocker register. Owner delegated approval ("theo khuyến nghị" = choose the ADR's Option-C
+  recommendation; same precedent as 0003). Two L2 artifacts: `knowledge/standards/release-readiness-
+  standard.md` (descriptive thin gate — composes the existing verify bar / CI / changeset / reviewer /
+  live-smoke gates and points to their homes; originates nothing; graduates thin→full at first real
+  release) + `knowledge/registries/release-blockers.yaml` (owner-visible register — 3 present blockers
+  re-grounded 2026-07-05: **94** changesets · **no** release.yml · **47** unpushed commits [ADR's "15"
+  was stale] · 10 packages 0.x unpublished; + the 3 ADR open questions PARKED, not resolved). Both
+  registered in index.yaml (`standard-release-readiness`, `registry-release-blockers`); methods
+  calibrated clean; freshness-header sweep 13/13 ok. Full release governance deferred to first real
+  release (npm publish OR client deploy) per Option C.
 - Label extracted-vs-proposed. Validation: apply each standard to one real diff (e.g. the P1b
   commit). Batch ratifications in one sitting.
 

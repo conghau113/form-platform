@@ -1,0 +1,99 @@
+# Release-Blocker Register — L2 reference (present release risks + parked owner decisions)
+#
+# Nature: descriptive/reference (L2). This records the CURRENT, real blockers between the repo
+# and a first release, so they are owner-visible decisions instead of silent debt. It is the
+# "blocker register" half of ADR-0005 (Accepted, Option C); the "thin gate" half is
+# knowledge/standards/release-readiness-standard.md. It originates no rule (constitution §2).
+#
+# WHY THIS EXISTS: nothing has ever been released, so release governance cannot be extracted
+# from history. Rather than write speculative governance (ADR-0005 Option B, rejected), we
+# record the real blockers here and defer full governance to the first real release event.
+#
+# HOW TO CONSUME: before any first-release action (npm publish or client deployment), read this
+# register — each blocker names its owner-decision trigger. Resolving a blocker or shipping the
+# first release is the framework event that GRADUATES the thin standard into full governance.
+#
+# FRESHNESS: registered in knowledge/index.yaml as `registry-release-blockers` (class E1 — every
+# count below was measured against L0 on the verified_on date). These figures are VOLATILE
+# (changeset count moves with every package change; unpushed count moves with every commit and
+# resets on push) — re-verify per the index method whenever a release-relevant fact changes.
+
+framework_version: 1
+schema_version: 1
+authority: decision-records/ADR-0005-release-readiness-scope.md   # Accepted, Option C
+verified_on: 2026-07-05
+
+# ── Present blockers (measured against L0) ──────────────────────────────────────────────
+blockers:
+  - id: changeset-backlog
+    severity: high
+    fact: 94 pending changeset files in .changeset/ (excluding README).
+    risk: >-
+      The first `changeset version` will produce a massive, multi-package version event. Its
+      shape is an unmade decision (accept the big bang vs. squash/reset the backlog first). All
+      10 packages sit at 0.1.0 and have never been published, so this is the first-ever version
+      bump for every one of them at once.
+    owner_decision: OQ1 (see open_questions) — due before the first `changeset version`.
+    measure: "ls .changeset/*.md | grep -v README | wc -l   # expect 94"
+
+  - id: no-publish-pipeline
+    severity: medium
+    fact: >-
+      No .github/workflows/release.yml. The 5 workflows are ci, codeql, gitleaks, sonarcloud,
+      trivy. @changesets/cli exists and the changeset gate is CI-enforced, but there is no
+      automated version->publish path.
+    risk: >-
+      A first publish would be manual/ad-hoc with no exercised, reviewed pipeline — exactly the
+      ungrounded procedure ADR-0005 declines to invent in advance. Publish is also deny-listed in
+      the harness (gate-inventory: deny-publish), by design.
+    owner_decision: >-
+      OQ2 (npm publish vs client deployment) determines whether a release.yml or a deploy runbook
+      is authored first. Authoring it IS the first-release framework event.
+    measure: "ls .github/workflows/release.yml   # expect ABSENT"
+
+  - id: unpushed-branch-exposure
+    severity: high
+    fact: >-
+      Branch feat/ai-dev-framework is 47 commits ahead of origin/main and unpushed (push is
+      owner-gated / deny-listed). Was 15 on 2026-07-03 (ADR-0005 Evidence) — the exposure has
+      grown as the framework work accumulated locally.
+    risk: >-
+      Single-machine data-loss exposure. Normal release governance would cover push cadence; with
+      the stage thin, this is recorded here rather than left unowned (the failure mode of
+      ADR-0005 Option A).
+    owner_decision: >-
+      OQ3 (push-cadence policy) — PARKED, not adopted into the thin gate. Owner may push at will
+      (the gate is a human decision) or later adopt a cadence rule via a superseding ADR.
+    measure: "git log --oneline origin/main..HEAD | wc -l   # count moves; resets on push"
+
+# ── Parked owner decisions (ADR-0005 Open Questions — visible, not resolved) ─────────────
+# Option C's purpose: make these visible deferred decisions, not silent debt. Each is owned by
+# the owner and triggered by a concrete first-release action; none blocks framework design.
+open_questions:
+  - id: OQ1
+    question: >-
+      Changeset backlog strategy — accept one large version event, or reset/squash the 94-changeset
+      backlog before first publish?
+    trigger: before the first `changeset version`.
+    status: open
+  - id: OQ2
+    question: >-
+      Is the first release an npm publish (embeddable SDK path) or a client deployment (self-host
+      path)? The thin gate's emphasis and the first pipeline authored differ.
+    trigger: at first release intent.
+    status: open
+  - id: OQ3
+    question: >-
+      Should a push-cadence policy (how long commits may stay local-only) be adopted?
+    trigger: owner choice; currently parked (unpushed exposure recorded under unpushed-branch-exposure).
+    status: open (parked — not in the thin gate)
+
+# ── Graduation trigger ──────────────────────────────────────────────────────────────────
+# The first real release (npm publish OR client deployment) is a framework event: it produces
+# the full, evidence-grounded release governance and supersedes/expands ADR-0005 + graduates
+# knowledge/standards/release-readiness-standard.md from thin to full.
+graduation:
+  trigger: first npm publish OR first client deployment.
+  produces:
+    - full release governance (publish pipeline / semver-in-anger / deploy + rollback), grounded.
+    - a superseding or expanding ADR (ADR-0005 is thin-by-design; full governance is a new record).
