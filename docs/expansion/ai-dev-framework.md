@@ -113,7 +113,7 @@ Total ~18–22 phases.
 | E2 | T2.4.2 | S | `registries/gate-inventory.yaml` (16 gates: 9 CI + 6 local + 1 structural; rung labels §8; sonar advisory) | ✅ | f152298 |
 | E2 | T2.5.1 | S | `knowledge/templates/` (README + drift/review/audit/calibration reports + phase-plan; evidence-nature, not index-registered) | ✅ | 16e10ff |
 | E2 | — | — | **E2 validation** (epic DoD): batch-ran all 8 index methods → first calibration-report; 7 pass + 1 detector-fix + 0 drift → **E2 DONE** | ✅ | acd9204 |
-| **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ⬜ | — |
+| **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ✅ | _pending_ |
 | E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ⬜ | — |
 | E3 | T3.3.1 | S | [ADR-0003] Documentation standard (natures · freshness · language) | ⬜ | — |
 | E3 | T3.4.1 | M | [ADR-0009] Design baseline, descriptive (antd conventions · spacing · P1b breakpoints · locale) | ⬜ | — |
@@ -122,7 +122,7 @@ Total ~18–22 phases.
 | **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | 9b9faec |
 | E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | a1ee5c1 |
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | c50ab94 |
-| E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | _pending_ |
+| E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | 03f8a6c |
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ⬜ | — |
 | E5 | T5.1.2 | S | New skill bindings for new procedures | ⬜ | — |
 | E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ⬜ | — |
@@ -477,8 +477,31 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 
 ## E3 — Standards Extraction (‖ E4)
 
-- **T3.1.1 (M):** coding standard (extract AGENTS.md / feature-module / CODE; + two owed
-  conformance sweeps: Prisma-confinement grep · builder feature-folder conformance).
+- **T3.1.1 (M): ✅ DONE `_pending_`** — `knowledge/standards/coding-standard.md` (first L2
+  standard; created `knowledge/standards/`). **Nature = descriptive** (constitution §2/§3 place
+  *extracted* standards in L2 Knowledge, agent+reviewer authored, freshness-contracted) — it
+  *describes* the conventions L0 already follows, points **up** to each rule's normative home
+  (constitution + ADR-0006/0014/0015/0016/0019/0023) and **down** to the enforcing gate, and
+  **originates nothing** (§2). Extracted from AGENTS.md + the `feature-module` skill + code +
+  `tsconfig.base.json`. Contents: §2 golden rules table (contract-first · additive-schema/
+  formVersion · no-eval-JSONLogic · renderer-peerDeps · native-freeze) each w/ authority +
+  enforcement + **E1 anchor**; §3 house style (TS strict/no-any/moduleResolution Bundler-base-but-
+  NodeNext-for-api+renderer; barrels + one-concern; builder feature-folders/thin-components/
+  react-query; api controller-service-repo + DTO + **Prisma-confinement**; scoped-Biome; changeset-
+  per-published-package); §4 the two owed conformance sweeps; §5 extracted-vs-proposed (**zero
+  proposed** this pass); §6 DoD pointer. **Both sweeps ran E1-clean 2026-07-04:** Prisma-access
+  (`this.prisma.`) confined to `persistence/prisma/` + carve-outs `modules/health/` +`scripts/`
+  (empty = clean); builder `structure.test.ts` pass. **Sweep-1 calibrated this pass** (per
+  `sweeps.md`): the `PrismaService`-import signal false-flagged `health.module.ts` — the word is
+  only in a *doc comment* there, and DI-wiring imports aren't access → narrowed the detector to the
+  `this.prisma.` **access** signal. Also E1-verified in passing: no-eval sweep (only protective
+  comments match, 0 real calls), renderer peerDeps (5 libs are peers not deps). Registered
+  `standard-coding` in `index.yaml` (descriptive, class **E1**, verified-on 2026-07-04, method =
+  the two sweeps; fetch-confinement + folder roster left to the `builder-architecture` entry = one
+  home per method). YAML parses (9 artifacts). Validation (E3): applied to real diff P1b `c90eb86`
+  — touches only feature-folder files + grandfathered `App.tsx`, no root `*.tsx`, no `fetch` →
+  satisfies §3. Doc-only ⇒ no changeset/typecheck/test. Backfilled T4.2.3 hash `03f8a6c`.
+  ⚠️ T3.1.1 own row `_pending_` → backfill in the next E3 task.
 - **T3.2.1 (M):** verification standard (verify bar + evidence + codified MANUAL MCP SMOKE —
   valid regardless of ADR-0008).
 - **T3.3.1 (S) [ADR-0003]:** documentation standard (natures · freshness · language).

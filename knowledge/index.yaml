@@ -244,6 +244,37 @@ artifacts:
       this repo already hardened its core checks. ci-sonarcloud is advisory (no-ops until
       SONAR_TOKEN is set). Feeds the E6 gate-promotion work.
 
+  - id: standard-coding
+    path: knowledge/standards/coding-standard.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-04
+    cadence: >-
+      re-verify when the api persistence layering, the builder feature-folder rule, or an
+      anchoring ADR (0006/0014/0015/0016/0019/0023) changes; else each release.
+    scope:
+      - apps/api/src/**
+      - apps/builder/src/**
+      - tsconfig.base.json
+      - packages/form-renderer-web/package.json
+    method: |
+      # Sweep 1 — Prisma access confined to persistence/prisma + the two carve-outs
+      # (modules/health liveness ping, scripts one-off import). Match the this.prisma.
+      # ACCESS signal, NOT PrismaService imports (those false-flag DI wiring + a doc comment).
+      grep -rlnE "this\.prisma\." apps/api/src --include=*.ts \
+        | grep -vE 'persistence/prisma/|modules/health/|scripts/'    # expect EMPTY (clean)
+      # Sweep 2 — builder feature-folder guardrail (no stray root *.tsx beyond App/main).
+      (cd apps/builder && npx vitest run src/structure.test.ts)      # expect pass
+    notes: >-
+      Descriptive extraction of the coding conventions (constitution §2/§3 place extracted
+      standards in L2). The golden rules' normative force lives at L1 (constitution +
+      ADR-0006/0014/0015/0016/0019/0023); this standard points to them and does not
+      re-decide. Method = the two owed conformance sweeps; fetch()-confinement + the
+      feature-folder folder roster are covered by the builder-architecture entry (one home
+      per method). Both sweeps ran clean 2026-07-04; Sweep 1 was calibrated this pass (the
+      PrismaService-import signal false-flagged health.module.ts's doc comment).
+
 # Descriptive docs deliberately NOT registered (kept here for traceability so the
 # omission is auditable, not accidental):
 unregistered_by_design:
