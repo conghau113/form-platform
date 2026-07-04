@@ -115,8 +115,8 @@ Total ~18–22 phases.
 | E2 | T2.5.1 | S | `knowledge/templates/` (README + drift/review/audit/calibration reports + phase-plan; evidence-nature, not index-registered) | ✅ | 16e10ff |
 | E2 | — | — | **E2 validation** (epic DoD): batch-ran all 8 index methods → first calibration-report; 7 pass + 1 detector-fix + 0 drift → **E2 DONE** | ✅ | acd9204 |
 | **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ✅ | e42add4 |
-| E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ✅ | _pending_ |
-| E3 | T3.3.1 | S | [ADR-0003] Documentation standard (natures · freshness · language) | ⬜ | — |
+| E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ✅ | 0fb694e |
+| E3 | T3.3.1 | S | [ADR-0003 ✅Accepted] Documentation standard (natures · freshness · language) | ✅ | _pending_ |
 | E3 | T3.4.1 | M | [ADR-0009] Design baseline, descriptive (antd conventions · spacing · P1b breakpoints · locale) | ⬜ | — |
 | E3 | T3.4.2 | M | [ADR-0009/0010] Design/a11y normative proposals (benchmark distillation + WCAG 2.1 AA antd-scoped) → owner ratify | ⬜ | — |
 | E3 | T3.5.1 | S | [ADR-0005] Release thin gate + blocker register (94 changesets · push-cadence) | ⬜ | — |
@@ -523,7 +523,22 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   self-checklist (no duplication verified: floors→verification.md, gotchas→dev-stack.md,
   CI→gate-inventory). Doc-only ⇒ no changeset/typecheck/test. Backfilled T3.1.1 hash `e42add4`.
   ⚠️ T3.2.1 own row `_pending_` → backfill in the next E3 task.
-- **T3.3.1 (S) [ADR-0003]:** documentation standard (natures · freshness · language).
+- **T3.3.1 (S) [ADR-0003 ✅Accepted 2026-07-04, Option A — commit `a8c238a`]: ✅ DONE `_pending_`**
+  — `knowledge/standards/documentation-standard.md` (3rd L2 standard). **Nature = descriptive**
+  (same §2/§3 basis): a meta-standard on how docs are written/kept-fresh/languaged; normative sources
+  **pointed to NOT restated** — natures/lifecycle → constitution §5/§6, freshness → §10, working
+  language → ADR-0003. §2 **pick-the-nature** table (4 natures + header each carries + where it lives
+  + review route; split-if-mixed rule; trackers = evidence-nature unregistered) · §3 **freshness for
+  descriptive docs** (header declares §10 fields + points to index entry by id; executable `method`
+  lives in index ONLY = no two-places drift; drift = finding not silent-fix) · §4 **language**
+  (ADR-0003 Option A: conversation VI · engineering artifacts EN · product docs VI) · §5 zero proposed.
+  Registered `standard-documentation` (descriptive E1, verified 2026-07-04). **Method = a conformance
+  sweep over the index itself:** every registered descriptive artifact must carry a freshness header →
+  ran clean **11/11 ok** (incl the new doc). YAML parses (11 artifacts). Review = in-session
+  descriptive self-checklist (no duplication verified). Doc-only ⇒ no changeset/typecheck/test.
+  Backfilled T3.2.1 `0fb694e`. ⚠️ T3.3.1 own row `_pending_` → backfill next task. **ADR-0003
+  acceptance (`a8c238a`) = owner delegated approval, Option A ratifies the standing conventions; if
+  owner later wants English-everywhere (B) that's a superseding ADR.**
 - **T3.4.1 (M) [ADR-0009]:** design baseline, descriptive (antd conventions · spacing ·
   P1b breakpoints · locale).
 - **T3.4.2 (M) [ADR-0009/0010]:** design/a11y normative proposals (benchmark distillation via

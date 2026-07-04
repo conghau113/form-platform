@@ -298,6 +298,35 @@ artifacts:
       runbook-dev-stack (one home). Automated e2e (Playwright) is out of scope — gated by
       ADR-0008 / epic E7.
 
+  - id: standard-documentation
+    path: knowledge/standards/documentation-standard.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-04
+    cadence: >-
+      re-verify when the constitution's nature/freshness sections or ADR-0003 change; else
+      each release.
+    scope:
+      - governance/constitution.md
+      - decision-records/ADR-0003-working-language.md
+      - knowledge/index.yaml
+    method: |
+      # Conformance: every index-registered descriptive artifact must carry a freshness
+      # header (the §10 fields — a nature/verified-on declaration). Expect all "ok".
+      node -e "const p=require('path'); const cp=require('child_process'); const fs=require('fs'); \
+        const dir=cp.execSync('ls -d node_modules/.pnpm/yaml@*/node_modules/yaml',{encoding:'utf8'}).trim(); \
+        const YAML=require(p.resolve(dir)); \
+        const d=YAML.parse(fs.readFileSync('knowledge/index.yaml','utf8')); \
+        for (const a of d.artifacts){const t=fs.readFileSync(a.path,'utf8'); \
+          console.log((/[Ff]reshness contract|verified[-_ ]on/i.test(t)?'ok  ':'MISS ')+a.path);}"
+    notes: >-
+      Meta-standard: describes how docs are written/kept-fresh/languaged. Normative sources
+      are pointed to, not restated — natures/lifecycle in constitution §5/§6, freshness in
+      §10, working language in ADR-0003 (Accepted, Option A). Method is a conformance sweep
+      over the index itself (all registered descriptive docs carry a freshness header); ran
+      clean 2026-07-04 (10/10 ok).
+
 # Descriptive docs deliberately NOT registered (kept here for traceability so the
 # omission is auditable, not accidental):
 unregistered_by_design:
