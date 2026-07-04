@@ -1,0 +1,185 @@
+# Knowledge Index — L2 freshness registry
+#
+# Nature: descriptive/reference (L2). This file is itself part of L2: it records,
+# for every governed *descriptive* artifact, the freshness contract that keeps it
+# from silently poisoning AI context (constitution §10, the framework's founding
+# concern). It is generated from — and re-verified against — L0 (the repo), never
+# from memory.
+#
+# SCOPE OF THIS INDEX (owner ruling, 2026-07-04): **L2 descriptive artifacts only.**
+#   - Freshness contracts (scope · verified-on · method · cadence · class) are, per
+#     constitution §10, a property of *descriptive* artifacts — facts about L0 that
+#     can drift. Normative L1 artifacts (constitution, policies, ADRs) carry
+#     status+version instead (§5) and are governed by the ADR ledger + lifecycle,
+#     NOT by a freshness method — they have no executable "re-verify against L0"
+#     check. Listing them here would mix natures (§5) and add bookkeeping with no
+#     enforcement payoff (§14). So they are deliberately absent.
+#   - Living *progress trackers* (evidence-nature: `docs/expansion/*.md`,
+#     including `production-hardening.md`, `product-roadmap.md`, `ai-dev-framework.md`)
+#     are also absent by design: their freshness is maintained by the per-phase
+#     update discipline, not a freshness contract. See `unregistered_by_design`.
+#
+# FIELD SCHEMA (per entry):
+#   id           stable slug (used by future gates / cross-refs)
+#   path         repo-relative path to the artifact
+#   nature       always `descriptive` in this index (§5)
+#   class        evidence class of its verification (§7): E1 executed / E2 source-read
+#   owner        who is accountable for re-verification (§3: agent+reviewer for L2)
+#   verified_on  date the method last ran green against L0 (YYYY-MM-DD)
+#   cadence      when to re-verify (the periodic + per-change triggers, §10)
+#   scope        L0 path globs the artifact describes (the per-change trigger surface)
+#   method       the EXECUTABLE check that re-verifies it (§10); commands + expected
+#   claims       optional — the specific checkable figures the method asserts
+#   notes        optional
+#
+# CONSUMED BY (future): the index/freshness CI gate (roadmap E6 T6.2.1, advisory-first)
+# and the health signal "oldest past-due freshness contract" (constitution §13).
+
+framework_version: 1
+schema_version: 1
+maintained_under: docs/expansion/ai-dev-framework.md   # E2 track (T2.1.1 created this)
+
+artifacts:
+  - id: system-overview
+    path: docs/architecture/system-overview.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-03
+    cadence: >-
+      per-change when a package/app/module/model is added or removed or a major
+      dependency is bumped; otherwise each release.
+    scope:
+      - packages/**
+      - apps/**
+      - apps/api/prisma/schema.prisma
+      - apps/builder/src/main.tsx
+      - "**/package.json"
+      - docker-compose.yml
+    method: |
+      # Structural counts must match the figures stated in the doc.
+      ls -d packages/*/                              | wc -l   # expect 10 packages
+      ls -d apps/api/src/modules/*/                  | wc -l   # expect 14 modules
+      ls apps/api/src/persistence/repositories/*.repo.ts | wc -l   # expect 17 repos
+      grep -c '^model ' apps/api/prisma/schema.prisma          # expect 21 models
+    claims:
+      packages: 10
+      api_modules: 14
+      api_repos: 17
+      prisma_models: 21
+    notes: >-
+      Full row-by-row verification was 2026-07-03 (E0 T0.3.1). Structural counts
+      re-calibrated 2026-07-04 (E2 T2.1.1) — zero drift. Prose/endpoint/version
+      claims are E2 and re-verify on cadence.
+
+  - id: api-architecture
+    path: apps/api/ARCHITECTURE.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-03
+    cadence: >-
+      per-change when an api module/repository is added or removed, an endpoint or
+      the auth/tenancy/RBAC posture changes, or the DB engine changes; else each release.
+    scope:
+      - apps/api/src/**
+      - apps/api/prisma/schema.prisma
+    method: |
+      ls -d apps/api/src/modules/*/                  | wc -l   # expect 14 modules
+      ls apps/api/src/persistence/repositories/*.repo.ts | wc -l   # expect 17 repo interfaces
+      ls apps/api/src/persistence/prisma/*.repo.ts   | wc -l   # expect 17 Prisma impls
+      # DB engine (must read postgres, not sqlite)
+      grep -i 'provider' apps/api/prisma/schema.prisma          # expect postgresql
+    claims:
+      api_modules: 14
+      api_repos: 17
+    notes: >-
+      Repositories live under apps/api/src/persistence/ (abstract *Repo + prisma-*
+      impl), NOT under src/modules/. Module/repo counts re-calibrated 2026-07-04.
+
+  - id: builder-architecture
+    path: apps/builder/ARCHITECTURE.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-03
+    cadence: >-
+      per-change when a builder feature folder is added or removed, or the
+      fetch-only-in-client.ts convention changes; else each release.
+    scope:
+      - apps/builder/src/**
+    method: |
+      # The feature folders the doc documents must all still exist.
+      for d in admin ai auth shell submissions versions editor workflow workspace query; do
+        test -d apps/builder/src/$d && echo "ok $d" || echo "MISSING $d"
+      done
+      # fetch() must remain confined to the api client (react-query convention).
+      # Expect exactly one hit: lib/apiFetch.ts (the sanctioned exception).
+      grep -rl 'fetch(' apps/builder/src --include=*.ts --include=*.tsx | grep -v 'apiFetch.ts'
+    notes: >-
+      Feature-folder presence re-calibrated 2026-07-04 — all present. The apiFetch
+      exception (fetch only in lib/apiFetch.ts) is the documented carve-out; the
+      confinement grep confirmed it is the sole file using fetch() (2026-07-04).
+
+  - id: usage-runbook
+    path: docs/usage.md
+    nature: descriptive
+    class: E2
+    owner: agent+reviewer
+    verified_on: 2026-07-03
+    cadence: >-
+      per-change when env vars, dev/test/docker commands, ports, or the auth model
+      change; else each release.
+    scope:
+      - apps/api/src/config/env.ts
+      - apps/api/.env.example
+      - docker-compose.yml
+      - package.json
+      - apps/api/package.json
+    method: |
+      # Env vars documented in usage.md must match the source of truth.
+      # Compare the doc's env table against the validated schema + example file.
+      cat apps/api/src/config/env.ts
+      cat apps/api/.env.example
+    notes: >-
+      Env vars were reconciled 2026-07-03 (E0 T0.2.3) against apps/api/config/env.ts
+      and .env.example (SQLite→PostgreSQL, real JWT+refresh auth). Not re-diffed
+      2026-07-04 — carries the 2026-07-03 stamp.
+
+  - id: agents-guide
+    path: AGENTS.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-03
+    cadence: per-change when a package is added/removed/renamed; else each release.
+    scope:
+      - packages/**
+    method: |
+      # AGENTS.md Layout names a curated subset of packages with roles; each must exist.
+      for p in form-schema form-core form-renderer-web form-renderer-native \
+               workflow-schema workflow-core; do
+        test -d packages/$p && echo "ok $p" || echo "MISSING $p"
+      done
+    notes: >-
+      Only AGENTS.md's *descriptive* surface (the Layout package roster + folder
+      structure) is registered here. Its normative golden rules (contract-first,
+      no-eval, additive schema, renderer peerDeps, native freeze) are governed at
+      L1 by the constitution + ADR-0006/0014/0015/0016, and AGENTS.md becomes a
+      pointer to them in E5 (T5.3.1). Registered scope re-verified 2026-07-04.
+
+# Descriptive docs deliberately NOT registered (kept here for traceability so the
+# omission is auditable, not accidental):
+unregistered_by_design:
+  - path: docs/expansion/production-hardening.md
+    reason: >-
+      Living progress tracker (evidence-nature). Its factual claims were remediated
+      in E0 T0.2.3, but a phase tracker is kept fresh by the per-phase update
+      discipline, not a freshness contract with an executable re-verify method;
+      registering it would mix natures (§5). FINDING (filed, not fixed per §10):
+      its Mục tiêu preamble states "11 packages" — current truth is 10 (E1,
+      2026-07-04). Low-severity stale figure; remediate as its own task if desired.
+  - path: docs/expansion/product-roadmap.md
+    reason: Living progress tracker (evidence-nature); same rationale as above.
+  - path: docs/expansion/ai-dev-framework.md
+    reason: This framework's own progress tracker (evidence-nature); same rationale.

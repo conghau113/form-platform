@@ -105,8 +105,8 @@ Total ~18–22 phases.
 | E1 | T1.2.4 | S | `policies/verification.md` (evidence floors per claim; accuracy-first normative) | ✅ | c7d786d |
 | E1 | T1.3.1 | S | ADR conventions (lifecycle · numbering · compact retroactive template) into README | ✅ | 420c546 |
 | E1 | T1.3.2 | M | Retro-ADR batch 1, contract layer (additive/formVersion · no-eval · peerDeps · validateGraph-hard vs lintGraph-advisory) | ✅ | 63cefc3 |
-| E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ✅ | _pending_ |
-| **E2** | T2.1.1 | M | `knowledge/index.yaml` schema (class/scope-globs/verified-on/executable method/cadence/owner) + register remediated docs + AGENTS.md | ⬜ | — |
+| E1 | T1.3.3 | M | Retro-ADR batch 2, product/arch (vendor↔client no-hardcode-EVN · Prisma-not-TypeORM · tenancy chokepoint · RBAC data-driven+`*` · adaptive shell · scoped-biome) | ✅ | a7d3620 |
+| **E2** | T2.1.1 | M | `knowledge/index.yaml` (L2-descriptive-only registry: class/scope-globs/verified-on/executable method/cadence/owner) + register 5 descriptive docs; trackers excluded-by-design | ✅ | _pending_ |
 | E2 | T2.2.1 | M | Stamp freshness contracts on every registered doc | ⬜ | — |
 | E2 | T2.3.1 | M | `knowledge/runbook/` consolidate env/ports/gotchas (promote gotchas seen ≥2×); memory → pointers | ⬜ | — |
 | E2 | T2.4.1 | S | `registries/model-registry` + capability tiers (judgment/mechanical/recall) | ⬜ | — |
@@ -329,17 +329,44 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   lived only in machine-local memory = exact ADR-0012 hazard; `.claude/settings.json` hook + memory
   `biome-not-clean-at-baseline`, origin `b1b7176`. Registered all six in README index + bumped next-free
   note 0017→0023 (next=0024). Doc-only ⇒ no changeset/typecheck/test. Backfilled T1.3.2 hash `63cefc3`.
-  ⚠️ T1.3.3 own row `_pending_` → backfill in the next E1 task. **This completes the retro-ADR backfill
-  (ADR-0012 Option C): 10 living constraints, 0014–0023, now durable.** NEXT = owner deep-read of E1
-  (constitution + 4 policies + ADR conventions + 10 retro-ADRs), then E2 Knowledge Infrastructure (T2.1.1
-  `knowledge/index.yaml`).
-- Owner deep-reads the constitution + policies (the only epic the owner reviews deeply,
-  not batched).
+  ⚠️ T1.3.3 own row `_pending_` → **backfilled in T2.1.1 → `a7d3620`.** **This completes the retro-ADR
+  backfill (ADR-0012 Option C): 10 living constraints, 0014–0023, now durable.** NEXT = owner deep-read of
+  E1 (constitution + 4 policies + ADR conventions + 10 retro-ADRs), then E2 Knowledge Infrastructure
+  (T2.1.1 `knowledge/index.yaml`).
+- **Owner deep-read of E1 — DONE (2026-07-04).** Owner read the constitution + 4 policies + ADR
+  conventions + 10 retro-ADRs; content-complete, **no problems found.** (An earlier in-session "deep-read
+  flags" list was retracted as re-litigation of deliberate documented conventions — the `Active`/`ratified`
+  header = the real Phase-6 blueprint-approval event, ADR-skips-`Active` is by design per ADR-0012,
+  `_pending_` is the fixed-point backfill pattern, and the `projects.service.ts` edit is the owner's
+  non-framework Fable-5 fix. Four evidence anchors spot-verified vs live code = exact match.) **E1 CLOSED.**
 
 ## E2 — Knowledge Infrastructure
 
-- **T2.1.1 (M):** `knowledge/index.yaml` schema (class / scope-globs / verified-on / EXECUTABLE
-  method / cadence / owner) + register the remediated docs + AGENTS.md.
+- **T2.1.1 (M):** `knowledge/index.yaml` — DONE. Created `knowledge/`; first L2 artifact. **Owner
+  design ruling (2026-07-04): the index registers L2 *descriptive* artifacts ONLY.** Rationale is
+  constitutional, not preference: the freshness contract (scope/verified-on/method/cadence/class) is a
+  property of *descriptive* artifacts per §10; normative L1 (constitution/policies/ADRs) carry
+  status+version per §5 and are governed by the ADR ledger + lifecycle — they have no executable
+  "re-verify against L0" method, so listing them would mix natures (§5) with no enforcement payoff (§14).
+  **Schema** (documented in the file header): per-entry `id · path · nature · class(§7) · owner(§3) ·
+  verified_on · cadence · scope[globs] · method(EXECUTABLE) · claims`. **Registered 5 descriptive docs:**
+  `system-overview.md` (E1), `apps/api/ARCHITECTURE.md` (E1), `apps/builder/ARCHITECTURE.md` (E1),
+  `docs/usage.md` (E2), `AGENTS.md` (E1, descriptive Layout surface only — its normative golden rules are
+  L1-governed and become pointers in E5). **`unregistered_by_design`** block records the 3 living progress
+  trackers (`production-hardening.md`, `product-roadmap.md`, `ai-dev-framework.md`) as deliberately absent
+  (evidence-nature; freshness maintained by per-phase update discipline, not a contract) — so the omission
+  is auditable, not accidental. **Methods calibrated once against L0 (2026-07-04, E1) — all pass, zero
+  drift:** 10 packages · 14 api modules · 17 repo interfaces (in `apps/api/src/persistence/repositories/`,
+  NOT `modules/`) + 17 Prisma impls · 21 prisma models · builder feature folders all present · fetch()
+  confined to `lib/apiFetch.ts` (sole hit) · Postgres provider. `verified_on` carries **2026-07-03** (the
+  docs' last full-verification / remediation date) — today's calibration confirms that stamp still holds;
+  it is not a new full re-verification (T2.2.1 stamps the docs themselves). YAML parsed OK via the
+  monorepo `yaml@2.9.0`. **FINDING (filed per §10, NOT fixed inline):** `production-hardening.md`
+  Mục-tiêu preamble says "11 packages" — current truth is 10; low-severity stale figure in a tracker
+  preamble, recorded in the index's `unregistered_by_design` note. Doc/config-only ⇒ no
+  changeset/typecheck/test. Backfilled T1.3.3 hash `a7d3620` + marked E1 deep-read DONE (2026-07-04) in
+  this commit. ⚠️ T2.1.1 own row `_pending_` → backfill in T2.2.1 (amend fixed-point).
+  NEXT = T2.2.1 (M) stamp freshness contracts on every registered doc.
 - **T2.2.1 (M):** stamp freshness contracts on every registered doc.
 - **T2.3.1 (M):** `knowledge/runbook/` consolidate env/ports/gotchas (usage.md + memory:
   EPERM · port 3001 · dist-rebuild); memory → pointers. Promote only gotchas seen ≥2×.
