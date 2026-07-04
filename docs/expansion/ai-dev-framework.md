@@ -113,8 +113,8 @@ Total ~18–22 phases.
 | E2 | T2.4.2 | S | `registries/gate-inventory.yaml` (16 gates: 9 CI + 6 local + 1 structural; rung labels §8; sonar advisory) | ✅ | f152298 |
 | E2 | T2.5.1 | S | `knowledge/templates/` (README + drift/review/audit/calibration reports + phase-plan; evidence-nature, not index-registered) | ✅ | 16e10ff |
 | E2 | — | — | **E2 validation** (epic DoD): batch-ran all 8 index methods → first calibration-report; 7 pass + 1 detector-fix + 0 drift → **E2 DONE** | ✅ | acd9204 |
-| **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ✅ | _pending_ |
-| E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ⬜ | — |
+| **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ✅ | e42add4 |
+| E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ✅ | _pending_ |
 | E3 | T3.3.1 | S | [ADR-0003] Documentation standard (natures · freshness · language) | ⬜ | — |
 | E3 | T3.4.1 | M | [ADR-0009] Design baseline, descriptive (antd conventions · spacing · P1b breakpoints · locale) | ⬜ | — |
 | E3 | T3.4.2 | M | [ADR-0009/0010] Design/a11y normative proposals (benchmark distillation + WCAG 2.1 AA antd-scoped) → owner ratify | ⬜ | — |
@@ -502,8 +502,26 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   — touches only feature-folder files + grandfathered `App.tsx`, no root `*.tsx`, no `fetch` →
   satisfies §3. Doc-only ⇒ no changeset/typecheck/test. Backfilled T4.2.3 hash `03f8a6c`.
   ⚠️ T3.1.1 own row `_pending_` → backfill in the next E3 task.
-- **T3.2.1 (M):** verification standard (verify bar + evidence + codified MANUAL MCP SMOKE —
-  valid regardless of ADR-0008).
+- **T3.2.1 (M): ✅ DONE `_pending_`** — `knowledge/standards/verification-standard.md` (2nd L2
+  standard). **Nature = descriptive** (same §2/§3 basis as T3.1.1): the *operational layer over*
+  the L1 `policies/verification.md`, which owns the normative floors + 5-rule loop + decay →
+  **pointed to, NOT restated** (one home per rule). Adds the concrete extracted mechanics:
+  §2 **verify bar** (E1 from `package.json`+CI: `pnpm typecheck`/`test`/`build` via turbo · biome
+  scoped-never-`--write .` ADR-0023 · changeset-per-published-package; CI mirrors → gate-inventory;
+  pnpm9+Turborepo) · §3 **evidence notation** (E1–E5 tags · the `live-smoke MCP PASS (<what>)`
+  convention names the observed behavior not "a smoke ran" · report-faithfully) · §4 **codified
+  MANUAL MCP browser-smoke protocol** — the genuinely new content: *when* required (any UI/runtime
+  behavior claim = E1 floor; feature-module "pnpm test ≠ verified"), *how* (bring-up defers to
+  `runbook/dev-stack.md` — one home for the kill-stale-:3001 / rebuild-dist / api-no-watch gotchas;
+  drive via chrome-devtools/playwright MCP navigate→snapshot→click/press_key→screenshot), *assert
+  THREE* (behavior visible + console clean + network/HTTP correct), *record* the PASS. Needs **no
+  e2e infra, valid regardless of ADR-0008**; §5 automated Playwright explicitly OUT (gated ADR-0008
+  → E7). **Zero proposed.** Registered `standard-verification` (descriptive E1, verified-on
+  2026-07-04; method = `package.json` scripts exist + CI runs the bar; ran clean → "bar ok" + CI
+  typecheck/build/test lines). YAML parses (10 artifacts). Review = in-session descriptive
+  self-checklist (no duplication verified: floors→verification.md, gotchas→dev-stack.md,
+  CI→gate-inventory). Doc-only ⇒ no changeset/typecheck/test. Backfilled T3.1.1 hash `e42add4`.
+  ⚠️ T3.2.1 own row `_pending_` → backfill in the next E3 task.
 - **T3.3.1 (S) [ADR-0003]:** documentation standard (natures · freshness · language).
 - **T3.4.1 (M) [ADR-0009]:** design baseline, descriptive (antd conventions · spacing ·
   P1b breakpoints · locale).

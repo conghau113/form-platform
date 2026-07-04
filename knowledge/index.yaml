@@ -275,6 +275,29 @@ artifacts:
       per method). Both sweeps ran clean 2026-07-04; Sweep 1 was calibrated this pass (the
       PrismaService-import signal false-flagged health.module.ts's doc comment).
 
+  - id: standard-verification
+    path: knowledge/standards/verification-standard.md
+    nature: descriptive
+    class: E1
+    owner: agent+reviewer
+    verified_on: 2026-07-04
+    cadence: re-verify when the verify-bar scripts or the CI verify job change; else each release.
+    scope:
+      - package.json
+      - .github/workflows/ci.yml
+    method: |
+      # The verify-bar scripts must still exist at the repo root.
+      node -e "const s=require('./package.json').scripts; for (const k of ['typecheck','test','build','changeset']) if(!s[k]) throw new Error('missing '+k); console.log('bar ok')"  # expect: bar ok
+      # CI must still run the bar (typecheck + build + test).
+      grep -nE 'run typecheck|run build|run test' .github/workflows/ci.yml    # expect all three
+    notes: >-
+      Descriptive operational layer over the L1 verification policy (governance/policies/
+      verification.md), which owns the normative floors + 5-rule loop (pointed to, not
+      restated). Adds the concrete verify bar (extracted from package.json/CI) and the
+      codified manual MCP browser-smoke protocol; smoke bring-up/gotchas defer to
+      runbook-dev-stack (one home). Automated e2e (Playwright) is out of scope — gated by
+      ADR-0008 / epic E7.
+
 # Descriptive docs deliberately NOT registered (kept here for traceability so the
 # omission is auditable, not accidental):
 unregistered_by_design:
