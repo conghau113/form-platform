@@ -1,7 +1,7 @@
 # Procedure — knowledge promotion (memory → L2)
 
 > **Artifact nature:** Normative (L1 — Governance Core / procedure)
-> **Status:** Active · **Version:** 1.0 · **Authority:** Owner (recommended 2026-07-04, ratification pending §3)
+> **Status:** Active · **Version:** 1.0 · **Authority:** Owner (ratified 2026-07-05, owner-delegated §3)
 > **Source:** the dev-stack promotion lived in T2.3.1 (`55265f6`: memory `dev-stack-ports` + `docs/usage.md` → [`knowledge/runbook/dev-stack.md`](../../knowledge/runbook/dev-stack.md)) + its ≥2× gotcha sub-filter + the standing `MEMORY.md` topic-file discipline · policies [verification](../policies/verification.md) · [review-workflow](../policies/review-workflow.md) · constitution §5/§8/§10
 > **Binding (L3):** a skill regenerates FROM this procedure (E5 T5.1.2) and must trace to it.
 

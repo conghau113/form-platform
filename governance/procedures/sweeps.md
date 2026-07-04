@@ -1,7 +1,7 @@
 # Procedures — drift-sweep & conformance-sweep
 
 > **Artifact nature:** Normative (L1 — Governance Core / procedures)
-> **Status:** Active · **Version:** 1.0 · **Authority:** Owner (recommended 2026-07-04, ratification pending §3)
+> **Status:** Active · **Version:** 1.0 · **Authority:** Owner (ratified 2026-07-05, owner-delegated §3)
 > **Source:** drift = per-artifact method calibration (T2.1.1–T2.5.1) + batch [calibration report](../../reports/calibration/CALIBRATION-2026-07-04.md) `acd9204`; conformance = assumption-register golden-rule verification (2026-07-03) + this-phase dry-run + the standing `structure.test.ts` gate · policies [verification](../policies/verification.md) · [review-workflow](../policies/review-workflow.md) · constitution §8/§10/§13
 > **Binding (L3):** a skill regenerates FROM these procedures (E5 T5.1.2) and must trace to them.
 

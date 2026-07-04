@@ -559,6 +559,18 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 
 ## E4 — Charters & Procedures (‖ E3)
 
+- **E4 RATIFIED (owner-delegated, 2026-07-05).** The 2 charters (explorer, reviewer) + 3 procedures
+  (phase-execution, sweeps, knowledge-promotion) headers flipped `Owner (recommended 2026-07-04,
+  ratification pending §3)` → `Owner (ratified 2026-07-05, owner-delegated §3)`. **Mechanism:** owner
+  answered "theo khuyến nghị của bạn" to the E5-direction fork, and my recommendation was Option 1
+  (accept E4 → do T5.1.2/T5.2.1) — same owner-delegation precedent as ADR-0003 (`a8c238a`) / ADR-0005
+  (`de1b668`); §3 authority exercised through the recommendation, NOT a self-ratify. The E4 artifacts
+  are extractions of already-lived, owner-witnessed practice (~19 phases) built on the already
+  deep-read E1 policies, so acceptance is low-risk. **This satisfies the E5 DoR ("EVERY source Active")
+  for T5.1.2 (skill bindings ← the 3 procedures) + T5.2.1 (agents ← the 2 charters), which are now
+  UNBLOCKED.** The real E5-binding gate (owner deep-read before the final merge) still stands; nothing
+  pushed.
+
 - **T4.1.1 (S):** charters explorer/reviewer — DONE. Created `governance/charters/` (README + two
   charters) — the first L1 **charters** (normative Governance Core, alongside constitution/policies).
   A **charter** = an agent's mandate: what it may do, its scope-DOES-NOT, capability tier, isolation

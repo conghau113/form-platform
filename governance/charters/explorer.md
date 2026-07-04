@@ -1,7 +1,7 @@
 # Charter — explorer
 
 > **Artifact nature:** Normative (L1 — Governance Core / agent charter)
-> **Status:** Active · **Version:** 1.0 · **Authority:** Owner (recommended 2026-07-04, ratification pending §3)
+> **Status:** Active · **Version:** 1.0 · **Authority:** Owner (ratified 2026-07-05, owner-delegated §3)
 > **Source:** [ADR-0011](../../decision-records/ADR-0011-model-cost-policy.md) · `registry-model` (tier `recall`) · L0 `.claude/agents/explorer.md`
 > **Binding (L3):** `.claude/agents/explorer.md` regenerates FROM this charter (E5 T5.2.1) and must trace to it.
 
