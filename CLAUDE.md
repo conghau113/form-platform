@@ -2,6 +2,11 @@
 
 @AGENTS.md
 
+## Governed framework (source of truth for how we work)
+- Rules & lifecycle: `governance/` — constitution + policies + charters + procedures (L1, owner-only).
+- Extracted knowledge: `knowledge/` — `index.yaml`, `standards/`, `runbook/`, `registries/` (L2, freshness-contracted).
+- Decisions: `decision-records/` (ADRs). AGENTS.md golden rules point to their ADR/constitution homes.
+
 ## Claude Code specifics (keep this file tiny — it loads every session)
 - Use the `explorer` subagent (Haiku) to investigate the repo or read large files.
   Delegate discovery so THIS context stays clean.

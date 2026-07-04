@@ -2,6 +2,7 @@
 description: Core project conventions (always on)
 alwaysApply: true
 ---
+_Derived L3 mirror — not the source. Authority: `AGENTS.md` + `governance/` + `decision-records/` (ADRs). Edit the source, then regenerate here._
 - Monorepo: pnpm workspaces + Turborepo. `packages/*` (libraries), `apps/*` (apps).
 - The JSON schema is the contract. `form-schema` (Zod + types) is the single source
   of truth. Renderers consume it — never duplicate validation/logic in a renderer.

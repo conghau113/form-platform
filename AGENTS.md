@@ -8,24 +8,27 @@ for every AI agent working in this repo.
 > descriptive facts. Its **descriptive** surface — the `## Layout` package roster + folder
 > structure — is registered in [`knowledge/index.yaml`](knowledge/index.yaml) as `agents-guide`
 > (**class** E1 · **verified-on** 2026-07-03 · **cadence** on any package add/remove/rename;
-> **method** in the index: each named package dir exists). Its **normative** golden rules are
-> L1-governed (constitution + ADR-0006/0014/0015/0016) and become pointers here in E5 (T5.3.1).
+> **method** in the index: each named package dir exists). Its **normative** golden rules
+> (`## Architecture`) are L1-governed (constitution + ADR-0006/0014/0015/0016) and now carry
+> pointers to their L1 home (E5 T5.3.1) — the authority lives there, edit the rule there not here.
 > Drift in the descriptive surface = defect: file it, do not silently patch (constitution §10).
 
 ## Architecture (non-negotiable)
+These restate rules that originate at L1 (constitution §2: lower layers never originate rules);
+each carries a pointer to its normative home. Change a rule at the home, then reflect it here.
 - The JSON schema IS the contract. `packages/form-schema` (Zod + inferred types)
   is the single source of truth. Renderers CONSUME it; never duplicate validation
-  or logic inside a renderer.
+  or logic inside a renderer. (→ `governance/constitution.md` §1 self-similarity)
 - `formVersion` is decoupled from the npm package version. Changing the JSON shape
   requires: bump `CURRENT_FORM_VERSION` + add a migration N->N+1 + a test that
-  migrates an old fixture to current. NEVER break older saved JSON.
+  migrates an old fixture to current. NEVER break older saved JSON. (→ ADR-0014)
 - One schema, many renderers. Shared behavior (migrate, conditional logic, RBAC)
   lives in `packages/form-core`. Only the leaf component mapping + layout
-  interpretation is platform-specific.
+  interpretation is platform-specific. (→ `governance/constitution.md` §1 self-similarity)
 - Conditional logic uses JSONLogic via form-core. NEVER eval() / new Function()
-  on schema-provided expressions.
+  on schema-provided expressions. (→ ADR-0015)
 - `react`, `react-dom`, `antd`, `react-native` are peerDependencies in renderers.
-  Never add them as dependencies; never bundle them.
+  Never add them as dependencies; never bundle them. (→ ADR-0016)
 
 ## Layout
 ```

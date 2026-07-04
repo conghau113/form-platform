@@ -124,10 +124,10 @@ Total ~18–22 phases.
 | E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ✅ | a1ee5c1 |
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | c50ab94 |
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | 03f8a6c |
-| **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | _pending_ |
+| **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | b3debca |
 | E5 | T5.1.2 | S | New skill bindings for new procedures | ⬜ | — |
 | E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ⬜ | — |
-| E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ⬜ | — |
+| E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | _pending_ |
 | E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ⬜ | — |
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ⬜ | — |
 | E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ⬜ | — |
@@ -676,13 +676,43 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   must decide whether to edit the verbatim contract. Review = in-session self-checklist + the
   deterministic verbatim-diff proof; owner deep-read is the gate for E5-bindings (reviewer charter).
   Doc-only ⇒ no changeset/typecheck/test. Backfilled T3.5.1 `de1b668`. ⚠️ T5.1.1 own row `_pending_`
-  → backfill next task. **E3-partial rationale:** T5.1.1 sources are E1 policies + in-force E3/L2
+  → **backfilled in T5.3.1 → `b3debca`.** **E3-partial rationale:** T5.1.1 sources are E1 policies + in-force E3/L2
   standards (NOT the design/a11y T3.4.x, orthogonal), so E5 can proceed with E3 at 4/6. **Remaining
   E5:** T5.1.2 (skill bindings for the 3 new procedures) + T5.2.1 (agents from charters) both source
   from the **ratification-pending E4 charters/procedures** → their DoR "EVERY source Active" needs an
   owner ratify (or accept the Active-header) FIRST — flag before doing them. T5.3.1 (CLAUDE/AGENTS/
   cursor pointers) + T5.4.1 (memory align) are not E4-gated. E5-close: run one real product task
   end-to-end under the new bindings before any merge.
+- **T5.3.1 (S) DONE `_pending_` (2026-07-05):** wired the governed framework into the three
+  session-entry surfaces — the ungated E5 continuation (T5.1.2/T5.2.1 stay blocked on owner
+  ratifying the E4 charters/procedures; T3.4.x on ADR-0009/0010). **Design = additive/surgical**
+  (CLAUDE.md §3 + P4 extraction≠refactoring): AGENTS.md is "the single source of truth for every
+  AI agent," so the load-bearing rule text is KEPT and each rule gains a pointer to its L1 home —
+  that IS the "become pointers" the freshness note promised, without gutting the entry doc. Three
+  parts: **(1) CLAUDE.md** gained a tiny "Governed framework" pointer block (governance/=L1 rules,
+  knowledge/=L2 freshness-contracted, decision-records/=ADRs) before the Claude-specifics — kept
+  tiny per the file's own loads-every-session directive. **(2) AGENTS.md** `## Architecture
+  (non-negotiable)` — each of the 5 golden rules now carries its normative home inline (rule 1 & 3
+  → `governance/constitution.md` §1 self-similarity · rule 2 → ADR-0014 · rule 4 → ADR-0015 · rule 5
+  → ADR-0016; native-freeze in Conventions already cited ADR-0006 since T0.4.1) + a lead-in noting
+  they restate L1-originated rules (constitution §2). The freshness note flipped from future tense
+  ("become pointers in E5") to done. **Descriptive Layout surface untouched → `agents-guide`
+  verified-on 2026-07-03 stays valid** (only the normative golden-rules section changed). **(3)
+  `.cursor/rules/{000-core,schema,renderers}.mdc`** each got a one-line **derived-mirror banner**
+  (L3 Cursor adapter, NOT the source; authority = AGENTS.md + governance/ + decision-records/;
+  edit-source-then-regenerate). Banner is compact (single line) to respect the always-on 000-core
+  token budget. **Content of the 3 `.mdc` verified accurate first (drift check) — they already
+  match the golden rules + ADR-0014/0016/0006 (renderers.mdc cited ADR-0006 since T0.4.1), so this
+  is banner-only, no rule rewrite.** All ADR/constitution/knowledge pointer targets verified to
+  resolve on disk before writing. **FINDING re-affirmed (NOT fixed, P4):** AGENTS.md `## Commands`
+  still lists `pnpm biome check --write .`, contradicting ADR-0023 (scoped Biome, never repo-wide) —
+  same contradiction already filed for `accuracy-first` §5 in T5.1.1; both await an owner decision
+  on the verbatim/operational text, out of this task's pointer/mirror scope. Review = in-session
+  self-checklist (governance-markdown gives an isolated reviewer no signal — the E5-binding gate is
+  owner deep-read per the reviewer charter; consistent with every prior E-phase). Doc-only ⇒ no
+  changeset/typecheck/test. `.claude/settings.json` + `projects.service.ts` kept OUT per convention.
+  Backfilled T5.1.1 hash `b3debca`. ⚠️ T5.3.1 own row `_pending_` → backfill next task. **Remaining
+  E5:** T5.4.1 (memory align — ungated, doable next) · T5.1.2 + T5.2.1 (owner-ratify-gated).
 
 ## E6 — Enforcement & Gates
 

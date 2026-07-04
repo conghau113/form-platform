@@ -2,6 +2,7 @@
 description: Rules for platform renderers
 globs: packages/form-renderer-web/**,packages/form-renderer-native/**
 ---
+_Derived L3 mirror — not the source. Authority: `AGENTS.md` + `decision-records/` (ADR-0016 peerDeps, ADR-0006 native freeze). Edit the source, then regenerate here._
 - Shared behavior (migrate, isVisible, RBAC) comes from `form-core`. Do not reimplement.
 - Only the leaf component mapping + layout interpretation is platform-specific.
 - Web: responsive via antd 24-col (xs/sm/md/lg).
