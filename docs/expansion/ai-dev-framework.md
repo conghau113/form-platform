@@ -48,11 +48,12 @@ Decision approvals from blueprint/roadmap approval (Phase 6/7). Status headers f
 
 | Status | ADRs |
 |---|---|
-| **Accepted** | 0001, 0002 (w/ modification), 0004, 0006, 0007 (w/ modification), 0011, 0012, 0013 |
-| **Open** (DoR gates for downstream items) | 0003, 0005, 0008, 0009, 0010 |
+| **Accepted** | 0001, 0002 (w/ modification), 0003 (Option A, 2026-07-04), 0004, 0006, 0007 (w/ modification), 0011, 0012, 0013 |
+| **Open** (DoR gates for downstream items) | 0005, 0008, 0009, 0010 |
 
-Open-ADR dependencies: 0003 → T3.3.1 · 0005 → T3.5.1 · 0008 → E7 · 0009 → T3.4.x ·
-0010 → T3.4.2 benchmark. Required before E3/E7; do NOT block E0/E1/E2/E4/E5/E6/E8.
+Open-ADR dependencies: 0005 → T3.5.1 · 0008 → E7 · 0009 → T3.4.x · 0010 → T3.4.2 benchmark.
+Required before E3/E7; do NOT block E0/E1/E2/E4/E5/E6/E8. (0003 accepted 2026-07-04 → T3.3.1
+unblocked.)
 
 - **ADR-0007 modification:** Option A + owner mandate — do NOT delete a file immediately after
   extraction. Mandatory 6-step workflow: Verify → Extract → Review → Commit → Archive →

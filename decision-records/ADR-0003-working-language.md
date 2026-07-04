@@ -1,6 +1,6 @@
 # ADR-0003: Working language for conversation and questions
 
-- **Status:** Open (as of 2026-07-03) — DoR gate for T3.3.1 (documentation standard); decide before E3, does not block E0–E2
+- **Status:** Accepted (owner, 2026-07-04) — Option A as recommended (ratifies the two standing conventions; DoR gate for T3.3.1 now cleared)
 - **Date:** 2026-07-03
 - **Deciders:** Owner
 - **Source:** Assumption register A5
@@ -83,7 +83,17 @@ and this English-language session is weak counter-evidence.
 - Owner's language policy statement this session (artifacts EN, product docs VI ok).
 - This session conducted in English by the owner.
 
+## Decision (2026-07-04)
+
+**Option A accepted** by the owner (delegated approval of the recommendation). The rule the
+framework encodes: **conversation** — status updates, completion summaries, `AskUserQuestion`
+prompts, plan reviews — in **Vietnamese**; **engineering artifacts** (agents, skills, prompts,
+standards, governance, ADRs) in **English**; **product/business documentation** may stay
+Vietnamese. This ratifies the two standing memory conventions ("Ask questions in Vietnamese",
+"Summarize in Vietnamese") — no revocation. It is codified descriptively in the documentation
+standard (T3.3.1) and, in E5, into the framework prompt bindings. If the owner later prefers
+English-everywhere (Option B), that is a superseding ADR, not an in-place edit (§ immutability).
+
 ## Open Questions
 
-1. Confirm A, or use this ADR to switch to B — either way the choice gets codified into
-   framework prompt templates and the memory conventions updated to match.
+_Resolved by the Decision above (Option A confirmed)._
