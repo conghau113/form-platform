@@ -112,14 +112,14 @@ Total ~18–22 phases.
 | E2 | T2.4.1 | S | `registries/model-registry.yaml` + capability tiers (judgment/mechanical/recall); materializes ADR-0011; registered in index | ✅ | 953e662 |
 | E2 | T2.4.2 | S | `registries/gate-inventory.yaml` (16 gates: 9 CI + 6 local + 1 structural; rung labels §8; sonar advisory) | ✅ | f152298 |
 | E2 | T2.5.1 | S | `knowledge/templates/` (README + drift/review/audit/calibration reports + phase-plan; evidence-nature, not index-registered) | ✅ | 16e10ff |
-| E2 | — | — | **E2 validation** (epic DoD): batch-ran all 8 index methods → first calibration-report; 7 pass + 1 detector-fix + 0 drift → **E2 DONE** | ✅ | this commit |
+| E2 | — | — | **E2 validation** (epic DoD): batch-ran all 8 index methods → first calibration-report; 7 pass + 1 detector-fix + 0 drift → **E2 DONE** | ✅ | acd9204 |
 | **E3** | T3.1.1 | M | Coding standard (extract AGENTS.md/feature-module/CODE; + Prisma-confinement + builder feature-folder conformance sweeps) | ⬜ | — |
 | E3 | T3.2.1 | M | Verification standard (verify bar + evidence + codified manual MCP smoke) | ⬜ | — |
 | E3 | T3.3.1 | S | [ADR-0003] Documentation standard (natures · freshness · language) | ⬜ | — |
 | E3 | T3.4.1 | M | [ADR-0009] Design baseline, descriptive (antd conventions · spacing · P1b breakpoints · locale) | ⬜ | — |
 | E3 | T3.4.2 | M | [ADR-0009/0010] Design/a11y normative proposals (benchmark distillation + WCAG 2.1 AA antd-scoped) → owner ratify | ⬜ | — |
 | E3 | T3.5.1 | S | [ADR-0005] Release thin gate + blocker register (94 changesets · push-cadence) | ⬜ | — |
-| **E4** | T4.1.1 | S | Charters: explorer / reviewer (scope · evidence obligations · tier · isolation argument) | ⬜ | — |
+| **E4** | T4.1.1 | S | Charters: explorer / reviewer (L1 normative in `governance/charters/`; mandate · scope · tier · isolation argument · evidence obligations; charter→binding for E5) | ✅ | _pending_ |
 | E4 | T4.2.1 | M | Procedure: phase-execution (de-facto lifecycle → normative) | ⬜ | — |
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ⬜ | — |
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ⬜ | — |
@@ -492,8 +492,26 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 
 ## E4 — Charters & Procedures (‖ E3)
 
-- **T4.1.1 (S):** charters explorer/reviewer (scope · evidence obligations · tier · isolation
-  argument).
+- **T4.1.1 (S):** charters explorer/reviewer — DONE. Created `governance/charters/` (README + two
+  charters) — the first L1 **charters** (normative Governance Core, alongside constitution/policies).
+  A **charter** = an agent's mandate: what it may do, its scope-DOES-NOT, capability tier, isolation
+  argument, and evidence obligations. The **charter↔binding split** (constitution §2 / blueprint Phase 4):
+  the L3 `.claude/agents/<name>.md` files regenerate FROM these charters in E5 (T5.2.1) and must trace to
+  them — the charter is the source of truth, the binding is regenerable. **Started E4 (not E3-first)
+  deliberately:** E3 T3.1.1 (coding standard, whole-monorepo) is the designated **Fable-5 escalation** task
+  per `registry-model`, and the main-session model is owner-controlled (ADR-0011 OQ3) — so a non-escalation,
+  Opus-appropriate E4 task is the right continuation; E4 is also all non-gated and has fresh ≥2× recurrence
+  evidence from the ~19 phases just executed. Content **extracted from L0** (`.claude/agents/{explorer,
+  reviewer}.md`) + framed by ADR-0011 (Accepted; roster/tiering/isolation) + `registry-model` (tiers) +
+  review-workflow §2 (reviewer's checklists): **explorer** = read-only recall/haiku, isolation = disposable
+  discovery (context economy), findings E2 + `file:line`-anchored, never edits/rules; **reviewer** = judgment/
+  opus, rung-4 isolated review, isolation = objectivity (a context that didn't watch the change), MUST run
+  `git diff` (E1), reports PASS/FAIL + exact fixes, never edits/ratifies (owner deep-read stays the gate for
+  normative-L1/contract/E5-binding). Normative headers (Active v1.0, owner-authority recommended 2026-07-04
+  ratification-pending, traceability). **Not registered in `index.yaml`** (normative L1, not descriptive-of-L0
+  — per the owner's ruling). Doc-only ⇒ no changeset/typecheck/test. Backfilled the E2-validation hash
+  `acd9204`. ⚠️ T4.1.1 own row `_pending_` → backfill in the next E4 task. NEXT = T4.2.1 (M) procedure
+  phase-execution (de-facto lifecycle → normative; richest ≥2× evidence — ~19 phases).
 - **T4.2.1 (M):** procedure phase-execution (de-facto lifecycle → normative).
 - **T4.2.2 (M):** procedures drift-sweep + conformance-sweep.
 - **T4.2.3 (S):** procedure knowledge-promotion (memory → L2).
