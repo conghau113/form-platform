@@ -125,8 +125,8 @@ Total ~18–22 phases.
 | E4 | T4.2.2 | M | Procedures: drift-sweep + conformance-sweep | ✅ | c50ab94 |
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | 03f8a6c |
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | b3debca |
-| E5 | T5.1.2 | S | New skill bindings for new procedures (phase-execution · sweeps · knowledge-promotion) | ✅ | _pending_ |
-| E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ⬜ | — |
+| E5 | T5.1.2 | S | New skill bindings for new procedures (phase-execution · sweeps · knowledge-promotion) | ✅ | 1eba1f8 |
+| E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ✅ | _pending_ |
 | E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | 173cc3f |
 | E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | fa0a1f3 |
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ⬜ | — |
@@ -762,8 +762,25 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   disk; no procedure text restated verbatim (condensed + pointer). Review = in-session self-checklist (the
   real E5-binding gate is owner deep-read before merge). Doc-only ⇒ no changeset/typecheck/test.
   `.claude/settings.json` + `projects.service.ts` kept OUT. Backfilled T5.4.1 hash `fa0a1f3`. ⚠️ T5.1.2 own
-  row `_pending_` → backfill next task. **Remaining E5:** T5.2.1 (regen `.claude/agents/{explorer,reviewer}`
-  from the charters) → then E5-CLOSE validation (one real product task end-to-end under the new bindings).
+  row `_pending_` → **backfilled in T5.2.1 → `1eba1f8`.** **Remaining E5:** T5.2.1 (regen
+  `.claude/agents/{explorer,reviewer}` from the charters) → then E5-CLOSE validation.
+- **T5.2.1 (S) DONE `_pending_` (2026-07-05):** regenerated the **2 L3 agent bindings** FROM the E4 charters
+  (now Active/ratified `39fb71b` — DoR "EVERY source Active" met), completing the charter↔binding split: the
+  charter is source of truth, the `.claude/agents/<name>.md` binding is regenerable and must trace to it.
+  Each file keeps the **harness-functional frontmatter** (name/description/tools/model) unchanged — tools +
+  model already match the charter's tier (**explorer** read-only Read/Grep/Glob + `recall`→haiku · **reviewer**
+  +Bash-for-`git diff` + `judgment`→opus) — and gains a **source-version header** blockquote (**Layer** L3 ·
+  originates-no-rule §2 · **Source** = the charter `v1.0` with a resolvable relative link · **Regenerated** E5
+  T5.2.1 stamp), followed by a body condensed from the charter's mandate + scope-DOES-NOT + evidence
+  obligations (explorer: `file:line` anchors, no file-paste, no verdict, no E1; reviewer: MUST run `git diff`,
+  the golden-rules checklist, PASS/FAIL only, no-edit + no-ratify, report-FAIL-faithfully). No charter text
+  restated verbatim — condensed + pointer (one home §5). Self-verified: both frontmatters valid + agents
+  harness-registered (appear in the agent-type list) + both `Source` links resolve on disk; tools/model align
+  with `registry-model` tiers. Review = in-session self-checklist (real E5-binding gate = owner deep-read
+  before merge). Doc-only ⇒ no changeset/typecheck/test. `.claude/settings.json` + `projects.service.ts` kept
+  OUT. Backfilled T5.1.2 hash `1eba1f8`. ⚠️ T5.2.1 own row `_pending_` → backfill next task (the E5-CLOSE
+  validation commit). **Remaining E5:** E5-CLOSE — run ONE real product task end-to-end under the new
+  bindings before any merge (owner deep-read is the gate).
 
 ## E6 — Enforcement & Gates
 
