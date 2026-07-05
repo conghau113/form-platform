@@ -127,10 +127,10 @@ Total ~18–22 phases.
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | b3debca |
 | E5 | T5.1.2 | S | New skill bindings for new procedures (phase-execution · sweeps · knowledge-promotion) | ✅ | 1eba1f8 |
 | E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ✅ | 5bb18b3 |
-| E5 | E5-CLOSE | — | Validation: one real product task (FS3a) end-to-end under the new bindings | ✅ | _pending_ |
+| E5 | E5-CLOSE | — | Validation: one real product task (FS3a) end-to-end under the new bindings | ✅ | 4b2b675 |
 | E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | 173cc3f |
 | E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | fa0a1f3 |
-| **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ⬜ | — |
+| **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ✅ | _pending_ |
 | E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ⬜ | — |
 | E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ⬜ | — |
 | E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ⬜ | — |
@@ -825,6 +825,28 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 - **T6.2.3 (S):** settings/hooks reconcile policies; RUNG-3 CI-PREFERENCE (CI > hooks).
 - Each gate is advisory ≥1 phase before blocking. Validation: seed one violation per gate — it
   must be caught. Disabling a blocking gate requires a decision record.
+
+- **T6.1.1 (S) DONE `_pending_` (2026-07-06):** the E6 entry **promotion review** — reviewed the six
+  rung-1 product golden rules NOT already at rung-3 (per `registry-gate-inventory`; `changeset` +
+  feature-folders already gated, out of scope) against their **recorded violation evidence**, judged by
+  climb-on-evidence (§8) + minimum-viable-rung (§14). Evidence mined via the **explorer agent** (docs/
+  expansion + docs/refactor + `git log` + a current-code grep this session). **Result: Reject-defer ALL —
+  no rule crosses the climb threshold.** Five have **0** recorded violations lifetime (corroborated by the
+  E4 T4.2.2 conformance-sweep's "0 real violations"); rule 6 (NestJS DI needs a **runtime** import, not
+  `import type`) has its **first** sighting (FS3a `ff61a6a`, self-caught by live-smoke) at **1× < ≥2×**.
+  Per §8/§14, **building a gate for a never-violated rule = the speculation the constitution forbids** — so
+  the correct E6 move is NOT to gate the (clean) product rules. Deliverable = an **Evidence report**
+  `reports/reviews/REVIEW-2026-07-06-gate-promotion.md` (append-only §5; NOT index-registered — reports are
+  Evidence, like the calibration report): evidence table w/ anchors + verdict + a ranked **WATCH-list**
+  (pre-analysis for when a sighting lands: rule 6 @1× top, rule 1 `eval` = the one severity-first owner-call)
+  + a **redirect** confirming the existing T6.2.x correctly target the framework's OWN un-proven governance
+  surface (index-freshness / traceability / settings-reconcile), where advisory-first gates ARE warranted.
+  Self-verified: 2 load-bearing citations re-read + confirmed (`ai-dev-framework.md:628–629` "0 real
+  violations"; `refactor-plan.md:248` fetch-confinement). Review = in-session self-checklist (Evidence
+  nature, not high-stakes → no isolated spawn). Doc-only ⇒ no changeset/typecheck/test. `.claude/
+  settings.json` + `projects.service.ts` kept OUT. Backfilled **E5-CLOSE hash `4b2b675`.** ⚠️ T6.1.1 own row
+  `_pending_` → backfill next commit. **NEXT = T6.2.1** (index/freshness CI check, advisory-first) — the
+  first framework-surface gate; T6.1.1's redirect confirms this is where E6 enforcement belongs.
 
 ## E7 — Automated Verification Floor (GATED by ADR-0008, severable)
 
