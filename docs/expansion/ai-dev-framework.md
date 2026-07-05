@@ -126,7 +126,8 @@ Total ~18–22 phases.
 | E4 | T4.2.3 | S | Procedure: knowledge-promotion (memory → L2) | ✅ | 03f8a6c |
 | **E5** | T5.1.1 | M | Regen 4 skills → traceable bindings (accuracy-first text kept VERBATIM per ADR-0001) | ✅ | b3debca |
 | E5 | T5.1.2 | S | New skill bindings for new procedures (phase-execution · sweeps · knowledge-promotion) | ✅ | 1eba1f8 |
-| E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ✅ | _pending_ |
+| E5 | T5.2.1 | S | Regen agents from charters (source-version headers) | ✅ | 5bb18b3 |
+| E5 | E5-CLOSE | — | Validation: one real product task (FS3a) end-to-end under the new bindings | ✅ | _pending_ |
 | E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | 173cc3f |
 | E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | fa0a1f3 |
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ⬜ | — |
@@ -778,9 +779,43 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   harness-registered (appear in the agent-type list) + both `Source` links resolve on disk; tools/model align
   with `registry-model` tiers. Review = in-session self-checklist (real E5-binding gate = owner deep-read
   before merge). Doc-only ⇒ no changeset/typecheck/test. `.claude/settings.json` + `projects.service.ts` kept
-  OUT. Backfilled T5.1.2 hash `1eba1f8`. ⚠️ T5.2.1 own row `_pending_` → backfill next task (the E5-CLOSE
-  validation commit). **Remaining E5:** E5-CLOSE — run ONE real product task end-to-end under the new
+  OUT. Backfilled T5.1.2 hash `1eba1f8`. ⚠️ T5.2.1 own row `_pending_` → **backfilled in the E5-CLOSE
+  commit → `5bb18b3`.** **Remaining E5:** E5-CLOSE — run ONE real product task end-to-end under the new
   bindings before any merge (owner deep-read is the gate).
+- **E5-CLOSE (validation) DONE `_pending_` (2026-07-05):** ran **one real product task end-to-end under the
+  new L3 bindings** — the E5 DoR "run one real product task before the final merge." Owner delegated the
+  choice ("theo khuyến nghị"); vehicle = **FS3 file storage** (Form Submission Runtime track). Executed on a
+  **separate product branch** `feat/fs3-file-storage` (branched off `feat/ai-dev-framework` — deliberately,
+  so the NEW bindings were actually on disk for the spawned agents; the framework branch head stays doc-only
+  and FS3a is never merged into it). **Product commits (on that branch, NOT here):** FS3a code `ff61a6a` +
+  FS-track record `194e1ac`.
+  - **What was validated (dogfood evidence — this is what owner deep-read reviews):**
+    - **phase-execution DoR gate caught an L task:** FS3 as specced (upload + S3 + signed URLs + MIME policy
+      + submission-embed + audit) is **L** → split into **FS3a** (upload/download/list + local adapter + size
+      cap + access) now, FS3b deferred. The sizing rule fired exactly as intended.
+    - **explorer binding (T5.2.1)** mapped the mirror template (submissions module + repo abstraction) with
+      `file:line` anchors, no file-paste — the map sufficed to build FS3a with no further spelunking.
+    - **feature-module skill** scaffold matched house style first-pass (controller/service/repo split, repo
+      abstract in `persistence/repositories` + prisma impl, `ProjectsService.requireAccess` gate, DTO-less
+      multipart, `apps/*` need no changeset).
+    - **reviewer binding (T5.2.1)** PASS on the real staged diff + caught a genuine **non-blocking** hardening
+      (multer `FileInterceptor` has no `limits` → full in-memory buffering before the service-level 413; DoS
+      vector) → filed to **FS3b**, not fixed inline (findings-filed-not-fixed).
+    - **self-verify-by-running (accuracy-first / verification policy) earned its keep:** a real **DI bug**
+      (`import type { ConfigService }` erases the runtime class NestJS DI needs) passed typecheck AND the 7
+      unit tests (which construct the service by hand) and was **caught only by the live-smoke** (app failed to
+      boot: "can't resolve dependencies … index [4]"). Fixed to a runtime import + `biome-ignore`. **Behaviour
+      is E1** — this is the canonical demonstration.
+  - **Floor met (product DoD):** api typecheck clean · api test **200 pass** (7 new files tests) · biome clean
+    (11 files) · reviewer PASS · **live HTTP smoke on real Postgres** (register→project→form→upload 201 metadata
+    [no `storageKey`]→download 200 bytes+headers match→list→oversize **413**→empty **400**→cross-user **404**).
+    Migration `20260705161045_fs3_file_storage` applied (additive: new table + 2 cascade FKs). Smoke server
+    stopped; temp artifacts removed (smoke DB rows = harmless dev data, per prior-smoke convention).
+  - **Verdict:** the governed bindings drove a real backend feature cleanly AND surfaced value the author's
+    context would miss (the L-split, the reviewer's DoS catch, the run-caught DI bug). **This closes the E5
+    build+validation; the real E5 gate remains owner deep-read of the bindings before any merge.** `.claude/
+    settings.json` + `projects.service.ts` kept OUT of this commit. ⚠️ E5-CLOSE own row `_pending_` → backfill
+    next commit. **NEXT (framework):** E6 (enforcement/gates) — or owner may merge E5 after deep-read.
 
 ## E6 — Enforcement & Gates
 
