@@ -90,6 +90,23 @@ ci_gates:
       (that promotion needs a decision record). Detector proven E6 T6.2.1: 6 seeded violation
       classes (bad path / missing field / future date / bad class / duplicate id / bad date) all
       caught; the clean index passes.
+  - id: ci-traceability
+    workflow: ci.yml (verify — "L3 traceability / links" step)
+    enforces: >-
+      constitution §12 guarantee 3 — every L3 binding (.claude/agents, .claude/skills, .cursor/rules)
+      names its L1/L2 source (agents/skills carry `Source:`, cursor rules `Authority:`) — AND every
+      relative markdown link across the governed surface (the L3 bindings + governance/ + knowledge/)
+      resolves on disk. `pnpm check:traceability` (scripts/check-traceability.mjs). Reports the §13
+      health signal "L3 traceability coverage". Second framework-surface gate (E6 T6.2.2).
+    events: [push, pull_request]
+    blocking: false
+    note: >-
+      ADVISORY-FIRST (§8) — continue-on-error keeps it non-blocking; promote to blocking by dropping
+      that line after ≥1 clean advisory phase (needs a decision record). Only markdown links are
+      resolved (backtick prose pointers are ambiguous globs → left to the presence check). Detector
+      proven E6 T6.2.2: 4 seeded violation classes (broken source link / missing source pointer /
+      missing authority / broken intra-governance link) all caught; the clean tree passes (12/12
+      bindings, 70 links).
 
 # ── Local guardrails (RUNG 3, harness-enforced via .claude/settings.json) ───────────────
 # Convenience / agent-safety. NOT durable across a tool swap → never the sole copy of a rule

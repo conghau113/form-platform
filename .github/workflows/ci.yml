@@ -48,6 +48,14 @@ jobs:
         continue-on-error: true
         run: pnpm check:index
 
+      - name: L3 traceability / links (advisory)
+        # Framework E6 T6.2.2 gate — enforces constitution §12 guarantee 3 (every L3 binding
+        # names its source) + resolves every relative markdown link across the governed
+        # surface. ADVISORY-FIRST (§8): continue-on-error keeps it non-blocking; promote to
+        # blocking by dropping this line (a decision-record change) after ≥1 clean advisory phase.
+        continue-on-error: true
+        run: pnpm check:traceability
+
       - name: Biome (changed files only)
         shell: bash
         run: |

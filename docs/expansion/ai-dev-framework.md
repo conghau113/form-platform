@@ -131,8 +131,8 @@ Total ~18–22 phases.
 | E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | 173cc3f |
 | E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | fa0a1f3 |
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ✅ | ff63618 |
-| E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ✅ | _pending_ |
-| E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ⬜ | — |
+| E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ✅ | df4d571 |
+| E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ✅ | _pending_ |
 | E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ⬜ | — |
 | **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ⬜ | — |
 | E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ⬜ | — |
@@ -878,6 +878,33 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   `.claude/settings.json` + `projects.service.ts` kept OUT. Backfilled **T6.1.1 hash `ff63618`.**
   ⚠️ T6.2.1 own row `_pending_` → backfill next commit. **NEXT = T6.2.2** (traceability/link check,
   advisory-first) — same advisory-first pattern over L3-binding → L1/L2 source links.
+  T6.2.1 hash backfilled by T6.2.2 → **`df4d571`**.
+
+- **T6.2.2 (M) DONE `_pending_` (2026-07-12):** the **second framework-surface gate** — a
+  **traceability / link check, advisory-first** (§8) enforcing **constitution §12 guarantee 3** ("every
+  L3 binding names its L1/L2 source; regeneration keeps the trace") + surfacing the **§13 health signal**
+  "traceability coverage of L3 bindings". Deliverable = `scripts/check-traceability.mjs` (Layer L3,
+  originates no rule — enforces an existing constitutional guarantee; zero shell, pure `fs`+regex).
+  **Two dimensions:** (1) **PRESENCE** — every L3 binding (`.claude/agents/*.md`, `.claude/skills/*/SKILL.md`
+  → `Source:`; `.cursor/rules/*.mdc` → `Authority:`) names a source; (2) **LINK INTEGRITY** — every
+  *relative markdown link* `](path)` across the governed surface (the L3 bindings + `governance/` +
+  `knowledge/`) resolves on disk (anchors/queries stripped; http/mailto/#-anchor skipped). ⚠️ **Honest
+  scope:** only markdown links are resolved — backtick prose pointers (e.g. `AGENTS.md`, `governance/`)
+  are ambiguous globs → left to the presence check, NOT resolved (avoids false positives). **Clean
+  baseline PASSES:** 12 L3 bindings (2 agents + 7 skills + 3 cursor), **70 relative links across 35
+  governed files all resolve**, coverage 12/12 — i.e. the whole governance/knowledge cross-reference
+  graph is intact. **Validation (E6 "seed one violation, it must be caught" floor):** 4 seeded classes —
+  broken source link / missing source pointer / missing authority / broken intra-governance link — **all
+  caught (exit 1)**; seed harness mutates real files in memory + restores in `finally` (working tree left
+  clean, verified). Wired as `pnpm check:traceability` + an **advisory** step in `ci.yml`'s verify job
+  (`continue-on-error: true`; promote-to-blocking = drop that line, needs a decision record §8). Recorded
+  as `ci-traceability` in `registry-gate-inventory` (`blocking: false`); the registry's `verified_on`
+  stays 2026-07-12 (T6.2.1's same-day L0 re-verify still holds). Floor met E1: both gates PASS · biome
+  clean · seed validation 4/4. Not a package change ⇒ no changeset; no typecheck/test surface. Review =
+  in-session self-checklist (executable+config+registry, not high-stakes). `.claude/settings.json` +
+  `projects.service.ts` kept OUT. Backfilled **T6.2.1 hash `df4d571`.** ⚠️ T6.2.2 own row `_pending_` →
+  backfill next commit. **NEXT = T6.2.3 (S)** (settings/hooks reconcile policies; RUNG-3 CI-preference,
+  CI > hooks) — closes E6.
 
 ## E7 — Automated Verification Floor (GATED by ADR-0008, severable)
 
