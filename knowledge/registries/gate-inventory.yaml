@@ -17,7 +17,7 @@
 framework_version: 1
 schema_version: 1
 authority: governance/constitution.md   # §8 enforcement ladder
-verified_on: 2026-07-04
+verified_on: 2026-07-12
 
 # ── CI machine gates (RUNG 3, the PREFERRED locus per §8) ──────────────────────────────
 # All live in .github/workflows/. Blocking = fails the check on the listed events.
@@ -75,6 +75,21 @@ ci_gates:
     note: >-
       INACTIVE/advisory — the job no-ops until the SONAR_TOKEN repo secret exists (it does not
       fail the pipeline). A real advisory-first state; becomes active once the owner sets the secret.
+  - id: ci-knowledge-index
+    workflow: ci.yml (verify — "Knowledge index freshness" step)
+    enforces: >-
+      knowledge/index.yaml self-consistency + freshness metadata (required fields, unique ids,
+      descriptive-only nature, class in E1/E2, each path exists, verified_on is a valid non-future
+      date) via `pnpm check:index` (scripts/check-knowledge-index.mjs). Reports the §13 health
+      signal "oldest freshness contract". First framework-surface gate (E6 T6.2.1).
+    events: [push, pull_request]
+    blocking: false
+    note: >-
+      ADVISORY-FIRST (§8) — the step carries continue-on-error, so a violation is reported but does
+      not fail CI. Promote to blocking by dropping continue-on-error after ≥1 clean advisory phase
+      (that promotion needs a decision record). Detector proven E6 T6.2.1: 6 seeded violation
+      classes (bad path / missing field / future date / bad class / duplicate id / bad date) all
+      caught; the clean index passes.
 
 # ── Local guardrails (RUNG 3, harness-enforced via .claude/settings.json) ───────────────
 # Convenience / agent-safety. NOT durable across a tool swap → never the sole copy of a rule

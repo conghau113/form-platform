@@ -228,7 +228,7 @@ artifacts:
     nature: descriptive
     class: E1
     owner: agent+reviewer
-    verified_on: 2026-07-04
+    verified_on: 2026-07-12
     cadence: re-verify when a CI workflow, a hook, or a permission deny rule changes; else each release.
     scope:
       - .github/workflows/**

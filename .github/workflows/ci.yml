@@ -40,6 +40,14 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Knowledge index freshness (advisory)
+        # Framework E6 T6.2.1 gate — validates knowledge/index.yaml self-consistency +
+        # freshness metadata. ADVISORY-FIRST (constitution §8): continue-on-error keeps it
+        # non-blocking for ≥1 phase. To promote to blocking, drop this line (a decision-record
+        # change) once it has run clean advisory.
+        continue-on-error: true
+        run: pnpm check:index
+
       - name: Biome (changed files only)
         shell: bash
         run: |

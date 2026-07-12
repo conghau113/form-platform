@@ -130,8 +130,8 @@ Total ~18–22 phases.
 | E5 | E5-CLOSE | — | Validation: one real product task (FS3a) end-to-end under the new bindings | ✅ | 4b2b675 |
 | E5 | T5.3.1 | S | CLAUDE.md pointer + AGENTS.md ADR-pointers + `.cursor/rules` derived mirror + banner | ✅ | 173cc3f |
 | E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | fa0a1f3 |
-| **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ✅ | _pending_ |
-| E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ⬜ | — |
+| **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ✅ | ff63618 |
+| E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ✅ | _pending_ |
 | E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ⬜ | — |
 | E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ⬜ | — |
 | **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ⬜ | — |
@@ -847,6 +847,37 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   settings.json` + `projects.service.ts` kept OUT. Backfilled **E5-CLOSE hash `4b2b675`.** ⚠️ T6.1.1 own row
   `_pending_` → backfill next commit. **NEXT = T6.2.1** (index/freshness CI check, advisory-first) — the
   first framework-surface gate; T6.1.1's redirect confirms this is where E6 enforcement belongs.
+  T6.1.1 hash backfilled by T6.2.1 → **`ff63618`**.
+
+- **T6.2.1 (M) DONE `_pending_` (2026-07-12):** the **first framework-surface gate** — an
+  **index/freshness CI check, advisory-first** (§8), exactly where T6.1.1's redirect said E6 enforcement
+  belongs (the framework's own un-proven governance surface, NOT the clean product rules). Deliverable =
+  `scripts/check-knowledge-index.mjs` (Layer L3, originates no rule — enforces the schema
+  `knowledge/index.yaml` declares about ITSELF + basic validity; normative homes constitution §10/§5).
+  **Checks:** top-level shape · per-artifact required fields (the index's own FIELD SCHEMA) · unique ids ·
+  `nature: descriptive` only (§5) · `class ∈ {E1,E2}` (§7) · each `path` exists on disk · `scope` non-empty ·
+  `verified_on` a valid non-future `YYYY-MM-DD` · `unregistered_by_design` entries carry path+reason. Also
+  emits the **§13 health signal** "oldest freshness contract" (informational — cadence is prose, not a
+  machine interval, so staleness is reported, never failed). Wired as `pnpm check:index` + an **advisory**
+  step in `ci.yml`'s verify job (`continue-on-error: true` — reuses the existing install; promote to
+  blocking = drop that one line, which per §8 needs a decision record). **Validation (the E6 "seed one
+  violation, it must be caught" floor):** 6 seeded violation classes — bad path / missing field / future
+  date / bad class / duplicate id / bad date — **all caught (exit 1)**; the clean index passes (exit 0).
+  ⚠️ **Gotcha:** `index.yaml` is **CRLF** (Windows checkout) — a first seed harness using `\n` literals
+  silently no-matched (false "MISSED"); fixed with CRLF-agnostic `\r?\n` replacements, then all 6 caught.
+  Script hardened: TZ-safe local-midnight date parse (UTC `new Date('YYYY-MM-DD')` skewed the age by one
+  day); portable `.pnpm`-store scan for the transitive `yaml` dep (no `execSync ls` — works on Windows too);
+  optional path arg (`process.argv[2]`) so the seed test runs against temp copies without touching the real
+  index. **Recorded the new gate** in `registry-gate-inventory` (`ci-knowledge-index`, `blocking: false`,
+  advisory-first note) and re-verified that registry vs L0 (method re-ran: 5 workflows, 9 deny rules,
+  PostToolUse hook, structure.test.ts present — unchanged) → bumped its `verified_on` + the matching
+  `index.yaml` entry to **2026-07-12**. Floor met E1: `pnpm check:index` PASS · biome clean (double-quote
+  house style) · seed validation 6/6. Not a package change ⇒ no changeset; no typecheck/test surface (plain
+  node script, config, YAML). Review = in-session self-checklist (executable+config+registry nature, not
+  high-stakes normative-L1/contract/E5 → no isolated reviewer spawn, per phase-execution §2 routing).
+  `.claude/settings.json` + `projects.service.ts` kept OUT. Backfilled **T6.1.1 hash `ff63618`.**
+  ⚠️ T6.2.1 own row `_pending_` → backfill next commit. **NEXT = T6.2.2** (traceability/link check,
+  advisory-first) — same advisory-first pattern over L3-binding → L1/L2 source links.
 
 ## E7 — Automated Verification Floor (GATED by ADR-0008, severable)
 

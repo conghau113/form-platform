@@ -13,6 +13,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "changeset": "changeset",
+    "check:index": "node scripts/check-knowledge-index.mjs",
     "version-packages": "changeset version",
     "release": "turbo run build && changeset publish",
     "biome:check": "biome check .",
