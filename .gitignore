@@ -8,6 +8,12 @@ dist/
 # turborepo
 .turbo/
 
+# playwright e2e (E7) — generated artifacts (all created at the repo root)
+/playwright-report/
+/test-results/
+/blob-report/
+/.playwright/
+
 # vite
 **/.vite/
 

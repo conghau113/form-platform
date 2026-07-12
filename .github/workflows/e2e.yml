@@ -1,0 +1,79 @@
+name: E2E (advisory)
+
+# Thin critical-path Playwright suite (framework E7, ADR-0008 Option C). Boots the full
+# docker-compose stack (postgres + api + builder/nginx) and drives it through a real browser.
+#
+# ADVISORY-FIRST (constitution §8): the job carries continue-on-error, so a failure is reported
+# but does NOT fail the pipeline. T7.3.1 promotes it to blocking after N clean runs (dropping
+# continue-on-error — a decision-record change) once the "broken twice" growth rule is codified.
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Critical-path e2e (compose stack)
+    runs-on: ubuntu-latest
+    continue-on-error: true # advisory-first (§8) — remove to promote to blocking (T7.3.1)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boot the stack (postgres + api + builder)
+        # Compose defaults are self-sufficient (JWT default ≥16 chars, ports 5435/3001/8080). The api
+        # auto-migrates on boot; the builder waits for the api healthcheck before it serves.
+        run: docker compose up -d --build
+
+      - name: Wait for the stack to be reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3001/health >/dev/null 2>&1 \
+               && curl -fsS http://localhost:8080/ >/dev/null 2>&1; then
+              echo "stack up (api :3001 healthy, builder :8080 serving)"; exit 0
+            fi
+            echo "waiting for stack… ($i)"; sleep 5
+          done
+          echo "stack did not come up in time"; docker compose ps; docker compose logs --no-color | tail -200; exit 1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run e2e (against the compose stack)
+        env:
+          E2E_BASE_URL: http://localhost:8080
+        run: pnpm e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Tear down the stack
+        if: ${{ always() }}
+        run: docker compose down -v

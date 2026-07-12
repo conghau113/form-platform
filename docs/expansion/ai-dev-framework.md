@@ -134,7 +134,7 @@ Total ~18–22 phases.
 | E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ✅ | df4d571 |
 | E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ✅ | d55e31e |
 | E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ✅ | _pending_ |
-| **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ⬜ | — |
+| **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ✅ | _pending_ |
 | E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ⬜ | — |
 | E7 | T7.2.2 | M | Specs: publish + submit/view | ⬜ | — |
 | E7 | T7.2.3 | M | Specs: workflow run | ⬜ | — |
@@ -952,6 +952,32 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   stack) — start in a FRESH session (P3 context cap). Selectors by role/label; growth-rule enforcement
   deferred to T7.3.1. Bring-up gotchas: probe ports 3001/5173 (never assume; EADDRINUSE + stale-server-on-
   3001 false-fail are recorded incidents — see [[dev-stack-ports]] / runbook-dev-stack).
+  ADR-0008 status-flip hash backfilled by T7.1.1 → **`352bb8c`**.
+
+- **T7.1.1 (M) DONE `_pending_` (2026-07-13) — E7 scaffold + first green spec:** stood up the thin
+  critical-path Playwright harness (ADR-0008 Option C). **Location:** root-level `e2e/` + `playwright.config.ts`
+  (NOT a workspace package → severable, outside every tsconfig/Vitest `testDir`, so it can't perturb package
+  typecheck/test). **Config:** `baseURL` from `E2E_BASE_URL` (default `:5173` dev-stack; CI sets `:8080`
+  compose), chromium-only, `forbidOnly`+`retries:1` under CI, role/label selectors (ADR Risks — resist antd
+  churn). **Spec `e2e/auth.spec.ts`** (flow #1 login/auth round-trip): API-arranges an account via
+  `POST /api/auth/register` (deterministic, unique `e2e-${Date.now()}@…` — no seed dependency), then drives
+  the real UI sign-in (`getByRole('tabpanel')` → `getByLabel('Email'/'Password')` → button `Sign in`) and
+  asserts redirect to `/projects` + heading "Projects"; plus a RequireAuth-bounce test (unauth `/projects`
+  → `/login`). **CI `.github/workflows/e2e.yml`:** advisory-first (`continue-on-error: true`, §8; T7.3.1
+  promotes) — `docker compose up -d --build` → wait-loop on `/health`+`:8080` → `pnpm e2e` vs `:8080` →
+  report artifact → `down -v` on `always()`. Root `@playwright/test@1.61.1` devDep + `e2e`/`e2e:report`
+  scripts; `.gitignore` for the generated artifacts. **Floor met E1 — spec RAN GREEN (2/2) vs a live stack**
+  · biome clean · `pnpm typecheck` green · reviewer **PASS**. No package changed ⇒ no changeset.
+  ⚠️ **Self-verify gotchas (recorded):** (1) Docker Desktop engine was DOWN — launched it
+  (`Docker Desktop.exe`) before compose could run; (2) `apps/api/.env` points Prisma at **:5435** (the
+  compose postgres), NOT the native `:5432` — brought up `docker compose up -d postgres` (volume 11 days
+  old, migrations intact) to satisfy the dev-stack api; (3) full self-verify ran against the **dev stack**
+  (api `pnpm dev` :3001 + Vite :5173), which is behaviourally identical to compose (`vite.config.ts` proxies
+  `/api`→:3001 exactly as nginx does) — faster than building the api/builder images locally; (4) a running
+  api dev **locks the Prisma query-engine DLL** → `@app/api` typecheck EPERM-fails until the api process is
+  killed (known gotcha) — killed it, api typecheck then exit 0. `.claude/settings.json` + `projects.service.ts`
+  kept OUT. Backfilled **ADR-0008 hash `352bb8c`.** ⚠️ T7.1.1 own row `_pending_` → backfill next commit.
+  **NEXT = T7.2.1 (M):** specs for CRUD project/form + save/load (build on this harness; role/label selectors).
 
 ## E8 — First Audit & v1.0
 
