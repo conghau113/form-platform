@@ -938,6 +938,21 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 - **T7.3.1 (S):** growth rule "broken twice" + flake policy; blocking after N clean runs.
 - Selectors by role/label (resist antd churn). Fully severable.
 
+- **DoR GATE CLEARED — ADR-0008 Accepted `_pending_` (owner-delegated, 2026-07-12):** the E7 gate
+  ADR flipped Open → **Accepted, Option C** (thin critical-path Playwright + codified manual-MCP smoke,
+  growth rule "broken twice", advisory-first per §8), precedent ADR-0003/0005. **Open questions resolved:**
+  (1) critical-path flow list **APPROVED as proposed** (login/auth · project+form CRUD · save/load ·
+  publish · submit+view · workflow run happy-path); (2) timing = now, E7 as its own severable epic;
+  (3) blocking posture = **advisory-first** (mandatory per §8 — non-blocking ≥1 phase; block only after N
+  clean runs, codified at T7.3.1). E7 is fully severable (§12) — does not couple to E0–E6/E8. Doc-only
+  governance ⇒ no changeset/typecheck/test; ADRs are NOT index-registered. `.claude/settings.json` +
+  `projects.service.ts` kept OUT. ⚠️ ADR-0008 own status flip committed `_pending_` → backfill next commit.
+  **▶ NEXT = T7.1.1 (M):** Playwright scaffold + CI docker-compose boot + a green login/auth spec. Heavy
+  phase (new e2e location, `playwright.config`, CI job with compose lifecycle, real green spec vs the live
+  stack) — start in a FRESH session (P3 context cap). Selectors by role/label; growth-rule enforcement
+  deferred to T7.3.1. Bring-up gotchas: probe ports 3001/5173 (never assume; EADDRINUSE + stale-server-on-
+  3001 false-fail are recorded incidents — see [[dev-stack-ports]] / runbook-dev-stack).
+
 ## E8 — First Audit & v1.0
 
 - **T8.1.1 (S):** run sweeps → first reports. **T8.1.2 (S):** metrics baseline (blueprint §9).

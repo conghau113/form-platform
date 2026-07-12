@@ -1,6 +1,6 @@
 # ADR-0008: UI verification strategy (manual MCP smoke vs automated e2e)
 
-- **Status:** Open (as of 2026-07-03) — DoR gate for E7 (Playwright critical-path, severable); decide before E7, does not block E0–E6/E8
+- **Status:** Accepted (owner-delegated, 2026-07-12) — Option C as recommended (thin critical-path Playwright + codified manual-MCP smoke, growth rule "broken twice", advisory-first per §8); the DoR gate for E7 is now cleared
 - **Date:** 2026-07-03
 - **Deciders:** Owner
 - **Source:** Assumption register D6
@@ -113,10 +113,29 @@ list is a design detail for later.
   session record) — evidence that manual environments need probing policy.
 - CI already runs Docker (Testcontainers note in `ci.yml`).
 
-## Open Questions
+## Decision (2026-07-12)
 
-1. Approve the proposed critical-path flow list (login, project/form CRUD, save/load,
-   publish, submit/view, workflow run)?
-2. Timing: e2e setup as an early framework phase, or after governance core lands?
-3. Should e2e failures block merge (CI-required) from day one, or run advisory first
-   until flake-free for N runs?
+**Option C accepted** by the owner (delegated approval of the recommendation, precedent
+ADR-0003/0005). A deliberately thin Playwright critical-path suite runs in CI against the
+docker-compose stack; the churn-prone editor surfaces (drag-drop canvas, visual UX) stay on
+manual-MCP smoke, codified as a procedure. The suite's long-term cost is capped by a governance
+rule, not left to emerge. This opens the DoR for epic **E7** (T7.1.1–T7.3.1), which is fully
+severable (constitution §12) and does not couple to E0–E6/E8.
+
+**Open questions resolved:**
+
+1. **Critical-path flow list — APPROVED as proposed** (owner, 2026-07-12): login/auth
+   round-trip · create project/form · save/load form · publish version · submit + view
+   submission · workflow run happy-path. These are the stable, low-churn flows where automation's
+   reliability is highest and manual smoke re-verifies only by accident.
+2. **Timing — now**, as its own epic E7 (owner directive to continue E7). Governance core (E0–E6)
+   has landed; E7 is severable and additive.
+3. **Blocking posture — advisory-first**, resolved by governance not re-decided here: constitution
+   §8 makes advisory-first **mandatory** for any new machine gate (non-blocking ≥1 phase before it
+   may block; a *blocking* gate is disabled only via a decision record). T7.3.1 codifies the
+   promotion — the suite blocks merge only after N clean runs + the "broken twice" growth rule are
+   written into the verification standard.
+
+**Growth rule (the anti-scope-creep guard, must be governed — see Risks C):** a spec is added to
+the suite only when a flow has **broken twice** (evidence-driven), and this rule lands in
+`knowledge/standards/verification-standard.md` at T7.3.1 so C cannot decay into B.
