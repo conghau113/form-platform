@@ -132,8 +132,8 @@ Total ~18–22 phases.
 | E5 | T5.4.1 | S | Memory conventions align; slim framework-track memory to pointers | ✅ | fa0a1f3 |
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ✅ | ff63618 |
 | E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ✅ | df4d571 |
-| E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ✅ | _pending_ |
-| E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ⬜ | — |
+| E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ✅ | d55e31e |
+| E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ✅ | _pending_ |
 | **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ⬜ | — |
 | E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ⬜ | — |
 | E7 | T7.2.2 | M | Specs: publish + submit/view | ⬜ | — |
@@ -905,6 +905,30 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   `projects.service.ts` kept OUT. Backfilled **T6.2.1 hash `df4d571`.** ⚠️ T6.2.2 own row `_pending_` →
   backfill next commit. **NEXT = T6.2.3 (S)** (settings/hooks reconcile policies; RUNG-3 CI-preference,
   CI > hooks) — closes E6.
+  T6.2.2 hash backfilled by T6.2.3 → **`d55e31e`**.
+
+- **T6.2.3 (S) DONE `_pending_` (2026-07-12) — CLOSES E6:** the **settings/hooks reconcile** — audited the
+  **local** enforcement layer (`.claude/settings.json`, committed HEAD = repo truth) against the ladder's
+  **§8 CI-preference** ("a machine gate that could live in CI or a local hook should live in CI") + the
+  **§2 replacement test** ("a hook is a convenience mirror of a CI gate, never the only copy"). Scope =
+  1 hook + 13 permission denies (the 406-entry `permissions.allow` is machine-local session convenience,
+  not a gate → out of scope). **Verdict: reconciled, NO promotion needed.** The one gate with a portable
+  code-rule nature (PostToolUse biome) already has its durable copy in CI (`ci-biome`) — the hook is the
+  sanctioned convenience mirror. Every deny is an **agent-runtime guardrail** (destructive/sudo, push,
+  publish, net, secret-read) that governs the *agent's actions*, not a *diff* → **no CI equivalent to
+  migrate to** (CI gates a diff; these gate an action). §8 + §2 both satisfied as-is → E6 needs no
+  settings.json change. Deliverable = Evidence report
+  `reports/reviews/REVIEW-2026-07-12-settings-hooks-reconcile.md` (append-only §5, NOT index-registered).
+  **2 findings filed (NOT fixed — §10/P4):** **F1 (security, owner action)** — the **working-copy**
+  settings.json (owner's uncommitted edit) has **dropped the 4 `.env` read-denies** present in committed
+  HEAD (`Read(.env)` / `Read(.env.*)` / `Read(**/.env)` / `Read(**/.env.*)`), weakening the live secret-read
+  guardrail; owner should restore or confirm intent (not edited — owner's out-of-track file). **F2 (L2
+  drift)** — `gate-inventory.yaml` `deny-secret-read` under-lists the committed denies (omits the `.env`
+  family); remediate as its own task. Doc-only ⇒ no changeset/typecheck/test; review = in-session
+  self-checklist (Evidence nature). Both CI gates (index + traceability) re-run green (regression).
+  `.claude/settings.json` + `projects.service.ts` kept OUT. Backfilled **T6.2.2 hash `d55e31e`.**
+  ⚠️ T6.2.3 own row `_pending_` → backfill next commit. **E6 COMPLETE (4/4).** **NEXT = E7** (Playwright
+  automated-verification floor, GATED by ADR-0008, severable) OR interleave a product track — owner's call.
 
 ## E7 — Automated Verification Floor (GATED by ADR-0008, severable)
 
