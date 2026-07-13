@@ -136,8 +136,8 @@ Total ~18–22 phases.
 | E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ✅ | 0359405 |
 | **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ✅ | b0724d4 |
 | E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ✅ | 9e4ed6e |
-| E7 | T7.2.2 | M | Specs: publish + submit/view | ✅ | _pending_ |
-| E7 | T7.2.3 | M | Specs: workflow run | ⬜ | — |
+| E7 | T7.2.2 | M | Specs: publish + submit/view | ✅ | 3050cdc |
+| E7 | T7.2.3 | M | Specs: workflow run | ✅ | _pending_ |
 | E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ⬜ | — |
 | **E8** | T8.1.1 | S | Run sweeps → first reports | ⬜ | — |
 | E8 | T8.1.2 | S | Metrics baseline (blueprint §9) | ⬜ | — |
@@ -1033,8 +1033,36 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   submit spec self-contained rather than depending on publish). (3) `submittedBy` is the raw `ownerId`
   (userId), not a display name — hence returning `userId` from the helper to target the row. (4) Compose
   stack was already UP+healthy this run (api :3001 healthy / builder :8080 / postgres :5435) — ran against
-  `:8080` directly. ⚠️ T7.2.2 own row `_pending_` → backfill next commit. **NEXT = T7.2.3 (M):** workflow
-  run happy-path spec.
+  `:8080` directly. ⚠️ T7.2.2 own row `_pending_` → backfill next commit (done here → **`3050cdc`**).
+  **NEXT = T7.2.3 (M):** workflow run happy-path spec.
+
+- **T7.2.3 (M) DONE `_pending_` (2026-07-14) — workflow run happy-path spec (E7 4/5, CLOSES the T7.2.x
+  spec set).** One new spec `e2e/workflow-run.spec.ts` on the T7.1.1 harness. The workflow **editor** is
+  the churn-prone drag-drop xyflow canvas ADR-0008 says to AVOID, and a freshly-created workflow has only
+  a single `draft` node with **no transitions** (`newWorkflow.ts`) → nothing to run — so the spec
+  **API-arranges** a minimal valid two-state workflow (`draft --submit--> submitted`, one transition, no
+  roles/guard/formId → the one action is always fireable with empty data) via **`page.request`.post**
+  (`POST /api/workflows?projectId=…`), which shares the browser context's auth cookie (the standalone
+  `request` fixture does NOT — it's a separate isolated context), so the POST runs as the signed-in owner.
+  Then it drives the **real Run view** (`WorkflowRunRoute`): register+sign-in → create project (URL yields
+  `projectId`) → arrange workflow → `goto /projects/:pid/workflows/:wid/run` → click **"Bắt đầu case mới"**
+  (lands on `/run/:instanceId`) → click the **"submit"** action button (raw action id — no i18n label) →
+  the server-authoritative engine advances `draft→submitted` → assert the **terminal marker** "Trạng thái
+  kết thúc — không còn hành động" (rendered only when `actions.length===0`) + the **history timeline**
+  `submit: draft → submitted` (`/draft\s*→\s*submitted/`). Both assertions are **catalog-independent**
+  (don't depend on status-catalog labels) → deterministic. role/label/text selectors only (ADR-0008), no
+  canvas. **Floor met E1 — full suite RAN GREEN 8/8 vs the compose stack under CI topology
+  (`CI=true` `--workers=1`, retries=1)** · biome clean · reviewer **PASS** (no fixes). No package changed
+  ⇒ no changeset; README Specs list updated. `.claude/settings.json` + `projects.service.ts` kept OUT.
+  Backfilled **T7.2.2 `3050cdc`**. ⚠️ **Notes:** (1) compose stack was already UP+healthy this run (api
+  :3001 / builder :8080 / postgres :5435) → ran vs `:8080` directly; the T7.2.1 compose-crash-loop finding
+  (empty `AUTH_BOOTSTRAP_*`) was not re-hit. (2) One PRE-EXISTING flake surfaced under retries=0 —
+  `project-form-crud` "survives a reload" failed once on a tree load-race, then PASSED alone and under
+  CI retries=1 — not a regression from this task (this task adds only a new file + a README line).
+  (3) the server `save()` runs `migrateWorkflow` (validation only), NOT the editor's hard `validateGraph`
+  gate, so the minimal 2-node/1-edge graph persists. ⚠️ T7.2.3 own row `_pending_` → backfill next commit.
+  **NEXT = T7.3.1 (S):** growth rule "broken twice" + flake policy + promote `e2e.yml` from advisory to
+  blocking after N clean runs (drop `continue-on-error` — a §8 decision-record change). CLOSES E7.
 
 ## E8 — First Audit & v1.0
 

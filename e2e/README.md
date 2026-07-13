@@ -43,6 +43,8 @@ after N clean runs (dropping `continue-on-error` — a decision-record change).
   version 1 and the badge flips to "Đã publish v1".
 - `submit-view.spec.ts` — submit + view: give a form a field, submit an answer via the Submissions
   view, then open its read-only detail and confirm the value round-trips.
+- `workflow-run.spec.ts` — workflow run happy-path: API-arrange a two-state workflow, then drive the
+  Run view — launch a case, fire the one action, and confirm it reaches the terminal state.
 - `helpers.ts` — shared arrange-helpers (register + UI sign-in, create project, create form).
 
 Selectors are **by role/label** (resist antd DOM churn — ADR-0008).
