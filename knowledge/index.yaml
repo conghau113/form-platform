@@ -228,7 +228,7 @@ artifacts:
     nature: descriptive
     class: E1
     owner: agent+reviewer
-    verified_on: 2026-07-12
+    verified_on: 2026-07-14
     cadence: re-verify when a CI workflow, a hook, or a permission deny rule changes; else each release.
     scope:
       - .github/workflows/**
@@ -236,7 +236,7 @@ artifacts:
       - apps/builder/src/structure.test.ts
     method: |
       # Every catalogued gate must still exist in L0.
-      ls .github/workflows/                                              # ci, codeql, gitleaks, sonarcloud, trivy
+      ls .github/workflows/                                              # ci, codeql, gitleaks, sonarcloud, trivy, e2e
       node -e "const s=require('./.claude/settings.json'); console.log('deny:',s.permissions.deny.join(',')); console.log('hooks:',Object.keys(s.hooks||{}).join(','))"
       test -f apps/builder/src/structure.test.ts && echo "structure test present"
     notes: >-
@@ -280,23 +280,31 @@ artifacts:
     nature: descriptive
     class: E1
     owner: agent+reviewer
-    verified_on: 2026-07-04
-    cadence: re-verify when the verify-bar scripts or the CI verify job change; else each release.
+    verified_on: 2026-07-14
+    cadence: >-
+      re-verify when the verify-bar scripts, the CI verify job, or the automated e2e suite/gate
+      (§5) change; else each release.
     scope:
       - package.json
       - .github/workflows/ci.yml
+      - .github/workflows/e2e.yml
+      - playwright.config.ts
     method: |
       # The verify-bar scripts must still exist at the repo root.
-      node -e "const s=require('./package.json').scripts; for (const k of ['typecheck','test','build','changeset']) if(!s[k]) throw new Error('missing '+k); console.log('bar ok')"  # expect: bar ok
+      node -e "const s=require('./package.json').scripts; for (const k of ['typecheck','test','build','changeset','e2e']) if(!s[k]) throw new Error('missing '+k); console.log('bar ok')"  # expect: bar ok
       # CI must still run the bar (typecheck + build + test).
       grep -nE 'run typecheck|run build|run test' .github/workflows/ci.yml    # expect all three
+      # §5: the automated e2e suite + its advisory gate must still exist in L0.
+      ls playwright.config.ts .github/workflows/e2e.yml                        # both present
+      grep -nE 'continue-on-error' .github/workflows/e2e.yml                   # still advisory-first
     notes: >-
       Descriptive operational layer over the L1 verification policy (governance/policies/
       verification.md), which owns the normative floors + 5-rule loop (pointed to, not
-      restated). Adds the concrete verify bar (extracted from package.json/CI) and the
-      codified manual MCP browser-smoke protocol; smoke bring-up/gotchas defer to
-      runbook-dev-stack (one home). Automated e2e (Playwright) is out of scope — gated by
-      ADR-0008 / epic E7.
+      restated). Adds the concrete verify bar (extracted from package.json/CI), the codified
+      manual MCP browser-smoke protocol, and (§5) the automated critical-path e2e suite + its
+      advisory `e2e.yml` gate, growth rule "broken twice", and advisory→blocking promotion
+      criteria (extracted from ADR-0008 Option C / constitution §8, landed in epic E7). Smoke
+      bring-up/gotchas defer to runbook-dev-stack (one home).
 
   - id: standard-documentation
     path: knowledge/standards/documentation-standard.md

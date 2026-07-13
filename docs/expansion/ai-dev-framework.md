@@ -137,8 +137,8 @@ Total ~18–22 phases.
 | **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ✅ | b0724d4 |
 | E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ✅ | 9e4ed6e |
 | E7 | T7.2.2 | M | Specs: publish + submit/view | ✅ | 3050cdc |
-| E7 | T7.2.3 | M | Specs: workflow run | ✅ | _pending_ |
-| E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ⬜ | — |
+| E7 | T7.2.3 | M | Specs: workflow run | ✅ | 45fc2c8 |
+| E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ✅ | _pending_ |
 | **E8** | T8.1.1 | S | Run sweeps → first reports | ⬜ | — |
 | E8 | T8.1.2 | S | Metrics baseline (blueprint §9) | ⬜ | — |
 | E8 | T8.1.3 | S | Regeneration-test paper walkthrough + FRAMEWORK_VERSION=1.0 + open Observe queue | ⬜ | — |
@@ -1063,6 +1063,38 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   gate, so the minimal 2-node/1-edge graph persists. ⚠️ T7.2.3 own row `_pending_` → backfill next commit.
   **NEXT = T7.3.1 (S):** growth rule "broken twice" + flake policy + promote `e2e.yml` from advisory to
   blocking after N clean runs (drop `continue-on-error` — a §8 decision-record change). CLOSES E7.
+
+- **T7.3.1 (S) DONE `_pending_` (2026-07-14) — growth rule + flake policy + promotion criteria codified
+  (CLOSES E7, 5/5).** ADR-0008 §139-141 names the governed home explicitly: the "broken twice" growth
+  rule lands in `knowledge/standards/verification-standard.md` "so C cannot decay into B." Deliverable =
+  a new **§5 "Automated critical-path e2e"** in that standard capturing all three governance choices as
+  *extracted/recorded* (constitution §2 — the standard describes, ADR-0008/§8 originate): **(1) growth
+  rule** — a spec is added only when a flow has broken **twice** (evidence-driven; adding for a
+  never-broken flow = §14 speculation); **(2) flake policy** — `retries:1` + `--workers=1`
+  (`playwright.config.ts`), a retry-only pass is recorded flaky not green (§3 report-faithfully), the
+  known theme-write/containers/`project-form-crud`-reload flakes are named debt not floor; **(3)
+  promotion advisory→blocking** — §8 advisory-first is mandatory, so the gate stays `continue-on-error`
+  until **N=3 consecutive clean runs on `main`** (owner-chosen this session) and the flip is itself a
+  decision-record change. **Did NOT flip to blocking** — the honest disposition: §8 requires ≥1 clean
+  advisory phase and the **N-count is 0** (branch unpushed + the T7.2.1 compose crash-loop finding →
+  the CI job has never booted green), so promotion now would be unjustified. Codify ≠ flip (ADR-0008
+  frames T7.3.1 as "codifies the promotion", not "performs" it). **Recorded the gate** `ci-e2e` in
+  `gate-inventory.yaml` (was MISSING since T7.1.1 — closed that gap; `blocking:false`, references §5 +
+  the N=3 criterion + the finding-blocker). **Freshness upkeep** (the standard's L0 changed): bumped
+  `verification-standard.md` header + the index `standard-verification` (verified-on 2026-07-14; scope
+  +`e2e.yml`+`playwright.config.ts`; method now greps the advisory gate + e2e script) and
+  `registry-gate-inventory` (verified-on 2026-07-14); un-stale'd the standard's §4/§5-old + the index
+  note that said "e2e out of scope / gated by ADR-0008" (E7 has landed). Updated the `e2e.yml` header
+  comment + `e2e/README.md` to point at the governed home (§5) and reflect N=3 + the blocker. **Verify:**
+  `pnpm check:index` PASS (13 artifacts, freshness well-formed) + `pnpm check:traceability` PASS (12/12
+  bindings, **72** links — the 2 new §5 links resolve) — the two framework-surface machine gates that
+  validate exactly this surface. Doc/config-only ⇒ no changeset/typecheck/test; review = in-session
+  self-checklist (governance-markdown gives an isolated reviewer no signal; owner deep-read is the real
+  gate). `.claude/settings.json` + `projects.service.ts` kept OUT. Backfilled **T7.2.3 `45fc2c8`**.
+  ⚠️ T7.3.1 own row `_pending_` → backfill in the first E8 task. **E7 COMPLETE 5/5.**
+  **NEXT = E8 (T8.1.1):** run sweeps → first reports; then T8.1.2 metrics baseline. ⚠️ **Carry-forward
+  for the e2e gate to ever go green in CI: the compose crash-loop finding (empty `AUTH_BOOTSTRAP_*` in
+  `env.ts`) must be fixed — that's the gate on starting the N=3 clean-run clock.**
 
 ## E8 — First Audit & v1.0
 

@@ -4,8 +4,12 @@ name: E2E (advisory)
 # docker-compose stack (postgres + api + builder/nginx) and drives it through a real browser.
 #
 # ADVISORY-FIRST (constitution §8): the job carries continue-on-error, so a failure is reported
-# but does NOT fail the pipeline. T7.3.1 promotes it to blocking after N clean runs (dropping
-# continue-on-error — a decision-record change) once the "broken twice" growth rule is codified.
+# but does NOT fail the pipeline. The "broken twice" growth rule + flake policy + promotion criteria
+# are codified in knowledge/standards/verification-standard.md §5 (T7.3.1) and recorded as `ci-e2e`
+# in knowledge/registries/gate-inventory.yaml. Promote to blocking (drop continue-on-error — itself a
+# decision-record change) ONLY after N=3 consecutive clean runs on main. ⚠️ N-count is 0: the compose
+# api crash-loops on empty AUTH_BOOTSTRAP_* (a filed product/infra finding), so this job has never
+# booted green in CI — the clock starts once that finding is fixed.
 
 on:
   push:
@@ -24,7 +28,7 @@ jobs:
   e2e:
     name: Critical-path e2e (compose stack)
     runs-on: ubuntu-latest
-    continue-on-error: true # advisory-first (§8) — remove to promote to blocking (T7.3.1)
+    continue-on-error: true # advisory-first (§8) — remove to block ONLY after N=3 clean runs (see header)
     steps:
       - uses: actions/checkout@v4
 

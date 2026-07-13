@@ -17,7 +17,7 @@
 framework_version: 1
 schema_version: 1
 authority: governance/constitution.md   # §8 enforcement ladder
-verified_on: 2026-07-12
+verified_on: 2026-07-14
 
 # ── CI machine gates (RUNG 3, the PREFERRED locus per §8) ──────────────────────────────
 # All live in .github/workflows/. Blocking = fails the check on the listed events.
@@ -107,6 +107,23 @@ ci_gates:
       proven E6 T6.2.2: 4 seeded violation classes (broken source link / missing source pointer /
       missing authority / broken intra-governance link) all caught; the clean tree passes (12/12
       bindings, 70 links).
+  - id: ci-e2e
+    workflow: e2e.yml
+    enforces: >-
+      thin critical-path Playwright suite (ADR-0008 Option C, epic E7) — boots the docker-compose
+      stack (postgres + api + builder/nginx) and drives it through a real browser against :8080.
+      Covers the stable, high-value flows: login/auth, project/form CRUD, save/load, publish,
+      submit+view, workflow run happy-path (`e2e/*.spec.ts`). Growth rule "broken twice" + flake
+      policy (retries:1, --workers=1) live in standards/verification-standard.md §5.
+    events: [push, pull_request]
+    blocking: false
+    note: >-
+      ADVISORY-FIRST (§8) — continue-on-error keeps it non-blocking. Promote to blocking by dropping
+      that line ONLY after N=3 consecutive clean runs on main (owner-set, T7.3.1) — itself a
+      decision-record change. ⚠️ N-count currently 0: the compose api crash-loops on empty
+      AUTH_BOOTSTRAP_* (filed product/infra finding, out of E7 track), so the job has never booted
+      green in CI; the clock starts once that finding is fixed. Suite proven green locally vs the
+      compose stack (8/8, CI topology CI=true --workers=1) across T7.1.1–T7.2.3.
 
 # ── Local guardrails (RUNG 3, harness-enforced via .claude/settings.json) ───────────────
 # Convenience / agent-safety. NOT durable across a tool swap → never the sole copy of a rule

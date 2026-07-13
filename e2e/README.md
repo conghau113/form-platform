@@ -2,8 +2,11 @@
 
 Framework epic **E7** (ADR-0008 **Option C**): a deliberately small Playwright suite covering the
 stable, high-value flows where automation's reliability is highest. Everything churn-prone (drag-drop
-canvas, visual UX) stays on manual-MCP smoke. **Growth rule (T7.3.1): add a spec only when a flow has
-broken twice** — this keeps Option C from decaying into a full-suite maintenance tax.
+canvas, visual UX) stays on manual-MCP smoke. **Growth rule: add a spec only when a flow has broken
+twice** — this keeps Option C from decaying into a full-suite maintenance tax. The growth rule, the
+flake policy, and the advisory→blocking promotion criteria are governed in
+[`knowledge/standards/verification-standard.md`](../knowledge/standards/verification-standard.md) §5
+(this README is the operational quick-start, not the source of truth).
 
 The suite drives a **real running stack**; it starts nothing itself. Point it at one with `E2E_BASE_URL`.
 
@@ -28,8 +31,11 @@ docker compose down -v
 ## CI
 
 `.github/workflows/e2e.yml` boots the compose stack and runs this suite against `:8080`. It is
-**advisory-first** (constitution §8): the job is non-blocking for now. T7.3.1 promotes it to blocking
-after N clean runs (dropping `continue-on-error` — a decision-record change).
+**advisory-first** (constitution §8): the job is non-blocking. It is promoted to blocking (dropping
+`continue-on-error` — a decision-record change) only after **N = 3 consecutive clean runs on `main`**
+(verification-standard §5). ⚠️ That count is currently 0 — the compose api crash-loops on empty
+`AUTH_BOOTSTRAP_*` (a filed product/infra finding), so the CI job has never booted green; the clock
+starts once that finding is fixed.
 
 ## Specs
 

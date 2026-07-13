@@ -9,10 +9,11 @@
 > `.github/workflows/ci.yml`, the `feature-module` skill, and the repeated live-smoke practice.
 >
 > **Freshness contract** (constitution §10; method authoritative in the index, not here):
-> **class** E1 · **verified-on** 2026-07-04 · **cadence** re-verify when the verify-bar scripts
-> or the CI verify job change; else each release · **scope** `package.json`,
-> `.github/workflows/ci.yml`. Registered as `standard-verification` in
-> [`knowledge/index.yaml`](../index.yaml). Drift = finding (§10), filed — never patched inline.
+> **class** E1 · **verified-on** 2026-07-14 · **cadence** re-verify when the verify-bar scripts,
+> the CI verify job, or the automated e2e suite/gate (§5) change; else each release · **scope**
+> `package.json`, `.github/workflows/ci.yml`, `.github/workflows/e2e.yml`, `playwright.config.ts`.
+> Registered as `standard-verification` in [`knowledge/index.yaml`](../index.yaml). Drift = finding
+> (§10), filed — never patched inline.
 
 ---
 
@@ -65,8 +66,10 @@ describes the repo's *notation*, not the rules.
 The `feature-module` skill states it plainly: *drag, marquee, column-resize, spring-load, keyboard
 nav, save/load are browser behaviours — green units do not prove the canvas still works.* This is
 the codification of the repeated "live-smoke MCP" practice used across the product tracks. It needs
-**no automated e2e infrastructure** and is valid regardless of ADR-0008 (the Playwright decision,
-still Open → epic E7); automated critical-path specs are **out of scope here**.
+**no automated e2e infrastructure** and remains the E1 floor for the churn-prone surfaces automation
+cannot reach (drag-drop canvas, visual UX). The automated critical-path suite that *complements* it
+on the stable flows is **§5** (ADR-0008 Option C, landed in epic E7) — the two are siblings, not
+substitutes.
 
 **When it is required (the E1 floor for a behavior claim):** any change to UI interaction or
 runtime behavior — editor canvas (drag/marquee/resize/keyboard nav), save/load, publish/submit,
@@ -89,15 +92,49 @@ workflow run, auth/login flows, responsive layout. Pure logic covered by a unit 
    no false-dirty state (e.g. a Save button that should stay disabled).
 5. **Record** as `live-smoke MCP PASS (<what was checked>)` (§3).
 
-## 5. Extracted vs proposed
+## 5. Automated critical-path e2e (Playwright — ADR-0008 Option C, epic E7)
+
+A deliberately thin Playwright suite (`e2e/` + `playwright.config.ts` at the repo root — severable,
+outside every package tsconfig) drives the docker-compose stack through a real browser in CI
+([`.github/workflows/e2e.yml`](../../.github/workflows/e2e.yml), against `:8080`). It is the
+**executable regression floor** the manual smoke (§4) cannot be — it re-verifies the stable,
+high-value flows on *every* push, where manual smoke re-verifies earlier features only by accident.
+It does **not** replace §4: the churn-prone surfaces stay on manual MCP smoke (ADR-0008 Risks C).
+
+- **Covered flows (the critical path, ADR-0008 Decision Q1):** login/auth round-trip · create
+  project/form · save/load form · publish version · submit + view submission · workflow run
+  happy-path. Selectors are **by role/label/text only** — antd's DOM is churn-prone (ADR-0008 Risks).
+- **Growth rule — "broken twice" (the anti-scope-creep guard, ADR-0008 Growth rule + Risks C):** a
+  spec is added to this suite **only when a flow has broken twice** (evidence-driven, not
+  aspiration-driven). This is what keeps Option C from decaying into Option B — an unpayable
+  full-suite flake tax for a solo team. Adding a spec for a flow that has **not** demonstrably broken
+  twice is speculation (constitution §14, minimum-viable) — don't.
+- **Flake policy:** the suite runs `retries: 1` under CI and `--workers=1` (serial — one shared
+  stack), both in `playwright.config.ts`. A flake is **not** a green (§3, report-faithfully): a spec
+  that only passes on retry is recorded as flaky and is fixed or quarantined, never rounded up to
+  "passing". Known pre-existing flakes are **named debt, not floor** — the theme-write
+  characterization test and the containers test (ADR-0008 Context), and a `project-form-crud`
+  reload load-race (seen at T7.2.3, passes on retry).
+- **Promotion (advisory → blocking, constitution §8 advisory-first):** the gate is **advisory-first**
+  — `e2e.yml` carries `continue-on-error: true`, so a failure is reported but does not fail the
+  pipeline. §8 makes this mandatory (a new machine gate runs non-blocking ≥1 phase before it may
+  block; a *blocking* gate is disabled only via a decision record). It is promoted to **blocking** —
+  by dropping `continue-on-error`, itself a decision-record change — **only after N = 3 consecutive
+  clean runs on `main`** (owner-set, T7.3.1). ⚠️ The count is currently **0**: the compose api
+  crash-loops on empty `AUTH_BOOTSTRAP_*` (a filed product/infra finding, out of the E7 track), so the
+  CI job has never booted green — the clock starts once that finding is fixed and the suite runs green
+  in CI. Recorded as `ci-e2e` in [`registries/gate-inventory.yaml`](../registries/gate-inventory.yaml).
+
+## 6. Extracted vs proposed
 
 Everything above is **extracted** — the verify bar from `package.json`/CI, the smoke protocol from
 the `feature-module` skill + repeated practice (seen many times across the workflow/product tracks;
-promoted like any ≥2× fact). **Zero proposed items** this pass. Automated end-to-end verification
-(Playwright) is deliberately **not** proposed here — it is gated by ADR-0008 and scoped to E7; this
-standard covers only the manual bar + MCP smoke that the repo already practices.
+promoted like any ≥2× fact), and (§5) the automated e2e suite + its `e2e.yml` gate, which now exist
+in L0 after epic E7. **Zero proposed items.** The e2e growth rule and promotion criteria (§5) are
+*governance choices recorded from ADR-0008 / constitution §8*, not proposed anew here — this standard
+describes them, it does not re-decide them (constitution §2).
 
-## 6. Definition of done (pointer)
+## 7. Definition of done (pointer)
 
 The per-change "done" bar is `dor-dod.md` + the `feature-module` "before you say done" checklist:
 the §2 verify bar green **plus** the §4 smoke where behavior changed, a changeset for any changed
