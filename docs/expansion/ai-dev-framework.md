@@ -133,9 +133,9 @@ Total ~18–22 phases.
 | **E6** | T6.1.1 | S | Promotion review (prose rules with violation evidence → ranked candidates) | ✅ | ff63618 |
 | E6 | T6.2.1 | M | Gate: index/freshness CI check (advisory-first) | ✅ | df4d571 |
 | E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ✅ | d55e31e |
-| E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ✅ | _pending_ |
-| **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ✅ | _pending_ |
-| E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ⬜ | — |
+| E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ✅ | 0359405 |
+| **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ✅ | b0724d4 |
+| E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ✅ | _pending_ |
 | E7 | T7.2.2 | M | Specs: publish + submit/view | ⬜ | — |
 | E7 | T7.2.3 | M | Specs: workflow run | ⬜ | — |
 | E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ⬜ | — |
@@ -978,6 +978,40 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   killed (known gotcha) — killed it, api typecheck then exit 0. `.claude/settings.json` + `projects.service.ts`
   kept OUT. Backfilled **ADR-0008 hash `352bb8c`.** ⚠️ T7.1.1 own row `_pending_` → backfill next commit.
   **NEXT = T7.2.1 (M):** specs for CRUD project/form + save/load (build on this harness; role/label selectors).
+
+- **T7.2.1 (M) DONE `_pending_` (2026-07-14) — CRUD + save/load specs (E7 2/5).** Two new specs on the
+  T7.1.1 harness, plus a shared `e2e/helpers.ts` (register+UI sign-in · createProject · createForm —
+  role/label/placeholder only). **`project-form-crud.spec.ts`:** (1) create a project via the `/projects`
+  modal → create a form via the Explorer's inline "Form" create → assert it shows in the tree AND survives
+  a full reload (server-persisted); (2) rename (right-click context menu → inline edit, a loadForm→saveForm
+  round-trip) then delete (context menu → confirm modal) — full C-R-U-D. **`save-load.spec.ts`:** switch to
+  the JSON view, change the form `title` in the contract, Save, reload, assert the persisted title shows in
+  the tree — exercises the editor's Save button + server load without touching the churn-prone drag-drop
+  canvas (per ADR-0008). **Floor met E1 — full suite RAN GREEN 5/5 vs the compose stack serially
+  (`--workers=1`, CI topology)** · biome clean · reviewer **PASS**. No package changed ⇒ no changeset;
+  README Specs list updated. `.claude/settings.json` + `projects.service.ts` kept OUT. Backfilled
+  **T7.1.1 `b0724d4`** + the stale **T6.2.3 `0359405`** (missed by the T7.1.1 backfill).
+  ⚠️ **Self-verify gotchas / findings (recorded):**
+  (1) **FINDING (product/infra defect, out of E7 track — file, don't fix):** the compose api **crash-loops**
+  because `env.ts` declares `AUTH_BOOTSTRAP_EMAIL/PASSWORD` as `.optional()` but `docker-compose.yml` passes
+  them as **empty strings** (`${VAR:-}`), and Zod treats `""` as present-and-invalid (`.email()` / `.min(8)`
+  fail) rather than absent → api never becomes healthy → **the advisory `e2e.yml` compose job has never
+  actually booted green** (masked by `continue-on-error` + the wait-step timing out; the workflow comment
+  "compose defaults are self-sufficient" is wrong). Unblocked this run by passing valid
+  `AUTH_BOOTSTRAP_EMAIL/PASSWORD` as a shell override to `docker compose up`. Fix belongs to product code
+  (preprocess empty→undefined in `env.ts`, or drop the two vars from compose when unset) — NOT this task.
+  (2) **Selector gotcha:** antd prefixes a button's accessible name with its icon name (`"file-add Form"`),
+  so `getByRole('button', { name: 'Form', exact: true })` misses — anchor on the trailing label
+  (`{ name: /Form$/ }`); non-exact substring names (`"New project"`, `"Create"`) already matched.
+  (3) **Editor load race:** the `/forms/:id` editor first renders a **default demo "Contact request" form**,
+  then `useFormPersistence` async-`onLoad(formId)` replaces it — read/edit the JSON view only AFTER waiting
+  for the created form's title to appear (`toHaveValue`), else you edit+save the wrong document (id
+  `contact-request`). (4) antd `Segmented` hides its radio `<input>` (not clickable) → switch view mode by
+  clicking the visible option **text** (`getByText('JSON', { exact:true })`), not `getByRole('radio')`.
+  (5) `fullyParallel` + many local workers against ONE compose stack → login latency flakes the auth URL
+  assertion (button stuck "loading"); CI runs `workers:1` so it's serial — verify locally with `--workers=1`.
+  ⚠️ Docker Desktop was DOWN again (launched it); compose stack left UP after the run. ⚠️ T7.2.1 own row
+  `_pending_` → backfill next commit. **NEXT = T7.2.2 (M):** publish + submit/view specs.
 
 ## E8 — First Audit & v1.0
 

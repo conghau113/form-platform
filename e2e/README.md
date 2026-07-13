@@ -35,5 +35,10 @@ after N clean runs (dropping `continue-on-error` — a decision-record change).
 
 - `auth.spec.ts` — login/auth round-trip: API-arranged account → UI sign-in → lands on `/projects`;
   plus RequireAuth bounce (unauthenticated → `/login`).
+- `project-form-crud.spec.ts` — project + form CRUD via the Explorer: create a project, create a
+  form in it (persists across a reload), then rename and delete the form.
+- `save-load.spec.ts` — editor save/load: edit the form in the JSON view, Save, reload, and confirm
+  the edit was loaded back from the server.
+- `helpers.ts` — shared arrange-helpers (register + UI sign-in, create project, create form).
 
 Selectors are **by role/label** (resist antd DOM churn — ADR-0008).
