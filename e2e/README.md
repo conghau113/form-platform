@@ -39,6 +39,10 @@ after N clean runs (dropping `continue-on-error` — a decision-record change).
   form in it (persists across a reload), then rename and delete the form.
 - `save-load.spec.ts` — editor save/load: edit the form in the JSON view, Save, reload, and confirm
   the edit was loaded back from the server.
+- `publish.spec.ts` — publish a form: a fresh form reads "Chưa publish"; Publish freezes it into
+  version 1 and the badge flips to "Đã publish v1".
+- `submit-view.spec.ts` — submit + view: give a form a field, submit an answer via the Submissions
+  view, then open its read-only detail and confirm the value round-trips.
 - `helpers.ts` — shared arrange-helpers (register + UI sign-in, create project, create form).
 
 Selectors are **by role/label** (resist antd DOM churn — ADR-0008).

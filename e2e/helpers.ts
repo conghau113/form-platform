@@ -21,6 +21,8 @@ export async function registerAndSignIn(page: Page, request: APIRequestContext) 
   const creds = freshCreds();
   const created = await request.post("/api/auth/register", { data: creds });
   expect(created.ok(), `register failed: ${created.status()} ${await created.text()}`).toBeTruthy();
+  // The account's id becomes a submission's `submittedBy` — return it so a spec can find its own row.
+  const { user } = (await created.json()) as { user: { id: string } };
 
   await page.goto("/login");
   const panel = page.getByRole("tabpanel");
@@ -28,7 +30,7 @@ export async function registerAndSignIn(page: Page, request: APIRequestContext) 
   await panel.getByLabel("Password").fill(creds.password);
   await panel.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/projects$/);
-  return creds;
+  return { ...creds, userId: user.id };
 }
 
 /** Create a project via the `/projects` modal and land in its (empty) workspace. */

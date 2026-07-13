@@ -135,8 +135,8 @@ Total ~18–22 phases.
 | E6 | T6.2.2 | M | Gate: traceability/link check (advisory-first) | ✅ | d55e31e |
 | E6 | T6.2.3 | S | Settings/hooks reconcile policies; RUNG-3 CI-preference (CI > hooks) | ✅ | 0359405 |
 | **E7** | T7.1.1 | M | [ADR-0008] Playwright scaffold + CI compose boot + login spec green | ✅ | b0724d4 |
-| E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ✅ | _pending_ |
-| E7 | T7.2.2 | M | Specs: publish + submit/view | ⬜ | — |
+| E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ✅ | 9e4ed6e |
+| E7 | T7.2.2 | M | Specs: publish + submit/view | ✅ | _pending_ |
 | E7 | T7.2.3 | M | Specs: workflow run | ⬜ | — |
 | E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ⬜ | — |
 | **E8** | T8.1.1 | S | Run sweeps → first reports | ⬜ | — |
@@ -1011,7 +1011,30 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   (5) `fullyParallel` + many local workers against ONE compose stack → login latency flakes the auth URL
   assertion (button stuck "loading"); CI runs `workers:1` so it's serial — verify locally with `--workers=1`.
   ⚠️ Docker Desktop was DOWN again (launched it); compose stack left UP after the run. ⚠️ T7.2.1 own row
-  `_pending_` → backfill next commit. **NEXT = T7.2.2 (M):** publish + submit/view specs.
+  `_pending_` → backfill next commit (done here → **`9e4ed6e`**). **NEXT = T7.2.2 (M):** publish + submit/view specs.
+
+- **T7.2.2 (M) DONE `_pending_` (2026-07-14) — publish + submit/view specs (E7 3/5).** Two new specs on
+  the T7.1.1 harness, extending the shared `e2e/helpers.ts` (`registerAndSignIn` now also returns the
+  account `userId`, additive — existing callers ignore it). **`publish.spec.ts`:** create project→form →
+  the editor-header `PublishControl` badge reads **"Chưa publish"** → click **Publish** (which saves the
+  draft then POSTs `/forms/:id/publish` to freeze v1) → the badge flips to **"Đã publish v1"** (content-based
+  draft-ahead diff = no diff after publish). **`submit-view.spec.ts`:** create project→form → give it one
+  `{type:"text", label:"Your answer"}` field via the JSON view (the save-load edit path, already proven) +
+  Save → open the runtime **Submissions** view via the Explorer right-click context menu → fill + **Submit**
+  (POST `/forms/:id/submissions`) → assert it's listed under **"Đã gửi (1)"** → click the submission row
+  (uniquely `filter({hasText: userId})`, since `submittedBy` = the authed account id) → the read-only detail
+  round-trips the submitted value from the PINNED snapshot (`getByText(answer)`). Both drive the real UI with
+  role/label/text selectors only (ADR-0008) — no drag-drop canvas. **Floor met E1 — full suite RAN GREEN
+  7/7 vs the compose stack serially (`--workers=1`, CI topology)** · biome clean · reviewer **PASS** (no
+  fixes). No package changed ⇒ no changeset; README Specs list updated. `.claude/settings.json` +
+  `projects.service.ts` kept OUT. Backfilled **T7.2.1 `9e4ed6e`**. ⚠️ **Notes:** (1) publish requires no
+  gate — submit reads the DRAFT form (`loadForm`), so submit+view is independent of publish. (2) submit
+  needs a fillable field — a fresh `newForm()` has `fields:[]`, so the spec injects one via JSON (kept the
+  submit spec self-contained rather than depending on publish). (3) `submittedBy` is the raw `ownerId`
+  (userId), not a display name — hence returning `userId` from the helper to target the row. (4) Compose
+  stack was already UP+healthy this run (api :3001 healthy / builder :8080 / postgres :5435) — ran against
+  `:8080` directly. ⚠️ T7.2.2 own row `_pending_` → backfill next commit. **NEXT = T7.2.3 (M):** workflow
+  run happy-path spec.
 
 ## E8 — First Audit & v1.0
 
