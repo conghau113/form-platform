@@ -140,8 +140,8 @@ Total ~18–22 phases.
 | E7 | T7.2.3 | M | Specs: workflow run | ✅ | 45fc2c8 |
 | E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ✅ | b0e060d |
 | **E8** | T8.1.1 | S | Run sweeps → first reports | ✅ | 6e389ae |
-| E8 | T8.1.2 | S | Metrics baseline (blueprint §9) | ✅ | _pending_ |
-| E8 | T8.1.3 | S | Regeneration-test paper walkthrough + FRAMEWORK_VERSION=1.0 + open Observe queue | ⬜ | — |
+| E8 | T8.1.2 | S | Metrics baseline (blueprint §9) | ✅ | 8d5a0af |
+| E8 | T8.1.3 | S | Regeneration-test paper walkthrough + FRAMEWORK_VERSION=1.0 + open Observe queue | ✅ | _pending_ |
 
 Legend: ✅ done · 🟡 in progress · ⬜ not started.
 
@@ -1145,6 +1145,32 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   ⇒ no changeset/typecheck/test; review = in-session evidence self-checklist. `.claude/settings.json`
   + `projects.service.ts` kept OUT. ⚠️ own row `_pending_` → backfill in T8.1.3. **NEXT = T8.1.3 (S):**
   regeneration-test paper walkthrough + `FRAMEWORK_VERSION=1.0` + open the Observe queue — CLOSES E8.
+
+- **T8.1.3 DONE `_pending_` (2026-07-15) — CLOSES E8 (3/3): regeneration-test + v1.0 milestone +
+  Observe queue.** Three deliverables. (1) **Regeneration-test paper walkthrough**
+  `reports/audits/REGEN-TEST-2026-07-15.md`: traced on paper how each L3 binding re-emits from its
+  Active L1/L2 source — validates the architecture's "only L3 regenerates on tool swap" claim + §12.3
+  traceability. **12/12 bindings regenerable from an Active source** (E2: all L1 sources read Active;
+  E1: `check:traceability` 12/12 name source, 72/72 links). Walked 3 representative kinds (agent←charter,
+  skill←procedure, cursor←authority) + the `accuracy-first` VERBATIM special case (ADR-0001, header-only
+  regen). §12 G1–G4 all hold. (2) **`FRAMEWORK_VERSION` = 1 (v1.0 milestone) — NO integer bump.** Per
+  §12.4, E0–E8 were **content edits within the stable shape** (no new layer/nature/evidence-class after
+  T1.1.1) → the integer correctly **stays 1**; "1.0" = the completeness milestone, NOT a shape change.
+  Did NOT edit the constitution's normative header (owner-only §15; it already reads `Version 1.0 ·
+  FRAMEWORK_VERSION 1`). **v1.0 release ratification = the standing owner gate** (with the E5-bindings
+  deep-read). (3) **Opened the Observe queue** `reports/observe-queue.md` — the §13 Operate→Observe→
+  **Amend**→Audit backlog (living register, NOT append-only/index-registered; like release-blockers).
+  Seeded from AUDIT-2026-07-15 amend-recs (A1 promote 2 framework gates to blocking [needs decision
+  record] · A2 fix compose crash-loop to start ci-e2e N=3 clock · A3 F1 `.env` deny restore) + filed
+  findings (F2 gate-inventory under-list · D1 "11 packages" · D2 `.env.example` · D3 biome-repo-wide
+  vs ADR-0023 · B1 T3.4.x ADR-0009/0010). Backfilled **T8.1.2 `8d5a0af`**. E2+E1 evidence. Report-only
+  ⇒ no changeset/typecheck/test; review = in-session evidence self-checklist (owner deep-read = real
+  gate for the v1.0 milestone). `.claude/settings.json` + `projects.service.ts` kept OUT. ⚠️ own row
+  `_pending_` → backfill in the first post-E8 task. **E8 COMPLETE 3/3 → the framework build (E0–E8, minus
+  E3 T3.4.x gated on owner ADRs) is content-complete at v1.0.** ▶ NEXT: the **v1.0 owner-ratification
+  gate** (E5-bindings deep-read + this milestone) · then the standing **Observe loop** (audits/sweeps on
+  cadence, working the Amend queue) · or interleave product tracks ([[session-resume-product-roadmap]] /
+  form-submission-runtime FS3b/FS4). E3 T3.4.x still need ADR-0009/0010 grants.
 
 ---
 
