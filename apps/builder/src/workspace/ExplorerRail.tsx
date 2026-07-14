@@ -40,9 +40,9 @@ const DRAFT_KEY = "__draft__";
 
 /** Placeholder text for the inline create/rename input, by node kind. */
 const PLACEHOLDER: Record<NodeKind, string> = {
-  folder: "Folder name",
-  form: "Form title",
-  workflow: "Workflow title",
+  folder: "Tên thư mục",
+  form: "Tên biểu mẫu",
+  workflow: "Tên quy trình",
 };
 
 /**
@@ -188,8 +188,8 @@ export function ExplorerRail({
   }
   function deleteForm(id: string, title: string) {
     modal.confirm({
-      title: `Delete form "${title}"?`,
-      okText: "Delete",
+      title: `Xóa biểu mẫu "${title}"?`,
+      okText: "Xóa",
       okButtonProps: { danger: true },
       onOk: () => run(api.deleteForm(id)),
     });
@@ -198,9 +198,9 @@ export function ExplorerRail({
   // --- folder actions (non-inline) ---
   function deleteFolder(id: string, name: string) {
     modal.confirm({
-      title: `Delete folder "${name}"?`,
-      content: "Sub-folders are deleted; forms inside move to the project root.",
-      okText: "Delete",
+      title: `Xóa thư mục "${name}"?`,
+      content: "Thư mục con sẽ bị xóa; các biểu mẫu bên trong chuyển về gốc dự án.",
+      okText: "Xóa",
       okButtonProps: { danger: true },
       onOk: () => run(api.deleteFolder(id, true)),
     });
@@ -219,8 +219,8 @@ export function ExplorerRail({
   }
   function deleteWorkflow(id: string, title: string) {
     modal.confirm({
-      title: `Delete workflow "${title}"?`,
-      okText: "Delete",
+      title: `Xóa quy trình "${title}"?`,
+      okText: "Xóa",
       okButtonProps: { danger: true },
       onOk: () => run(wfApi.deleteWorkflow(id)),
     });
@@ -256,40 +256,40 @@ export function ExplorerRail({
             {
               key: "new-folder",
               icon: <FolderAddOutlined />,
-              label: "New subfolder",
+              label: "Thư mục con mới",
             },
             {
               key: "new-form",
               icon: <FileAddOutlined />,
-              label: "New form here",
+              label: "Biểu mẫu mới",
             },
             {
               key: "new-workflow",
               icon: <PartitionOutlined />,
-              label: "New workflow here",
+              label: "Quy trình mới",
             },
-            { key: "rename", icon: <EditOutlined />, label: "Rename" },
+            { key: "rename", icon: <EditOutlined />, label: "Đổi tên" },
             {
               key: "delete",
               icon: <DeleteOutlined />,
-              label: "Delete",
+              label: "Xóa",
               danger: true,
             },
           ]
         : [
-            { key: "open", icon: <FormOutlined />, label: "Open" },
+            { key: "open", icon: <FormOutlined />, label: "Mở" },
             ...(node.kind === "workflow"
-              ? [{ key: "run", icon: <PlayCircleOutlined />, label: "Run" }]
+              ? [{ key: "run", icon: <PlayCircleOutlined />, label: "Chạy" }]
               : [
-                  { key: "submissions", icon: <ProfileOutlined />, label: "Submissions" },
-                  { key: "versions", icon: <HistoryOutlined />, label: "Versions" },
+                  { key: "submissions", icon: <ProfileOutlined />, label: "Câu trả lời" },
+                  { key: "versions", icon: <HistoryOutlined />, label: "Phiên bản" },
                 ]),
-            { key: "rename", icon: <EditOutlined />, label: "Rename" },
-            { key: "duplicate", icon: <CopyOutlined />, label: "Duplicate" },
+            { key: "rename", icon: <EditOutlined />, label: "Đổi tên" },
+            { key: "duplicate", icon: <CopyOutlined />, label: "Nhân bản" },
             {
               key: "delete",
               icon: <DeleteOutlined />,
-              label: "Delete",
+              label: "Xóa",
               danger: true,
             },
           ];
@@ -432,7 +432,7 @@ export function ExplorerRail({
         >
           <Link to="/projects">
             <Button type="text" icon={<LeftOutlined style={{ fontSize: 12 }} />}>
-              <span style={{ fontWeight: 600 }}>PROJECTS</span>
+              <span style={{ fontWeight: 600 }}>DỰ ÁN</span>
             </Button>
           </Link>
         </div>
@@ -449,7 +449,7 @@ export function ExplorerRail({
             icon={<FolderAddOutlined />}
             onClick={() => startCreate("folder", null)}
           >
-            Folder
+            Thư mục
           </Button>
           <Button
             size="small"
@@ -457,14 +457,14 @@ export function ExplorerRail({
             icon={<FileAddOutlined />}
             onClick={() => startCreate("form", null)}
           >
-            Form
+            Biểu mẫu
           </Button>
           <Button
             size="small"
             icon={<PartitionOutlined />}
             onClick={() => startCreate("workflow", null)}
           >
-            Workflow
+            Quy trình
           </Button>
           <Button
             size="small"
@@ -472,7 +472,7 @@ export function ExplorerRail({
             style={{ marginLeft: "auto" }}
             onClick={() => setSharing(true)}
           >
-            Share
+            Chia sẻ
           </Button>
         </div>
       </div>
@@ -484,7 +484,7 @@ export function ExplorerRail({
           <Typography.Text type="danger">{error}</Typography.Text>
         ) : draftedNodes.length === 0 ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Empty project — create a folder or a form.
+            Dự án trống — tạo một thư mục hoặc biểu mẫu.
           </Typography.Text>
         ) : (
           <Tree

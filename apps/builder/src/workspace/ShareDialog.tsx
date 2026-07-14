@@ -5,9 +5,16 @@ import { useAuth } from "../auth";
 import * as api from "./client";
 import type { MemberRole, ProjectMembersView, ProjectRecord } from "./types";
 
+/** Vietnamese label per project role (matches the admin panel's role wording). */
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Chủ sở hữu",
+  editor: "Biên tập",
+  viewer: "Người xem",
+};
+
 const ROLE_OPTIONS: { value: MemberRole; label: string }[] = [
-  { value: "editor", label: "Editor" },
-  { value: "viewer", label: "Viewer" },
+  { value: "editor", label: ROLE_LABEL.editor },
+  { value: "viewer", label: ROLE_LABEL.viewer },
 ];
 
 /**
@@ -67,7 +74,7 @@ export function ShareDialog({
   return (
     <Modal
       open={project !== null}
-      title={`Share "${project?.name ?? ""}"`}
+      title={`Chia sẻ "${project?.name ?? ""}"`}
       footer={null}
       onCancel={onClose}
     >
@@ -77,8 +84,8 @@ export function ShareDialog({
         header={
           <Typography.Text type="secondary">
             {isOwner
-              ? "Invite collaborators by their user id."
-              : "You have shared access to this project; only the owner can manage members."}
+              ? "Mời cộng tác viên bằng user id của họ."
+              : "Bạn được chia sẻ quyền truy cập dự án này; chỉ chủ sở hữu mới quản lý thành viên."}
           </Typography.Text>
         }
         dataSource={[
@@ -117,9 +124,9 @@ export function ShareDialog({
             <Space>
               <Typography.Text>{row.userId || "—"}</Typography.Text>
               {row.isOwnerRow ? (
-                <Tag color="gold">owner</Tag>
+                <Tag color="gold">{ROLE_LABEL.owner}</Tag>
               ) : !isOwner ? (
-                <Tag>{row.role}</Tag>
+                <Tag>{ROLE_LABEL[row.role] ?? row.role}</Tag>
               ) : null}
             </Space>
           </List.Item>
@@ -129,7 +136,7 @@ export function ShareDialog({
       {isOwner && (
         <Space.Compact style={{ width: "100%", marginTop: 12 }}>
           <Input
-            placeholder="User id to share with"
+            placeholder="User id cần chia sẻ"
             value={newUserId}
             onChange={(e) => setNewUserId(e.target.value)}
             onPressEnter={onAdd}
@@ -141,7 +148,7 @@ export function ShareDialog({
             onChange={setNewRole}
           />
           <Button type="primary" icon={<UserAddOutlined />} onClick={onAdd}>
-            Share
+            Chia sẻ
           </Button>
         </Space.Compact>
       )}

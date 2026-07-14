@@ -21,7 +21,7 @@ export function EmptyEditorState() {
         <ExplorerToggle collapsed={explorerCollapsed} onCollapsedChange={setExplorerCollapsed} />
       </header>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Empty description="Chọn hoặc tạo một form để chỉnh sửa." />
+        <Empty description="Chọn hoặc tạo một biểu mẫu để chỉnh sửa." />
       </div>
     </div>
   );

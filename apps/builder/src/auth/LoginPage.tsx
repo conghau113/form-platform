@@ -59,53 +59,53 @@ export function LoginPage() {
           items={[
             {
               key: "login",
-              label: "Sign in",
+              label: "Đăng nhập",
               children: (
                 <Form layout="vertical" onFinish={onLogin} requiredMark={false}>
                   <Form.Item
                     name="email"
                     label="Email"
-                    rules={[{ required: true, type: "email", message: "Enter a valid email" }]}
+                    rules={[{ required: true, type: "email", message: "Nhập email hợp lệ" }]}
                   >
                     <Input autoComplete="email" placeholder="you@example.com" />
                   </Form.Item>
                   <Form.Item
                     name="password"
-                    label="Password"
-                    rules={[{ required: true, message: "Enter your password" }]}
+                    label="Mật khẩu"
+                    rules={[{ required: true, message: "Nhập mật khẩu" }]}
                   >
                     <Input.Password autoComplete="current-password" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" block loading={submitting}>
-                    Sign in
+                    Đăng nhập
                   </Button>
                 </Form>
               ),
             },
             {
               key: "register",
-              label: "Create account",
+              label: "Tạo tài khoản",
               children: (
                 <Form layout="vertical" onFinish={onRegister} requiredMark={false}>
-                  <Form.Item name="displayName" label="Name (optional)">
-                    <Input autoComplete="name" placeholder="Your name" />
+                  <Form.Item name="displayName" label="Tên hiển thị (tùy chọn)">
+                    <Input autoComplete="name" placeholder="Tên của bạn" />
                   </Form.Item>
                   <Form.Item
                     name="email"
                     label="Email"
-                    rules={[{ required: true, type: "email", message: "Enter a valid email" }]}
+                    rules={[{ required: true, type: "email", message: "Nhập email hợp lệ" }]}
                   >
                     <Input autoComplete="email" placeholder="you@example.com" />
                   </Form.Item>
                   <Form.Item
                     name="password"
-                    label="Password"
-                    rules={[{ required: true, min: 8, message: "At least 8 characters" }]}
+                    label="Mật khẩu"
+                    rules={[{ required: true, min: 8, message: "Ít nhất 8 ký tự" }]}
                   >
                     <Input.Password autoComplete="new-password" />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" block loading={submitting}>
-                    Create account
+                    Tạo tài khoản
                   </Button>
                 </Form>
               ),

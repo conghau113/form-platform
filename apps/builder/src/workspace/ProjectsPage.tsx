@@ -77,9 +77,9 @@ export function ProjectsPage() {
 
   function onDelete(project: ProjectRecord) {
     modal.confirm({
-      title: `Delete project "${project.name}"?`,
-      content: "This permanently deletes the project and every folder and form inside it.",
-      okText: "Delete",
+      title: `Xóa dự án "${project.name}"?`,
+      content: "Thao tác này sẽ xóa vĩnh viễn dự án cùng mọi thư mục và biểu mẫu bên trong.",
+      okText: "Xóa",
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
@@ -95,7 +95,7 @@ export function ProjectsPage() {
     <div style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
         <Typography.Title level={3} style={{ margin: 0 }}>
-          Projects
+          Dự án
         </Typography.Title>
         <Button
           type="primary"
@@ -103,14 +103,14 @@ export function ProjectsPage() {
           onClick={() => setCreating(true)}
           style={{ marginLeft: "auto" }}
         >
-          New project
+          Dự án mới
         </Button>
       </div>
 
       {loading ? (
         <Spin />
       ) : projects.length === 0 ? (
-        <Empty description="No projects yet — create one to start." />
+        <Empty description="Chưa có dự án nào — tạo một dự án để bắt đầu." />
       ) : (
         <div
           style={{
@@ -127,19 +127,19 @@ export function ProjectsPage() {
                 trigger={["contextMenu"]}
                 menu={{
                   items: [
-                    { key: "open", icon: <FolderOpenOutlined />, label: "Open" },
+                    { key: "open", icon: <FolderOpenOutlined />, label: "Mở" },
                     {
                       key: "share",
                       icon: <ShareAltOutlined />,
-                      label: owned ? "Share" : "Members",
+                      label: owned ? "Chia sẻ" : "Thành viên",
                     },
                     ...(owned
                       ? [
-                          { key: "rename", icon: <EditOutlined />, label: "Rename" },
+                          { key: "rename", icon: <EditOutlined />, label: "Đổi tên" },
                           {
                             key: "delete",
                             icon: <DeleteOutlined />,
-                            label: "Delete",
+                            label: "Xóa",
                             danger: true,
                           },
                         ]
@@ -160,13 +160,13 @@ export function ProjectsPage() {
                   title={
                     <Space>
                       {project.name}
-                      {!owned && <Tag color="blue">Shared</Tag>}
+                      {!owned && <Tag color="blue">Được chia sẻ</Tag>}
                     </Space>
                   }
                   onClick={() => navigate(`/projects/${project.id}`)}
                 >
                   <Typography.Text type="secondary">
-                    {project.description || "No description"}
+                    {project.description || "Không có mô tả"}
                   </Typography.Text>
                 </Card>
               </Dropdown>
@@ -177,8 +177,8 @@ export function ProjectsPage() {
 
       <Modal
         open={creating}
-        title="New project"
-        okText="Create"
+        title="Dự án mới"
+        okText="Tạo"
         onOk={onCreate}
         onCancel={() => setCreating(false)}
         afterOpenChange={(open) => {
@@ -191,7 +191,7 @@ export function ProjectsPage() {
         <Space direction="vertical" style={{ width: "100%" }}>
           <Input
             autoFocus
-            placeholder="Project name"
+            placeholder="Tên dự án"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onPressEnter={onCreate}
@@ -203,7 +203,7 @@ export function ProjectsPage() {
               onChange={setTenantChoice}
               options={creatable.map((t) => ({
                 value: t.id,
-                label: t.personal ? "Personal workspace" : t.name,
+                label: t.personal ? "Không gian cá nhân" : t.name,
               }))}
             />
           )}
@@ -212,8 +212,8 @@ export function ProjectsPage() {
 
       <Modal
         open={renaming !== null}
-        title="Rename project"
-        okText="Save"
+        title="Đổi tên dự án"
+        okText="Lưu"
         onOk={onRename}
         onCancel={() => setRenaming(null)}
       >

@@ -20,7 +20,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
         items: [
           { key: "email", label: user.email, disabled: true },
           { type: "divider" },
-          { key: "logout", icon: <LogoutOutlined />, label: "Sign out" },
+          { key: "logout", icon: <LogoutOutlined />, label: "Đăng xuất" },
         ],
         onClick: async ({ key }) => {
           if (key !== "logout") return;
@@ -35,7 +35,7 @@ export function UserMenu({ compact = false }: { compact?: boolean }) {
     >
       <span
         style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}
-        title="Account"
+        title="Tài khoản"
       >
         <Avatar size="small" icon={<UserOutlined />} />
         {!compact && <Typography.Text>{user.displayName || user.email}</Typography.Text>}

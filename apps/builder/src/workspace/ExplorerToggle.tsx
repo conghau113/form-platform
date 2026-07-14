@@ -12,7 +12,7 @@ export function ExplorerToggle({
   onCollapsedChange,
 }: ExplorerToggleProps) {
   return (
-    <Tooltip title={collapsed ? "Show explorer" : "Hide explorer"}>
+    <Tooltip title={collapsed ? "Hiện explorer" : "Ẩn explorer"}>
       <Button
         // size="small"
         // type="text"
