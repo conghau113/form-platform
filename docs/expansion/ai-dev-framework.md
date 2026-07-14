@@ -139,8 +139,8 @@ Total ~18–22 phases.
 | E7 | T7.2.2 | M | Specs: publish + submit/view | ✅ | 3050cdc |
 | E7 | T7.2.3 | M | Specs: workflow run | ✅ | 45fc2c8 |
 | E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ✅ | b0e060d |
-| **E8** | T8.1.1 | S | Run sweeps → first reports | ✅ | _pending_ |
-| E8 | T8.1.2 | S | Metrics baseline (blueprint §9) | ⬜ | — |
+| **E8** | T8.1.1 | S | Run sweeps → first reports | ✅ | 6e389ae |
+| E8 | T8.1.2 | S | Metrics baseline (blueprint §9) | ✅ | _pending_ |
 | E8 | T8.1.3 | S | Regeneration-test paper walkthrough + FRAMEWORK_VERSION=1.0 + open Observe queue | ⬜ | — |
 
 Legend: ✅ done · 🟡 in progress · ⬜ not started.
@@ -1125,6 +1125,26 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
   **NEXT = T8.1.2 (S):** §13 health-signal metrics baseline → `reports/audits/AUDIT-<date>.md`
   (audit-report template) — ladder-rung share · oldest freshness contract · L3 traceability coverage ·
   escaped-defects. The two clean sweeps are its raw inputs.
+
+- **T8.1.2 DONE `_pending_` (2026-07-15) — E8 metrics baseline / first self-audit.** The framework's
+  first §13 self-audit → `reports/audits/AUDIT-2026-07-15.md` (audit-report template). All 5 health
+  signals computed from **existing artifacts** (§13, no new bookkeeping): inputs = the 2 clean E8
+  sweeps + `check:index`/`check:traceability` gate outputs + `gate-inventory.yaml`. **Baseline:**
+  (1) **ladder-rung share** — 19 enforcement gates all rung ≥2 (18×r3 + 1×r2); ~76% incl. the 6
+  rung-1 golden rules (held at prose by §14 minimum-viable-rung — T6.1.1 found 0 violations, so gating
+  = speculation); (2) **undischarged manifests** — 0 (all E0–E7 normative changes discharged
+  in-commit; no `reports/manifests/`); (3) **past-due freshness** — 0 (cadences event-driven, no
+  release cut; oldest contract `system-overview` @ 2026-07-03 = 12d; all 13 re-ran green today);
+  (4) **L3 traceability** — 12/12 = 100% (72/72 links resolve); (5) **escaped defects** — 0 by audit /
+  3 by accident lifetime (FS3a DI bug via live-smoke · F1 settings `.env` denies via T6.2.3 review ·
+  stale doc figures via E2 build) → all caught by per-change floors *before* an audit = gates working.
+  **Verdict: passes first self-audit, healthy across all 5.** Amend-queue recommendations (owner
+  decides): promote `ci-knowledge-index`+`ci-traceability` to blocking (clean advisory phase done —
+  needs decision record) · `ci-e2e` N=3 clock still 0 (compose crash-loop finding) · F1 restore.
+  Backfilled **T8.1.1 `6e389ae`**. E1 (signals from executed gate outputs, not asserted). Report-only
+  ⇒ no changeset/typecheck/test; review = in-session evidence self-checklist. `.claude/settings.json`
+  + `projects.service.ts` kept OUT. ⚠️ own row `_pending_` → backfill in T8.1.3. **NEXT = T8.1.3 (S):**
+  regeneration-test paper walkthrough + `FRAMEWORK_VERSION=1.0` + open the Observe queue — CLOSES E8.
 
 ---
 
