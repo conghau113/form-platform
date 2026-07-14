@@ -138,8 +138,8 @@ Total ~18–22 phases.
 | E7 | T7.2.1 | M | Specs: CRUD project/form, save/load | ✅ | 9e4ed6e |
 | E7 | T7.2.2 | M | Specs: publish + submit/view | ✅ | 3050cdc |
 | E7 | T7.2.3 | M | Specs: workflow run | ✅ | 45fc2c8 |
-| E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ✅ | _pending_ |
-| **E8** | T8.1.1 | S | Run sweeps → first reports | ⬜ | — |
+| E7 | T7.3.1 | S | Growth rule "broken twice" + flake policy; blocking after N clean runs | ✅ | b0e060d |
+| **E8** | T8.1.1 | S | Run sweeps → first reports | ✅ | _pending_ |
 | E8 | T8.1.2 | S | Metrics baseline (blueprint §9) | ⬜ | — |
 | E8 | T8.1.3 | S | Regeneration-test paper walkthrough + FRAMEWORK_VERSION=1.0 + open Observe queue | ⬜ | — |
 
@@ -1101,6 +1101,30 @@ two untracked artifacts BEFORE any framework design begins (ADR-0013 timing deci
 - **T8.1.1 (S):** run sweeps → first reports. **T8.1.2 (S):** metrics baseline (blueprint §9).
 - **T8.1.3 (S):** regeneration-test paper walkthrough + `FRAMEWORK_VERSION=1.0` + open the
   Observe queue.
+
+- **T8.1.1 DONE `_pending_` (2026-07-15) — E8 first audit, both sweeps run clean.** Ran the two
+  periodic batch verifications (sweeps procedure) as the E8 first audit; two append-only dated
+  reports filed. **Drift-sweep** (`reports/calibration/CALIBRATION-2026-07-15.md`): all **13**
+  registered `knowledge/index.yaml` methods executed vs L0 — **13/13 pass, 0 detector fix, 0 real
+  drift** (supersedes the E2-validation 8-method `CALIBRATION-2026-07-04`). Only non-static item =
+  `registry-release-blockers.unpushed_commits` 47→**65**, a **by-design volatile re-measurement**
+  (entry's own note: "resets on push"), NOT drift — claim left as-is. **Conformance-sweep**
+  (`reports/conformance/CONFORMANCE-2026-07-15.md`, first filed conformance report): 6 enforceable
+  golden rules run repo-wide + retroactive — **6/6 conform, 0 real violation.** The one non-pass was
+  the **documented too-broad-pattern FP**: `\beval\(|new Function\(` matched **6 comment-prose hits**
+  ("NEVER eval()") — tightened method (skip comment lines) → zero real calls; detector bug (recorded
+  tightened pattern), NOT an L0 defect. Rules verified: no-eval (ADR-0015) · fetch-confinement
+  (builder) · Prisma-confinement (ADR-0019) · renderer peerDeps react/react-dom/antd/react-native
+  never `dependencies` (ADR-0016, both renderers) · feature-folder `structure.test.ts` (1/1) · NestJS
+  runtime-import not `import type` (gate-promotion WATCH — clean). **Floor met E1** (every method
+  executed, output pasted as evidence). No new findings filed — re-surfaced known/filed only (F1
+  working-copy `.env` denies dropped [security, owner] · F2 gate-inventory under-lists `.env` denies ·
+  production-hardening "11 packages"→10 · dotted `.env.example` stale). Backfilled **T7.3.1 `b0e060d`**.
+  Report/doc-only ⇒ no changeset/typecheck/test; review = in-session evidence self-checklist. `.claude/
+  settings.json` + `projects.service.ts` kept OUT. ⚠️ own row `_pending_` → backfill in T8.1.2.
+  **NEXT = T8.1.2 (S):** §13 health-signal metrics baseline → `reports/audits/AUDIT-<date>.md`
+  (audit-report template) — ladder-rung share · oldest freshness contract · L3 traceability coverage ·
+  escaped-defects. The two clean sweeps are its raw inputs.
 
 ---
 
