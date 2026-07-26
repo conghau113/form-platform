@@ -238,9 +238,9 @@ export function App({
   async function onImportForm(file: File) {
     try {
       loadSchema(parseFormFile(await file.text()));
-      message.success(`Imported "${file.name}"`);
+      message.success(`Đã nhập "${file.name}"`);
     } catch (e) {
-      message.error(`Import failed: ${(e as Error).message}`);
+      message.error(`Nhập thất bại: ${(e as Error).message}`);
     }
   }
 
@@ -264,12 +264,12 @@ export function App({
             />
           )}
           <Typography.Title level={4} style={{ margin: 0, whiteSpace: "nowrap" }}>
-            Builder
+            Trình thiết kế
           </Typography.Title>
           <Space wrap style={{ marginLeft: "auto" }}>
-            <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
-            <Button onClick={() => setGalleryOpen(true)}>Templates</Button>
-            <Button onClick={onExportForm}>Export</Button>
+            <Button onClick={() => setAiOpen(true)}>✨ Tạo bằng AI</Button>
+            <Button onClick={() => setGalleryOpen(true)}>Mẫu có sẵn</Button>
+            <Button onClick={onExportForm}>Xuất</Button>
             <Upload
               accept=".json,application/json"
               showUploadList={false}
@@ -278,13 +278,13 @@ export function App({
                 return false; // handle locally; never POST
               }}
             >
-              <Button>Import</Button>
+              <Button>Nhập</Button>
             </Upload>
             <Button type="primary" onClick={onSave}>
-              Save
+              Lưu
             </Button>
             {formId && <PublishControl formId={formId} schema={schema} onSave={onSave} />}
-            <Button onClick={() => onLoad()}>Load</Button>
+            <Button onClick={() => onLoad()}>Tải lại</Button>
           </Space>
         </header>
 
