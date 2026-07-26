@@ -30,9 +30,9 @@ export function SettingsPanel({
   if (!open) {
     return (
       <aside style={{ display: "flex", alignItems: "flex-start", padding: 4 }}>
-        <Tooltip title="Open settings" placement="left">
+        <Tooltip title="Mở thiết lập" placement="left">
           <Button
-            aria-label="Open settings"
+            aria-label="Mở thiết lập"
             type="text"
             icon={<SettingOutlined />}
             onClick={() => setOpen(true)}
@@ -93,12 +93,12 @@ export function SettingsPanel({
               ),
             )
           ) : (
-            <Typography.Text type="secondary">Settings</Typography.Text>
+            <Typography.Text type="secondary">Thiết lập</Typography.Text>
           )}
         </div>
-        <Tooltip title="Close settings">
+        <Tooltip title="Đóng thiết lập">
           <Button
-            aria-label="Close settings"
+            aria-label="Đóng thiết lập"
             type="text"
             size="small"
             icon={<CloseOutlined />}

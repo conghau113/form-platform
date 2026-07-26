@@ -58,17 +58,17 @@ function PresetChip({
           <Button
             type="text"
             size="small"
-            aria-label={pinned ? `Unpin ${preset.name}` : `Pin ${preset.name}`}
+            aria-label={pinned ? `Bỏ ghim ${preset.name}` : `Ghim ${preset.name}`}
             icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
             onPointerDown={stop}
             onClick={() => onTogglePin(preset.id)}
           />
           {onApply && (
-            <Tooltip title="Apply across project forms" placement="top">
+            <Tooltip title="Áp dụng cho các biểu mẫu trong dự án" placement="top">
               <Button
                 type="text"
                 size="small"
-                aria-label={`Apply ${preset.name} across project forms`}
+                aria-label={`Áp dụng ${preset.name} cho các biểu mẫu trong dự án`}
                 icon={<DeploymentUnitOutlined />}
                 onPointerDown={stop}
                 onClick={onApply}
@@ -76,11 +76,11 @@ function PresetChip({
             </Tooltip>
           )}
           {onPromote && (
-            <Tooltip title="Promote to global" placement="top">
+            <Tooltip title="Nâng lên toàn cục" placement="top">
               <Button
                 type="text"
                 size="small"
-                aria-label={`Promote ${preset.name} to global`}
+                aria-label={`Nâng ${preset.name} lên toàn cục`}
                 icon={<GlobalOutlined />}
                 onPointerDown={stop}
                 onClick={onPromote}
@@ -91,7 +91,7 @@ function PresetChip({
             <Button
               type="text"
               size="small"
-              aria-label={`Delete ${preset.name}`}
+              aria-label={`Xóa ${preset.name}`}
               icon={<DeleteOutlined />}
               onPointerDown={stop}
               onClick={onDelete}
@@ -130,11 +130,11 @@ function SaveButton({
           ? ({ scope: "project", projectId } as const)
           : ({ scope: "global" } as const);
       await onSave(presetFromField(name, field, scopeOpts));
-      message.success(`Saved preset "${name.trim()}"`);
+      message.success(`Đã lưu preset "${name.trim()}"`);
       setOpen(false);
       setName("");
     } catch (e) {
-      message.error(`Save preset failed: ${(e as Error).message}`);
+      message.error(`Lưu preset thất bại: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -142,19 +142,19 @@ function SaveButton({
 
   return (
     <>
-      <Tooltip title="Save the selected field as a preset" placement="top">
+      <Tooltip title="Lưu trường đang chọn thành preset" placement="top">
         <Button
           type="text"
           size="small"
-          aria-label="Save current field as preset"
+          aria-label="Lưu trường hiện tại thành preset"
           icon={<PlusOutlined />}
           onClick={() => setOpen(true)}
         />
       </Tooltip>
       <Modal
         open={open}
-        title="Save field as preset"
-        okText="Save"
+        title="Lưu trường thành preset"
+        okText="Lưu"
         okButtonProps={{ disabled: !name.trim(), loading: busy }}
         onOk={submit}
         onCancel={() => setOpen(false)}
@@ -163,7 +163,7 @@ function SaveButton({
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <Input
             autoFocus
-            placeholder="Preset name"
+            placeholder="Tên preset"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onPressEnter={submit}
@@ -197,11 +197,11 @@ function GenerateButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Tooltip title="Generate a reusable field preset with AI" placement="top">
+      <Tooltip title="Tạo preset trường tái dùng bằng AI" placement="top">
         <Button
           type="text"
           size="small"
-          aria-label="Generate a preset with AI"
+          aria-label="Tạo preset bằng AI"
           icon={<ThunderboltOutlined />}
           onClick={() => setOpen(true)}
         />
@@ -238,12 +238,12 @@ export function PresetSection({
   const [applying, setApplying] = useState<Preset | null>(null);
 
   const onDelete = (id: string) => {
-    remove(id).catch((e: Error) => message.error(`Delete preset failed: ${e.message}`));
+    remove(id).catch((e: Error) => message.error(`Xóa preset thất bại: ${e.message}`));
   };
   const onPromote = (id: string) => {
     promote(id)
-      .then(() => message.success("Promoted to global"))
-      .catch((e: Error) => message.error(`Promote preset failed: ${e.message}`));
+      .then(() => message.success("Đã nâng lên toàn cục"))
+      .catch((e: Error) => message.error(`Nâng preset thất bại: ${e.message}`));
   };
 
   const matches = useMemo(() => {
@@ -299,7 +299,7 @@ export function PresetSection({
           type="secondary"
           style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}
         >
-          Presets
+          Preset
         </Typography.Text>
         <Space size={0}>
           <GenerateButton projectId={projectId} onSave={save} />
@@ -310,7 +310,7 @@ export function PresetSection({
       </div>
       {matches.pinned.length > 0 && (
         <Typography.Text type="secondary" style={{ fontSize: 11, opacity: 0.7 }}>
-          Pinned
+          Đã ghim
         </Typography.Text>
       )}
       {matches.pinned.map(chip)}

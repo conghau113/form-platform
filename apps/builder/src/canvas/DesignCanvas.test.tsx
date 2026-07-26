@@ -78,15 +78,15 @@ describe("DesignCanvas", () => {
     const tree = schemaToTree(migrate(src));
     const uid = tree.children[0].uid;
     setup({ selected: [uid] }, tree);
-    expect(screen.getByTitle("Delete")).toBeTruthy();
-    expect(screen.getByTitle("Copy")).toBeTruthy();
+    expect(screen.getByTitle("Xóa")).toBeTruthy();
+    expect(screen.getByTitle("Sao chép")).toBeTruthy();
   });
 
   it("shows a grid-resize handle for a selected leaf field", () => {
     const tree = schemaToTree(migrate(src));
     const uid = tree.children[0].uid;
     setup({ selected: [uid] }, tree);
-    expect(screen.getByTitle("Drag to resize column")).toBeTruthy();
+    expect(screen.getByTitle("Kéo để đổi kích thước cột")).toBeTruthy();
   });
 
   it("drag-resizing the handle writes the active breakpoint's colSpan", () => {
@@ -111,7 +111,7 @@ describe("DesignCanvas", () => {
       }) as DOMRect;
     row.getBoundingClientRect = () => rect(240);
     col.getBoundingClientRect = () => rect(120);
-    const handle = screen.getByTitle("Drag to resize column");
+    const handle = screen.getByTitle("Kéo để đổi kích thước cột");
     // jsdom's PointerEvent drops clientX; a MouseEvent typed as a pointer event keeps it.
     const fire = (target: HTMLElement | Window, type: string, clientX = 0) =>
       target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX }));
@@ -127,7 +127,7 @@ describe("DesignCanvas", () => {
     const shell = container.querySelector(`[data-designer-node-id="${uid}"]`) as HTMLElement;
     // Hover the node → the name tag becomes an explicit grab handle.
     fireEvent.pointerOver(shell);
-    const handle = screen.getByTitle("Drag to move");
+    const handle = screen.getByTitle("Kéo để di chuyển");
     expect(handle.style.cursor).toBe("grab");
     fireEvent.pointerDown(handle);
     expect(value.beginMove).toHaveBeenCalledWith([uid], expect.anything(), uid);
@@ -174,7 +174,7 @@ describe("DesignCanvas", () => {
   it("shows the empty-state legend when the form has no fields", () => {
     const tree = schemaToTree(migrate({ formVersion: 3, id: "e", title: "E", fields: [] }));
     setup({}, tree);
-    expect(screen.getByText(/Drag a field from the palette/i)).toBeTruthy();
+    expect(screen.getByText(/Kéo một trường từ bảng chọn/i)).toBeTruthy();
   });
 
   it("keeps the empty form card as a root drop target so fields can be dragged back in", () => {
@@ -183,6 +183,6 @@ describe("DesignCanvas", () => {
     // The card carries the ROOT uid; without it an emptied form has no hit-test target.
     const card = container.querySelector(`[data-designer-node-id="${tree.uid}"]`);
     expect(card).not.toBeNull();
-    expect(card?.textContent).toMatch(/Drag a field from the palette/i);
+    expect(card?.textContent).toMatch(/Kéo một trường từ bảng chọn/i);
   });
 });

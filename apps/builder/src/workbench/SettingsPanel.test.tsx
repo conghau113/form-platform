@@ -43,9 +43,9 @@ describe("SettingsPanel", () => {
   it("collapses to a slim rail and reopens, keeping the body mounted only while open", () => {
     setup(() => null);
     expect(screen.getByTestId("panel-body")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Close settings"));
+    fireEvent.click(screen.getByLabelText("Đóng thiết lập"));
     expect(screen.queryByTestId("panel-body")).toBeNull();
-    fireEvent.click(screen.getByLabelText("Open settings"));
+    fireEvent.click(screen.getByLabelText("Mở thiết lập"));
     expect(screen.getByTestId("panel-body")).toBeTruthy();
   });
 
@@ -70,7 +70,7 @@ describe("SettingsPanel", () => {
     expect(onChangeForm).toHaveBeenCalledWith({ title: "Renamed" });
 
     // Layout: a FORM_META descriptor control maps onto layoutProps.
-    fireEvent.click(screen.getByLabelText("Show colon"));
+    fireEvent.click(screen.getByLabelText("Hiện dấu hai chấm"));
     expect(onChangeForm).toHaveBeenCalledWith({ layoutProps: { colon: true } });
   });
 });

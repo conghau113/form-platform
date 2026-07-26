@@ -18,13 +18,13 @@ export function newForm(title: string): FormSchema {
   return migrate({
     formVersion: CURRENT_FORM_VERSION,
     id: slugId(title),
-    title: title.trim() || "Untitled form",
+    title: title.trim() || "Biểu mẫu chưa đặt tên",
     fields: [],
   });
 }
 
-/** A copy of an existing form for duplication: fresh id, " (copy)" suffix on the title. */
+/** A copy of an existing form for duplication: fresh id, " (bản sao)" suffix on the title. */
 export function duplicateForm(source: FormSchema): FormSchema {
-  const title = `${source.title} (copy)`;
+  const title = `${source.title} (bản sao)`;
   return { ...source, id: slugId(title), title };
 }

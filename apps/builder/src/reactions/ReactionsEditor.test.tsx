@@ -26,7 +26,7 @@ describe("ReactionsEditor", () => {
     const user = userEvent.setup();
     const onChange = setup([]);
 
-    await user.click(screen.getByRole("button", { name: "Add reaction" }));
+    await user.click(screen.getByRole("button", { name: "Thêm phản ứng" }));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith([
@@ -41,7 +41,7 @@ describe("ReactionsEditor", () => {
     // [0]=source field, [1]=target, [2]=effect
     const effectSelect = screen.getAllByRole("combobox")[2];
     await user.click(effectSelect);
-    await user.click(await screen.findByText("Show / hide"));
+    await user.click(await screen.findByText("Hiện / ẩn"));
 
     expect(onChange).toHaveBeenCalledWith([
       { when: eq("x", "co"), target: "a", effect: "visible", value: true },
@@ -76,7 +76,7 @@ describe("ReactionsEditor", () => {
     // [0]=source field, [1]=target, [2]=effect
     const effectSelect = screen.getAllByRole("combobox")[2];
     await user.click(effectSelect);
-    await user.click(await screen.findByText("Require / optional"));
+    await user.click(await screen.findByText("Bắt buộc / tùy chọn"));
 
     expect(onChange).toHaveBeenCalledWith([
       { when: eq("x", "co"), target: "a", effect: "required", value: true },
@@ -86,6 +86,6 @@ describe("ReactionsEditor", () => {
   it("shows a read-only hint for a non-simple condition", () => {
     setup([{ when: { rule: { ">": [{ var: "x" }, 5] } }, target: "a", effect: "visible" }]);
 
-    expect(screen.getByText(/edit via the JSON panel/i)).toBeTruthy();
+    expect(screen.getByText(/sửa qua bảng JSON/i)).toBeTruthy();
   });
 });

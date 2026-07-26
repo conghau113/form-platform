@@ -4,11 +4,11 @@ import { type Option, OptionsEditor, readEqualsRule } from "../PropertyPanel";
 
 /** The effects an authored reaction can apply, with friendly labels. */
 const EFFECT_OPTIONS: { label: string; value: ReactionEffect }[] = [
-  { label: "Show / hide", value: "visible" },
-  { label: "Enable / disable", value: "disabled" },
-  { label: "Require / optional", value: "required" },
-  { label: "Set value", value: "value" },
-  { label: "Set options", value: "options" },
+  { label: "Hiện / ẩn", value: "visible" },
+  { label: "Bật / tắt", value: "disabled" },
+  { label: "Bắt buộc / tùy chọn", value: "required" },
+  { label: "Đặt giá trị", value: "value" },
+  { label: "Đặt tùy chọn", value: "options" },
 ];
 
 /** A sensible starting payload when the effect kind changes, so the value control
@@ -44,8 +44,8 @@ function ReactionValueControl({
           style={{ width: 110 }}
           value={reaction.value === false ? "hide" : "show"}
           options={[
-            { label: "Show", value: "show" },
-            { label: "Hide", value: "hide" },
+            { label: "Hiện", value: "show" },
+            { label: "Ẩn", value: "hide" },
           ]}
           onChange={(v) => onChange(v !== "hide")}
         />
@@ -56,8 +56,8 @@ function ReactionValueControl({
           style={{ width: 120 }}
           value={reaction.value === false ? "enable" : "disable"}
           options={[
-            { label: "Disable", value: "disable" },
-            { label: "Enable", value: "enable" },
+            { label: "Tắt", value: "disable" },
+            { label: "Bật", value: "enable" },
           ]}
           onChange={(v) => onChange(v !== "enable")}
         />
@@ -68,8 +68,8 @@ function ReactionValueControl({
           style={{ width: 120 }}
           value={reaction.value === false ? "optional" : "require"}
           options={[
-            { label: "Require", value: "require" },
-            { label: "Optional", value: "optional" },
+            { label: "Bắt buộc", value: "require" },
+            { label: "Tùy chọn", value: "optional" },
           ]}
           onChange={(v) => onChange(v !== "optional")}
         />
@@ -78,7 +78,7 @@ function ReactionValueControl({
       return (
         <Input
           style={{ width: 130 }}
-          placeholder="value"
+          placeholder="giá trị"
           value={(reaction.value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -131,7 +131,7 @@ export function ReactionsEditor({
   return (
     <>
       <Divider orientation="left" plain>
-        Reactions
+        Phản ứng
       </Divider>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {reactions.map((reaction, i) => {
@@ -144,11 +144,11 @@ export function ReactionsEditor({
             >
               {eq ? (
                 <Space wrap align="center" style={{ marginBottom: 8 }}>
-                  <Typography.Text type="secondary">When</Typography.Text>
+                  <Typography.Text type="secondary">Khi</Typography.Text>
                   <Select
                     style={{ width: 130 }}
                     value={eq.field || undefined}
-                    placeholder="field"
+                    placeholder="trường"
                     options={sourceNames.map((n) => ({ label: n, value: n }))}
                     onChange={(name) =>
                       update(i, { when: { rule: { "==": [{ var: name }, eq.value] } } })
@@ -165,15 +165,15 @@ export function ReactionsEditor({
                 </Space>
               ) : (
                 <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
-                  Custom condition — edit via the JSON panel
+                  Điều kiện tùy chỉnh — sửa qua bảng JSON
                 </Typography.Text>
               )}
               <Space wrap align="center">
-                <Typography.Text type="secondary">then</Typography.Text>
+                <Typography.Text type="secondary">thì</Typography.Text>
                 <Select
                   style={{ width: 130 }}
                   value={reaction.target || undefined}
-                  placeholder="target"
+                  placeholder="đích"
                   options={targets.map((n) => ({ label: n, value: n }))}
                   onChange={(target) => update(i, { target })}
                 />
@@ -197,7 +197,7 @@ export function ReactionsEditor({
           );
         })}
         <Button size="small" onClick={add}>
-          Add reaction
+          Thêm phản ứng
         </Button>
       </div>
     </>

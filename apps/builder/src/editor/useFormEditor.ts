@@ -83,7 +83,7 @@ export function useFormEditor(): FormEditor {
 
   // A valid JSON-editor edit replaces the tree as one history step.
   const applyJson = useCallback(
-    (next: FormSchema) => history.set(schemaToTree(next), "Edit JSON"),
+    (next: FormSchema) => history.set(schemaToTree(next), "Sửa JSON"),
     [history.set],
   );
 
@@ -91,7 +91,7 @@ export function useFormEditor(): FormEditor {
   // machinery as any edit, so the user can undo it and the unsaved-changes guard
   // sees it as a change. Unlike `loadSchema`, history (and undo) is preserved.
   const applyGeneratedForm = useCallback(
-    (next: FormSchema) => history.set(schemaToTree(next), "Generate with AI"),
+    (next: FormSchema) => history.set(schemaToTree(next), "Tạo bằng AI"),
     [history.set],
   );
 

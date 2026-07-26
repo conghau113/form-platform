@@ -48,10 +48,10 @@ export function ApplyPresetModal({ open, onClose, preset, projectId }: ApplyPres
     const result = await apply.mutateAsync({ preset, formIds: selected });
     setReport({ applied: result.applied.length, failed: result.failed.length });
     if (result.failed.length === 0) {
-      message.success(`Added “${preset.name}” to ${result.applied.length} form(s).`);
+      message.success(`Đã thêm “${preset.name}” vào ${result.applied.length} biểu mẫu.`);
     } else {
       message.warning(
-        `Added to ${result.applied.length}, failed on ${result.failed.length} form(s).`,
+        `Đã thêm vào ${result.applied.length}, thất bại ${result.failed.length} biểu mẫu.`,
       );
     }
   }
@@ -61,7 +61,7 @@ export function ApplyPresetModal({ open, onClose, preset, projectId }: ApplyPres
       open={open}
       title={
         <Space>
-          Apply preset
+          Áp dụng preset
           <Tag color="blue">{preset.name}</Tag>
         </Space>
       }
@@ -69,7 +69,7 @@ export function ApplyPresetModal({ open, onClose, preset, projectId }: ApplyPres
       destroyOnHidden
       footer={[
         <Button key="close" onClick={onClose}>
-          {report ? "Done" : "Cancel"}
+          {report ? "Xong" : "Hủy"}
         </Button>,
         <Button
           key="apply"
@@ -78,21 +78,21 @@ export function ApplyPresetModal({ open, onClose, preset, projectId }: ApplyPres
           disabled={selected.length === 0}
           onClick={onApply}
         >
-          Apply to {selected.length || ""} form{selected.length === 1 ? "" : "s"}
+          Áp dụng cho {selected.length || ""} biểu mẫu
         </Button>,
       ]}
     >
       <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Typography.Text type="secondary">
-          The preset is added to each chosen form as a <b>linked field</b>. Editing the preset later
-          updates every linked form automatically.
+          Preset được thêm vào mỗi biểu mẫu đã chọn dưới dạng <b>trường liên kết</b>. Sửa preset sau
+          này sẽ tự cập nhật mọi biểu mẫu liên kết.
         </Typography.Text>
 
         {report && (
           <Alert
             type={report.failed ? "warning" : "success"}
             showIcon
-            message={`Applied to ${report.applied} form(s)${report.failed ? `, ${report.failed} failed` : ""}.`}
+            message={`Đã áp dụng vào ${report.applied} biểu mẫu${report.failed ? `, ${report.failed} thất bại` : ""}.`}
           />
         )}
 
@@ -101,11 +101,11 @@ export function ApplyPresetModal({ open, onClose, preset, projectId }: ApplyPres
             <Spin />
           </div>
         ) : forms.length === 0 ? (
-          <Empty description="No forms in this project yet" />
+          <Empty description="Chưa có biểu mẫu trong dự án này" />
         ) : (
           <>
             <Checkbox checked={allChecked} onChange={(e) => toggleAll(e.target.checked)}>
-              Select all ({forms.length})
+              Chọn tất cả ({forms.length})
             </Checkbox>
             <div style={{ maxHeight: 280, overflow: "auto" }}>
               <Checkbox.Group

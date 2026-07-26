@@ -54,19 +54,19 @@ export function TreeOptionsEditor({
         <div key={path.join(".")} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <Space style={{ marginLeft: base.length * 16 }}>
             <Input
-              placeholder="label"
+              placeholder="nhãn"
               value={opt.label}
               onChange={(e) => patch(path, { label: e.target.value })}
               style={{ width: 110 }}
             />
             <Input
-              placeholder="value"
+              placeholder="giá trị"
               value={String(opt.value)}
               onChange={(e) => patch(path, { value: e.target.value })}
               style={{ width: 90 }}
             />
             <Button size="small" onClick={() => addChild(path)}>
-              + child
+              + con
             </Button>
             <TranslatePopover
               value={opt.label}
@@ -87,7 +87,7 @@ export function TreeOptionsEditor({
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {rows(options, [])}
       <Button size="small" onClick={() => onChange([...options, { label: "", value: "" }])}>
-        Add option
+        Thêm tùy chọn
       </Button>
     </div>
   );

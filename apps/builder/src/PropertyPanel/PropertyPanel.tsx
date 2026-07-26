@@ -80,7 +80,7 @@ export function PropertyPanel({
     }
     return (
       <div style={{ padding: 24 }}>
-        <Empty description="Select a field to edit its properties" />
+        <Empty description="Chọn một trường để chỉnh sửa thuộc tính" />
       </div>
     );
   }
@@ -102,7 +102,7 @@ export function PropertyPanel({
   const translationsBlock = locales?.length ? (
     <>
       <Divider orientation="left" plain>
-        Translations
+        Bản dịch
       </Divider>
       <TranslationsEditor
         i18n={(node as { i18n?: I18nMap }).i18n}
@@ -145,7 +145,8 @@ export function PropertyPanel({
       <div style={{ padding: 16, overflow: "auto", height: "100%" }}>
         {breadcrumb}
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-          {fieldTypeLabel(node.type)} container — its fields are edited on the canvas.
+          {fieldTypeLabel(node.type)} là vùng chứa — các trường bên trong được chỉnh sửa trên
+          canvas.
         </Typography.Paragraph>
         {/* The wizard's step list is authored here (add/remove/reorder + per-step label and
             description); the fields INSIDE each step are still edited on the canvas. */}
@@ -156,7 +157,7 @@ export function PropertyPanel({
           {/* A named container (today only `group`) carries a schema key once it is
               authorable/selectable on the canvas. */}
           {describeNode(node.type).named && (
-            <Form.Item label="Name (schema key)">
+            <Form.Item label="Tên (khóa schema)">
               <Input value={nodeName(node) ?? ""} onChange={(e) => set({ name: e.target.value })} />
             </Form.Item>
           )}

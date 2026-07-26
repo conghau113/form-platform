@@ -20,7 +20,7 @@ export function HistoryPanel<T>({
   if (entries.length <= 1) {
     return (
       <div style={{ padding: 24 }}>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No history yet" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có lịch sử" />
       </div>
     );
   }
@@ -62,7 +62,7 @@ export function HistoryPanel<T>({
               {i + 1}
             </span>
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {entry.label ?? "Edit"}
+              {entry.label ?? "Chỉnh sửa"}
             </span>
           </button>
         );

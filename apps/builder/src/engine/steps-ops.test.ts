@@ -31,7 +31,7 @@ describe("applyStepsOp", () => {
   it("removes the step at an index", () => {
     const { root, stepsUid } = stepsTree();
     const next = applyStepsOp(root, stepsUid, { kind: "remove", index: 0 }, guard);
-    expect(stepLabels(next, stepsUid)).toEqual(["Step 2"]);
+    expect(stepLabels(next, stepsUid)).toEqual(["Bước 2"]);
   });
 
   it("patches a step's label and description", () => {
@@ -52,7 +52,7 @@ describe("applyStepsOp", () => {
   it("moves a step toward the end", () => {
     const { root, stepsUid } = stepsTree();
     const next = applyStepsOp(root, stepsUid, { kind: "move", index: 0, dir: 1 }, guard);
-    expect(stepLabels(next, stepsUid)).toEqual(["Step 2", "Step 1"]);
+    expect(stepLabels(next, stepsUid)).toEqual(["Bước 2", "Bước 1"]);
   });
 
   it("preserves a moved step's uid (no descendant regeneration)", () => {

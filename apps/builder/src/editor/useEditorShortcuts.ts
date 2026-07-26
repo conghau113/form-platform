@@ -62,7 +62,7 @@ export function useEditorShortcuts({
           anchor && anchor !== tree.uid
             ? pasteAfter(tree, anchor, clipboard, metaGuard())
             : pasteInto(tree, tree.uid, clipboard, metaGuard());
-        if (next !== tree) history.set(next, "Paste");
+        if (next !== tree) history.set(next, "Dán");
       } else if (
         // D6 keyboard reorder: ↑/↓ swap with a sibling, Tab/Shift-Tab indent/outdent.
         // Acts on a single selected non-root node; the global listener covers both the
@@ -78,7 +78,7 @@ export function useEditorShortcuts({
         const next = keyboardMove(tree, uid, dir, metaGuard());
         // The moved node keeps its uid, so the selection stays valid; only commit when
         // the move actually changed the tree (skips the no-op edges).
-        if (next !== tree) history.set(next, "Move");
+        if (next !== tree) history.set(next, "Di chuyển");
       } else if (key === "delete" || key === "backspace") {
         if (selection.selected.length === 0) return;
         e.preventDefault();
@@ -94,7 +94,7 @@ export function useEditorShortcuts({
           }
         }
         if (next !== tree) {
-          history.set(next, "Delete");
+          history.set(next, "Xóa");
           setSelection(emptySelection);
         }
       }

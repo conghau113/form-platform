@@ -30,7 +30,7 @@ export function presetFromDraft(
   return {
     id: `user-${crypto.randomUUID()}`,
     fieldType: draft.fieldType,
-    name: draft.name.trim() || "Untitled preset",
+    name: draft.name.trim() || "Preset chưa đặt tên",
     icon: draft.icon ?? patchIcon,
     patch: draft.patch,
     ...(scope ?? {}),

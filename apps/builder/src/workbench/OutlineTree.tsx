@@ -109,7 +109,7 @@ function Row({
         {hasChildren ? (
           <button
             type="button"
-            aria-label={isCollapsed ? "Expand" : "Collapse"}
+            aria-label={isCollapsed ? "Mở rộng" : "Thu gọn"}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
@@ -169,7 +169,7 @@ export function OutlineTree({ root }: { root: TreeNode }) {
   if (root.children.length === 0) {
     return (
       <div style={{ padding: 24 }}>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No fields yet" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có trường nào" />
       </div>
     );
   }

@@ -26,13 +26,13 @@ export function OptionsEditor({
         // biome-ignore lint/suspicious/noArrayIndexKey: options have no stable id; index is fine for this small editor
         <Space key={i}>
           <Input
-            placeholder="label"
+            placeholder="nhãn"
             value={opt.label}
             onChange={(e) => update(i, { label: e.target.value })}
             style={{ width: 110 }}
           />
           <Input
-            placeholder="value"
+            placeholder="giá trị"
             value={String(opt.value)}
             onChange={(e) => update(i, { value: e.target.value })}
             style={{ width: 90 }}
@@ -54,7 +54,7 @@ export function OptionsEditor({
         </Space>
       ))}
       <Button size="small" onClick={() => onChange([...options, { label: "", value: "" }])}>
-        Add option
+        Thêm tùy chọn
       </Button>
     </div>
   );

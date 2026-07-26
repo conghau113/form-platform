@@ -12,14 +12,14 @@ const entries: HistoryEntry<number>[] = [
 describe("HistoryPanel", () => {
   it("shows an empty state until there is something to undo", () => {
     render(<HistoryPanel entries={[{ value: 0 }]} index={0} onJump={vi.fn()} />);
-    expect(screen.getByText("No history yet")).toBeTruthy();
+    expect(screen.getByText("Chưa có lịch sử")).toBeTruthy();
   });
 
   it("lists every step with its label, falling back to 'Edit'", () => {
     render(<HistoryPanel entries={entries} index={2} onJump={vi.fn()} />);
     expect(screen.getByText("Initial")).toBeTruthy();
     expect(screen.getByText("Drop field")).toBeTruthy();
-    expect(screen.getByText("Edit")).toBeTruthy();
+    expect(screen.getByText("Chỉnh sửa")).toBeTruthy();
   });
 
   it("jumps to the clicked step", () => {

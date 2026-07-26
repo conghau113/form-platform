@@ -40,7 +40,7 @@ export function presetFromField(
     // collide on id and overwrite each other. Hyphens are within the preset-id charset.
     id: `user-${crypto.randomUUID()}`,
     fieldType: field.type,
-    name: name.trim() || "Untitled preset",
+    name: name.trim() || "Preset chưa đặt tên",
     icon,
     patch,
     ...(scope ?? {}),

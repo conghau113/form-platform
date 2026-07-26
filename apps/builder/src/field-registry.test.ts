@@ -88,13 +88,13 @@ describe("palette freeze", () => {
   });
 
   it("expands paletteVariants into one chip per variant, seeding the same type + patch", () => {
-    const arrays = paletteEntries().find((g) => g.category === "Arrays");
+    const arrays = paletteEntries().find((g) => g.category === "Mảng");
     expect(arrays?.items.map((e) => e.id)).toEqual(["array:list", "array:card", "array:table"]);
     // every array chip seeds the single `array` type with a distinct variant patch
     expect(arrays?.items.every((e) => e.type === "array")).toBe(true);
     expect(arrays?.items.map((e) => e.patch?.variant)).toEqual(["auto", "card", "table"]);
 
-    const inputs = paletteEntries().find((g) => g.category === "Inputs");
+    const inputs = paletteEntries().find((g) => g.category === "Nhập liệu");
     const upload = inputs?.items.filter((e) => e.type === "upload");
     expect(upload?.map((e) => e.id)).toEqual(["upload:button", "upload:dragger"]);
     expect(upload?.map((e) => e.patch?.dragger)).toEqual([undefined, true]);

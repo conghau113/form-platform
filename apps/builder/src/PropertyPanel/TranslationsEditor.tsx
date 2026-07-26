@@ -30,7 +30,7 @@ export function TranslationsEditor({
   };
 
   if (!attrs.length) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing to translate yet" />;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có gì để dịch" />;
   }
 
   return (

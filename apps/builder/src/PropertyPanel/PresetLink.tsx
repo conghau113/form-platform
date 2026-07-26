@@ -62,7 +62,7 @@ export function PresetLink({
             <Button
               size="small"
               icon={<DisconnectOutlined />}
-              aria-label="Unlink preset"
+              aria-label="Gỡ liên kết preset"
               onClick={() => set(UNLINK_PATCH)}
             />
           </Tooltip>

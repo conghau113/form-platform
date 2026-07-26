@@ -134,7 +134,7 @@ describe("SettingControls — S1 setter vocabulary", () => {
     const set = setup([{ key: "meta", label: "Meta", control: "keyValue" }], {
       meta: [{ key: "a", value: "1" }],
     });
-    await user.click(screen.getByText("Add row"));
+    await user.click(screen.getByText("Thêm dòng"));
     expect(set).toHaveBeenCalledWith("meta", [
       { key: "a", value: "1" },
       { key: "", value: "" },

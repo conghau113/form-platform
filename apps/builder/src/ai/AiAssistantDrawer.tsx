@@ -33,9 +33,9 @@ export interface AiAssistantDrawerProps {
 
 /** Starter prompts so the user never faces a blank box (EN + VI, the product's two locales). */
 const EXAMPLE_PROMPTS = [
-  "A job application: full name, email, phone, résumé upload and a cover letter.",
+  "Đơn xin việc: họ tên, email, điện thoại, tải CV và thư xin việc.",
   "Đăng ký sự kiện: họ tên, email, số điện thoại, số người tham dự, ghi chú.",
-  "A customer feedback survey with a 1–5 rating, what we did well and what to improve.",
+  "Khảo sát phản hồi khách hàng với thang điểm 1–5, điều làm tốt và điều cần cải thiện.",
 ];
 
 interface AttachedImage {
@@ -62,7 +62,7 @@ function readImage(file: File): Promise<{ base64: string; mediaType: string }> {
     const reader = new FileReader();
     reader.onload = () => {
       const match = /^data:(.+?);base64,(.*)$/.exec(String(reader.result));
-      if (!match) return reject(new Error("Unsupported image"));
+      if (!match) return reject(new Error("Ảnh không hỗ trợ"));
       resolve({ mediaType: match[1], base64: match[2] });
     };
     reader.onerror = () => reject(reader.error);
@@ -122,13 +122,15 @@ export function AiAssistantDrawer({
 
   function noteStripped(result: GenerateFormResult) {
     if (result.strippedUrls.length) {
-      message.warning(`Removed ${result.strippedUrls.length} off-allowlist URL(s) for safety.`);
+      message.warning(
+        `Đã loại ${result.strippedUrls.length} URL ngoài danh sách cho phép để an toàn.`,
+      );
     }
   }
 
   async function onGenerate() {
     if (!prompt.trim()) {
-      message.warning("Describe the form you want first.");
+      message.warning("Hãy mô tả biểu mẫu bạn muốn trước.");
       return;
     }
     const input: GenerateFormInput = {
@@ -174,7 +176,7 @@ export function AiAssistantDrawer({
   /** Seed the conversation from the current canvas form so it can be refined directly. */
   function refineCurrent() {
     setProposed({ form: currentSchema, attempts: 0, strippedUrls: [] });
-    setTurns([turn("prompt", "Refining your current form")]);
+    setTurns([turn("prompt", "Đang tinh chỉnh biểu mẫu hiện tại")]);
   }
 
   /** Back to the composer to draft a fresh form (keeps prompt/guidance/image). */
@@ -187,7 +189,7 @@ export function AiAssistantDrawer({
 
   function applyForm(next: FormSchema) {
     onApply(next);
-    message.success("Applied to the canvas.");
+    message.success("Đã áp dụng vào canvas.");
   }
 
   /** Read a File into the reference image, shared by the Upload button and paste. */
@@ -229,11 +231,11 @@ export function AiAssistantDrawer({
             return false; // handle locally; never POST from Upload
           }}
         >
-          <Button>Attach reference image</Button>
+          <Button>Đính kèm ảnh tham chiếu</Button>
         </Upload>
         {!image && (
           <Typography.Text type="secondary" style={{ alignSelf: "center" }}>
-            or paste a screenshot
+            hoặc dán ảnh chụp màn hình
           </Typography.Text>
         )}
         {image && (
@@ -255,11 +257,11 @@ export function AiAssistantDrawer({
           </Space>
         )}
       </Space>
-      <Tooltip title="Reads an attached image in two passes (transcribe → build) for higher fidelity. Slower; only affects image-based requests.">
+      <Tooltip title="Đọc ảnh đính kèm qua hai lượt (chép lại → dựng) để chính xác hơn. Chậm hơn; chỉ ảnh hưởng yêu cầu có ảnh.">
         <Space>
           <Switch size="small" checked={twoPass} onChange={setTwoPass} disabled={!image} />
           <Typography.Text type={image ? undefined : "secondary"}>
-            High-fidelity image read (slower)
+            Đọc ảnh độ chính xác cao (chậm hơn)
           </Typography.Text>
         </Space>
       </Tooltip>
@@ -274,7 +276,7 @@ export function AiAssistantDrawer({
       items={[
         {
           key: "byok",
-          label: "API key (optional — uses the server default if blank)",
+          label: "Khóa API (tùy chọn — dùng mặc định của server nếu để trống)",
           children: (
             <Space direction="vertical" size="small" style={{ width: "100%" }}>
               <Segmented
@@ -284,14 +286,14 @@ export function AiAssistantDrawer({
                   setCreds((c) => ({ ...c, provider: (v || undefined) as AiCreds["provider"] }))
                 }
                 options={[
-                  { label: "Server default", value: "" },
-                  { label: "OpenAI-compatible", value: "openai" },
+                  { label: "Mặc định server", value: "" },
+                  { label: "Tương thích OpenAI", value: "openai" },
                   { label: "Anthropic", value: "anthropic" },
                 ]}
               />
-              {credField("apiKey", "API key (kept in your browser, sent per request)", true)}
-              {credField("baseUrl", "Base URL — OpenAI-compatible only (e.g. 9router/Azure)")}
-              {credField("model", "Model id (e.g. gpt-4o-mini, claude-sonnet-4-6)")}
+              {credField("apiKey", "Khóa API (lưu trong trình duyệt, gửi mỗi yêu cầu)", true)}
+              {credField("baseUrl", "Base URL — chỉ tương thích OpenAI (vd 9router/Azure)")}
+              {credField("model", "ID model (vd gpt-4o-mini, claude-sonnet-4-6)")}
             </Space>
           ),
         },
@@ -300,7 +302,7 @@ export function AiAssistantDrawer({
   );
 
   const errorAlert = error && (
-    <Alert type="error" showIcon message="Couldn’t reach the model" description={error.message} />
+    <Alert type="error" showIcon message="Không kết nối được model" description={error.message} />
   );
 
   // The composer: drafting a brand-new form.
@@ -311,10 +313,10 @@ export function AiAssistantDrawer({
         <Alert
           type="info"
           showIcon
-          message="You have a form on the canvas"
+          message="Bạn đang có biểu mẫu trên canvas"
           description={
             <Button size="small" type="link" style={{ padding: 0 }} onClick={refineCurrent}>
-              Refine the current form with AI instead →
+              Tinh chỉnh biểu mẫu hiện tại bằng AI →
             </Button>
           }
         />
@@ -322,13 +324,13 @@ export function AiAssistantDrawer({
       <Input.TextArea
         autoFocus
         rows={4}
-        placeholder="Describe the form, e.g. “A job application with name, email, a résumé upload and a cover letter.” You can also paste a screenshot here."
+        placeholder="Mô tả biểu mẫu, vd “Đơn xin việc với họ tên, email, tải CV và thư xin việc.” Bạn cũng có thể dán ảnh chụp màn hình vào đây."
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         onPaste={onPasteImage}
       />
       <Space size={[8, 8]} wrap>
-        <Typography.Text type="secondary">Try:</Typography.Text>
+        <Typography.Text type="secondary">Thử:</Typography.Text>
         {EXAMPLE_PROMPTS.map((ex) => (
           <Button key={ex} size="small" type="dashed" onClick={() => setPrompt(ex)}>
             {ex.length > 36 ? `${ex.slice(0, 36)}…` : ex}
@@ -336,14 +338,14 @@ export function AiAssistantDrawer({
         ))}
       </Space>
       <Input
-        placeholder="Optional house-style guidance (tone, required fields, language…)"
+        placeholder="Hướng dẫn phong cách tùy chọn (giọng điệu, trường bắt buộc, ngôn ngữ…)"
         value={guidance}
         onChange={(e) => setGuidance(e.target.value)}
       />
       {imageControls}
       {byokSection}
       <Button type="primary" block loading={generate.isPending} onClick={onGenerate}>
-        Generate
+        Tạo
       </Button>
     </Space>
   );
@@ -366,19 +368,19 @@ export function AiAssistantDrawer({
         message={
           <Space size={[4, 4]} wrap>
             <Typography.Text strong>{proposed.form.title || proposed.form.id}</Typography.Text>
-            <Tag color="blue">{diff.proposedCount} fields</Tag>
-            {diff.added.length > 0 && <Tag color="green">+{diff.added.length} new</Tag>}
-            {diff.kept.length > 0 && <Tag>{diff.kept.length} shared</Tag>}
+            <Tag color="blue">{diff.proposedCount} trường</Tag>
+            {diff.added.length > 0 && <Tag color="green">+{diff.added.length} mới</Tag>}
+            {diff.kept.length > 0 && <Tag>{diff.kept.length} chung</Tag>}
             {currentHasFields && diff.removed.length > 0 && (
-              <Tag color="red">Replace drops {diff.removed.length} current</Tag>
+              <Tag color="red">Thay thế bỏ {diff.removed.length} hiện tại</Tag>
             )}
-            {proposed.attempts > 1 && <Tag color="gold">repaired ×{proposed.attempts - 1}</Tag>}
+            {proposed.attempts > 1 && <Tag color="gold">đã sửa ×{proposed.attempts - 1}</Tag>}
           </Space>
         }
         description={
           currentHasFields
-            ? "Append adds these fields to your current form (colliding names are renamed). Replace swaps your whole form for this one. The drawer stays open so you can keep refining."
-            : "Review the proposal, apply it, then keep refining — the canvas updates live."
+            ? "Thêm sẽ thêm các trường này vào biểu mẫu hiện tại (tên trùng sẽ được đổi). Thay thế đổi toàn bộ biểu mẫu sang cái này. Ngăn kéo vẫn mở để bạn tiếp tục tinh chỉnh."
+            : "Xem đề xuất, áp dụng, rồi tiếp tục tinh chỉnh — canvas cập nhật trực tiếp."
         }
       />
 
@@ -400,7 +402,7 @@ export function AiAssistantDrawer({
           disabled={busy}
           onClick={() => applyForm(appendForms(currentSchema, proposed.form))}
         >
-          Append fields
+          Thêm trường
         </Button>
         <Button
           type={currentHasFields ? "default" : "primary"}
@@ -408,19 +410,19 @@ export function AiAssistantDrawer({
           disabled={busy}
           onClick={() => applyForm(proposed.form)}
         >
-          {currentHasFields ? "Replace form" : "Use this form"}
+          {currentHasFields ? "Thay biểu mẫu" : "Dùng biểu mẫu này"}
         </Button>
         <Button type="text" disabled={busy} onClick={newDraft}>
-          ＋ New form
+          ＋ Biểu mẫu mới
         </Button>
       </Space>
 
       <div style={{ borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 12 }}>
-        <Typography.Text strong>Refine</Typography.Text>
+        <Typography.Text strong>Tinh chỉnh</Typography.Text>
         <Input.TextArea
           rows={2}
           style={{ marginTop: 8 }}
-          placeholder="e.g. “make email required, add a date of birth, group the address fields”"
+          placeholder="vd “bắt buộc email, thêm ngày sinh, gom các trường địa chỉ”"
           value={refineText}
           onChange={(e) => setRefineText(e.target.value)}
           onPaste={onPasteImage}
@@ -438,11 +440,9 @@ export function AiAssistantDrawer({
             disabled={!refineText.trim()}
             onClick={onRefine}
           >
-            Send refinement
+            Gửi tinh chỉnh
           </Button>
-          <Typography.Text type="secondary">
-            Enter to send · Shift+Enter for newline
-          </Typography.Text>
+          <Typography.Text type="secondary">Enter để gửi · Shift+Enter xuống dòng</Typography.Text>
         </Space>
       </div>
     </Space>
@@ -452,7 +452,7 @@ export function AiAssistantDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title={proposed ? "Refine with AI" : "Generate with AI"}
+      title={proposed ? "Tinh chỉnh bằng AI" : "Tạo bằng AI"}
       placement="right"
       width={480}
       mask={false}
@@ -461,8 +461,8 @@ export function AiAssistantDrawer({
         <div style={{ padding: "48px 0", textAlign: "center" }}>
           <Spin size="large" />
           <Typography.Paragraph type="secondary" style={{ marginTop: 20 }}>
-            Drafting your form, validating it against the contract, and repairing if needed. This
-            usually takes a few seconds{twoPass && image ? " (two-pass is slower)" : ""}.
+            Đang soạn biểu mẫu, kiểm tra theo hợp đồng schema và sửa nếu cần. Thường mất vài giây
+            {twoPass && image ? " (hai lượt sẽ chậm hơn)" : ""}.
           </Typography.Paragraph>
         </div>
       ) : proposed ? (

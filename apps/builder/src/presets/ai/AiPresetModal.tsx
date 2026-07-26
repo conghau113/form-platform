@@ -32,9 +32,9 @@ export interface AiPresetModalProps {
 
 /** Starter prompts so the user never faces a blank box (EN + VI, the product's two locales). */
 const EXAMPLE_PROMPTS = [
-  "A validated Vietnam phone number field, required, with a helpful placeholder.",
+  "Ô số điện thoại Việt Nam có kiểm tra, bắt buộc, có chữ gợi ý hữu ích.",
   "Một ô chọn quốc gia (select) với vài lựa chọn phổ biến.",
-  "An email field with email-format validation and a clear button.",
+  "Ô email có kiểm tra định dạng email và nút xóa.",
 ];
 
 /** Leaf field types (presets are single fields, never containers), for the type hint. */
@@ -107,11 +107,11 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
           ? ({ scope: "project", projectId } as const)
           : ({ scope: "global" } as const);
       await onSave(presetFromDraft(draft, scopeOpts));
-      message.success(`Saved preset "${draft.name}"`);
+      message.success(`Đã lưu preset "${draft.name}"`);
       close();
     } catch (e) {
       // Keep the modal open so the reviewed draft is not lost.
-      message.error(`Save preset failed: ${(e as Error).message}`);
+      message.error(`Lưu preset thất bại: ${(e as Error).message}`);
     } finally {
       setSaving(false);
     }
@@ -136,7 +136,7 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
       items={[
         {
           key: "byok",
-          label: "API key (optional — uses the server default if blank)",
+          label: "Khóa API (tùy chọn — dùng mặc định của server nếu để trống)",
           children: (
             <Space direction="vertical" size="small" style={{ width: "100%" }}>
               <Segmented
@@ -146,14 +146,14 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
                   setCreds((c) => ({ ...c, provider: (v || undefined) as AiCreds["provider"] }))
                 }
                 options={[
-                  { label: "Server default", value: "" },
-                  { label: "OpenAI-compatible", value: "openai" },
+                  { label: "Mặc định server", value: "" },
+                  { label: "Tương thích OpenAI", value: "openai" },
                   { label: "Anthropic", value: "anthropic" },
                 ]}
               />
-              {credField("apiKey", "API key (kept in your browser, sent per request)", true)}
-              {credField("baseUrl", "Base URL — OpenAI-compatible only (e.g. 9router/Azure)")}
-              {credField("model", "Model id (e.g. gpt-4o-mini, claude-sonnet-4-6)")}
+              {credField("apiKey", "Khóa API (lưu trong trình duyệt, gửi mỗi yêu cầu)", true)}
+              {credField("baseUrl", "Base URL — chỉ tương thích OpenAI (vd 9router/Azure)")}
+              {credField("model", "ID model (vd gpt-4o-mini, claude-sonnet-4-6)")}
             </Space>
           ),
         },
@@ -162,7 +162,7 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
   );
 
   const errorAlert = error && (
-    <Alert type="error" showIcon message="Couldn’t reach the model" description={error.message} />
+    <Alert type="error" showIcon message="Không kết nối được model" description={error.message} />
   );
 
   const composer = (
@@ -171,12 +171,12 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
       <Input.TextArea
         autoFocus
         rows={3}
-        placeholder="Describe the reusable field, e.g. “A validated Vietnam phone number, required, with a placeholder.”"
+        placeholder="Mô tả trường tái dùng, vd “Số điện thoại Việt Nam có kiểm tra, bắt buộc, có chữ gợi ý.”"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
       />
       <Space size={[8, 8]} wrap>
-        <Typography.Text type="secondary">Try:</Typography.Text>
+        <Typography.Text type="secondary">Thử:</Typography.Text>
         {EXAMPLE_PROMPTS.map((ex) => (
           <Button key={ex} size="small" type="dashed" onClick={() => setPrompt(ex)}>
             {ex.length > 40 ? `${ex.slice(0, 40)}…` : ex}
@@ -186,13 +186,13 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
       <Select
         allowClear
         style={{ width: "100%" }}
-        placeholder="Field type (optional — let the AI choose)"
+        placeholder="Loại trường (tùy chọn — để AI chọn)"
         value={fieldType}
         onChange={(v) => setFieldType(v)}
         options={LEAF_TYPES.map((c) => ({ label: `${c.type} — ${c.summary}`, value: c.type }))}
       />
       <Input
-        placeholder="Optional guidance (tone, language, validation rules…)"
+        placeholder="Hướng dẫn tùy chọn (giọng điệu, ngôn ngữ, quy tắc kiểm tra…)"
         value={guidance}
         onChange={(e) => setGuidance(e.target.value)}
       />
@@ -205,18 +205,18 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
       {errorAlert}
       <Space size={[4, 6]} wrap>
         <Tag color="blue">{proposed.preset.fieldType}</Tag>
-        {proposed.attempts > 1 && <Tag color="gold">repaired ×{proposed.attempts - 1}</Tag>}
+        {proposed.attempts > 1 && <Tag color="gold">đã sửa ×{proposed.attempts - 1}</Tag>}
         {proposed.strippedUrls.length > 0 && (
-          <Tag color="red">removed {proposed.strippedUrls.length} unsafe URL(s)</Tag>
+          <Tag color="red">đã loại {proposed.strippedUrls.length} URL không an toàn</Tag>
         )}
       </Space>
       <div>
-        <Typography.Text type="secondary">Preset name</Typography.Text>
+        <Typography.Text type="secondary">Tên preset</Typography.Text>
         <Input
           style={{ marginTop: 4 }}
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Preset name"
+          placeholder="Tên preset"
         />
       </div>
       {projectId && (
@@ -240,7 +240,7 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
         <FormRenderer schema={previewForm} access={{ roles: ["admin"] }} />
       </div>
       <Button type="text" onClick={reset}>
-        ↺ Start over
+        ↺ Bắt đầu lại
       </Button>
     </Space>
   );
@@ -248,14 +248,14 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
   return (
     <Modal
       open={open}
-      title={proposed ? "Review preset" : "Generate a preset with AI"}
+      title={proposed ? "Xem preset" : "Tạo preset bằng AI"}
       onCancel={close}
       destroyOnHidden
       footer={
         proposed
           ? [
               <Button key="back" onClick={reset} disabled={saving}>
-                Back
+                Quay lại
               </Button>,
               <Button
                 key="save"
@@ -264,12 +264,12 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
                 disabled={!name.trim()}
                 onClick={onSaveDraft}
               >
-                Add to library
+                Thêm vào thư viện
               </Button>,
             ]
           : [
               <Button key="cancel" onClick={close}>
-                Cancel
+                Hủy
               </Button>,
               <Button
                 key="gen"
@@ -278,7 +278,7 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
                 disabled={!prompt.trim()}
                 onClick={onGenerate}
               >
-                Generate
+                Tạo
               </Button>,
             ]
       }
@@ -287,8 +287,7 @@ export function AiPresetModal({ open, onClose, projectId, onSave }: AiPresetModa
         <div style={{ padding: "32px 0", textAlign: "center" }}>
           <Spin size="large" />
           <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
-            Designing your field and validating it against the contract. This usually takes a few
-            seconds.
+            Đang thiết kế trường và kiểm tra theo hợp đồng schema. Thường mất vài giây.
           </Typography.Paragraph>
         </div>
       ) : proposed ? (

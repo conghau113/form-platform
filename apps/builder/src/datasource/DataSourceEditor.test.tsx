@@ -20,10 +20,10 @@ describe("DataSourceEditor", () => {
     const user = userEvent.setup();
     const set = setup(selectField({ options: [{ label: "Hanoi", value: "hn" }] }));
 
-    expect((screen.getByText("Static").closest("label") as HTMLElement).className).toContain(
+    expect((screen.getByText("Tĩnh").closest("label") as HTMLElement).className).toContain(
       "ant-segmented-item-selected",
     );
-    await user.click(screen.getByRole("button", { name: "Add option" }));
+    await user.click(screen.getByRole("button", { name: "Thêm tùy chọn" }));
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({ dataSource: undefined, options: expect.any(Array) }),
     );
@@ -33,7 +33,7 @@ describe("DataSourceEditor", () => {
     const user = userEvent.setup();
     const set = setup(selectField({ options: [{ label: "Hanoi", value: "hn" }] }));
 
-    await user.click(screen.getByText("Remote (data source)"));
+    await user.click(screen.getByText("Từ xa (nguồn dữ liệu)"));
 
     expect(set).toHaveBeenCalledWith({
       options: undefined,
@@ -59,7 +59,7 @@ describe("DataSourceEditor", () => {
     const ds = { url: "u", labelKey: "name", valueKey: "id" };
     const set = setup(selectField({ dataSource: ds }));
 
-    await user.click(screen.getByRole("button", { name: "Add param" }));
+    await user.click(screen.getByRole("button", { name: "Thêm tham số" }));
 
     expect(set).toHaveBeenLastCalledWith({
       options: undefined,
@@ -78,7 +78,7 @@ describe("DataSourceEditor", () => {
     };
     render(<DataSourceEditor field={field} sourceNames={["plan"]} set={set} />);
 
-    await user.click(screen.getByText("Remote (data source)"));
+    await user.click(screen.getByText("Từ xa (nguồn dữ liệu)"));
     expect(set).toHaveBeenCalledWith({
       options: undefined,
       dataSource: { url: "", labelKey: "", valueKey: "" },
@@ -96,8 +96,8 @@ describe("DataSourceEditor", () => {
     render(<DataSourceEditor field={field} sourceNames={[]} set={set} />);
 
     // The tree editor exposes a "+ child" per row — the flat OptionsEditor never does.
-    expect(screen.getAllByRole("button", { name: "+ child" })).toHaveLength(2);
-    const labels = screen.getAllByPlaceholderText("label") as HTMLInputElement[];
+    expect(screen.getAllByRole("button", { name: "+ con" })).toHaveLength(2);
+    const labels = screen.getAllByPlaceholderText("nhãn") as HTMLInputElement[];
     expect(labels.map((i) => i.value)).toEqual(["Vietnam", "Hanoi"]);
   });
 
@@ -113,8 +113,8 @@ describe("DataSourceEditor", () => {
     };
     render(<DataSourceEditor field={field} sourceNames={[]} set={set} />);
 
-    expect(screen.getByText("Children key (tree)")).toBeTruthy();
-    await user.type(screen.getByPlaceholderText("e.g. children"), "s");
+    expect(screen.getByText("Khóa con (cây)")).toBeTruthy();
+    await user.type(screen.getByPlaceholderText("vd children"), "s");
 
     expect(set).toHaveBeenLastCalledWith({
       options: undefined,
@@ -128,7 +128,7 @@ describe("DataSourceEditor", () => {
     const set = setup(selectField({ dataSource: ds }));
 
     // The legacy `dependsOn` surfaces as a single param row, seeded name = the field.
-    const nameInput = screen.getByPlaceholderText("query name") as HTMLInputElement;
+    const nameInput = screen.getByPlaceholderText("tên truy vấn") as HTMLInputElement;
     expect(nameInput.value).toBe("country");
     expect(screen.getByText("country", { selector: ".ant-select-selection-item" })).toBeTruthy();
 

@@ -57,15 +57,15 @@ export function ItemFieldsEditor({
   return (
     <>
       <Divider orientation="left" plain>
-        Item fields
+        Trường của mục
       </Divider>
-      <Form.Item label="Display">
+      <Form.Item label="Hiển thị">
         <Segmented
           value={field.variant ?? "card"}
           onChange={(v) => set({ variant: v as ArrayField["variant"] } as Patch)}
           options={[
-            { label: "Cards", value: "card" },
-            { label: "Table", value: "table" },
+            { label: "Thẻ", value: "card" },
+            { label: "Bảng", value: "table" },
           ]}
         />
       </Form.Item>
@@ -75,13 +75,13 @@ export function ItemFieldsEditor({
             checked={field.editInDialog ?? false}
             onChange={(e) => set({ editInDialog: e.target.checked || undefined } as Patch)}
           >
-            Edit rows in a dialog
+            Sửa hàng trong hộp thoại
           </Checkbox>
         </Form.Item>
       ) : null}
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        Columns repeated for each row. Use Configure for full settings (options, validation, default
-        value…).
+        Các cột lặp lại cho mỗi hàng. Dùng Cấu hình để chỉnh đầy đủ (tùy chọn, kiểm tra, giá trị mặc
+        định…).
       </Typography.Text>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
         {items.map((it, i) => (
@@ -96,18 +96,18 @@ export function ItemFieldsEditor({
             />
             <Input
               style={{ width: 100 }}
-              placeholder="label"
+              placeholder="nhãn"
               value={nodeLabel(it) ?? ""}
               onChange={(e) => update(i, { ...it, label: e.target.value } as FieldNode)}
             />
             <Input
               style={{ width: 90 }}
-              placeholder="name"
+              placeholder="tên"
               value={nodeName(it) ?? ""}
               onChange={(e) => update(i, { ...it, name: e.target.value } as FieldNode)}
             />
             <Button size="small" onClick={() => onConfigure(i)}>
-              Configure
+              Cấu hình
             </Button>
             <Button type="text" size="small" disabled={i === 0} onClick={() => move(i, -1)}>
               ↑

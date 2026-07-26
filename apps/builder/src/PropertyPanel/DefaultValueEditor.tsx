@@ -17,7 +17,7 @@ export function DefaultValueEditor({
   const dv = prop(field, "defaultValue");
   const setDefault = (value: unknown) => set({ defaultValue: value } as Patch);
   return (
-    <Form.Item label="Default value">
+    <Form.Item label="Giá trị mặc định">
       {defaultValueKind === "boolean" ? (
         <Checkbox checked={!!dv} onChange={(e) => setDefault(e.target.checked || undefined)} />
       ) : defaultValueKind === "number" ? (

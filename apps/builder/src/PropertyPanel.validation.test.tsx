@@ -18,7 +18,7 @@ function setup(field: FieldNode, siblingNames: string[] = ["other"]) {
   // FieldForm groups sections into a Collapse with only Basic+Properties open by default,
   // so the Validation panel's controls aren't mounted until it's expanded. These tests all
   // exercise validation, so open it up front.
-  fireEvent.click(screen.getByText("Validation"));
+  fireEvent.click(screen.getByText("Kiểm tra"));
   // The panel re-emits the WHOLE rebuilt node; tests read the last emitted field.
   const lastField = () => onChange.mock.calls[onChange.mock.calls.length - 1]?.[1] as FieldNode;
   return { onChange, lastField };
@@ -56,8 +56,8 @@ describe("ValidationEditor severity", () => {
       validations: [{ type: "min", value: 3 }],
     });
 
-    await user.click(screen.getByText("Error"));
-    await user.click(await screen.findByText("Warning"));
+    await user.click(screen.getByText("Lỗi"));
+    await user.click(await screen.findByText("Cảnh báo"));
 
     expect(lastField()).toMatchObject({
       validations: [{ type: "min", value: 3, severity: "warning" }],
@@ -75,8 +75,8 @@ describe("ValidationEditor severity", () => {
       validations: [{ type: "min", value: 3, severity: "warning" }],
     });
 
-    await user.click(screen.getByText("Warning", { selector: ".ant-select-selection-item" }));
-    await user.click(await screen.findByText("Error"));
+    await user.click(screen.getByText("Cảnh báo", { selector: ".ant-select-selection-item" }));
+    await user.click(await screen.findByText("Lỗi"));
 
     const rule = (lastField() as { validations?: Array<Record<string, unknown>> }).validations?.[0];
     expect(rule).toBeDefined();
@@ -97,8 +97,8 @@ describe("ValidationEditor cross rules", () => {
       ["start"],
     );
 
-    await user.click(screen.getByText("Required", { selector: ".ant-select-selection-item" }));
-    await user.click(await screen.findByText("Cross-field (logic)"));
+    await user.click(screen.getByText("Bắt buộc", { selector: ".ant-select-selection-item" }));
+    await user.click(await screen.findByText("Liên trường (logic)"));
 
     expect(lastField()).toMatchObject({
       validations: [{ type: "cross", rule: { "==": [{ var: "end" }, { var: "start" }] } }],
@@ -137,7 +137,7 @@ describe("ValidationEditor cross rules", () => {
       ["min"],
     );
 
-    await user.click(screen.getByText("Value"));
+    await user.click(screen.getByText("Giá trị"));
 
     expect(lastField()).toMatchObject({
       validations: [{ type: "cross", rule: { ">": [{ var: "age" }, ""] } }],
@@ -155,7 +155,7 @@ describe("ValidationEditor cross rules", () => {
       ["min"],
     );
 
-    fireEvent.change(screen.getByPlaceholderText("value"), { target: { value: "18" } });
+    fireEvent.change(screen.getByPlaceholderText("giá trị"), { target: { value: "18" } });
 
     expect(lastField()).toMatchObject({
       validations: [{ type: "cross", rule: { ">": [{ var: "age" }, 18] } }],
@@ -170,7 +170,7 @@ describe("ValidationEditor cross rules", () => {
       validations: [{ type: "cross", rule: { and: [{ "==": [1, 1] }] } }],
     });
 
-    expect(screen.getByText(/edit via the JSON panel/i)).toBeTruthy();
+    expect(screen.getByText(/sửa qua bảng JSON/i)).toBeTruthy();
   });
 });
 
@@ -232,9 +232,9 @@ describe("FormSettingsEditor validateTrigger", () => {
 
     // Target the validateTrigger select by its placeholder (robust to other selects on the
     // form, e.g. the i18n "Other locales" tags select).
-    const triggerSelect = screen.getByText("On submit (default)").closest(".ant-select");
+    const triggerSelect = screen.getByText("Khi gửi (mặc định)").closest(".ant-select");
     await user.click(within(triggerSelect as HTMLElement).getByRole("combobox"));
-    await user.click(await screen.findByText("On blur"));
+    await user.click(await screen.findByText("Khi rời ô"));
 
     expect(onChangeForm).toHaveBeenCalledWith({ settings: { validateTrigger: "onBlur" } });
   });

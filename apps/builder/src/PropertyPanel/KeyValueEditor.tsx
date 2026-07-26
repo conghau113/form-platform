@@ -10,8 +10,8 @@ export function KeyValueEditor({
   pairs,
   onChange,
   numericKeys = false,
-  keyLabel = "key",
-  valueLabel = "value",
+  keyLabel = "khóa",
+  valueLabel = "giá trị",
 }: {
   pairs: KeyValuePair[];
   onChange: (pairs: KeyValuePair[]) => void;
@@ -51,7 +51,7 @@ export function KeyValueEditor({
             type="text"
             size="small"
             danger
-            aria-label="Remove row"
+            aria-label="Xóa dòng"
             onClick={() => onChange(pairs.filter((_, idx) => idx !== i))}
           >
             ✕
@@ -59,7 +59,7 @@ export function KeyValueEditor({
         </Space>
       ))}
       <Button size="small" onClick={() => onChange([...pairs, { key: "", value: "" }])}>
-        Add row
+        Thêm dòng
       </Button>
     </div>
   );

@@ -15,13 +15,13 @@ export const PANEL_SECTIONS = [
 export type PanelSectionKey = (typeof PANEL_SECTIONS)[number];
 
 export const SECTION_LABELS: Record<PanelSectionKey, string> = {
-  basic: "Basic",
-  props: "Properties",
-  translations: "Translations",
-  validation: "Validation",
-  layout: "Layout",
-  logic: "Logic (visibility & reactions)",
-  permissions: "Permissions",
+  basic: "Cơ bản",
+  props: "Thuộc tính",
+  translations: "Bản dịch",
+  validation: "Kiểm tra",
+  layout: "Bố cục",
+  logic: "Logic (hiển thị & phản ứng)",
+  permissions: "Phân quyền",
 };
 
 export const SECTION_KEYWORDS: Record<PanelSectionKey, string[]> = {

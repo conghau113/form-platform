@@ -43,15 +43,15 @@ export function FormSettingsEditor({
   return (
     <div style={{ padding: 16, overflow: "auto", height: "100%" }}>
       <Form layout="vertical" size="small">
-        <Form.Item label="Title">
+        <Form.Item label="Tiêu đề">
           <Input value={form.title} onChange={(e) => onChange({ title: e.target.value })} />
         </Form.Item>
-        <Form.Item label="Form id">
+        <Form.Item label="ID biểu mẫu">
           <Input value={form.id} onChange={(e) => onChange({ id: e.target.value })} />
         </Form.Item>
 
         <Divider orientation="left" plain>
-          Layout
+          Bố cục
         </Divider>
         <SettingControls
           settings={FORM_META.settings}
@@ -59,7 +59,7 @@ export function FormSettingsEditor({
           set={setLayoutKey}
         />
         <Space>
-          <Form.Item label="Label col (span)">
+          <Form.Item label="Cột nhãn (span)">
             <InputNumber
               min={0}
               max={24}
@@ -68,7 +68,7 @@ export function FormSettingsEditor({
               onChange={(v) => setColSpan("labelCol", v)}
             />
           </Form.Item>
-          <Form.Item label="Wrapper col (span)">
+          <Form.Item label="Cột nội dung (span)">
             <InputNumber
               min={0}
               max={24}
@@ -80,43 +80,43 @@ export function FormSettingsEditor({
         </Space>
 
         <Divider orientation="left" plain>
-          Validation
+          Kiểm tra
         </Divider>
         <Form.Item
-          label="Validate when"
-          tooltip="When the renderer runs validation. Default: on submit."
+          label="Kiểm tra khi"
+          tooltip="Thời điểm renderer chạy kiểm tra. Mặc định: khi gửi."
         >
           <Select
             allowClear
-            placeholder="On submit (default)"
+            placeholder="Khi gửi (mặc định)"
             style={{ width: 200 }}
             value={(settings.validateTrigger as string | undefined) ?? undefined}
             options={[
-              { label: "While typing", value: "onInput" },
-              { label: "On blur", value: "onBlur" },
-              { label: "On submit", value: "onSubmit" },
+              { label: "Khi đang gõ", value: "onInput" },
+              { label: "Khi rời ô", value: "onBlur" },
+              { label: "Khi gửi", value: "onSubmit" },
             ]}
             onChange={(v) => setSettingKey("validateTrigger", v)}
           />
         </Form.Item>
 
         <Divider orientation="left" plain>
-          Localization
+          Ngôn ngữ
         </Divider>
         <Form.Item
-          label="Default locale"
-          tooltip="The language the authored strings are written in (the implicit default)."
+          label="Ngôn ngữ mặc định"
+          tooltip="Ngôn ngữ mà các chuỗi được soạn (mặc định ngầm định)."
         >
           <Input
-            placeholder="e.g. en"
+            placeholder="vd en"
             style={{ width: 200 }}
             value={form.defaultLocale ?? ""}
             onChange={(e) => onChange({ defaultLocale: e.target.value || undefined })}
           />
         </Form.Item>
         <Form.Item
-          label="Other locales"
-          tooltip="Extra languages this form offers translations for. Type a code (e.g. vi) and press Enter."
+          label="Ngôn ngữ khác"
+          tooltip="Các ngôn ngữ khác biểu mẫu cung cấp bản dịch. Nhập mã (vd vi) rồi Enter."
         >
           <Select
             mode="tags"

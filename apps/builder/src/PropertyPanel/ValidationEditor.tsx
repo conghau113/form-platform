@@ -7,30 +7,30 @@ import { TranslatePopover } from "./TranslatePopover";
 import type { AuthoredField, Patch } from "./types";
 
 const RULE_LABELS: Record<ValidationRuleType, string> = {
-  required: "Required",
-  len: "Exact length",
-  min: "Min",
-  max: "Max",
-  pattern: "Pattern (regex)",
-  format: "Format",
-  cross: "Cross-field (logic)",
+  required: "Bắt buộc",
+  len: "Độ dài chính xác",
+  min: "Tối thiểu",
+  max: "Tối đa",
+  pattern: "Mẫu (regex)",
+  format: "Định dạng",
+  cross: "Liên trường (logic)",
 };
 const SEVERITY_OPTIONS = [
-  { label: "Error", value: "error" },
-  { label: "Warning", value: "warning" },
+  { label: "Lỗi", value: "error" },
+  { label: "Cảnh báo", value: "warning" },
 ];
 const FORMAT_OPTIONS = [
   { label: "Email", value: "email" },
   { label: "URL", value: "url" },
-  { label: "Phone", value: "phone" },
-  { label: "Integer", value: "integer" },
-  { label: "Number", value: "number" },
-  { label: "Money", value: "money" },
-  { label: "ID card", value: "idcard" },
-  { label: "Chinese", value: "zh" },
-  { label: "Letters", value: "en" },
+  { label: "Điện thoại", value: "phone" },
+  { label: "Số nguyên", value: "integer" },
+  { label: "Số", value: "number" },
+  { label: "Tiền tệ", value: "money" },
+  { label: "CMND/CCCD", value: "idcard" },
+  { label: "Tiếng Trung", value: "zh" },
+  { label: "Chữ cái", value: "en" },
   { label: "QQ", value: "qq" },
-  { label: "Postal code", value: "zip" },
+  { label: "Mã bưu chính", value: "zip" },
 ];
 
 /** A "Validation" section whose available rule kinds come from the registry
@@ -108,7 +108,7 @@ export function ValidationEditor({
               {(rule.type === "len" || rule.type === "min" || rule.type === "max") && (
                 <InputNumber
                   style={{ width: 90 }}
-                  placeholder="value"
+                  placeholder="giá trị"
                   value={(rule.value as number | null) ?? null}
                   onChange={(v) => update(i, { value: v ?? undefined })}
                 />
@@ -116,7 +116,7 @@ export function ValidationEditor({
               {rule.type === "pattern" && (
                 <Input
                   style={{ width: 130 }}
-                  placeholder="regex source"
+                  placeholder="biểu thức regex"
                   value={(rule.value as string) ?? ""}
                   onChange={(e) => update(i, { value: e.target.value })}
                 />
@@ -138,7 +138,7 @@ export function ValidationEditor({
               )}
               <Input
                 style={{ width: 140 }}
-                placeholder="message (optional)"
+                placeholder="thông báo (tùy chọn)"
                 value={rule.message ?? ""}
                 onChange={(e) => update(i, { message: e.target.value || undefined })}
               />
@@ -163,14 +163,14 @@ export function ValidationEditor({
             </Space>
           ))}
           <Button size="small" onClick={add}>
-            Add rule
+            Thêm quy tắc
           </Button>
         </div>
       )}
 
       <Form.Item
-        label="Remote check (URL)"
-        tooltip="GET url?value=<value>&name=<field> → { valid, message? }. valid:false blocks submit; network failure never blocks."
+        label="Kiểm tra từ xa (URL)"
+        tooltip="GET url?value=<value>&name=<field> → { valid, message? }. valid:false chặn gửi; lỗi mạng không bao giờ chặn."
         style={{ marginTop: 12 }}
       >
         <Input
@@ -181,11 +181,11 @@ export function ValidationEditor({
       </Form.Item>
       {av && (
         <Space>
-          <Form.Item label="Message">
+          <Form.Item label="Thông báo">
             <Space.Compact>
               <Input
                 style={{ width: 160 }}
-                placeholder="server message wins"
+                placeholder="thông báo từ server ưu tiên"
                 value={av.message ?? ""}
                 onChange={(e) => setAv({ message: e.target.value || undefined })}
               />
@@ -197,7 +197,7 @@ export function ValidationEditor({
               />
             </Space.Compact>
           </Form.Item>
-          <Form.Item label="Debounce (ms)">
+          <Form.Item label="Trì hoãn (ms)">
             <InputNumber
               style={{ width: 110 }}
               min={0}
@@ -228,7 +228,7 @@ function CrossRuleControls({
   if (!simple) {
     return (
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        Complex rule — edit via the JSON panel
+        Quy tắc phức tạp — sửa qua bảng JSON
       </Typography.Text>
     );
   }
@@ -257,8 +257,8 @@ function CrossRuleControls({
         size="small"
         value={simple.right.kind}
         options={[
-          { label: "Field", value: "field" },
-          { label: "Value", value: "value" },
+          { label: "Trường", value: "field" },
+          { label: "Giá trị", value: "value" },
         ]}
         onChange={(kind) =>
           write(
@@ -280,7 +280,7 @@ function CrossRuleControls({
       ) : (
         <Input
           style={{ width: 90 }}
-          placeholder="value"
+          placeholder="giá trị"
           value={simple.right.value}
           onChange={(e) => write(simple.op, simple.left, { kind: "value", value: e.target.value })}
         />

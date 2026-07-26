@@ -45,6 +45,6 @@ describe("presetFromField", () => {
   });
 
   it("falls back to a placeholder name when blank", () => {
-    expect(presetFromField("   ", field).name).toBe("Untitled preset");
+    expect(presetFromField("   ", field).name).toBe("Preset chưa đặt tên");
   });
 });

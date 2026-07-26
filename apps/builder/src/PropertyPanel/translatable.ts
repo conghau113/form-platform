@@ -3,14 +3,14 @@
  *  (a leaf has `label`/`placeholder`/…, a container `label`/`title`/…, display-text
  *  `content`), so we filter to the ones that actually hold an authored string. */
 const TRANSLATABLE_ATTRS: { attr: string; label: string }[] = [
-  { attr: "label", label: "Label" },
-  { attr: "title", label: "Title" },
-  { attr: "description", label: "Description" },
-  { attr: "placeholder", label: "Placeholder" },
-  { attr: "helpText", label: "Help text" },
-  { attr: "tooltip", label: "Tooltip" },
-  { attr: "extra", label: "Extra hint" },
-  { attr: "content", label: "Content" },
+  { attr: "label", label: "Nhãn" },
+  { attr: "title", label: "Tiêu đề" },
+  { attr: "description", label: "Mô tả" },
+  { attr: "placeholder", label: "Chữ gợi ý" },
+  { attr: "helpText", label: "Văn bản trợ giúp" },
+  { attr: "tooltip", label: "Chú thích" },
+  { attr: "extra", label: "Gợi ý thêm" },
+  { attr: "content", label: "Nội dung" },
 ];
 
 export interface TranslatableAttr {

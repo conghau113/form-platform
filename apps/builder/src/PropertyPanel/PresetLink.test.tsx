@@ -44,7 +44,7 @@ describe("PresetLink", () => {
   it("unlinks (clearing the link metadata) on the unlink button", () => {
     const set = vi.fn();
     render(<PresetLink field={field({ presetId: "org_select" })} presets={[preset]} set={set} />);
-    fireEvent.click(screen.getByLabelText("Unlink preset"));
+    fireEvent.click(screen.getByLabelText("Gỡ liên kết preset"));
     expect(set).toHaveBeenCalledWith({ presetId: undefined, overrides: undefined });
   });
 });

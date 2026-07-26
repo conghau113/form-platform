@@ -12,7 +12,7 @@ describe("translatableAttrs", () => {
       tooltip: undefined,
     });
     expect(attrs.map((a) => a.attr)).toEqual(["label", "placeholder"]);
-    expect(attrs[0]).toEqual({ attr: "label", label: "Label", value: "Email" });
+    expect(attrs[0]).toEqual({ attr: "label", label: "Nhãn", value: "Email" });
   });
 
   it("covers container text (label/title/description)", () => {

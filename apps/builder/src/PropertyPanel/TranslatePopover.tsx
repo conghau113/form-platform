@@ -32,7 +32,7 @@ export function TranslatePopover({
   return (
     <Popover
       trigger="click"
-      title={title ?? `Translations${value ? ` — ${value}` : ""}`}
+      title={title ?? `Bản dịch${value ? ` — ${value}` : ""}`}
       content={
         <div style={{ display: "flex", flexDirection: "column", gap: 4, width: 200 }}>
           {locales.map((locale) => (
@@ -51,8 +51,8 @@ export function TranslatePopover({
       <Button
         type="text"
         size="small"
-        aria-label="Translate"
-        title="Translate"
+        aria-label="Dịch"
+        title="Dịch"
         icon={<TranslationOutlined />}
       />
     </Popover>

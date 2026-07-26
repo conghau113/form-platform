@@ -22,7 +22,7 @@ function setup(options: TreeOption[] = tree) {
 describe("TreeOptionsEditor", () => {
   it("renders one label/value row per node, including nested children", () => {
     setup();
-    const labels = screen.getAllByPlaceholderText("label") as HTMLInputElement[];
+    const labels = screen.getAllByPlaceholderText("nhãn") as HTMLInputElement[];
     expect(labels.map((i) => i.value)).toEqual(["Vietnam", "Hanoi", "Laos"]);
   });
 
@@ -30,7 +30,7 @@ describe("TreeOptionsEditor", () => {
     const user = userEvent.setup();
     const onChange = setup();
 
-    const hanoi = (screen.getAllByPlaceholderText("label") as HTMLInputElement[])[1];
+    const hanoi = (screen.getAllByPlaceholderText("nhãn") as HTMLInputElement[])[1];
     await user.type(hanoi, "!");
 
     expect(onChange).toHaveBeenLastCalledWith([
@@ -46,7 +46,7 @@ describe("TreeOptionsEditor", () => {
     const onChange = setup();
 
     // One "+ child" per row; the last belongs to Laos (childless so far).
-    const addChild = screen.getAllByRole("button", { name: "+ child" });
+    const addChild = screen.getAllByRole("button", { name: "+ con" });
     await user.click(addChild[addChild.length - 1] as HTMLElement);
 
     expect(onChange).toHaveBeenLastCalledWith([
@@ -68,7 +68,7 @@ describe("TreeOptionsEditor", () => {
     const user = userEvent.setup();
     const onChange = setup();
 
-    await user.click(screen.getByRole("button", { name: "Add option" }));
+    await user.click(screen.getByRole("button", { name: "Thêm tùy chọn" }));
 
     expect(onChange).toHaveBeenLastCalledWith([...tree, { label: "", value: "" }]);
   });

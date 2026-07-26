@@ -96,10 +96,10 @@ describe("OutlineTree", () => {
     const { tree, value } = setup();
     const card = tree.children[0];
     // Collapse the Card row: its child "A" disappears, nothing is deleted.
-    fireEvent.click(screen.getAllByLabelText("Collapse")[1]);
+    fireEvent.click(screen.getAllByLabelText("Thu gọn")[1]);
     expect(screen.queryByText("A")).toBeNull();
     expect(screen.getByText("Profile card")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Expand"));
+    fireEvent.click(screen.getByLabelText("Mở rộng"));
     expect(screen.getByText("A")).toBeTruthy();
     expect(value.remove).not.toHaveBeenCalled();
     expect(card.children).toHaveLength(1);

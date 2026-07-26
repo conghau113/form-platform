@@ -29,7 +29,7 @@ function TemplateCard({
           <Button
             type="text"
             size="small"
-            aria-label={`Delete ${template.title}`}
+            aria-label={`Xóa ${template.title}`}
             icon={<DeleteOutlined />}
             onClick={onDelete}
           />
@@ -37,7 +37,7 @@ function TemplateCard({
       }
       actions={[
         <Button key="use" type="link" onClick={onUse}>
-          Use
+          Dùng
         </Button>,
       ]}
     >
@@ -89,29 +89,29 @@ export function TemplateGallery({
     <Modal
       open={open}
       onCancel={onClose}
-      title="Templates"
+      title="Mẫu có sẵn"
       width={760}
       footer={null}
       destroyOnHidden
     >
-      <Typography.Title level={5}>Starters</Typography.Title>
+      <Typography.Title level={5}>Mẫu khởi đầu</Typography.Title>
       {grid(BUILTIN_TEMPLATES, false)}
 
       <Typography.Title level={5} style={{ marginTop: 24 }}>
-        Your templates
+        Mẫu của bạn
       </Typography.Title>
       {userTemplates.length > 0 ? (
         grid(userTemplates, true)
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="Save the current form below to reuse it later."
+          description="Lưu biểu mẫu hiện tại bên dưới để tái sử dụng."
         />
       )}
 
       <Space.Compact style={{ marginTop: 24, width: "100%" }}>
         <Input
-          placeholder="Template name"
+          placeholder="Tên mẫu"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onPressEnter={() => {
@@ -128,7 +128,7 @@ export function TemplateGallery({
             setName("");
           }}
         >
-          Save current form as template
+          Lưu biểu mẫu hiện tại thành mẫu
         </Button>
       </Space.Compact>
     </Modal>

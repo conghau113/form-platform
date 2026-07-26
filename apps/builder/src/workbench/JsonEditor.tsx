@@ -83,7 +83,7 @@ export function JsonEditor({
         <Alert
           type="error"
           showIcon
-          message="Schema errors — the canvas keeps the last valid version"
+          message="Lỗi schema — canvas giữ phiên bản hợp lệ gần nhất"
           description={
             <ul style={{ margin: 0, paddingLeft: 18 }}>
               {errors.map((line) => (
@@ -100,7 +100,7 @@ export function JsonEditor({
                 setText(json);
               }}
             >
-              Revert
+              Hoàn nguyên
             </Button>
           }
           style={{ borderRadius: 0 }}
@@ -112,7 +112,7 @@ export function JsonEditor({
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         spellCheck={false}
-        aria-label="Form schema JSON"
+        aria-label="JSON schema biểu mẫu"
         status={errors ? "error" : undefined}
         style={{
           flex: 1,

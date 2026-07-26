@@ -32,16 +32,16 @@ describe("TemplateGallery", () => {
   it("Use applies the template schema and closes", () => {
     const { onUse, onClose } = setup();
     const contact = BUILTIN_TEMPLATES.find((t) => t.id === "contact") as Template;
-    fireEvent.click(within(card(contact.title)).getByText("Use"));
+    fireEvent.click(within(card(contact.title)).getByText("Dùng"));
     expect(onUse).toHaveBeenCalledWith(contact.schema);
     expect(onClose).toHaveBeenCalled();
   });
 
   it("Save current form as template is gated on a name", () => {
     const { onSaveCurrent } = setup();
-    const button = screen.getByRole("button", { name: "Save current form as template" });
+    const button = screen.getByRole("button", { name: "Lưu biểu mẫu hiện tại thành mẫu" });
     expect((button as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByPlaceholderText("Template name"), {
+    fireEvent.change(screen.getByPlaceholderText("Tên mẫu"), {
       target: { value: "My preset" },
     });
     fireEvent.click(button);
@@ -53,7 +53,7 @@ describe("TemplateGallery", () => {
     const user: Template = { id: "user-1", title: "Saved one", description: "d", schema };
     const { onDeleteUser } = setup({ userTemplates: [user] });
     expect(screen.getByText("Saved one")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Delete Saved one"));
+    fireEvent.click(screen.getByLabelText("Xóa Saved one"));
     expect(onDeleteUser).toHaveBeenCalledWith("user-1");
   });
 });

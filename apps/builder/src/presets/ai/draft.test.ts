@@ -37,7 +37,7 @@ describe("presetFromDraft", () => {
 
   it("gives untitled drafts a fallback name", () => {
     const preset = presetFromDraft({ name: "  ", fieldType: "text", patch: { label: "X" } });
-    expect(preset.name).toBe("Untitled preset");
+    expect(preset.name).toBe("Preset chưa đặt tên");
   });
 });
 

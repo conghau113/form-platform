@@ -15,70 +15,70 @@ export const NUMBER_RULES: ValidationRuleType[] = ["required", "min", "max", "cr
 
 export const placeholder: SettingDescriptor = {
   key: "placeholder",
-  label: "Placeholder",
+  label: "Chữ gợi ý",
   control: "text",
 };
 export const maxLength: SettingDescriptor = {
   key: "maxLength",
-  label: "Max length",
+  label: "Độ dài tối đa",
   control: "number",
 };
 export const optionsSetting: SettingDescriptor = {
   key: "options",
-  label: "Options",
+  label: "Tùy chọn",
   control: "options",
 };
 
 /** Shared antd `size` override (small/middle/large) — input + choice families. */
 export const sizeSetting: SettingDescriptor = {
   key: "size",
-  label: "Size",
+  label: "Kích thước",
   control: "segmented",
   choices: [
-    { label: "Small", value: "small" },
-    { label: "Middle", value: "middle" },
-    { label: "Large", value: "large" },
+    { label: "Nhỏ", value: "small" },
+    { label: "Vừa", value: "middle" },
+    { label: "Lớn", value: "large" },
   ],
 };
 /** Shared antd input `variant` (border treatment). */
 export const variantSetting: SettingDescriptor = {
   key: "variant",
-  label: "Variant",
+  label: "Kiểu viền",
   control: "segmented",
   choices: [
-    { label: "Outlined", value: "outlined" },
-    { label: "Filled", value: "filled" },
-    { label: "Borderless", value: "borderless" },
+    { label: "Có viền", value: "outlined" },
+    { label: "Nền đặc", value: "filled" },
+    { label: "Không viền", value: "borderless" },
   ],
 };
 export const pickerSetting: SettingDescriptor = {
   key: "picker",
-  label: "Picker",
+  label: "Kiểu chọn",
   control: "select",
   choices: [
-    { label: "Date", value: "date" },
-    { label: "Week", value: "week" },
-    { label: "Month", value: "month" },
-    { label: "Quarter", value: "quarter" },
-    { label: "Year", value: "year" },
+    { label: "Ngày", value: "date" },
+    { label: "Tuần", value: "week" },
+    { label: "Tháng", value: "month" },
+    { label: "Quý", value: "quarter" },
+    { label: "Năm", value: "year" },
   ],
 };
 
 /** Display props shared by the date pickers (X4). `format` is a dayjs token string. */
 export const DATE_SETTINGS: SettingDescriptor[] = [
-  { key: "format", label: "Format", control: "text" },
-  { key: "showTime", label: "Show time", control: "checkbox" },
-  { key: "allowClear", label: "Allow clear", control: "checkbox" },
+  { key: "format", label: "Định dạng", control: "text" },
+  { key: "showTime", label: "Hiện giờ", control: "checkbox" },
+  { key: "allowClear", label: "Cho phép xóa", control: "checkbox" },
   sizeSetting,
   variantSetting,
 ];
 
 /** Display props shared by the time pickers (X4). */
 export const TIME_SETTINGS: SettingDescriptor[] = [
-  { key: "format", label: "Format", control: "text" },
-  { key: "use12Hours", label: "12-hour clock", control: "checkbox" },
-  { key: "minuteStep", label: "Minute step", control: "number" },
-  { key: "allowClear", label: "Allow clear", control: "checkbox" },
+  { key: "format", label: "Định dạng", control: "text" },
+  { key: "use12Hours", label: "Đồng hồ 12 giờ", control: "checkbox" },
+  { key: "minuteStep", label: "Bước phút", control: "number" },
+  { key: "allowClear", label: "Cho phép xóa", control: "checkbox" },
   sizeSetting,
   variantSetting,
 ];
@@ -102,33 +102,33 @@ export const CONTAINER: ComponentBehavior = {
 export const FORM_SETTINGS: SettingDescriptor[] = [
   {
     key: "layout",
-    label: "Layout",
+    label: "Bố cục",
     control: "segmented",
     choices: [
-      { label: "Vertical", value: "vertical" },
-      { label: "Horizontal", value: "horizontal" },
-      { label: "Inline", value: "inline" },
+      { label: "Dọc", value: "vertical" },
+      { label: "Ngang", value: "horizontal" },
+      { label: "Cùng dòng", value: "inline" },
     ],
   },
   {
     key: "size",
-    label: "Size",
+    label: "Kích thước",
     control: "segmented",
     choices: [
-      { label: "Small", value: "small" },
-      { label: "Middle", value: "middle" },
-      { label: "Large", value: "large" },
+      { label: "Nhỏ", value: "small" },
+      { label: "Vừa", value: "middle" },
+      { label: "Lớn", value: "large" },
     ],
   },
   {
     key: "labelAlign",
-    label: "Label align",
+    label: "Canh nhãn",
     control: "segmented",
     choices: [
-      { label: "Right", value: "right" },
-      { label: "Left", value: "left" },
+      { label: "Phải", value: "right" },
+      { label: "Trái", value: "left" },
     ],
   },
-  { key: "colon", label: "Show colon", control: "checkbox" },
-  { key: "labelWrap", label: "Wrap labels", control: "checkbox" },
+  { key: "colon", label: "Hiện dấu hai chấm", control: "checkbox" },
+  { key: "labelWrap", label: "Xuống dòng nhãn", control: "checkbox" },
 ];

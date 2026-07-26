@@ -155,7 +155,7 @@ export function App({
     guard: metaGuard(),
     createNode: (type, patch, taken) => fieldToTree(newField(type, taken, patch)),
     commit: (next, dropped) => {
-      history.set(next, "Drop field");
+      history.set(next, "Thả trường");
       setSelection(selectMany(emptySelection, dropped));
     },
     onClickSelect: (uids, additive) =>
@@ -167,7 +167,7 @@ export function App({
     if (!node || node.node.type === "form" || !describeNode(node.node.type).behavior.deletable) {
       return;
     }
-    history.set(remove(tree, uid), "Delete");
+    history.set(remove(tree, uid), "Xóa");
     if (selectedUid === uid) setSelection(emptySelection);
   }
 
@@ -180,7 +180,7 @@ export function App({
     const dup = clone(node, collectNames(tree));
     const next = insertAfter(tree, uid, dup, metaGuard());
     if (next !== tree) {
-      history.set(next, "Duplicate");
+      history.set(next, "Nhân bản");
       setSelection(select(emptySelection, dup.uid));
     }
   }
@@ -206,7 +206,7 @@ export function App({
     resizeColSpan: (uid, key, span, gesture) =>
       history.set(
         (prev) => setColSpan(prev, uid, key, span),
-        "Resize column",
+        "Đổi kích thước cột",
         `resize:${uid}:${gesture}`,
       ),
   };
@@ -383,12 +383,14 @@ export function App({
                 presets={allPresets}
                 locales={form.locales}
                 onChange={(uid, field) =>
-                  history.set(applyFieldEdit(tree, uid, field), "Edit field")
+                  history.set(applyFieldEdit(tree, uid, field), "Sửa trường")
                 }
                 onStepsEdit={(uid, op) =>
-                  history.set(applyStepsOp(tree, uid, op, metaGuard()), "Edit steps")
+                  history.set(applyStepsOp(tree, uid, op, metaGuard()), "Sửa các bước")
                 }
-                onChangeForm={(patch) => history.set(patchNode(tree, tree.uid, patch), "Edit form")}
+                onChangeForm={(patch) =>
+                  history.set(patchNode(tree, tree.uid, patch), "Sửa biểu mẫu")
+                }
               />
             </SettingsPanel>
           </div>

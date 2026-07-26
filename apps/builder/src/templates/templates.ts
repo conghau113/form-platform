@@ -27,61 +27,61 @@ function preset(id: string, title: string, description: string, doc: unknown): T
 }
 
 export const BUILTIN_TEMPLATES: Template[] = [
-  preset("blank", "Blank form", "An empty form to start from scratch.", {
+  preset("blank", "Biểu mẫu trống", "Biểu mẫu trống để bắt đầu từ đầu.", {
     formVersion: 3,
     id: "untitled",
-    title: "Untitled form",
+    title: "Biểu mẫu chưa đặt tên",
     fields: [],
   }),
-  preset("contact", "Contact request", "Name, email and a conditional country field.", formV1),
+  preset("contact", "Yêu cầu liên hệ", "Tên, email và trường quốc gia có điều kiện.", formV1),
   preset(
     "onboarding",
-    "Employee onboarding",
-    "Tabs, cards and a grid — a layout-container showcase.",
+    "Tiếp nhận nhân viên",
+    "Tab, thẻ và lưới — trình diễn vùng chứa bố cục.",
     formV3,
   ),
-  preset("feedback", "Feedback survey", "Rating, recommendation and free-text comments.", {
+  preset("feedback", "Khảo sát phản hồi", "Đánh giá, giới thiệu và nhận xét tự do.", {
     formVersion: 3,
     id: "feedback-survey",
-    title: "Feedback survey",
+    title: "Khảo sát phản hồi",
     fields: [
-      { type: "rate", name: "rating", label: "Overall rating", required: true },
+      { type: "rate", name: "rating", label: "Đánh giá tổng thể", required: true },
       {
         type: "radio",
         name: "recommend",
-        label: "Would you recommend us?",
+        label: "Bạn có giới thiệu chúng tôi không?",
         options: [
-          { label: "Yes", value: "yes" },
-          { label: "No", value: "no" },
+          { label: "Có", value: "yes" },
+          { label: "Không", value: "no" },
         ],
       },
-      { type: "textarea", name: "comments", label: "Comments" },
+      { type: "textarea", name: "comments", label: "Nhận xét" },
     ],
   }),
-  preset("registration", "Event registration", "Attendee details and session choice.", {
+  preset("registration", "Đăng ký sự kiện", "Thông tin người tham dự và lựa chọn phiên.", {
     formVersion: 3,
     id: "event-registration",
-    title: "Event registration",
+    title: "Đăng ký sự kiện",
     fields: [
       {
         type: "grid",
         cols: 2,
         children: [
-          { type: "text", name: "fullName", label: "Full name", required: true },
+          { type: "text", name: "fullName", label: "Họ và tên", required: true },
           { type: "text", name: "email", label: "Email", required: true },
         ],
       },
-      { type: "number", name: "guests", label: "Number of guests" },
+      { type: "number", name: "guests", label: "Số khách" },
       {
         type: "select",
         name: "session",
-        label: "Session",
+        label: "Phiên",
         options: [
-          { label: "Morning", value: "am" },
-          { label: "Afternoon", value: "pm" },
+          { label: "Buổi sáng", value: "am" },
+          { label: "Buổi chiều", value: "pm" },
         ],
       },
-      { type: "checkbox", name: "terms", label: "I accept the terms", required: true },
+      { type: "checkbox", name: "terms", label: "Tôi đồng ý với điều khoản", required: true },
     ],
   }),
 ];
@@ -117,8 +117,8 @@ export function useUserTemplates(): {
     (title: string, schema: FormSchema) => {
       const tpl: Template = {
         id: `user-${Date.now()}`,
-        title: title.trim() || "Untitled template",
-        description: "Saved from the builder",
+        title: title.trim() || "Mẫu chưa đặt tên",
+        description: "Đã lưu từ trình thiết kế",
         schema,
       };
       setTemplates((list) => [tpl, ...list]);

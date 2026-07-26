@@ -28,7 +28,7 @@ class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error 
         <Alert
           type="error"
           showIcon
-          message="Invalid schema"
+          message="Schema không hợp lệ"
           description={this.state.error.message}
         />
       );

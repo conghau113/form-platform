@@ -61,19 +61,19 @@ export function FieldForm({
   // --- Basic identity + universal interaction pattern ------------------------
   const basic = (
     <>
-      <Form.Item label="Label">
+      <Form.Item label="Nhãn">
         <Input value={field.label} onChange={(e) => set({ label: e.target.value })} />
       </Form.Item>
-      <Form.Item label="Name (schema key)">
+      <Form.Item label="Tên (khóa schema)">
         <Input value={field.name} onChange={(e) => set({ name: e.target.value })} />
       </Form.Item>
-      <Form.Item label="Help text">
+      <Form.Item label="Văn bản trợ giúp">
         <Input
           value={field.helpText ?? ""}
           onChange={(e) => set({ helpText: e.target.value || undefined })}
         />
       </Form.Item>
-      <Form.Item label="Tooltip">
+      <Form.Item label="Chú thích">
         <Input
           value={field.tooltip ?? ""}
           onChange={(e) => set({ tooltip: e.target.value || undefined })}
@@ -82,7 +82,7 @@ export function FieldForm({
       {/* Persistent hint under the control (Form.Item `extra`); a validation message
           never replaces it, unlike Help text. Leaves only — arrays render their own shell. */}
       {!isArray && (
-        <Form.Item label="Extra hint">
+        <Form.Item label="Gợi ý thêm">
           <Input
             value={field.extra ?? ""}
             onChange={(e) => set({ extra: e.target.value || undefined } as Patch)}
@@ -95,7 +95,7 @@ export function FieldForm({
             checked={!!field.required}
             onChange={(e) => set({ required: e.target.checked || undefined })}
           >
-            Required
+            Bắt buộc
           </Checkbox>
         </Form.Item>
         {!isArray && (
@@ -104,14 +104,14 @@ export function FieldForm({
               checked={!!field.hasFeedback}
               onChange={(e) => set({ hasFeedback: e.target.checked || undefined } as Patch)}
             >
-              Show feedback
+              Hiện phản hồi
             </Checkbox>
           </Form.Item>
         )}
         {/* Universal interaction pattern (Formily-style), layered on the additive
             disabled/readOnly/readPretty flags — mutually exclusive in the UI. */}
         {!isArray && (
-          <Form.Item label="Pattern">
+          <Form.Item label="Chế độ">
             <Select
               style={{ width: 140 }}
               value={
@@ -124,10 +124,10 @@ export function FieldForm({
                       : "editable"
               }
               options={[
-                { label: "Editable", value: "editable" },
-                { label: "Disabled", value: "disabled" },
-                { label: "Read-only", value: "readOnly" },
-                { label: "Read-pretty", value: "readPretty" },
+                { label: "Chỉnh sửa được", value: "editable" },
+                { label: "Vô hiệu hóa", value: "disabled" },
+                { label: "Chỉ đọc", value: "readOnly" },
+                { label: "Hiển thị đẹp", value: "readPretty" },
               ]}
               onChange={(p) =>
                 set({
@@ -191,7 +191,7 @@ export function FieldForm({
             set({ layout: { ...field.layout, hideOnMobile: e.target.checked || undefined } })
           }
         >
-          Hide on mobile
+          Ẩn trên di động
         </Checkbox>
       </Form.Item>
     </>
@@ -204,7 +204,7 @@ export function FieldForm({
           is evaluated against the row's merged scope (G4). For an item field, `condFields`
           offers the row's sibling names; referencing a top-level field still works via the
           JSON panel since the row scope merges outer values. */}
-      <Form.Item label="Show this field">
+      <Form.Item label="Hiển thị trường này">
         <Select
           value={equals ? "when" : "always"}
           onChange={(mode) => {
@@ -215,14 +215,14 @@ export function FieldForm({
             }
           }}
           options={[
-            { label: "Always", value: "always" },
-            { label: "When a field equals a value", value: "when" },
+            { label: "Luôn luôn", value: "always" },
+            { label: "Khi một trường bằng giá trị", value: "when" },
           ]}
         />
       </Form.Item>
       {equals && (
         <Space>
-          <Form.Item label="Field">
+          <Form.Item label="Trường">
             <Select
               style={{ width: 130 }}
               value={equals.field}
@@ -232,7 +232,7 @@ export function FieldForm({
               options={condFields.map((n) => ({ label: n, value: n }))}
             />
           </Form.Item>
-          <Form.Item label="Equals">
+          <Form.Item label="Bằng">
             <Input
               value={equals.value}
               onChange={(e) =>
@@ -257,7 +257,7 @@ export function FieldForm({
   // --- Permissions (RBAC) ----------------------------------------------------
   const permissions = (
     <>
-      <Form.Item label="View roles (comma-separated)">
+      <Form.Item label="Vai trò xem (ngăn cách bằng dấu phẩy)">
         <Input
           value={csv(field.permissions?.viewRoles)}
           onChange={(e) => {
@@ -270,7 +270,7 @@ export function FieldForm({
           }}
         />
       </Form.Item>
-      <Form.Item label="Edit roles (comma-separated)">
+      <Form.Item label="Vai trò sửa (ngăn cách bằng dấu phẩy)">
         <Input
           value={csv(field.permissions?.editRoles)}
           onChange={(e) => {
@@ -334,7 +334,7 @@ export function FieldForm({
       <Input
         allowClear
         size="small"
-        placeholder="Search settings"
+        placeholder="Tìm thiết lập"
         prefix={<SearchOutlined />}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -355,8 +355,8 @@ export function FieldForm({
               <Button
                 type="text"
                 size="small"
-                aria-label={pinned ? `Unpin "${label}"` : `Pin "${label}"`}
-                title={pinned ? `Unpin "${label}"` : `Pin "${label}"`}
+                aria-label={pinned ? `Bỏ ghim "${label}"` : `Ghim "${label}"`}
+                title={pinned ? `Bỏ ghim "${label}"` : `Ghim "${label}"`}
                 icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();

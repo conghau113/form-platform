@@ -51,7 +51,7 @@ export function JsonEditor({
       external.current = parsed;
       onChange(parsed);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Invalid JSON");
+      setError(e instanceof Error ? e.message : "JSON không hợp lệ");
     }
   };
 

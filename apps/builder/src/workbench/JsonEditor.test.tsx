@@ -13,7 +13,7 @@ const json = JSON.stringify(schema, null, 2);
 function editor() {
   const onApply = vi.fn();
   render(<JsonEditor json={json} onApply={onApply} />);
-  const textarea = screen.getByLabelText("Form schema JSON") as HTMLTextAreaElement;
+  const textarea = screen.getByLabelText("JSON schema biểu mẫu") as HTMLTextAreaElement;
   return { onApply, textarea };
 }
 
@@ -36,14 +36,14 @@ describe("JsonEditor", () => {
     typeAndSettle(textarea, JSON.stringify({ ...schema, title: "Renamed" }, null, 2));
     expect(onApply).toHaveBeenCalledTimes(1);
     expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ title: "Renamed" }));
-    expect(screen.queryByText(/Schema errors/)).toBeNull();
+    expect(screen.queryByText(/Lỗi schema/)).toBeNull();
   });
 
   it("shows a parse error inline and never applies broken JSON", () => {
     const { onApply, textarea } = editor();
     typeAndSettle(textarea, "{ this is not json");
     expect(onApply).not.toHaveBeenCalled();
-    expect(screen.getByText(/Schema errors/)).toBeTruthy();
+    expect(screen.getByText(/Lỗi schema/)).toBeTruthy();
     // The draft is kept for fixing — no forced revert to the canonical text.
     expect(textarea.value).toBe("{ this is not json");
   });
@@ -55,23 +55,23 @@ describe("JsonEditor", () => {
       JSON.stringify({ ...schema, fields: [{ type: "bogus", name: "x" }] }, null, 2),
     );
     expect(onApply).not.toHaveBeenCalled();
-    expect(screen.getByText(/Schema errors/)).toBeTruthy();
+    expect(screen.getByText(/Lỗi schema/)).toBeTruthy();
     expect(screen.getByRole("list").textContent).toMatch(/fields/);
   });
 
   it("reverts to the canonical JSON on demand", () => {
     const { onApply, textarea } = editor();
     typeAndSettle(textarea, "broken{");
-    fireEvent.click(screen.getByText("Revert"));
+    fireEvent.click(screen.getByText("Hoàn nguyên"));
     expect(textarea.value).toBe(json);
-    expect(screen.queryByText(/Schema errors/)).toBeNull();
+    expect(screen.queryByText(/Lỗi schema/)).toBeNull();
     expect(onApply).not.toHaveBeenCalled();
   });
 
   it("resyncs an idle editor when the tree changes elsewhere, but keeps a dirty draft", () => {
     const onApply = vi.fn();
     const { rerender } = render(<JsonEditor json={json} onApply={onApply} />);
-    const textarea = screen.getByLabelText("Form schema JSON") as HTMLTextAreaElement;
+    const textarea = screen.getByLabelText("JSON schema biểu mẫu") as HTMLTextAreaElement;
 
     // Idle (committed) editor follows canvas edits.
     const fromCanvas = JSON.stringify({ ...schema, title: "Canvas edit" }, null, 2);

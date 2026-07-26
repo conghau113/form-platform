@@ -21,7 +21,7 @@ export function StepsEditor({
   return (
     <>
       <Divider orientation="left" plain>
-        Steps
+        Các bước
       </Divider>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {steps.map((step, i) => (
@@ -29,13 +29,13 @@ export function StepsEditor({
           <Space key={i} wrap align="start">
             <Input
               style={{ width: 130 }}
-              placeholder="label"
+              placeholder="nhãn"
               value={step.label ?? ""}
               onChange={(e) => emit({ kind: "patch", index: i, patch: { label: e.target.value } })}
             />
             <Input
               style={{ width: 160 }}
-              placeholder="description (optional)"
+              placeholder="mô tả (tùy chọn)"
               value={step.description ?? ""}
               onChange={(e) =>
                 emit({
@@ -73,7 +73,7 @@ export function StepsEditor({
           </Space>
         ))}
         <Button size="small" onClick={() => emit({ kind: "add", step: newField("step") })}>
-          Add step
+          Thêm bước
         </Button>
       </div>
     </>

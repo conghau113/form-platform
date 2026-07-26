@@ -200,7 +200,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
         // inert label.
         <span
           className="designer-aux"
-          title={meta.behavior.draggable ? "Drag to move" : undefined}
+          title={meta.behavior.draggable ? "Kéo để di chuyển" : undefined}
           onPointerDown={meta.behavior.draggable ? startMove : undefined}
           style={{
             position: "absolute",
@@ -250,16 +250,16 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
           <span style={{ fontSize: 11, padding: "0 4px", whiteSpace: "nowrap" }}>
             {nodeLabel(node)}
           </span>
-          <ToolbarButton title="Drag" onPointerDown={startMove}>
+          <ToolbarButton title="Kéo" onPointerDown={startMove}>
             <HolderOutlined />
           </ToolbarButton>
           {meta.behavior.cloneable && (
-            <ToolbarButton title="Copy" onClick={() => d.copy(uid)}>
+            <ToolbarButton title="Sao chép" onClick={() => d.copy(uid)}>
               <CopyOutlined />
             </ToolbarButton>
           )}
           {meta.behavior.deletable && (
-            <ToolbarButton title="Delete" onClick={() => d.remove(uid)}>
+            <ToolbarButton title="Xóa" onClick={() => d.remove(uid)}>
               <DeleteOutlined />
             </ToolbarButton>
           )}
@@ -278,7 +278,7 @@ function NodeShell({ uid, node, children }: { uid: string; node: FieldNode; chil
         // (pointer-inert) control. A slim blue bar marks the boundary.
         <div
           className="designer-aux"
-          title="Drag to resize column"
+          title="Kéo để đổi kích thước cột"
           onPointerDown={startResize}
           style={{
             position: "absolute",
@@ -423,7 +423,9 @@ class CanvasBoundary extends Component<
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: 24, color: RED }}>Invalid schema: {this.state.error.message}</div>
+        <div style={{ padding: 24, color: RED }}>
+          Schema không hợp lệ: {this.state.error.message}
+        </div>
       );
     }
     return this.props.children;
@@ -445,7 +447,7 @@ function buildPathIndex(root: TreeNode): Map<string, string> {
   return map;
 }
 
-const LEGEND = "Drag a field from the palette · Click to select · Copy ⌘/Ctrl+C/V · Delete";
+const LEGEND = "Kéo một trường từ bảng chọn · Nhấp để chọn · Sao chép ⌘/Ctrl+C/V · Xóa";
 
 export function DesignCanvas({
   schema,
@@ -647,10 +649,11 @@ export function DesignCanvas({
               {onGenerateWithAi && (
                 <div style={{ marginBottom: 24 }}>
                   <Button type="primary" size="large" onClick={onGenerateWithAi}>
-                    ✨ Generate with AI
+                    ✨ Tạo bằng AI
                   </Button>
                   <div style={{ marginTop: 8, color: "rgba(0,0,0,0.45)" }}>
-                    Describe your form or paste a screenshot — or drag a field to start by hand.
+                    Mô tả biểu mẫu hoặc dán ảnh chụp màn hình — hoặc kéo một trường để bắt đầu thủ
+                    công.
                   </div>
                 </div>
               )}
@@ -697,7 +700,7 @@ export function DesignCanvas({
                 whiteSpace: "nowrap",
               }}
             >
-              {d.drag.copy ? `+ ${d.drag.label} (copy)` : d.drag.label}
+              {d.drag.copy ? `+ ${d.drag.label} (bản sao)` : d.drag.label}
             </span>
             <GhostHost node={d.drag.ghost.node} width={d.drag.ghost.width} />
           </div>
