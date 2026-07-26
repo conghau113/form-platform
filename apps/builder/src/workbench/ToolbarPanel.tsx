@@ -58,11 +58,21 @@ export function ToolbarPanel({
       }}
     >
       <Space>
-        <Tooltip title="Undo">
-          <Button aria-label="Undo" icon={<UndoOutlined />} disabled={!canUndo} onClick={onUndo} />
+        <Tooltip title="Hoàn tác">
+          <Button
+            aria-label="Hoàn tác"
+            icon={<UndoOutlined />}
+            disabled={!canUndo}
+            onClick={onUndo}
+          />
         </Tooltip>
-        <Tooltip title="Redo">
-          <Button aria-label="Redo" icon={<RedoOutlined />} disabled={!canRedo} onClick={onRedo} />
+        <Tooltip title="Làm lại">
+          <Button
+            aria-label="Làm lại"
+            icon={<RedoOutlined />}
+            disabled={!canRedo}
+            onClick={onRedo}
+          />
         </Tooltip>
       </Space>
 
@@ -72,9 +82,9 @@ export function ToolbarPanel({
         onChange={onDevice}
         disabled={viewMode === "json"}
         options={[
-          { value: "Desktop", icon: <DesktopOutlined />, title: "Desktop" },
-          { value: "Tablet", icon: <TabletOutlined />, title: "Tablet" },
-          { value: "Mobile", icon: <MobileOutlined />, title: "Mobile" },
+          { value: "Desktop", icon: <DesktopOutlined />, title: "Máy tính" },
+          { value: "Tablet", icon: <TabletOutlined />, title: "Máy tính bảng" },
+          { value: "Mobile", icon: <MobileOutlined />, title: "Điện thoại" },
         ]}
       />
 
@@ -86,7 +96,7 @@ export function ToolbarPanel({
             allowClear
             size="small"
             style={{ width: 120 }}
-            placeholder="Language"
+            placeholder="Ngôn ngữ"
             value={locale}
             onChange={(v) => onLocale?.(v)}
             options={locales.map((l) => ({ label: l, value: l }))}
@@ -96,14 +106,14 @@ export function ToolbarPanel({
           value={viewMode}
           onChange={onViewMode}
           options={[
-            { label: "Design", value: "design" },
+            { label: "Thiết kế", value: "design" },
             { label: "JSON", value: "json" },
-            { label: "Preview", value: "preview" },
+            { label: "Xem trước", value: "preview" },
           ]}
         />
-        <Tooltip title="Preview">
+        <Tooltip title="Xem trước">
           <Button
-            aria-label="Preview"
+            aria-label="Xem trước"
             type="primary"
             icon={<PlayCircleOutlined />}
             onClick={() => onViewMode("preview")}

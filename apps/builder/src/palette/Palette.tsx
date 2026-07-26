@@ -79,32 +79,32 @@ const ENTRY_ICON: Record<string, ReactNode> = {
 
 /** One-line tooltip hint per type (falls back to the label when absent). */
 const TYPE_HINT: Partial<Record<FieldType, string>> = {
-  text: "Single-line text input",
-  textarea: "Multi-line text input",
-  password: "Masked input for secrets",
-  number: "Numeric input with min/max/step",
-  select: "Pick from a list of options",
-  "checkbox-group": "Pick several options",
-  radio: "Pick exactly one option",
-  cascader: "Pick a value down a parent→child tree",
-  "tree-select": "Pick from a hierarchical tree",
-  checkbox: "A single on/off box",
-  switch: "An on/off toggle",
-  slider: "Drag to pick a number in a range",
-  rate: "Star/heart rating",
-  date: "Pick a date",
-  "date-range": "Pick a start and end date",
-  time: "Pick a time",
-  "time-range": "Pick a start and end time",
-  color: "Pick a colour",
-  upload: "Attach files",
-  array: "A repeatable list of fields",
-  tabs: "Group fields into tabs",
-  collapse: "Group fields into collapsible panels",
-  card: "Group fields in a bordered card",
-  grid: "Lay fields out in a responsive grid",
-  space: "Lay fields out in a row/column with gaps",
-  steps: "A multi-step wizard",
+  text: "Ô nhập văn bản một dòng",
+  textarea: "Ô nhập văn bản nhiều dòng",
+  password: "Ô nhập ẩn cho mật khẩu",
+  number: "Ô nhập số có min/max/bước nhảy",
+  select: "Chọn từ danh sách tùy chọn",
+  "checkbox-group": "Chọn nhiều tùy chọn",
+  radio: "Chọn đúng một tùy chọn",
+  cascader: "Chọn giá trị theo cây cha→con",
+  "tree-select": "Chọn từ cây phân cấp",
+  checkbox: "Một ô bật/tắt đơn",
+  switch: "Công tắc bật/tắt",
+  slider: "Kéo để chọn số trong khoảng",
+  rate: "Đánh giá sao/tim",
+  date: "Chọn ngày",
+  "date-range": "Chọn ngày bắt đầu và kết thúc",
+  time: "Chọn giờ",
+  "time-range": "Chọn giờ bắt đầu và kết thúc",
+  color: "Chọn màu",
+  upload: "Đính kèm tệp",
+  array: "Danh sách trường lặp lại",
+  tabs: "Nhóm trường theo tab",
+  collapse: "Nhóm trường vào panel thu gọn",
+  card: "Nhóm trường trong thẻ có viền",
+  grid: "Xếp trường theo lưới co giãn",
+  space: "Xếp trường theo hàng/cột có khoảng cách",
+  steps: "Trình hướng dẫn nhiều bước",
 };
 
 /** A palette chip. Pressing it starts a "create" drag through the pointer engine;
@@ -131,7 +131,7 @@ function PaletteItem({
         <Button
           type="text"
           size="small"
-          aria-label={pinned ? `Unpin ${entry.label}` : `Pin ${entry.label}`}
+          aria-label={pinned ? `Bỏ ghim ${entry.label}` : `Ghim ${entry.label}`}
           icon={pinned ? <PushpinFilled /> : <PushpinOutlined />}
           // Stop the press from starting a create-drag on the chip behind it.
           onPointerDown={(e) => e.stopPropagation()}
@@ -189,7 +189,7 @@ export function Palette({
       <Input
         allowClear
         size="small"
-        placeholder="Search components"
+        placeholder="Tìm thành phần"
         prefix={<SearchOutlined />}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -206,7 +206,7 @@ export function Palette({
             type="secondary"
             style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase" }}
           >
-            Pinned
+            Đã ghim
           </Typography.Text>
           {pinnedGroup.map((entry) => (
             <PaletteItem key={entry.id} entry={entry} pinned onTogglePin={toggle} />
@@ -214,7 +214,7 @@ export function Palette({
         </div>
       )}
       {groups.length === 0 && pinnedGroup.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No components" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có thành phần" />
       ) : (
         groups.map(({ category, items }) => (
           <div key={category} style={{ display: "flex", flexDirection: "column", gap: 8 }}>

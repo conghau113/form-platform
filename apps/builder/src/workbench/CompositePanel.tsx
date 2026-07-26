@@ -72,26 +72,26 @@ export function CompositePanel({
       items={[
         {
           key: "components",
-          label: <AppstoreOutlined style={{ fontSize: 16 }} title="Components" />,
+          label: <AppstoreOutlined style={{ fontSize: 16 }} title="Thành phần" />,
           children: (
             <Palette selectedField={selectedField} projectId={projectId} presets={presets} />
           ),
         },
         {
           key: "outline",
-          label: <ApartmentOutlined style={{ fontSize: 16 }} title="Outline" />,
+          label: <ApartmentOutlined style={{ fontSize: 16 }} title="Cấu trúc" />,
           children: <OutlineTree root={tree} />,
         },
         {
           key: "history",
-          label: <HistoryOutlined style={{ fontSize: 16 }} title="History" />,
+          label: <HistoryOutlined style={{ fontSize: 16 }} title="Lịch sử" />,
           children: (
             <HistoryPanel entries={history.entries} index={history.index} onJump={history.jumpTo} />
           ),
         },
         {
           key: "theme",
-          label: <BgColorsOutlined style={{ fontSize: 16 }} title="Theme" />,
+          label: <BgColorsOutlined style={{ fontSize: 16 }} title="Giao diện" />,
           children: (
             <div style={{ padding: 12 }}>
               <ThemeEditor tokens={tokens} onChange={onChangeTokens} onExport={onExportTheme} />
