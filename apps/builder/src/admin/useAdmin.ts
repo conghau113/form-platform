@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { qk } from "../query";
-import type { FunctionRecord, RoleWithFunctions, TenantUser } from "./client";
+import type {
+  AdminFormRow,
+  AdminFormVersionRow,
+  AdminWorkflowInstanceRow,
+  AdminWorkflowRow,
+  FunctionRecord,
+  RoleWithFunctions,
+  TenantUser,
+} from "./client";
 import * as api from "./client";
 
 /**
@@ -26,6 +34,41 @@ export function useRbacRoles(enabled: boolean): { roles: RoleWithFunctions[]; lo
 export function useTenantUsers(enabled: boolean): { users: TenantUser[]; loading: boolean } {
   const query = useQuery({ queryKey: qk.rbacUsers, queryFn: api.listUsers, enabled });
   return { users: query.data ?? [], loading: enabled && query.isPending };
+}
+
+// --- Tenant-wide admin catalog reads (D2–D4). Read-only; no mutations to invalidate. --------
+
+export function useAdminForms(enabled: boolean): { rows: AdminFormRow[]; loading: boolean } {
+  const query = useQuery({ queryKey: qk.adminForms, queryFn: api.listAdminForms, enabled });
+  return { rows: query.data ?? [], loading: enabled && query.isPending };
+}
+
+export function useAdminWorkflows(enabled: boolean): {
+  rows: AdminWorkflowRow[];
+  loading: boolean;
+} {
+  const query = useQuery({ queryKey: qk.adminWorkflows, queryFn: api.listAdminWorkflows, enabled });
+  return { rows: query.data ?? [], loading: enabled && query.isPending };
+}
+
+export function useAdminFormVersions(enabled: boolean): {
+  rows: AdminFormVersionRow[];
+  loading: boolean;
+} {
+  const query = useQuery({
+    queryKey: qk.adminFormVersions,
+    queryFn: api.listAdminFormVersions,
+    enabled,
+  });
+  return { rows: query.data ?? [], loading: enabled && query.isPending };
+}
+
+export function useAdminInstances(enabled: boolean): {
+  rows: AdminWorkflowInstanceRow[];
+  loading: boolean;
+} {
+  const query = useQuery({ queryKey: qk.adminInstances, queryFn: api.listAdminInstances, enabled });
+  return { rows: query.data ?? [], loading: enabled && query.isPending };
 }
 
 /** Invalidate every RBAC read + the caller's own permission probe after a mutation. */

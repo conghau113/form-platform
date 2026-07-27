@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { validateEnv } from "./config/env.js";
+import { AdminCatalogModule } from "./modules/admin-catalog/admin-catalog.module.js";
 import { AiModule } from "./modules/ai/ai.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { FoldersModule } from "./modules/folders/folders.module.js";
@@ -65,6 +66,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     PresetsModule,
     StatusCatalogModule,
     SubmissionsModule,
+    AdminCatalogModule,
     AiModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -12,6 +12,11 @@ export const qk = {
   rbacFunctions: ["rbac", "functions"] as const,
   rbacRoles: ["rbac", "roles"] as const,
   rbacUsers: ["rbac", "users"] as const,
+  // Tenant-wide admin catalog (D2–D4): every form/workflow/version/case in the caller's tenant.
+  adminForms: ["admin", "forms"] as const,
+  adminWorkflows: ["admin", "workflows"] as const,
+  adminFormVersions: ["admin", "form-versions"] as const,
+  adminInstances: ["admin", "workflow-instances"] as const,
   projects: ["projects"] as const,
   // The user's tenant memberships (B4): powers the New-project workspace picker.
   myTenants: ["tenants", "mine"] as const,

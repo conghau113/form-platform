@@ -130,3 +130,79 @@ export async function setUserRoles(userId: string, roleIds: string[]): Promise<s
   if (!res.ok) throw new Error(await readError(res));
   return (await res.json()) as string[];
 }
+
+// --- Tenant-wide admin catalog (D2–D4) --------------------------------------
+// Read-only lists across every project in the caller's tenant, function-gated server-side
+// (`form.admin` / `workflow.admin`). Dates arrive as ISO strings over JSON.
+
+/** A form in the tenant + its project's name (D2). */
+export interface AdminFormRow {
+  id: string;
+  projectId: string;
+  folderId: string | null;
+  title: string;
+  status: string | null;
+  updatedAt: string;
+  projectName: string;
+}
+
+/** A workflow in the tenant + its project's name (D3). */
+export interface AdminWorkflowRow {
+  id: string;
+  projectId: string;
+  folderId: string | null;
+  title: string;
+  status: string | null;
+  updatedAt: string;
+  projectName: string;
+}
+
+/** A published form version + its parent form/project names (D4). */
+export interface AdminFormVersionRow {
+  id: string;
+  formId: string;
+  projectId: string;
+  version: number;
+  formVersion: number;
+  publishedBy: string;
+  publishedAt: string;
+  formTitle: string;
+  projectName: string;
+}
+
+/** A running workflow case + its parent workflow/project names (D4). */
+export interface AdminWorkflowInstanceRow {
+  id: string;
+  workflowId: string;
+  projectId: string;
+  current: string;
+  label: string | null;
+  createdAt: string;
+  updatedAt: string;
+  workflowTitle: string;
+  projectName: string;
+}
+
+export async function listAdminForms(): Promise<AdminFormRow[]> {
+  const res = await apiFetch(`${API_BASE}/admin/forms`, { headers: ownerHeaders() });
+  if (!res.ok) throw new Error(`Load forms failed: ${await readError(res)}`);
+  return (await res.json()) as AdminFormRow[];
+}
+
+export async function listAdminWorkflows(): Promise<AdminWorkflowRow[]> {
+  const res = await apiFetch(`${API_BASE}/admin/workflows`, { headers: ownerHeaders() });
+  if (!res.ok) throw new Error(`Load workflows failed: ${await readError(res)}`);
+  return (await res.json()) as AdminWorkflowRow[];
+}
+
+export async function listAdminFormVersions(): Promise<AdminFormVersionRow[]> {
+  const res = await apiFetch(`${API_BASE}/admin/form-versions`, { headers: ownerHeaders() });
+  if (!res.ok) throw new Error(`Load versions failed: ${await readError(res)}`);
+  return (await res.json()) as AdminFormVersionRow[];
+}
+
+export async function listAdminInstances(): Promise<AdminWorkflowInstanceRow[]> {
+  const res = await apiFetch(`${API_BASE}/admin/workflow-instances`, { headers: ownerHeaders() });
+  if (!res.ok) throw new Error(`Load cases failed: ${await readError(res)}`);
+  return (await res.json()) as AdminWorkflowInstanceRow[];
+}
