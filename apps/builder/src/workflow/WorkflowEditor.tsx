@@ -79,14 +79,14 @@ const ARROW: Record<string, Direction | undefined> = {
 
 /** WE5b: rows for the "?" keyboard-shortcut cheat sheet. */
 const KEY_HELP: [string[], string][] = [
-  [["←", "↑", "→", "↓"], "Move selection to the nearest state"],
-  [["Enter", "F2"], "Rename the selected state"],
-  [["n", "Insert"], "Add a state"],
-  [["s"], "Make the selected state the start"],
-  [["Delete", "Backspace"], "Delete the selection"],
-  [["Esc"], "Clear the selection"],
-  [["Ctrl+Z", "Ctrl+Shift+Z"], "Undo / redo"],
-  [["?"], "Toggle this help"],
+  [["←", "↑", "→", "↓"], "Chuyển lựa chọn tới trạng thái gần nhất"],
+  [["Enter", "F2"], "Đổi tên trạng thái đang chọn"],
+  [["n", "Insert"], "Thêm trạng thái"],
+  [["s"], "Đặt trạng thái đang chọn làm bắt đầu"],
+  [["Delete", "Backspace"], "Xoá lựa chọn"],
+  [["Esc"], "Bỏ chọn"],
+  [["Ctrl+Z", "Ctrl+Shift+Z"], "Hoàn tác / Làm lại"],
+  [["?"], "Bật/tắt trợ giúp này"],
 ];
 
 import { type UsedForm, usedForms } from "./used-forms";
@@ -324,7 +324,7 @@ function WorkflowEditorInner({
       await onSave(def);
       savedJsonRef.current = JSON.stringify(def);
       onDirtyChange?.(false);
-      message.success("Workflow saved");
+      message.success("Đã lưu workflow");
       return true;
     } catch (e) {
       message.error((e as Error).message);
@@ -438,7 +438,7 @@ function WorkflowEditorInner({
   );
 
   function addStateAt(position: { x: number; y: number }) {
-    const node = newNode(`state${nodes.length + 1}`, position);
+    const node = newNode(`Trạng thái ${nodes.length + 1}`, position);
     const next = [...nodes, node];
     setNodes(next);
     commit("Add state", { nodes: next });
@@ -600,7 +600,7 @@ function WorkflowEditorInner({
       if (warnings.length > 0) {
         message.info(`Hợp lệ — ${warnings.length} cảnh báo (không chặn lưu), xem panel bên phải.`);
       } else {
-        message.success("Workflow graph is valid");
+        message.success("Đồ thị workflow hợp lệ");
       }
       return;
     }
@@ -811,29 +811,29 @@ function WorkflowEditorInner({
         <Input
           value={meta.title}
           onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
-          placeholder="workflow title"
+          placeholder="tiêu đề workflow"
           style={{ width: 240 }}
         />
         <Space wrap style={{ marginLeft: "auto", justifyContent: "flex-end" }}>
-          <Button onClick={() => setAiOpen(true)}>✨ Generate with AI</Button>
-          <Button onClick={() => setFormsOpen(true)}>Forms ({formsView.forms.length})</Button>
-          <Button onClick={() => setStatusOpen(true)}>Statuses ({catalog.entries.length})</Button>
-          <Button onClick={undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">
-            Undo
+          <Button onClick={() => setAiOpen(true)}>✨ Tạo bằng AI</Button>
+          <Button onClick={() => setFormsOpen(true)}>Biểu mẫu ({formsView.forms.length})</Button>
+          <Button onClick={() => setStatusOpen(true)}>Trạng thái ({catalog.entries.length})</Button>
+          <Button onClick={undo} disabled={!history.canUndo} title="Hoàn tác (Ctrl+Z)">
+            Hoàn tác
           </Button>
-          <Button onClick={redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">
-            Redo
+          <Button onClick={redo} disabled={!history.canRedo} title="Làm lại (Ctrl+Shift+Z)">
+            Làm lại
           </Button>
-          <Button onClick={addState}>Add state</Button>
-          <Button onClick={onTidy}>Tidy</Button>
+          <Button onClick={addState}>Thêm trạng thái</Button>
+          <Button onClick={onTidy}>Sắp xếp</Button>
           <Button danger={issues.length > 0} onClick={onValidate}>
-            {issues.length > 0 ? `Validate (${issues.length})` : "Validate"}
+            {issues.length > 0 ? `Kiểm tra (${issues.length})` : "Kiểm tra"}
           </Button>
           <Button
             icon={<QuestionCircleOutlined />}
             onClick={() => setShowKeyHelp(true)}
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
+            title="Phím tắt (?)"
+            aria-label="Phím tắt"
           />
           {projectId ? (
             // Jump to the Run view to operate this workflow. The route's unsaved-changes blocker
@@ -843,11 +843,11 @@ function WorkflowEditorInner({
               onClick={() => navigate(`/projects/${projectId}/workflows/${definition.id}/run`)}
               title="Mở chế độ chạy"
             >
-              Run
+              Chạy
             </Button>
           ) : null}
           <Button type="primary" disabled={!dirty} onClick={save}>
-            Save
+            Lưu
           </Button>
         </Space>
       </div>
@@ -945,10 +945,10 @@ function WorkflowEditorInner({
             <IssuesPanel issues={issues} warnings={warnings} onFocus={focusRef} />
           ) : (
             <Typography.Paragraph type="secondary">
-              Select a state or transition to edit it. Drag from any handle to another node to
-              create a transition. Double-click the canvas to add a state, or a node to rename it.
-              Press Delete/Backspace to remove the selection. Undo/redo with Ctrl+Z / Ctrl+Shift+Z.
-              Navigate with the arrow keys — press <kbd>?</kbd> for all keyboard shortcuts.
+              Chọn một trạng thái hoặc chuyển tiếp để chỉnh sửa. Kéo từ bất kỳ điểm nối nào sang
+              node khác để tạo chuyển tiếp. Nhấp đúp lên canvas để thêm trạng thái, hoặc lên một
+              node để đổi tên. Nhấn Delete/Backspace để xoá lựa chọn. Hoàn tác/làm lại bằng Ctrl+Z /
+              Ctrl+Shift+Z. Dùng phím mũi tên để di chuyển — nhấn <kbd>?</kbd> để xem mọi phím tắt.
             </Typography.Paragraph>
           )}
         </aside>
@@ -958,7 +958,7 @@ function WorkflowEditorInner({
       <Modal
         open={showKeyHelp}
         onCancel={() => setShowKeyHelp(false)}
-        title="Keyboard shortcuts"
+        title="Phím tắt"
         footer={null}
       >
         <List
@@ -985,7 +985,7 @@ function WorkflowEditorInner({
       <Drawer
         open={formsOpen}
         onClose={() => setFormsOpen(false)}
-        title="Forms trong workflow"
+        title="Biểu mẫu trong workflow"
         width={380}
       >
         <UsedFormsPanel
@@ -1010,7 +1010,7 @@ function WorkflowEditorInner({
       <Drawer
         open={statusOpen}
         onClose={() => setStatusOpen(false)}
-        title="Status catalog"
+        title="Danh mục trạng thái"
         width={420}
       >
         <StatusCatalogPanel
@@ -1087,7 +1087,7 @@ function NodePanel({
   // A bound form that no longer exists in the project still shows as a (dangling) option.
   const options = formOptions.map((f) => ({ value: f.id, label: f.title }));
   if (boundFormId && !formExists) {
-    options.push({ value: boundFormId, label: `${boundFormId} (missing)` });
+    options.push({ value: boundFormId, label: `${boundFormId} (không tồn tại)` });
   }
 
   const statusCode = node.data.statusCode;
@@ -1109,7 +1109,7 @@ function NodePanel({
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Title level={5} style={{ margin: 0 }}>
-        State
+        Trạng thái
       </Typography.Title>
       <Field label="Trạng thái (catalog)">
         <Select
@@ -1172,7 +1172,7 @@ function NodePanel({
           />
         </Field>
       )}
-      <Field label="Bound form">
+      <Field label="Biểu mẫu gắn kèm">
         <Select
           style={{ width: "100%" }}
           allowClear
@@ -1192,14 +1192,14 @@ function NodePanel({
         canManageForms={canManageForms}
         creating={creating}
         onEditForm={onEditForm}
-        onCreateForm={() => onCreateForm(node.data.status || "Form")}
+        onCreateForm={() => onCreateForm(node.data.status || "Biểu mẫu")}
       />
 
       <Button block disabled={isStart} onClick={onSetStart}>
-        {isStart ? "This is the start state" : "Set as start"}
+        {isStart ? "Đây là trạng thái bắt đầu" : "Đặt làm bắt đầu"}
       </Button>
       <Button block danger disabled={isStart} onClick={onDelete}>
-        Delete state
+        Xoá trạng thái
       </Button>
     </Space>
   );
@@ -1316,22 +1316,22 @@ function EdgePanel({
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
       <Typography.Title level={5} style={{ margin: 0 }}>
-        Transition
+        Chuyển tiếp
       </Typography.Title>
-      <Field label="Action (event)">
+      <Field label="Hành động (sự kiện)">
         <Input
           value={edge.data?.action ?? ""}
           onChange={(e) => onChange({ action: e.target.value })}
         />
       </Field>
-      <Field label="Required role (optional)">
+      <Field label="Vai trò yêu cầu (tuỳ chọn)">
         <Input
           value={edge.data?.role ?? ""}
-          placeholder="e.g. manager"
+          placeholder="vd: manager"
           onChange={(e) => onChange({ role: e.target.value || undefined })}
         />
       </Field>
-      <Field label="Guard (JSONLogic rule, optional)">
+      <Field label="Điều kiện (quy tắc JSONLogic, tuỳ chọn)">
         <Input.TextArea
           value={guardText}
           onChange={(e) => onGuardChange(e.target.value)}
@@ -1342,10 +1342,10 @@ function EdgePanel({
         />
       </Field>
       {guardError && (
-        <Alert type="error" showIcon message="Invalid JSON" description={guardError} />
+        <Alert type="error" showIcon message="JSON không hợp lệ" description={guardError} />
       )}
       <Button block danger onClick={onDelete}>
-        Delete transition
+        Xoá chuyển tiếp
       </Button>
       <Divider style={{ margin: 0 }} />
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -1469,9 +1469,7 @@ function UsedFormsPanel({
                 {f.missing ? (
                   <Tag color="red">đã xoá</Tag>
                 ) : (
-                  <Tag>
-                    {f.states.length} state{f.states.length > 1 ? "s" : ""}
-                  </Tag>
+                  <Tag>{f.states.length} trạng thái</Tag>
                 )}
               </div>
               <div
@@ -1484,7 +1482,7 @@ function UsedFormsPanel({
               >
                 {f.states.map((s) => (
                   <Button key={s.id} size="small" onClick={() => onFocusState(s.id)}>
-                    {s.status || "(unnamed)"}
+                    {s.status || "(chưa đặt tên)"}
                   </Button>
                 ))}
               </div>

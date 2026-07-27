@@ -150,7 +150,7 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
               ellipsis
               style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 1.35 }}
             >
-              {resolved.label || "(unnamed)"}
+              {resolved.label || "(chưa đặt tên)"}
             </Typography.Text>
           )}
           {resolved.missing && (
@@ -164,7 +164,7 @@ export const WorkflowNodeView = memo(function WorkflowNodeView({
               color="success"
               style={{ margin: 0, fontSize: 11, lineHeight: "18px" }}
             >
-              start
+              Bắt đầu
             </Tag>
           )}
         </div>

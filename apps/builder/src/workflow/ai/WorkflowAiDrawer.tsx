@@ -27,11 +27,11 @@ export interface WorkflowAiDrawerProps {
   onApply: (next: WorkflowDefinition) => void;
 }
 
-/** Starter prompts so the user never faces a blank box (EN + VI, the product's two locales). */
+/** Gợi ý mẫu để người dùng không phải đối diện ô trống. */
 const EXAMPLE_PROMPTS = [
-  "A 3-level leave-approval flow: employee submits, manager approves, then HR approves.",
+  "Quy trình duyệt nghỉ phép 3 cấp: nhân viên gửi, quản lý duyệt, rồi HR duyệt.",
   "Quy trình duyệt mua sắm: nhân viên đề xuất → quản lý duyệt → kế toán thanh toán.",
-  "An expense claim: draft → submitted → (approved | rejected back to draft).",
+  "Yêu cầu hoàn chi phí: nháp → đã gửi → (duyệt | từ chối về nháp).",
 ];
 
 /** One line of the conversation log shown above the proposal. */
@@ -88,7 +88,7 @@ export function WorkflowAiDrawer({
 
   async function onGenerate() {
     if (!prompt.trim()) {
-      message.warning("Describe the process you want first.");
+      message.warning("Hãy mô tả quy trình bạn muốn trước.");
       return;
     }
     const input: GenerateWorkflowInput = {
@@ -128,7 +128,7 @@ export function WorkflowAiDrawer({
   /** Seed the conversation from the current canvas workflow so it can be refined directly. */
   function refineCurrent() {
     setProposed({ workflow: currentWorkflow, attempts: 0 });
-    setTurns([turn("prompt", "Refining your current workflow")]);
+    setTurns([turn("prompt", "Đang tinh chỉnh workflow hiện tại")]);
   }
 
   /** Back to the composer to draft a fresh workflow (keeps prompt/guidance). */
@@ -141,7 +141,7 @@ export function WorkflowAiDrawer({
 
   function applyWorkflow(next: WorkflowDefinition) {
     onApply(next);
-    message.success("Applied to the canvas.");
+    message.success("Đã áp dụng vào canvas.");
   }
 
   const credField = (key: keyof AiCreds, placeholder: string, isSecret = false) => {
@@ -163,7 +163,7 @@ export function WorkflowAiDrawer({
       items={[
         {
           key: "byok",
-          label: "API key (optional — uses the server default if blank)",
+          label: "Khóa API (tùy chọn — dùng mặc định của server nếu để trống)",
           children: (
             <Space direction="vertical" size="small" style={{ width: "100%" }}>
               <Segmented
@@ -173,14 +173,14 @@ export function WorkflowAiDrawer({
                   setCreds((c) => ({ ...c, provider: (v || undefined) as AiCreds["provider"] }))
                 }
                 options={[
-                  { label: "Server default", value: "" },
-                  { label: "OpenAI-compatible", value: "openai" },
+                  { label: "Mặc định server", value: "" },
+                  { label: "Tương thích OpenAI", value: "openai" },
                   { label: "Anthropic", value: "anthropic" },
                 ]}
               />
-              {credField("apiKey", "API key (kept in your browser, sent per request)", true)}
-              {credField("baseUrl", "Base URL — OpenAI-compatible only (e.g. 9router/Azure)")}
-              {credField("model", "Model id (e.g. gpt-4o-mini, claude-sonnet-4-6)")}
+              {credField("apiKey", "Khóa API (lưu trong trình duyệt, gửi mỗi yêu cầu)", true)}
+              {credField("baseUrl", "Base URL — chỉ tương thích OpenAI (vd 9router/Azure)")}
+              {credField("model", "ID model (vd gpt-4o-mini, claude-sonnet-4-6)")}
             </Space>
           ),
         },
@@ -189,7 +189,7 @@ export function WorkflowAiDrawer({
   );
 
   const errorAlert = error && (
-    <Alert type="error" showIcon message="Couldn’t reach the model" description={error.message} />
+    <Alert type="error" showIcon message="Không kết nối được model" description={error.message} />
   );
 
   // The composer: drafting a brand-new workflow.
@@ -199,22 +199,22 @@ export function WorkflowAiDrawer({
       <Alert
         type="info"
         showIcon
-        message="You already have a workflow on the canvas"
+        message="Bạn đã có sẵn một workflow trên canvas"
         description={
           <Button size="small" type="link" style={{ padding: 0 }} onClick={refineCurrent}>
-            Refine the current workflow with AI instead →
+            Tinh chỉnh workflow hiện tại bằng AI →
           </Button>
         }
       />
       <Input.TextArea
         autoFocus
         rows={4}
-        placeholder="Describe the process, e.g. “A 3-level leave-approval flow: employee submits, manager approves, then HR approves.”"
+        placeholder="Mô tả quy trình, vd: “Quy trình duyệt nghỉ phép 3 cấp: nhân viên gửi, quản lý duyệt, rồi HR duyệt.”"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
       />
       <Space size={[8, 8]} wrap>
-        <Typography.Text type="secondary">Try:</Typography.Text>
+        <Typography.Text type="secondary">Thử:</Typography.Text>
         {EXAMPLE_PROMPTS.map((ex) => (
           <Button key={ex} size="small" type="dashed" onClick={() => setPrompt(ex)}>
             {ex.length > 36 ? `${ex.slice(0, 36)}…` : ex}
@@ -222,13 +222,13 @@ export function WorkflowAiDrawer({
         ))}
       </Space>
       <Input
-        placeholder="Optional house-style guidance (roles, naming, language…)"
+        placeholder="Hướng dẫn phong cách tùy chọn (vai trò, cách đặt tên, ngôn ngữ…)"
         value={guidance}
         onChange={(e) => setGuidance(e.target.value)}
       />
       {byokSection}
       <Button type="primary" block loading={generate.isPending} onClick={onGenerate}>
-        Generate
+        Tạo
       </Button>
     </Space>
   );
@@ -253,16 +253,16 @@ export function WorkflowAiDrawer({
             <Typography.Text strong>
               {proposed.workflow.title || proposed.workflow.id}
             </Typography.Text>
-            <Tag color="blue">{diff.proposedStateCount} states</Tag>
-            <Tag color="purple">{diff.proposedTransitionCount} transitions</Tag>
-            {diff.addedStates.length > 0 && <Tag color="green">+{diff.addedStates.length} new</Tag>}
+            <Tag color="blue">{diff.proposedStateCount} trạng thái</Tag>
+            <Tag color="purple">{diff.proposedTransitionCount} chuyển tiếp</Tag>
+            {diff.addedStates.length > 0 && <Tag color="green">+{diff.addedStates.length} mới</Tag>}
             {diff.removedStates.length > 0 && (
-              <Tag color="red">Replaces {diff.removedStates.length} current</Tag>
+              <Tag color="red">Thay {diff.removedStates.length} hiện có</Tag>
             )}
-            {proposed.attempts > 1 && <Tag color="gold">repaired ×{proposed.attempts - 1}</Tag>}
+            {proposed.attempts > 1 && <Tag color="gold">đã sửa ×{proposed.attempts - 1}</Tag>}
           </Space>
         }
-        description="Applying replaces the whole graph on the canvas (a workflow is one state machine). The drawer stays open so you can keep refining."
+        description="Áp dụng sẽ thay toàn bộ đồ thị trên canvas (một workflow là một máy trạng thái). Ngăn kéo vẫn mở để bạn tiếp tục tinh chỉnh."
       />
 
       <div
@@ -279,19 +279,19 @@ export function WorkflowAiDrawer({
 
       <Space wrap>
         <Button type="primary" disabled={busy} onClick={() => applyWorkflow(proposed.workflow)}>
-          Use this workflow
+          Dùng workflow này
         </Button>
         <Button type="text" disabled={busy} onClick={newDraft}>
-          ＋ New workflow
+          ＋ Workflow mới
         </Button>
       </Space>
 
       <div style={{ borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 12 }}>
-        <Typography.Text strong>Refine</Typography.Text>
+        <Typography.Text strong>Tinh chỉnh</Typography.Text>
         <Input.TextArea
           rows={2}
           style={{ marginTop: 8 }}
-          placeholder="e.g. “add a rejection branch back to draft, require the manager role on approve”"
+          placeholder="vd: “thêm nhánh từ chối quay lại nháp, yêu cầu vai trò manager khi duyệt”"
           value={refineText}
           onChange={(e) => setRefineText(e.target.value)}
           onPressEnter={(e) => {
@@ -308,11 +308,9 @@ export function WorkflowAiDrawer({
             disabled={!refineText.trim()}
             onClick={onRefine}
           >
-            Send refinement
+            Gửi tinh chỉnh
           </Button>
-          <Typography.Text type="secondary">
-            Enter to send · Shift+Enter for newline
-          </Typography.Text>
+          <Typography.Text type="secondary">Enter để gửi · Shift+Enter xuống dòng</Typography.Text>
         </Space>
       </div>
     </Space>
@@ -322,7 +320,7 @@ export function WorkflowAiDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title={proposed ? "Refine workflow with AI" : "Generate workflow with AI"}
+      title={proposed ? "Tinh chỉnh workflow bằng AI" : "Tạo workflow bằng AI"}
       placement="right"
       width={480}
       mask={false}
@@ -331,8 +329,8 @@ export function WorkflowAiDrawer({
         <div style={{ padding: "48px 0", textAlign: "center" }}>
           <Spin size="large" />
           <Typography.Paragraph type="secondary" style={{ marginTop: 20 }}>
-            Drafting your workflow, validating its graph against the contract, and repairing if
-            needed. This usually takes a few seconds.
+            Đang soạn workflow, kiểm tra đồ thị theo hợp đồng và tự sửa nếu cần. Thường mất vài
+            giây.
           </Typography.Paragraph>
         </div>
       ) : proposed ? (
@@ -358,14 +356,14 @@ function WorkflowSummaryView({ workflow }: { workflow: WorkflowDefinition }) {
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <div>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          States
+          Trạng thái
         </Typography.Text>
         <Space direction="vertical" size={4} style={{ width: "100%", marginTop: 4 }}>
           {workflow.nodes.map((n) => (
             <Space key={n.id} size={6} wrap>
-              <Typography.Text strong>{n.status || "(unnamed)"}</Typography.Text>
-              {n.id === workflow.start && <Tag color="green">start</Tag>}
-              {n.formId && <Tag color="blue">form: {n.formId}</Tag>}
+              <Typography.Text strong>{n.status || "(chưa đặt tên)"}</Typography.Text>
+              {n.id === workflow.start && <Tag color="green">Bắt đầu</Tag>}
+              {n.formId && <Tag color="blue">biểu mẫu: {n.formId}</Tag>}
             </Space>
           ))}
         </Space>
@@ -373,7 +371,7 @@ function WorkflowSummaryView({ workflow }: { workflow: WorkflowDefinition }) {
       {workflow.transitions.length > 0 && (
         <div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Transitions
+            Chuyển tiếp
           </Typography.Text>
           <Space direction="vertical" size={4} style={{ width: "100%", marginTop: 4 }}>
             {workflow.transitions.map((t) => (
@@ -383,8 +381,8 @@ function WorkflowSummaryView({ workflow }: { workflow: WorkflowDefinition }) {
                   {statusOf(t.to)}
                 </Typography.Text>
                 <Tag>{t.action}</Tag>
-                {t.role && <Tag color="geekblue">role: {t.role}</Tag>}
-                {t.guard && <Tag color="orange">guard</Tag>}
+                {t.role && <Tag color="geekblue">vai trò: {t.role}</Tag>}
+                {t.guard && <Tag color="orange">điều kiện</Tag>}
               </Space>
             ))}
           </Space>
