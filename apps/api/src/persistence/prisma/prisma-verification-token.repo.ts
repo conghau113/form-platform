@@ -42,11 +42,12 @@ export class PrismaVerificationTokenRepo extends VerificationTokenRepo {
     return row ? toRecord(row) : null;
   }
 
-  async consume(id: string): Promise<void> {
-    await this.prisma.verificationToken.update({
-      where: { id },
+  async consume(id: string): Promise<boolean> {
+    const { count } = await this.prisma.verificationToken.updateMany({
+      where: { id, consumedAt: null },
       data: { consumedAt: new Date() },
     });
+    return count === 1;
   }
 
   async invalidateActive(userId: string, purpose: TokenPurpose): Promise<void> {

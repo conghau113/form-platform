@@ -89,9 +89,12 @@ class FakeVerificationTokenRepo extends VerificationTokenRepo {
   async findByHash(tokenHash: string): Promise<VerificationTokenRecord | null> {
     return this.rows.find((r) => r.tokenHash === tokenHash) ?? null;
   }
-  async consume(id: string): Promise<void> {
+  async consume(id: string): Promise<boolean> {
+    // Mirrors the Prisma compare-and-set: only the first claim of a token wins.
     const row = this.rows.find((r) => r.id === id);
-    if (row) row.consumedAt = new Date();
+    if (!row || row.consumedAt) return false;
+    row.consumedAt = new Date();
+    return true;
   }
   async invalidateActive(userId: string, purpose: TokenPurpose): Promise<void> {
     for (const r of this.rows) {
@@ -444,6 +447,18 @@ describe("AuthService", () => {
       await expect(service.verifyEmail(mail.lastToken())).rejects.toBeInstanceOf(
         BadRequestException,
       );
+    });
+
+    it("lets only one of two concurrent redemptions win (compare-and-set consume)", async () => {
+      await service.register("tess@example.com", "password1");
+      const token = mail.lastToken();
+
+      const results = await Promise.allSettled([
+        service.verifyEmail(token),
+        service.verifyEmail(token),
+      ]);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
     });
 
     it("resend issues a fresh token, kills the previous one, and is a no-op once verified", async () => {

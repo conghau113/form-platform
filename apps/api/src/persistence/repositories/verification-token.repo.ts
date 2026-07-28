@@ -26,8 +26,12 @@ export abstract class VerificationTokenRepo {
   }): Promise<VerificationTokenRecord>;
   /** Lookup by the stored hash; `null` when no such token exists. */
   abstract findByHash(tokenHash: string): Promise<VerificationTokenRecord | null>;
-  /** Mark a token redeemed (idempotent) so it can never be replayed. */
-  abstract consume(id: string): Promise<void>;
+  /**
+   * Claim a token: mark it redeemed and report whether *this* call won the race. Compare-and-set
+   * (`consumedAt IS NULL` in the WHERE) so two concurrent redemptions of the same link can't both
+   * proceed — `false` means someone else already consumed it.
+   */
+  abstract consume(id: string): Promise<boolean>;
   /** Consume every outstanding token of one purpose for a user (issuing a new one supersedes them). */
   abstract invalidateActive(userId: string, purpose: TokenPurpose): Promise<void>;
 }

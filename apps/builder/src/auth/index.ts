@@ -1,3 +1,4 @@
+export { changePassword, resendVerification } from "./client";
 export { ForgotPasswordPage } from "./ForgotPasswordPage";
 export { hasAnyFunction, hasFunction } from "./functions";
 export { LoginPage } from "./LoginPage";

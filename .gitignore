@@ -36,3 +36,8 @@ Thumbs.db
 # local scratch / AI helper output (not part of the project)
 project-tree-for-ai.txt
 structure.txt
+
+# test/automation artifacts (Playwright runs + MCP browser session output)
+playwright-report/
+test-results/
+.playwright-mcp/

@@ -19,12 +19,14 @@ export class MailService {
   constructor(private readonly config: ConfigService) {}
 
   async send(to: string, content: MailContent): Promise<void> {
-    const transporter = this.resolveTransporter();
-    if (!transporter) {
-      this.logger.log(`[mail:log-mode] to=${to} subject="${content.subject}"\n${content.text}`);
-      return;
-    }
     try {
+      // Building the transport is inside the try as well: a malformed SMTP config must not turn a
+      // registration or password-reset request into a 500.
+      const transporter = this.resolveTransporter();
+      if (!transporter) {
+        this.logger.log(`[mail:log-mode] to=${to} subject="${content.subject}"\n${content.text}`);
+        return;
+      }
       await transporter.sendMail({
         from: this.config.get<string>("MAIL_FROM"),
         to,
@@ -47,12 +49,16 @@ export class MailService {
     }
     const user = this.config.get<string>("SMTP_USER");
     const pass = this.config.get<string>("SMTP_PASSWORD");
+    const authenticated = !!(user && pass);
     this.transporter = nodemailer.createTransport({
       host,
       port: this.config.get<number>("SMTP_PORT", 1025),
       secure: this.config.get<boolean>("SMTP_SECURE", false),
       // MailHog/Mailpit accept anonymous mail; only pass credentials when both are configured.
-      auth: user && pass ? { user, pass } : undefined,
+      auth: authenticated ? { user, pass } : undefined,
+      // Never put SMTP credentials on the wire in cleartext: on a plain-port relay, insist on
+      // STARTTLS rather than silently falling back. Anonymous local catch-alls are unaffected.
+      requireTLS: authenticated,
     });
     return this.transporter;
   }

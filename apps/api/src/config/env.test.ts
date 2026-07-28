@@ -32,6 +32,28 @@ describe("validateEnv", () => {
     expect(env.NODE_ENV).toBe("development");
   });
 
+  it("treats present-but-empty mail vars as absent (compose `${FOO:-}` must not crash boot)", () => {
+    const env = validateEnv({
+      ...base,
+      SMTP_PORT: "",
+      MAIL_FROM: "",
+      APP_PUBLIC_URL: "",
+      AUTH_VERIFY_TOKEN_EXPIRES_IN: "",
+      AUTH_RESET_TOKEN_EXPIRES_IN: "",
+    });
+    expect(env.SMTP_PORT).toBe(1025);
+    expect(env.MAIL_FROM).toBe("Form Platform <no-reply@form-platform.local>");
+    expect(env.APP_PUBLIC_URL).toBe("http://localhost:5173");
+    expect(env.AUTH_VERIFY_TOKEN_EXPIRES_IN).toBe("24h");
+    expect(env.AUTH_RESET_TOKEN_EXPIRES_IN).toBe("1h");
+  });
+
+  it("rejects an APP_PUBLIC_URL that is not a URL (emailed links must be absolute)", () => {
+    expect(() => validateEnv({ ...base, APP_PUBLIC_URL: "localhost:5173" })).toThrow(
+      /APP_PUBLIC_URL/,
+    );
+  });
+
   it("coerces numeric strings to numbers", () => {
     const env = validateEnv({ ...base, PORT: "4000", THROTTLE_LIMIT: "50" });
     expect(env.PORT).toBe(4000);

@@ -7,6 +7,16 @@ import { z } from "zod";
  * lenient parsing in `ai.config.ts` (they are optional BYOK fallbacks) — `.passthrough()` here lets
  * them (and any other process env) flow through untouched.
  */
+/**
+ * Treat a **present-but-empty** variable as absent, so the wrapped schema's `.default()` applies.
+ * Compose (`FOO: ${FOO:-}`) and hand-edited `.env` files both produce `FOO=""`, which would
+ * otherwise fail `coerce.number().positive()` (`Number("") === 0`) or hand an empty string to code
+ * expecting the default — a boot-time crash-loop for something that is meant to be optional.
+ */
+function emptyAsUndefined<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((v) => (v === "" ? undefined : v), schema);
+}
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -58,7 +68,7 @@ export const envSchema = z
      * Dev/compose points at Mailpit (`SMTP_HOST=mailpit`, port 1025, web UI on 8025).
      */
     SMTP_HOST: z.string().optional(),
-    SMTP_PORT: z.coerce.number().int().positive().default(1025),
+    SMTP_PORT: emptyAsUndefined(z.coerce.number().int().positive().default(1025)),
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
     SMTP_SECURE: z
@@ -68,15 +78,23 @@ export const envSchema = z
       )
       .default(false),
     /** Envelope sender for every transactional email. */
-    MAIL_FROM: z.string().default("Form Platform <no-reply@form-platform.local>"),
+    MAIL_FROM: emptyAsUndefined(z.string().default("Form Platform <no-reply@form-platform.local>")),
     /**
      * Public origin of the SPA — the base of the verify/reset links we email out. Must be the URL
      * the *user's browser* reaches (not the container host), e.g. `http://localhost:8080` in compose.
      */
-    APP_PUBLIC_URL: z.string().default("http://localhost:5173"),
+    APP_PUBLIC_URL: emptyAsUndefined(
+      z
+        .string()
+        .url()
+        // `new URL()` (and so Zod's .url()) happily accepts "localhost:5173" — a scheme-less value
+        // would produce unusable links in email, so require a real http(s) origin.
+        .startsWith("http", "APP_PUBLIC_URL must start with http:// or https://")
+        .default("http://localhost:5173"),
+    ),
     /** Lifetimes of the one-time email tokens (A2), same duration syntax as the JWT vars. */
-    AUTH_VERIFY_TOKEN_EXPIRES_IN: z.string().default("24h"),
-    AUTH_RESET_TOKEN_EXPIRES_IN: z.string().default("1h"),
+    AUTH_VERIFY_TOKEN_EXPIRES_IN: emptyAsUndefined(z.string().default("24h")),
+    AUTH_RESET_TOKEN_EXPIRES_IN: emptyAsUndefined(z.string().default("1h")),
   })
   .passthrough();
 

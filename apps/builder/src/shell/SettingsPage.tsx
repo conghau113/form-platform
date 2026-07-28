@@ -11,8 +11,7 @@ import {
   Typography,
 } from "antd";
 import { useState } from "react";
-import { useAuth } from "../auth";
-import { changePassword, resendVerification } from "../auth/client";
+import { changePassword, resendVerification, useAuth } from "../auth";
 import { qk } from "../query";
 
 interface ChangePasswordValues {

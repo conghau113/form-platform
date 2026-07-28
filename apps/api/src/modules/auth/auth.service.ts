@@ -281,7 +281,11 @@ export class AuthService implements OnModuleInit {
     return raw;
   }
 
-  /** Validate + burn a one-time token. Unknown / wrong-purpose / spent / expired all read alike. */
+  /**
+   * Validate + burn a one-time token. Unknown / wrong-purpose / spent / expired all read alike.
+   * The burn is a compare-and-set: if a concurrent request consumed the same token first, this one
+   * loses the race and is rejected, so a link can never be redeemed twice.
+   */
   private async consumeEmailToken(rawToken: string, purpose: TokenPurpose) {
     const record = await this.verificationTokens.findByHash(hashToken(rawToken));
     if (
@@ -292,7 +296,9 @@ export class AuthService implements OnModuleInit {
     ) {
       throw new BadRequestException("Invalid or expired token");
     }
-    await this.verificationTokens.consume(record.id);
+    if (!(await this.verificationTokens.consume(record.id))) {
+      throw new BadRequestException("Invalid or expired token");
+    }
     return record;
   }
 
