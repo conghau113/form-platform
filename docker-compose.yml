@@ -24,6 +24,16 @@ services:
       timeout: 5s
       retries: 10
 
+  # Local catch-all mailbox (A2): the API sends here and nothing leaves the host. Mailpit is the
+  # maintained successor of MailHog — same ports (1025 smtp / 8025 web UI). Swap the image for
+  # `mailhog/mailhog` if you prefer the original. Replace with a real relay in production.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
   api:
     build:
       context: .
@@ -48,6 +58,16 @@ services:
       # Optional: seed an admin owning pre-2A data (id="local"). Leave unset to skip.
       AUTH_BOOTSTRAP_EMAIL: ${AUTH_BOOTSTRAP_EMAIL:-}
       AUTH_BOOTSTRAP_PASSWORD: ${AUTH_BOOTSTRAP_PASSWORD:-}
+      # Mail (A2): the local catch-all below. Point SMTP_HOST at a real relay for production —
+      # unset it entirely and the API falls back to logging each email instead of sending.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      MAIL_FROM: ${MAIL_FROM:-Form Platform <no-reply@form-platform.local>}
+      # Base of the verify/reset links we email — the URL the *browser* uses (the builder below).
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
     ports:
       - "${API_PORT:-3001}:3001"
     # GET /health runs a `SELECT 1`, so green = process up AND database reachable (1D).

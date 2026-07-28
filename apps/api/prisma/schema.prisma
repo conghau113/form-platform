@@ -220,15 +220,37 @@ model ProjectMember {
 /// `sub`, replacing the `x-owner-id` seam non-destructively. A bootstrap admin is seeded with
 /// `id = SEED_OWNER_ID ("local")` so pre-2A data keeps its owner. `email` is the login handle.
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
+  id            String              @id @default(cuid())
+  email         String              @unique
   passwordHash  String
   displayName   String?
+  /// When the account proved it owns `email` (product-roadmap A2). Null = unverified; nothing
+  /// *blocks* on it (soft verification) so every pre-A2 account keeps working untouched.
+  emailVerifiedAt DateTime?
   refreshTokens RefreshToken[]
+  verificationTokens VerificationToken[]
   memberships   Membership[]
   roles         UserRole[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+/// A single-use, expiring email token (product-roadmap A2) — one table for both purposes
+/// (`email_verify`, `password_reset`) because their lifecycle is identical; `purpose` keeps them
+/// apart. Like RefreshToken, only the SHA-256 `tokenHash` is stored: the raw token lives solely in
+/// the emailed link, so a DB leak can neither verify an address nor reset a password. `consumedAt`
+/// makes redemption single-use; issuing a new token invalidates the account's outstanding ones.
+model VerificationToken {
+  id         String    @id @default(cuid())
+  userId     String
+  purpose    String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
 }
 
 /// A long-lived, rotating refresh token (production-hardening A1). The raw token lives only in the

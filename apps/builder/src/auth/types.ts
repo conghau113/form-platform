@@ -7,5 +7,7 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName: string | null;
+  /** ISO timestamp of email verification (A2), or `null` while unverified. Nothing gates on it. */
+  emailVerifiedAt: string | null;
   createdAt: string;
 }

@@ -16,6 +16,7 @@ import { PrismaSubmissionRepo } from "./prisma/prisma-submission.repo.js";
 import { PrismaTenantRepo } from "./prisma/prisma-tenant.repo.js";
 import { PrismaThemeRepo } from "./prisma/prisma-theme.repo.js";
 import { PrismaUserRepo } from "./prisma/prisma-user.repo.js";
+import { PrismaVerificationTokenRepo } from "./prisma/prisma-verification-token.repo.js";
 import { PrismaWorkflowRepo } from "./prisma/prisma-workflow.repo.js";
 import { PrismaWorkflowInstanceRepo } from "./prisma/prisma-workflow-instance.repo.js";
 import { AdminCatalogRepo } from "./repositories/admin-catalog.repo.js";
@@ -34,6 +35,7 @@ import { SubmissionRepo } from "./repositories/submission.repo.js";
 import { TenantRepo } from "./repositories/tenant.repo.js";
 import { ThemeRepo } from "./repositories/theme.repo.js";
 import { UserRepo } from "./repositories/user.repo.js";
+import { VerificationTokenRepo } from "./repositories/verification-token.repo.js";
 import { WorkflowRepo } from "./repositories/workflow.repo.js";
 import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
 
@@ -59,6 +61,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: SubmissionRepo, useClass: PrismaSubmissionRepo },
     { provide: UserRepo, useClass: PrismaUserRepo },
     { provide: RefreshTokenRepo, useClass: PrismaRefreshTokenRepo },
+    { provide: VerificationTokenRepo, useClass: PrismaVerificationTokenRepo },
     { provide: TenantRepo, useClass: PrismaTenantRepo },
     { provide: OrgUnitRepo, useClass: PrismaOrgUnitRepo },
     { provide: RbacRepo, useClass: PrismaRbacRepo },
@@ -80,6 +83,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     SubmissionRepo,
     UserRepo,
     RefreshTokenRepo,
+    VerificationTokenRepo,
     TenantRepo,
     OrgUnitRepo,
     RbacRepo,

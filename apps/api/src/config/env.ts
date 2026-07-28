@@ -51,6 +51,32 @@ export const envSchema = z
      */
     AUTH_BOOTSTRAP_EMAIL: z.string().email().optional(),
     AUTH_BOOTSTRAP_PASSWORD: z.string().min(8).optional(),
+    /**
+     * SMTP transport (product-roadmap A2) — **optional by design** (roadmap principle #3: external
+     * dependencies must be configurable, never required). With `SMTP_HOST` unset the API runs in
+     * log mode: `MailService` writes each message (link included) to the logger instead of sending.
+     * Dev/compose points at Mailpit (`SMTP_HOST=mailpit`, port 1025, web UI on 8025).
+     */
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().positive().default(1025),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_SECURE: z
+      .preprocess(
+        (v) => (typeof v === "string" ? ["1", "true"].includes(v.toLowerCase()) : v),
+        z.boolean(),
+      )
+      .default(false),
+    /** Envelope sender for every transactional email. */
+    MAIL_FROM: z.string().default("Form Platform <no-reply@form-platform.local>"),
+    /**
+     * Public origin of the SPA — the base of the verify/reset links we email out. Must be the URL
+     * the *user's browser* reaches (not the container host), e.g. `http://localhost:8080` in compose.
+     */
+    APP_PUBLIC_URL: z.string().default("http://localhost:5173"),
+    /** Lifetimes of the one-time email tokens (A2), same duration syntax as the JWT vars. */
+    AUTH_VERIFY_TOKEN_EXPIRES_IN: z.string().default("24h"),
+    AUTH_RESET_TOKEN_EXPIRES_IN: z.string().default("1h"),
   })
   .passthrough();
 

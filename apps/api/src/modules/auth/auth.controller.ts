@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
 import { ConfigService } from "@nestjs/config";
+import { Throttle } from "@nestjs/throttler";
 import {
   AUTH_COOKIE_NAME,
   authCookieOptions,
@@ -14,6 +15,13 @@ import { durationToMs } from "../../config/env.js";
 import { type AuthResult, AuthService, type UserProfile } from "./auth.service.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { LoginDto } from "./dto/login.dto.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from "./dto/password.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { RegisterDto } from "./dto/register.dto.js";
 
@@ -114,6 +122,60 @@ export class AuthController {
   @Get("me")
   me(@CurrentOwner() ownerId: string): Promise<UserProfile> {
     return this.auth.me(ownerId);
+  }
+
+  /**
+   * Email a reset link (A2). Always `{ok:true}` — telling the caller whether the address exists
+   * would turn this into an account-enumeration oracle. Tightly throttled: it sends mail.
+   */
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post("forgot-password")
+  @HttpCode(200)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ ok: true }> {
+    await this.auth.forgotPassword(dto.email);
+    return { ok: true };
+  }
+
+  /** Redeem a reset token and set the new password (A2). Public: the caller has no session yet. */
+  @Public()
+  @Post("reset-password")
+  @HttpCode(200)
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ ok: true }> {
+    await this.auth.resetPassword(dto.token, dto.password);
+    return { ok: true };
+  }
+
+  /** Redeem an email-verification token (A2). Public: the link may be opened in any browser. */
+  @Public()
+  @Post("verify-email")
+  @HttpCode(200)
+  async verifyEmail(@Body() dto: VerifyEmailDto): Promise<{ ok: true }> {
+    await this.auth.verifyEmail(dto.token);
+    return { ok: true };
+  }
+
+  /** Re-send the verification email to the signed-in account (A2). No-op once verified. */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post("resend-verification")
+  @HttpCode(200)
+  async resendVerification(@CurrentOwner() ownerId: string): Promise<{ ok: true }> {
+    await this.auth.resendVerification(ownerId);
+    return { ok: true };
+  }
+
+  /** Change the password of the signed-in account (A2). Other sessions are revoked; this one is
+   *  re-issued, so the caller stays signed in with fresh cookies. */
+  @Post("change-password")
+  @HttpCode(200)
+  async changePassword(
+    @CurrentOwner() ownerId: string,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: CookieResponse,
+  ): Promise<{ user: UserProfile }> {
+    const result = await this.auth.changePassword(ownerId, dto.currentPassword, dto.newPassword);
+    this.setAuthCookies(res, result);
+    return { user: result.user };
   }
 
   private setAuthCookies(res: CookieResponse, { accessToken, refreshToken }: AuthResult): void {

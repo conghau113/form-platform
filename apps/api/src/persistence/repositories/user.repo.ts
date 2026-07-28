@@ -8,6 +8,8 @@ export interface UserRecord {
   email: string;
   passwordHash: string;
   displayName: string | null;
+  /** When the account proved it owns `email` (A2); `null` = not verified yet. */
+  emailVerifiedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,4 +29,8 @@ export abstract class UserRepo {
     passwordHash: string;
     displayName?: string | null;
   }): Promise<UserRecord>;
+  /** Replace the stored password hash (A2: reset-password / change-password). */
+  abstract updatePassword(id: string, passwordHash: string): Promise<void>;
+  /** Stamp `emailVerifiedAt` (A2: a redeemed verification token). Idempotent by design. */
+  abstract markEmailVerified(id: string): Promise<void>;
 }

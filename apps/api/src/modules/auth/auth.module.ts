@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { JwtAuthGuard } from "../../auth/jwt-auth.guard.js";
+import { MailModule } from "../mail/mail.module.js";
 import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 
@@ -21,6 +22,8 @@ import { AuthService } from "./auth.service.js";
         signOptions: { expiresIn: config.get<string>("JWT_ACCESS_EXPIRES_IN", "15m") },
       }),
     }),
+    // A2: verify-email / password-reset mail. Optional SMTP — falls back to logging (MailService).
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, { provide: APP_GUARD, useClass: JwtAuthGuard }],

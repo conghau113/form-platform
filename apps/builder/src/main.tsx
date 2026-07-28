@@ -8,7 +8,14 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { AdminPage } from "./admin/index.js";
-import { AuthProvider, LoginPage, RequireAuth } from "./auth/index.js";
+import {
+  AuthProvider,
+  ForgotPasswordPage,
+  LoginPage,
+  RequireAuth,
+  ResetPasswordPage,
+  VerifyEmailPage,
+} from "./auth/index.js";
 import { createQueryClient } from "./query/index.js";
 import { AppShell, SettingsPage } from "./shell/index.js";
 import { SubmissionsRoute } from "./submissions/index.js";
@@ -31,6 +38,10 @@ const basename = import.meta.env.BASE_URL.replace(/\/$/, "") || "/";
 const router = createBrowserRouter(
   [
     { path: "/login", element: <LoginPage /> },
+    // A2 recovery flows: reached without a session (emailed links), so they sit outside RequireAuth.
+    { path: "/forgot-password", element: <ForgotPasswordPage /> },
+    { path: "/reset-password", element: <ResetPasswordPage /> },
+    { path: "/verify-email", element: <VerifyEmailPage /> },
     {
       element: <RequireAuth />,
       children: [

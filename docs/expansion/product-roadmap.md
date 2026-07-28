@@ -112,7 +112,7 @@ env-driven, secret CHỈ ở `.env` phía API.
   live-smoke login trên base-path dev.
 - ⚠️ Không đọc lại được `.env` (deny Read) → verify gián tiếp qua boot/build + không echo secret.
 
-### Phase A — Kiện toàn bộ Auth (tiếp nối 2B) — A1 ✅ DONE (2026-07-02); A2/A3 📋 PLANNED
+### Phase A — Kiện toàn bộ Auth (tiếp nối 2B) — A1 ✅ DONE (2026-07-02); A2 ✅ DONE (2026-07-29); A3 📋 PLANNED
 - **A1 — Refresh token** ⭐ ✅ DONE (2026-07-02): access-token ngắn (`JWT_ACCESS_EXPIRES_IN`, mặc định
   **15m**) + refresh-token dài (`JWT_REFRESH_EXPIRES_IN`, mặc định **30d**) trong cookie HttpOnly RIÊNG
   (`refresh_token`, xoay vòng + revoke được). `POST /auth/refresh`, `/auth/logout` thu hồi, thêm
@@ -141,9 +141,45 @@ env-driven, secret CHỈ ở `.env` phía API.
   >   atomic** — 2 refresh THẬT-song-song cùng 1 token còn-hạn (khác tab, mỗi tab 1 `refreshInFlight`) có thể
   >   cùng qua check → nhân đôi token sống (fail-safe: KHÔNG báo trộm nhầm; replay sau vẫn bắt qua `revokedAt`).
   >   Nếu siết: compare-and-revoke atomic (`updateMany where revokedAt:null` + xét count) trong transaction.
-- **A2 — Quên/đặt lại mật khẩu + Xác minh email** 🔒 SMTP: `forgot-password`/`reset-password`/
-  `set-password` + `verify-email`; token 1-lần hết-hạn (bảng `VerificationToken`); `modules/mail`
-  (Nodemailer, cấu hình SMTP_*). Cần **SMTP** (self-host: MailHog cho dev; SMTP thật cho prod).
+- **A2 — Quên/đặt lại mật khẩu + Xác minh email** ✅ DONE (2026-07-29): `forgot-password`/`reset-password`/
+  `verify-email` + đổi mật khẩu khi đã đăng nhập; token 1-lần hết-hạn (bảng `VerificationToken`);
+  `modules/mail` (Nodemailer). SMTP **tùy chọn** (dev: Mailpit; prod: relay thật).
+  > **✅ ĐÃ LÀM (2026-07-29) — owner chốt 4 fork (đều theo khuyến nghị):** phạm vi ĐẦY ĐỦ (reset + verify) ·
+  > **verify MỀM** (không chặn đăng nhập) · SMTP chưa cấu hình → **fallback log ra logger** ·
+  > có `POST /auth/change-password`.
+  > - **Schema (`20260729000000_add_verification_token`, additive, KHÔNG backfill):** `User.emailVerifiedAt?`
+  >   + model `VerificationToken`(`userId`/`purpose`/`tokenHash @unique`/`expiresAt`/`consumedAt?`, FK Cascade,
+  >   `@@index([userId,purpose])`). **⚠️ DEVIATION có chủ đích:** **MỘT bảng + cột `purpose`**
+  >   (`email_verify`|`password_reset`) thay vì 2 bảng `VerificationToken`/`PasswordResetToken` như phác ở
+  >   §Phase A — vòng đời hệt nhau (single-use, hash SHA-256, hết hạn) nên 2 bảng = 2 repo + 2 impl trùng lặp.
+  > - **Token:** opaque `randomBytes(32).hex`, **DB chỉ lưu SHA-256** (mirror `RefreshToken` A1) → rò DB không
+  >   xác minh hộ ai, không đặt lại mật khẩu hộ ai. Cấp token mới **vô hiệu hoá** token cũ cùng purpose;
+  >   redeem sai purpose / đã dùng / hết hạn / không tồn tại đều trả **400 giống nhau**.
+  > - **`modules/mail`:** `MailService` (nodemailer, transport dựng lười) — **không có `SMTP_HOST` ⇒ log-mode**
+  >   (ghi nội dung + link ra Nest Logger, giữ nguyên tắc §2.3 "phụ thuộc ngoài là tùy chọn"); gửi lỗi được
+  >   nuốt + log (SMTP hỏng KHÔNG làm hỏng đăng ký / quên-mật-khẩu). `mail-templates.ts` = **hàm thuần** VI
+  >   (escape HTML cho displayName). Env mới: `SMTP_HOST/PORT/USER/PASSWORD/SECURE`, `MAIL_FROM`,
+  >   `APP_PUBLIC_URL` (gốc link), `AUTH_VERIFY_TOKEN_EXPIRES_IN`(24h)/`AUTH_RESET_TOKEN_EXPIRES_IN`(1h).
+  >   docker-compose thêm service **`mailpit`** (1025 smtp / 8025 UI — bản kế nhiệm được bảo trì của MailHog).
+  > - **Endpoint:** `POST /auth/forgot-password` (@Public, **luôn `{ok:true}`** = không lộ email nào có tài khoản,
+  >   throttle 5/phút) · `reset-password` · `verify-email` (@Public) · `resend-verification` (authed, throttle) ·
+  >   `change-password` (authed, yêu cầu mật khẩu cũ). Reset **và** change đều `revokeAllForUser` (đá mọi phiên
+  >   khác); change **cấp lại cookie** cho chính caller. `register` gửi mail xác minh (best-effort).
+  > - **Builder:** 3 route công khai `/forgot-password`·`/reset-password?token=`·`/verify-email?token=` +
+  >   link "Quên mật khẩu?" ở LoginPage · SettingsPage: trạng thái xác minh + "Gửi lại" + form Đổi mật khẩu ·
+  >   AppShell: banner nhắc xác minh (đóng được). `UserProfile.emailVerifiedAt` lộ qua `/auth/me`.
+  > - **Verify ALL PASS:** typecheck api+builder · **api 225 test** (+9: verify/reset/change + mail-templates) ·
+  >   **builder 388 test** (+4 client) · biome sạch file đổi · **live-smoke HTTP thật 26/26** (`node dist`
+  >   PORT=3011 + Postgres + Mailpit: đăng ký→đọc mail→verify→replay 400→forgot email-lạ vẫn 200→reset→refresh
+  >   token cũ 401→login mật khẩu mới→change-password sai-cũ 401/đúng 200 + phiên khác chết) · **log-mode
+  >   verify riêng** (`SMTP_HOST=` rỗng → log `[mail:log-mode]`) · **UI smoke MCP** (đăng ký→banner→Cài đặt
+  >   "Chưa xác minh"→Gửi lại→mở link→"Đã xác minh"→đổi mật khẩu→quên mật khẩu→đặt lại→đăng nhập lại;
+  >   console sạch). KHÔNG changeset (apps private).
+  > - **⚠️ Known-gap (advisory):** (1) **access-token 15m không bị thu hồi** khi reset/change (JWT stateless —
+  >   chỉ refresh token bị revoke) ⇒ phiên cũ trong cùng trình duyệt còn sống tối đa 15 phút; siết sau bằng
+  >   token-version/denylist nếu cần. (2) verify **mềm** — chưa nơi nào chặn theo `emailVerifiedAt` (đúng
+  >   chủ đích; muốn siết thì gate ở guard + backfill user cũ). (3) `AUTH_BOOTSTRAP_*` admin không được
+  >   verify tự động. (4) Chưa có UI đổi email.
 - **A3 — Google OAuth** 🔒 Google app (tùy chọn): `passport-google-oauth20`, `/auth/oauth/google` +
   callback, liên kết account theo email đã verify. Cần **Google client-id/secret/redirect**.
 - Δ nhỏ: `User` thêm `emailVerifiedAt?`, `authProvider?`. Additive.
@@ -411,7 +447,7 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
 |---|---|---|
 | **Demo/bootstrap admin** email + mật khẩu (dev) | Phase 0 | Điền sẵn `.env` dev để đỡ nhập lại; là admin id="local" giữ data cũ. |
 | **JWT_SECRET production** (≥32 ký tự ngẫu nhiên) | Phase 0 | Chỉ ở `.env.production` API. Tôi có thể sinh hộ 1 chuỗi ngẫu nhiên nếu owner muốn. |
-| **SMTP** host/port/user/pass/from | Phase A2 | Password-reset + email-verify. Dev có thể dùng **MailHog** (không cần tài khoản thật). |
+| ~~**SMTP** host/port/user/pass/from~~ ✅ hết chặn | Phase A2 (DONE 2026-07-29) | Dev đã chạy bằng **Mailpit** trong docker-compose; không SMTP ⇒ log-mode. Chỉ cần SMTP thật khi deploy production. |
 | **Google OAuth** client-id/secret/redirect-uri | Phase A3 | Tạo ở Google Cloud Console. Tùy chọn — bỏ qua nếu chưa cần. |
 | **Chính sách tenant** (self-host 1 tenant hay SaaS nhiều tenant?) | Phase B | Quyết định độ phức tạp multi-tenancy. |
 | **Danh mục quyền chức năng** (list functions/screens cần phân quyền) | Phase C | Có thể chốt dần; tôi đề xuất bộ mặc định trước. |

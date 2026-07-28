@@ -1,6 +1,6 @@
 import { App as AntApp, Button, Card, Form, Input, Tabs, Typography } from "antd";
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./useAuth";
 
 interface LoginValues {
@@ -79,6 +79,9 @@ export function LoginPage() {
                   <Button type="primary" htmlType="submit" block loading={submitting}>
                     Đăng nhập
                   </Button>
+                  <div style={{ marginTop: 12, textAlign: "center" }}>
+                    <Link to="/forgot-password">Quên mật khẩu?</Link>
+                  </div>
                 </Form>
               ),
             },

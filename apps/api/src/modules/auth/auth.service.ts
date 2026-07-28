@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   type OnModuleInit,
@@ -19,6 +20,17 @@ import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
 import type { UserRecord } from "../../persistence/repositories/user.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { UserRepo } from "../../persistence/repositories/user.repo.js";
+import type { TokenPurpose } from "../../persistence/repositories/verification-token.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { VerificationTokenRepo } from "../../persistence/repositories/verification-token.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { MailService } from "../mail/mail.service.js";
+import {
+  authLink,
+  passwordChangedMail,
+  resetPasswordMail,
+  verifyEmailMail,
+} from "../mail/mail-templates.js";
 
 /** bcrypt work factor — 10 is the common default (~100ms/hash), a sane cost for a self-host API. */
 const SALT_ROUNDS = 10;
@@ -26,11 +38,18 @@ const SALT_ROUNDS = 10;
 /** Fallback refresh-token lifetime when `JWT_REFRESH_EXPIRES_IN` is unset (matches env default). */
 const DEFAULT_REFRESH_EXPIRES_IN = "30d";
 
+/** Fallbacks for the A2 email-token lifetimes / link base (all match the env defaults). */
+const DEFAULT_VERIFY_EXPIRES_IN = "24h";
+const DEFAULT_RESET_EXPIRES_IN = "1h";
+const DEFAULT_PUBLIC_URL = "http://localhost:5173";
+
 /** The safe, password-free view of an account returned to clients. */
 export interface UserProfile {
   id: string;
   email: string;
   displayName: string | null;
+  /** `null` until the address is verified (A2). Nothing blocks on it — the UI just nudges. */
+  emailVerifiedAt: Date | null;
   createdAt: Date;
 }
 
@@ -59,6 +78,8 @@ export class AuthService implements OnModuleInit {
     private readonly refreshTokens: RefreshTokenRepo,
     private readonly tenants: TenantRepo,
     private readonly rbac: RbacRepo,
+    private readonly verificationTokens: VerificationTokenRepo,
+    private readonly mail: MailService,
   ) {}
 
   /** Seed the bootstrap admin (if configured) so pre-2A `ownerId="local"` data keeps its owner. */
@@ -77,6 +98,8 @@ export class AuthService implements OnModuleInit {
       passwordHash,
       displayName: displayName?.trim() || null,
     });
+    // Verification is a nudge, not a gate (A2): a mail failure must never block the signup.
+    await this.sendVerificationEmail(user);
     return this.issue(user);
   }
 
@@ -131,6 +154,70 @@ export class AuthService implements OnModuleInit {
     await this.refreshTokens.revokeAllForUser(userId);
   }
 
+  /**
+   * Start a password reset (`POST /auth/forgot-password`, A2). Resolves the same way whether or not
+   * the address has an account — the endpoint must not become an account-enumeration oracle. Any
+   * outstanding reset token is invalidated first so only the newest emailed link works.
+   */
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.users.findByEmail(normalizeEmail(email));
+    if (!user) return;
+    const raw = await this.issueEmailToken(
+      user.id,
+      "password_reset",
+      process.env.AUTH_RESET_TOKEN_EXPIRES_IN ?? DEFAULT_RESET_EXPIRES_IN,
+    );
+    await this.mail.send(user.email, resetPasswordMail(this.link("/reset-password", raw)));
+  }
+
+  /**
+   * Finish a password reset (`POST /auth/reset-password`, A2). Consumes the one-time token, stores
+   * the new hash, and revokes every session — whoever held the old password (or a stolen refresh
+   * token) is locked out, and the account owner logs back in with the new one.
+   */
+  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
+    const record = await this.consumeEmailToken(rawToken, "password_reset");
+    const user = await this.users.findById(record.userId);
+    if (!user) throw new BadRequestException("Invalid or expired token");
+    await this.users.updatePassword(user.id, await bcrypt.hash(newPassword, SALT_ROUNDS));
+    await this.refreshTokens.revokeAllForUser(user.id);
+    await this.mail.send(user.email, passwordChangedMail());
+  }
+
+  /** Redeem an email-verification token (`POST /auth/verify-email`, A2). */
+  async verifyEmail(rawToken: string): Promise<void> {
+    const record = await this.consumeEmailToken(rawToken, "email_verify");
+    await this.users.markEmailVerified(record.userId);
+  }
+
+  /** Re-send the verification email (`POST /auth/resend-verification`). No-op once verified. */
+  async resendVerification(userId: string): Promise<void> {
+    const user = await this.users.findById(userId);
+    if (!user || user.emailVerifiedAt) return;
+    await this.sendVerificationEmail(user);
+  }
+
+  /**
+   * Change the password of a signed-in account (`POST /auth/change-password`, A2). Requires the
+   * current password (so a hijacked browser tab can't lock the owner out), revokes every existing
+   * session, and returns a fresh pair so *this* caller stays signed in.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AuthResult> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new UnauthorizedException("Account no longer exists");
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new UnauthorizedException("Current password is incorrect");
+    }
+    await this.users.updatePassword(user.id, await bcrypt.hash(newPassword, SALT_ROUNDS));
+    await this.refreshTokens.revokeAllForUser(user.id);
+    await this.mail.send(user.email, passwordChangedMail());
+    return this.issue(user);
+  }
+
   private async issue(user: UserRecord): Promise<AuthResult> {
     // Auto-provision the caller's personal tenant (product-roadmap B1). Idempotent, so login/refresh
     // for an existing user is a no-op; a freshly registered user (and the bootstrap admin on first
@@ -158,6 +245,60 @@ export class AuthService implements OnModuleInit {
       expiresAt: new Date(Date.now() + ttlMs),
     });
     return raw;
+  }
+
+  /** Issue + email a fresh verification link. Swallows failures — signup must not depend on SMTP. */
+  private async sendVerificationEmail(user: UserRecord): Promise<void> {
+    const raw = await this.issueEmailToken(
+      user.id,
+      "email_verify",
+      process.env.AUTH_VERIFY_TOKEN_EXPIRES_IN ?? DEFAULT_VERIFY_EXPIRES_IN,
+    );
+    await this.mail.send(
+      user.email,
+      verifyEmailMail(this.link("/verify-email", raw), user.displayName),
+    );
+  }
+
+  /**
+   * Mint a one-time email token: the raw value goes into the link, only its SHA-256 hash is stored
+   * (same shape as the refresh tokens above). Supersedes the user's outstanding tokens of that
+   * purpose so an older email can't be replayed after a re-send.
+   */
+  private async issueEmailToken(
+    userId: string,
+    purpose: TokenPurpose,
+    expiresIn: string,
+  ): Promise<string> {
+    await this.verificationTokens.invalidateActive(userId, purpose);
+    const raw = randomBytes(32).toString("hex");
+    await this.verificationTokens.create({
+      userId,
+      purpose,
+      tokenHash: hashToken(raw),
+      expiresAt: new Date(Date.now() + durationToMs(expiresIn)),
+    });
+    return raw;
+  }
+
+  /** Validate + burn a one-time token. Unknown / wrong-purpose / spent / expired all read alike. */
+  private async consumeEmailToken(rawToken: string, purpose: TokenPurpose) {
+    const record = await this.verificationTokens.findByHash(hashToken(rawToken));
+    if (
+      !record ||
+      record.purpose !== purpose ||
+      record.consumedAt ||
+      record.expiresAt.getTime() <= Date.now()
+    ) {
+      throw new BadRequestException("Invalid or expired token");
+    }
+    await this.verificationTokens.consume(record.id);
+    return record;
+  }
+
+  /** Absolute link into the SPA for an emailed action. */
+  private link(path: string, token: string): string {
+    return authLink(process.env.APP_PUBLIC_URL ?? DEFAULT_PUBLIC_URL, path, token);
   }
 
   private async bootstrapAdmin(): Promise<void> {
@@ -197,6 +338,7 @@ function toProfile(user: UserRecord): UserProfile {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    emailVerifiedAt: user.emailVerifiedAt,
     createdAt: user.createdAt,
   };
 }

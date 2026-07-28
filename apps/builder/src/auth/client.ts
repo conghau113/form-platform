@@ -68,3 +68,51 @@ export async function register(
 export async function logout(): Promise<void> {
   await fetch(`${API_BASE}/auth/logout`, { method: "POST" });
 }
+
+/** POST a JSON body to a public (session-less) auth endpoint — raw `fetch`, like login/register. */
+async function postPublic(path: string, body: unknown): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/${path}`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+}
+
+/**
+ * Ask the server to email a reset link (A2). Always resolves when the request is accepted — the
+ * API deliberately answers the same way whether or not the address has an account.
+ */
+export async function forgotPassword(email: string): Promise<void> {
+  await postPublic("forgot-password", { email });
+}
+
+/** Redeem an emailed reset token and set a new password (A2). */
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await postPublic("reset-password", { token, password });
+}
+
+/** Redeem an emailed verification token (A2). */
+export async function verifyEmail(token: string): Promise<void> {
+  await postPublic("verify-email", { token });
+}
+
+/** Re-send the verification email to the signed-in account (A2). */
+export async function resendVerification(): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/auth/resend-verification`, { method: "POST" });
+  if (!res.ok) throw new Error(await readError(res));
+}
+
+/** Change the signed-in account's password (A2); the server re-issues this session's cookies. */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<UserProfile> {
+  const res = await apiFetch(`${API_BASE}/auth/change-password`, {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return ((await res.json()) as { user: UserProfile }).user;
+}

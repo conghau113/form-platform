@@ -177,6 +177,7 @@ class FakeUserRepo extends UserRepo {
       email,
       passwordHash: "x",
       displayName: null,
+      emailVerifiedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -190,6 +191,8 @@ class FakeUserRepo extends UserRepo {
   async create(): Promise<UserRecord> {
     throw new Error("not used");
   }
+  async updatePassword(): Promise<void> {}
+  async markEmailVerified(): Promise<void> {}
 }
 
 /** Captures audit writes so tests can assert who-did-what was recorded. */

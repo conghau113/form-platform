@@ -1,4 +1,5 @@
-import { ConflictException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, UnauthorizedException } from "@nestjs/common";
+import type { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -10,6 +11,13 @@ import {
 } from "../../persistence/repositories/refresh-token.repo.js";
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
 import { type UserRecord, UserRepo } from "../../persistence/repositories/user.repo.js";
+import {
+  type TokenPurpose,
+  type VerificationTokenRecord,
+  VerificationTokenRepo,
+} from "../../persistence/repositories/verification-token.repo.js";
+import { MailService } from "../mail/mail.service.js";
+import type { MailContent } from "../mail/mail-templates.js";
 import { AuthService } from "./auth.service.js";
 
 let seq = 0;
@@ -38,11 +46,74 @@ class FakeUserRepo extends UserRepo {
       email: input.email,
       passwordHash: input.passwordHash,
       displayName: input.displayName ?? null,
+      emailVerifiedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     this.rows.push(row);
     return row;
+  }
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    const row = this.rows.find((r) => r.id === id);
+    if (row) row.passwordHash = passwordHash;
+  }
+  async markEmailVerified(id: string): Promise<void> {
+    const row = this.rows.find((r) => r.id === id);
+    if (row) row.emailVerifiedAt = new Date();
+  }
+}
+
+/** In-memory VerificationTokenRepo — mirrors the unique `tokenHash` + single-use semantics. */
+class FakeVerificationTokenRepo extends VerificationTokenRepo {
+  readonly rows: VerificationTokenRecord[] = [];
+
+  async create(input: {
+    userId: string;
+    purpose: TokenPurpose;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<VerificationTokenRecord> {
+    if (this.rows.some((r) => r.tokenHash === input.tokenHash)) throw new Error("unique tokenHash");
+    const row: VerificationTokenRecord = {
+      id: `vt${++seq}`,
+      userId: input.userId,
+      purpose: input.purpose,
+      tokenHash: input.tokenHash,
+      expiresAt: input.expiresAt,
+      consumedAt: null,
+      createdAt: new Date(),
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async findByHash(tokenHash: string): Promise<VerificationTokenRecord | null> {
+    return this.rows.find((r) => r.tokenHash === tokenHash) ?? null;
+  }
+  async consume(id: string): Promise<void> {
+    const row = this.rows.find((r) => r.id === id);
+    if (row) row.consumedAt = new Date();
+  }
+  async invalidateActive(userId: string, purpose: TokenPurpose): Promise<void> {
+    for (const r of this.rows) {
+      if (r.userId === userId && r.purpose === purpose && !r.consumedAt) r.consumedAt = new Date();
+    }
+  }
+}
+
+/** Captures outgoing mail instead of sending it (the real service also has a no-SMTP log mode). */
+class FakeMailService extends MailService {
+  readonly sent: { to: string; subject: string; text: string }[] = [];
+  constructor() {
+    super({ get: () => undefined } as unknown as ConfigService);
+  }
+  override async send(to: string, content: MailContent): Promise<void> {
+    this.sent.push({ to, subject: content.subject, text: content.text });
+  }
+  /** The token embedded in the most recent link we "sent". */
+  lastToken(): string {
+    const match = /token=([a-f0-9]+)/.exec(this.sent.at(-1)?.text ?? "");
+    if (!match) throw new Error("no token in the last mail");
+    return match[1];
   }
 }
 
@@ -179,6 +250,8 @@ describe("AuthService", () => {
   let refreshTokens: FakeRefreshTokenRepo;
   let tenants: FakeTenantRepo;
   let rbac: FakeRbacRepo;
+  let verificationTokens: FakeVerificationTokenRepo;
+  let mail: FakeMailService;
   let service: AuthService;
 
   beforeEach(() => {
@@ -186,7 +259,9 @@ describe("AuthService", () => {
     refreshTokens = new FakeRefreshTokenRepo();
     tenants = new FakeTenantRepo();
     rbac = new FakeRbacRepo();
-    service = new AuthService(users, jwt, refreshTokens, tenants, rbac);
+    verificationTokens = new FakeVerificationTokenRepo();
+    mail = new FakeMailService();
+    service = new AuthService(users, jwt, refreshTokens, tenants, rbac, verificationTokens, mail);
   });
 
   afterEach(() => {
@@ -332,6 +407,113 @@ describe("AuthService", () => {
     });
   });
 
+  describe("email verification (A2)", () => {
+    it("emails a verification link on register and stamps emailVerifiedAt when redeemed", async () => {
+      const reg = await service.register("nina@example.com", "password1", "Nina");
+      expect(reg.user.emailVerifiedAt).toBeNull();
+      expect(mail.sent).toHaveLength(1);
+      expect(mail.sent[0].to).toBe("nina@example.com");
+      // Only the hash is stored — the raw token exists solely in the emailed link.
+      expect(verificationTokens.rows).toHaveLength(1);
+      expect(verificationTokens.rows[0].tokenHash).not.toBe(mail.lastToken());
+
+      await service.verifyEmail(mail.lastToken());
+      expect((await service.me(reg.user.id)).emailVerifiedAt).not.toBeNull();
+      expect(verificationTokens.rows[0].consumedAt).not.toBeNull();
+    });
+
+    it("rejects a replayed, unknown, expired or wrong-purpose token", async () => {
+      await service.register("otto@example.com", "password1");
+      const token = mail.lastToken();
+      await service.verifyEmail(token);
+
+      // Replay of a consumed token.
+      await expect(service.verifyEmail(token)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.verifyEmail("deadbeef")).rejects.toBeInstanceOf(BadRequestException);
+
+      // A verification token must not double as a reset token (purpose is checked).
+      await service.register("pam@example.com", "password1");
+      await expect(service.resetPassword(mail.lastToken(), "brandnewpass")).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      // Expired.
+      verificationTokens.rows[verificationTokens.rows.length - 1].expiresAt = new Date(
+        Date.now() - 1000,
+      );
+      await expect(service.verifyEmail(mail.lastToken())).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it("resend issues a fresh token, kills the previous one, and is a no-op once verified", async () => {
+      const reg = await service.register("quinn@example.com", "password1");
+      const first = mail.lastToken();
+
+      await service.resendVerification(reg.user.id);
+      const second = mail.lastToken();
+      expect(second).not.toBe(first);
+      // The superseded link no longer works; the newest one does.
+      await expect(service.verifyEmail(first)).rejects.toBeInstanceOf(BadRequestException);
+      await service.verifyEmail(second);
+
+      const before = mail.sent.length;
+      await service.resendVerification(reg.user.id);
+      expect(mail.sent).toHaveLength(before);
+    });
+  });
+
+  describe("password reset (A2)", () => {
+    it("forgot-password stays silent for an unknown address (no enumeration)", async () => {
+      await expect(service.forgotPassword("nobody@example.com")).resolves.toBeUndefined();
+      expect(mail.sent).toHaveLength(0);
+      expect(verificationTokens.rows).toHaveLength(0);
+    });
+
+    it("resets the password, revokes every session, and burns the token", async () => {
+      const reg = await service.register("rita@example.com", "oldpassword");
+      await service.forgotPassword("RITA@Example.com"); // email is normalized
+      const token = mail.lastToken();
+
+      await service.resetPassword(token, "newpassword1");
+
+      // Old password is dead, new one works.
+      await expect(service.login("rita@example.com", "oldpassword")).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      const relogin = await service.login("rita@example.com", "newpassword1");
+      expect(relogin.user.id).toBe(reg.user.id);
+
+      // The session that existed before the reset is gone.
+      await expect(service.refresh(reg.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
+      // And the link can't be replayed.
+      await expect(service.resetPassword(token, "another-pass")).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe("change password (A2)", () => {
+    it("requires the current password and re-issues the caller's session", async () => {
+      const reg = await service.register("sam@example.com", "oldpassword");
+
+      await expect(
+        service.changePassword(reg.user.id, "wrongpassword", "newpassword1"),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      const res = await service.changePassword(reg.user.id, "oldpassword", "newpassword1");
+      // Fresh pair for this caller...
+      expect(res.refreshToken).not.toBe(reg.refreshToken);
+      // ...every other session revoked...
+      await expect(service.refresh(reg.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
+      // ...and the new password is what logs in now.
+      await expect(service.login("sam@example.com", "oldpassword")).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      await expect(service.login("sam@example.com", "newpassword1")).resolves.toBeTruthy();
+    });
+  });
+
   describe("bootstrap admin", () => {
     it("seeds an admin with id=SEED_OWNER_ID when configured and absent", async () => {
       process.env.AUTH_BOOTSTRAP_EMAIL = "Admin@Corp.com";
@@ -361,6 +543,8 @@ describe("AuthService", () => {
         new FakeRefreshTokenRepo(),
         new FakeTenantRepo(),
         new FakeRbacRepo(),
+        new FakeVerificationTokenRepo(),
+        new FakeMailService(),
       ).onModuleInit();
       expect(users2.rows).toHaveLength(0);
     });

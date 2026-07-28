@@ -10,6 +10,7 @@ function toRecord(u: User): UserRecord {
     email: u.email,
     passwordHash: u.passwordHash,
     displayName: u.displayName,
+    emailVerifiedAt: u.emailVerifiedAt,
     createdAt: u.createdAt,
     updatedAt: u.updatedAt,
   };
@@ -46,5 +47,13 @@ export class PrismaUserRepo extends UserRepo {
       },
     });
     return toRecord(row);
+  }
+
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    await this.prisma.user.update({ where: { id }, data: { passwordHash } });
+  }
+
+  async markEmailVerified(id: string): Promise<void> {
+    await this.prisma.user.update({ where: { id }, data: { emailVerifiedAt: new Date() } });
   }
 }
