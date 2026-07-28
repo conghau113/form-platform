@@ -18,7 +18,7 @@ import {
   ProjectMemberRepo,
 } from "../../persistence/repositories/project-member.repo.js";
 import { ThemeRepo } from "../../persistence/repositories/theme.repo.js";
-import { FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
+import { FakeOrgUnitRepo, FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import { ThemesService } from "./themes.service.js";
 
@@ -76,6 +76,7 @@ class FakeProjectRepo extends ProjectRepo {
       id: `proj_${++seq}`,
       ownerId: input.ownerId,
       tenantId: input.tenantId ?? FakeTenantRepo.tenantIdFor(input.ownerId),
+      orgUnitId: input.orgUnitId ?? null,
       name: input.name,
       slug: input.slug,
       description: input.description ?? null,
@@ -171,6 +172,7 @@ beforeEach(async () => {
     memberRepo,
     new FakeTenantRepo(),
     new FakeRbacRepo(),
+    new FakeOrgUnitRepo(),
   );
   themes = new ThemesService(themeRepo, formRepo, projects);
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });

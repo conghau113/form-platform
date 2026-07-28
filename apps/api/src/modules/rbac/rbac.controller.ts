@@ -5,6 +5,8 @@ import type { FunctionRecord, TenantUserRecord } from "../../persistence/reposit
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { AddMemberDto } from "./dto/add-member.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { SetRoleDataScopesDto } from "./dto/set-role-data-scopes.dto.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { SetRoleFunctionsDto } from "./dto/set-role-functions.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { SetUserRolesDto } from "./dto/set-user-roles.dto.js";
@@ -79,6 +81,17 @@ export class RbacController {
     @Body() dto: SetRoleFunctionsDto,
   ): Promise<RoleWithFunctions> {
     return this.rbac.setRoleFunctions(userId, id, dto);
+  }
+
+  /** Replace a role's data-scope org units (C3); empty clears the scope (tenant-wide). */
+  @Put("roles/:id/data-scopes")
+  @RequireFunction("role.admin")
+  setRoleDataScopes(
+    @CurrentOwner() userId: string,
+    @Param("id") id: string,
+    @Body() dto: SetRoleDataScopesDto,
+  ): Promise<RoleWithFunctions> {
+    return this.rbac.setRoleDataScopes(userId, id, dto);
   }
 
   /** The tenant's members with the roles each holds (drives the admin user list). */

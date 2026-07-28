@@ -42,6 +42,8 @@ export async function createProject(input: {
   description?: string | null;
   /** Target tenant (B4). Omitted → the user's personal tenant. */
   tenantId?: string;
+  /** Placement in the tenant's org tree (C3). Omitted → unplaced. */
+  orgUnitId?: string;
 }): Promise<ProjectRecord> {
   const res = await apiFetch(`${API_BASE}/projects`, {
     method: "POST",
@@ -54,7 +56,7 @@ export async function createProject(input: {
 
 export async function updateProject(
   id: string,
-  patch: { name?: string; description?: string | null },
+  patch: { name?: string; description?: string | null; orgUnitId?: string | null },
 ): Promise<ProjectRecord> {
   const res = await apiFetch(`${API_BASE}/projects/${encodeURIComponent(id)}`, {
     method: "PATCH",

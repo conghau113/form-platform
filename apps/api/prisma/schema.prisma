@@ -57,11 +57,27 @@ model Role {
   tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   functions   RoleFunction[]
   users       UserRole[]
+  dataScopes  DataScope[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+/// Data-scope grant restricting a role to an org-unit subtree (product-roadmap Phase C3). A role with
+/// no `DataScope` rows is tenant-wide (backward-compatible); with rows, the role's functions apply only
+/// to projects placed under one of these org units (ancestor-or-self). The `*` admin role keeps zero
+/// rows → stays tenant-wide. Enforced in `ProjectsService.resolveRoleForProject`, never via SQL alone.
+model DataScope {
+  id        String  @id @default(cuid())
+  roleId    String
+  orgUnitId String
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  orgUnit   OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, orgUnitId])
+  @@index([roleId])
 }
 
 /// Grant of a function code to a role (product-roadmap Phase C2). A role's effective permission set is
@@ -107,6 +123,8 @@ model OrgUnit {
   parent    OrgUnit?     @relation("OrgUnitTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  OrgUnit[]    @relation("OrgUnitTree")
   members   Membership[]
+  projects  Project[]
+  dataScopes DataScope[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -156,10 +174,14 @@ model Project {
   /// create into a team tenant instead. `ownerId` stays the canonical creator + Track-W
   /// project-owner role; slugs are unique per tenant (B4 moved the unique off `ownerId`).
   tenantId    String
+  /// Placement in the tenant's org tree (C3). Null = unplaced (only tenant-wide roles reach it).
+  /// Data-scoped roles grant access only to projects whose org unit is in their scoped subtree.
+  orgUnitId   String?
   name        String
   slug        String
   description String?
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orgUnit     OrgUnit?        @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
   folders     Folder[]
   forms       FormRecord[]
   workflows   WorkflowRecord[]
@@ -174,6 +196,7 @@ model Project {
 
   @@unique([tenantId, slug])
   @@index([ownerId])
+  @@index([orgUnitId])
 }
 
 /// Sharing grant for a collaborator (W5). The canonical owner stays `Project.ownerId` (always

@@ -29,7 +29,7 @@ import {
   type ProjectMemberRecord,
   ProjectMemberRepo,
 } from "../persistence/repositories/project-member.repo.js";
-import { FakeRbacRepo, FakeTenantRepo } from "../testing/fake-tenant-rbac.js";
+import { FakeOrgUnitRepo, FakeRbacRepo, FakeTenantRepo } from "../testing/fake-tenant-rbac.js";
 import { FoldersService } from "./folders/folders.service.js";
 import { MembersService } from "./projects/members.service.js";
 import { ProjectsService } from "./projects/projects.service.js";
@@ -51,6 +51,7 @@ class FakeProjectRepo extends ProjectRepo {
       id: nextId("proj"),
       ownerId: input.ownerId,
       tenantId: input.tenantId ?? FakeTenantRepo.tenantIdFor(input.ownerId),
+      orgUnitId: input.orgUnitId ?? null,
       name: input.name,
       slug: input.slug,
       description: input.description ?? null,
@@ -186,6 +187,7 @@ let formRepo: FakeFormRepo;
 let memberRepo: FakeProjectMemberRepo;
 let tenantRepo: FakeTenantRepo;
 let rbacRepo: FakeRbacRepo;
+let orgUnitRepo: FakeOrgUnitRepo;
 let projects: ProjectsService;
 let folders: FoldersService;
 let membersSvc: MembersService;
@@ -198,6 +200,7 @@ beforeEach(() => {
   memberRepo = new FakeProjectMemberRepo();
   tenantRepo = new FakeTenantRepo();
   rbacRepo = new FakeRbacRepo();
+  orgUnitRepo = new FakeOrgUnitRepo();
   projects = new ProjectsService(
     projectRepo,
     folderRepo,
@@ -205,6 +208,7 @@ beforeEach(() => {
     memberRepo,
     tenantRepo,
     rbacRepo,
+    orgUnitRepo,
   );
   folders = new FoldersService(folderRepo, projects);
   membersSvc = new MembersService(projects, memberRepo);
@@ -371,6 +375,83 @@ describe("ProjectsService tenant scoping (B3)", () => {
     joinTenant("mix2-u", ["*"]);
     await expect(projects.update("mix2-u", p.id, { name: "Won" })).resolves.toMatchObject({
       name: "Won",
+    });
+  });
+});
+
+describe("ProjectsService data-scope (C3)", () => {
+  const TENANT = FakeTenantRepo.tenantIdFor(OWNER);
+
+  /** Add `userId` to OWNER's tenant with per-role scoped grants (their own tenant first). */
+  const joinScoped = (
+    userId: string,
+    grants: { functions: string[]; scopeOrgUnitIds: string[] }[],
+  ) => {
+    tenantRepo.join(userId, FakeTenantRepo.tenantIdFor(userId));
+    tenantRepo.join(userId, TENANT);
+    rbacRepo.grantScoped(userId, TENANT, grants);
+  };
+
+  beforeEach(() => {
+    // hr (root) → eng; sales (root) — all in OWNER's tenant.
+    orgUnitRepo.seed("hr", TENANT, null);
+    orgUnitRepo.seed("eng", TENANT, "hr");
+    orgUnitRepo.seed("sales", TENANT, null);
+  });
+
+  it("a role scoped to a branch reaches only projects in that subtree", async () => {
+    const inEng = await projects.create(OWNER, { name: "Eng App", orgUnitId: "eng" });
+    const inSales = await projects.create(OWNER, { name: "Sales App", orgUnitId: "sales" });
+    joinScoped("scoped-u", [{ functions: ["form.manage"], scopeOrgUnitIds: ["hr"] }]);
+    // hr subtree covers eng → editor there.
+    await expect(
+      folders.create("scoped-u", { projectId: inEng.id, name: "X" }),
+    ).resolves.toMatchObject({ name: "X" });
+    // sales is outside the scope → 404 (no access, no existence leak).
+    await expect(projects.getOne("scoped-u", inSales.id)).rejects.toBeInstanceOf(NotFoundException);
+    const ids = (await projects.list("scoped-u")).map((p) => p.id);
+    expect(ids).toContain(inEng.id);
+    expect(ids).not.toContain(inSales.id);
+  });
+
+  it("a scoped role does not reach an unplaced project", async () => {
+    const unplaced = await projects.create(OWNER, { name: "Unplaced" });
+    joinScoped("scoped-u", [{ functions: ["form.manage"], scopeOrgUnitIds: ["hr"] }]);
+    await expect(projects.getOne("scoped-u", unplaced.id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect((await projects.list("scoped-u")).map((p) => p.id)).not.toContain(unplaced.id);
+  });
+
+  it("an unscoped role stays tenant-wide (reaches placed and unplaced projects)", async () => {
+    const inSales = await projects.create(OWNER, { name: "Sales App", orgUnitId: "sales" });
+    const unplaced = await projects.create(OWNER, { name: "Unplaced" });
+    joinScoped("wide-u", [{ functions: ["form.read"], scopeOrgUnitIds: [] }]);
+    await expect(projects.getOne("wide-u", inSales.id)).resolves.toMatchObject({ id: inSales.id });
+    await expect(projects.getOne("wide-u", unplaced.id)).resolves.toMatchObject({
+      id: unplaced.id,
+    });
+  });
+
+  it("the * admin role reaches every project regardless of placement", async () => {
+    const inEng = await projects.create(OWNER, { name: "Eng App", orgUnitId: "eng" });
+    joinScoped("admin-u", [{ functions: ["*"], scopeOrgUnitIds: [] }]);
+    await expect(projects.update("admin-u", inEng.id, { name: "R" })).resolves.toMatchObject({
+      name: "R",
+    });
+  });
+
+  it("placing a project validates the org unit's tenant (400) and unplaces on null", async () => {
+    const p = await projects.create(OWNER, { name: "P" });
+    orgUnitRepo.seed("foreign", FakeTenantRepo.tenantIdFor("other-owner"), null);
+    await expect(projects.update(OWNER, p.id, { orgUnitId: "foreign" })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(projects.update(OWNER, p.id, { orgUnitId: "eng" })).resolves.toMatchObject({
+      orgUnitId: "eng",
+    });
+    await expect(projects.update(OWNER, p.id, { orgUnitId: null })).resolves.toMatchObject({
+      orgUnitId: null,
     });
   });
 });

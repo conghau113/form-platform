@@ -19,8 +19,11 @@ export interface ProjectsStore {
     description?: string | null;
     /** Target tenant (B4). Omitted → the user's personal tenant. */
     tenantId?: string;
+    /** Placement in the tenant's org tree (C3). Omitted → unplaced. */
+    orgUnitId?: string;
   }) => Promise<ProjectRecord>;
   rename: (id: string, name: string) => Promise<void>;
+  setOrgUnit: (id: string, orgUnitId: string | null) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
 
@@ -37,6 +40,11 @@ export function useProjects(): ProjectsStore {
     mutationFn: ({ id, name }: { id: string; name: string }) => api.updateProject(id, { name }),
     onSuccess: invalidate,
   });
+  const setOrgUnit = useMutation({
+    mutationFn: ({ id, orgUnitId }: { id: string; orgUnitId: string | null }) =>
+      api.updateProject(id, { orgUnitId }),
+    onSuccess: invalidate,
+  });
   const remove = useMutation({
     mutationFn: api.deleteProject,
     onSuccess: invalidate,
@@ -48,6 +56,9 @@ export function useProjects(): ProjectsStore {
     create: (input) => create.mutateAsync(input),
     rename: async (id, name) => {
       await rename.mutateAsync({ id, name });
+    },
+    setOrgUnit: async (id, orgUnitId) => {
+      await setOrgUnit.mutateAsync({ id, orgUnitId });
     },
     remove: async (id) => {
       await remove.mutateAsync(id);

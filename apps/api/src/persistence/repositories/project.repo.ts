@@ -4,6 +4,9 @@ export interface ProjectRecord {
   ownerId: string;
   /** Owning tenant (B1). B3 reads it to resolve tenant-membership access on top of `ownerId`. */
   tenantId: string;
+  /** Placement in the tenant's org tree (C3); `null` = unplaced. Data-scoped roles reach it only when
+   *  it sits in their scoped subtree. */
+  orgUnitId: string | null;
   name: string;
   slug: string;
   description: string | null;
@@ -16,15 +19,19 @@ export interface ProjectCreateInput {
   ownerId: string;
   /** Target tenant (B4). Omitted → the creator's personal tenant (the pre-B4 behaviour). */
   tenantId?: string;
+  /** Placement in the tenant's org tree (C3); omitted/null → unplaced. */
+  orgUnitId?: string | null;
   name: string;
   slug: string;
   description?: string | null;
 }
 
-/** Patchable project fields (W1: rename + description; slug stays stable once created). */
+/** Patchable project fields (W1: rename + description; slug stays stable once created). C3 adds
+ *  org-unit placement: `undefined` leaves it unchanged, `null` unplaces, a string moves it. */
 export interface ProjectUpdateInput {
   name?: string;
   description?: string | null;
+  orgUnitId?: string | null;
 }
 
 /**

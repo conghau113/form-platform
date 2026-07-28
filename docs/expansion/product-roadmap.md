@@ -259,7 +259,7 @@ Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 te
   > - **⚠️ Known-gap:** tenant `name` xấu (= ownerId/backfill) — rename tenant UI thuộc admin phase sau;
   >   active-tenant selection vẫn chưa có (`/rbac`,`/org-units` personal-first); member rời tenant chưa có UI.
 
-### Phase C — RBAC data-driven (phân quyền chức năng + dữ liệu, cấu hình được) ⭐⭐ Δ [C1+C2+C4 ✅ DONE 2026-07-02; C3/C5-custom 📋 PLANNED] [crux]
+### Phase C — RBAC data-driven (phân quyền chức năng + dữ liệu, cấu hình được) ⭐⭐ Δ [C1+C2+C4 ✅ 2026-07-02; C3 ✅ 2026-07-28; C5-custom 📋 PLANNED] [crux]
 Phỏng mô hình EVN nhưng bằng Prisma; **KHÔNG hardcode role** — client tự cấu hình:
 - **C1 — Function catalog:** `Function`(bản ghi DB: `code`/`name`/`parentCode` phân cấp — vd `form.manage`,
   `workflow.manage`, `user.admin`, `version.publish`) do **platform khai bộ gốc** + **client mở rộng**.
@@ -305,6 +305,35 @@ Phỏng mô hình EVN nhưng bằng Prisma; **KHÔNG hardcode role** — client 
 - **C3 — Phân quyền dữ liệu:** `DataScope`/`DataPermissionGroup` gắn theo **org/department** (phỏng EVN
   `permission_data_group`↔`permission_department`↔`permission_user`) → giới hạn user chỉ thấy dữ liệu của
   đơn vị được cấp.
+
+> **✅ ĐÃ LÀM (2026-07-28) — C3 data-scope (owner chốt: mô hình role-scoped + backend + UI tối thiểu):**
+> - **Mô hình chốt: role-scoped** (`DataScope(roleId↔orgUnitId)`). Role KHÔNG có DataScope = **tenant-wide**
+>   (tương thích ngược — role hiện tại giữ nguyên hành vi); role có DataScope → functions chỉ áp cho project
+>   đặt trong **subtree** (ancestor-or-self) của đơn vị scoped; project chưa gắn org chỉ role-tenant-wide với
+>   tới; `*` (admin, 0 DataScope) vẫn tenant-wide → thấy hết. **Membership.orgUnitId writer: DEFER** (không cần
+>   cho role-scoped).
+> - **Schema (additive, migration `20260728000000_add_data_scope`, hand-written):** model `DataScope`(`roleId`/
+>   `orgUnitId`, `@@unique`, FK Cascade) + `Project.orgUnitId?`(FK SetNull, `@@index`). KHÔNG backfill (role
+>   hiện có 0 DataScope). **KHÔNG changeset** (app private).
+> - **RbacRepo:** `resolveScopedGrants(userId,tenantId)` (role → functions + scopeOrgUnitIds) + `set/
+>   listRoleDataScopes`. GIỮ `resolveFunctions` (FunctionGuard/nav vẫn tenant-wide — **không đụng**, blast-radius nhỏ).
+> - **Chokepoint (`ProjectsService`):** pure `projectRoleFromScopedGrants`+`collectAncestors`+`hasScopedGrant`
+>   (`tenant-role.ts`, KHÔNG eval); `resolveRoleForProject`+`listTenantProjects` siết per-project theo org unit
+>   (org tree chỉ load khi project đã-đặt & có grant scoped — tránh N+1 personal-tenant). Union W5-grant giữ nguyên.
+> - **Writers:** `PUT /rbac/roles/:id/data-scopes` (gate `role.admin`, audit `role.set-data-scopes`, validate
+>   org-unit-in-tenant→400) · project placement qua create/update `orgUnitId` (owner-gated, validate→400, `null`=gỡ).
+> - **Builder (UI tối thiểu):** feature `src/org-units/` (client+useOrgUnits+`OrgUnitsPanel` Tree + pure `buildOrgTree`)
+>   → tab **"Đơn vị"** trong AdminPage gate `org.admin` (thêm vào nav) · **DataScope editor** (TreeSelect) trong
+>   RolesPanel + cột "Phạm vi dữ liệu" · **picker project↔org-unit** trong New-project modal + context "Đặt đơn vị".
+> - **Verify ALL PASS:** typecheck api+builder · **api 216 test** (+20: tenant-role scoped/ancestor 10, workspace
+>   §8 cross-scope 6 — scoped-thấy-in-subtree/out-scope-404/unplaced/`*`-tenant-wide/placement-400, rbac data-scope 3) ·
+>   **builder 384 test** (+orgTree 3; PropertyPanel flake không tái diễn) · biome sạch 35 file · reviewer **PASS
+>   0 required fix** (xác nhận chokepoint duy nhất, cross-tenant/cross-scope isolation, không bypass) · **live-smoke
+>   Postgres 18/18** (`node dist` :3011): scope set/echo · unknown-unit 400 · placement 400 · **member scoped `eng`
+>   thấy ĐÚNG project eng, KHÔNG thấy sales, out-scope→404 no-leak** · admin `*` thấy cả hai. Dọn data+member.
+> - **⚠️ Known-gap (advisory, đã ghi):** Membership.orgUnitId writer defer (user-scoped model = phase sau nếu cần) ·
+>   granularity vẫn theo project (chưa per-form) · active-tenant selection vẫn chưa có · enforcement thuần
+>   application-layer (comment schema đã ghi "never via SQL alone" — mọi read direct-SQL tương lai phải re-apply scope).
 - **C4 — Enforcement:** `@RequireFunction('form.manage')` + `FunctionGuard` (đọc union permission) +
   **data-scope filter** ở repository. Thay dần `CurrentOwner`-only; **đóng gap FS2/2C** (`?roles` hiện
   owner-declared → role thật server-side). Di trú project-member (editor/viewer Track W) vào role; bootstrap

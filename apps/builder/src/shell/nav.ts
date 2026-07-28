@@ -31,7 +31,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Quản trị",
     path: "/admin",
     enabled: true,
-    anyFunction: ["user.admin", "role.admin", "form.admin", "workflow.admin"],
+    anyFunction: ["user.admin", "role.admin", "form.admin", "workflow.admin", "org.admin"],
   },
 ];
 

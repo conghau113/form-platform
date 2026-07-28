@@ -19,6 +19,7 @@ function toRecord(p: Project): ProjectRecord {
     id: p.id,
     ownerId: p.ownerId,
     tenantId: p.tenantId,
+    orgUnitId: p.orgUnitId,
     name: p.name,
     slug: p.slug,
     description: p.description,
@@ -55,6 +56,7 @@ export class PrismaProjectRepo extends ProjectRepo {
       data: {
         ownerId: input.ownerId,
         tenantId,
+        orgUnitId: input.orgUnitId ?? null,
         name: input.name,
         slug: input.slug,
         description: input.description ?? null,
@@ -94,7 +96,8 @@ export class PrismaProjectRepo extends ProjectRepo {
   async update(id: string, patch: ProjectUpdateInput): Promise<ProjectRecord> {
     const project = await this.prisma.project.update({
       where: { id },
-      data: { name: patch.name, description: patch.description },
+      // `orgUnitId: undefined` leaves it unchanged; `null` unplaces (C3).
+      data: { name: patch.name, description: patch.description, orgUnitId: patch.orgUnitId },
     });
     return toRecord(project);
   }

@@ -9,6 +9,8 @@ export interface ProjectRecord {
   ownerId: string;
   /** Owning tenant (B3/B4). */
   tenantId: string;
+  /** Placement in the tenant's org tree (C3); `null` = unplaced. */
+  orgUnitId: string | null;
   name: string;
   slug: string;
   description: string | null;

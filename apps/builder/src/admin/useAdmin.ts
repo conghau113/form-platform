@@ -86,6 +86,7 @@ export function useRoleMutations(): {
   update: (roleId: string, patch: { name?: string; description?: string }) => Promise<unknown>;
   remove: (roleId: string) => Promise<void>;
   setFunctions: (roleId: string, functions: string[]) => Promise<unknown>;
+  setDataScopes: (roleId: string, orgUnitIds: string[]) => Promise<unknown>;
 } {
   const invalidate = useInvalidateRbac();
   const create = useMutation({
@@ -104,11 +105,17 @@ export function useRoleMutations(): {
       api.setRoleFunctions(v.roleId, v.functions),
     onSuccess: invalidate,
   });
+  const setDataScopes = useMutation({
+    mutationFn: (v: { roleId: string; orgUnitIds: string[] }) =>
+      api.setRoleDataScopes(v.roleId, v.orgUnitIds),
+    onSuccess: invalidate,
+  });
   return {
     create: (name, description) => create.mutateAsync({ name, description }),
     update: (roleId, patch) => update.mutateAsync({ roleId, patch }),
     remove: (roleId) => remove.mutateAsync(roleId),
     setFunctions: (roleId, functions) => setFunctions.mutateAsync({ roleId, functions }),
+    setDataScopes: (roleId, orgUnitIds) => setDataScopes.mutateAsync({ roleId, orgUnitIds }),
   };
 }
 

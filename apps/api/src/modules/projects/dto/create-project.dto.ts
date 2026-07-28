@@ -15,4 +15,9 @@ export class CreateProjectDto {
   @IsOptional()
   @IsString()
   tenantId?: string;
+
+  /** Placement in the tenant's org tree (C3). Omitted → unplaced. Must live in the target tenant. */
+  @IsOptional()
+  @IsString()
+  orgUnitId?: string;
 }

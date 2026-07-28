@@ -15,7 +15,8 @@ export interface FunctionRecord {
   system: boolean;
 }
 
-/** A tenant role plus the function codes it grants. */
+/** A tenant role plus the function codes it grants and its data-scope org units (C3). `dataScopes`
+ *  empty = tenant-wide. */
 export interface RoleWithFunctions {
   id: string;
   tenantId: string;
@@ -24,6 +25,7 @@ export interface RoleWithFunctions {
   system: boolean;
   createdAt: string;
   functions: string[];
+  dataScopes: string[];
 }
 
 /** A tenant member with the role ids they hold in this tenant. */
@@ -98,6 +100,20 @@ export async function setRoleFunctions(
     method: "PUT",
     headers: jsonHeaders(),
     body: JSON.stringify({ functions }),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as RoleWithFunctions;
+}
+
+/** Replace the full set of org-unit ids a role is data-scoped to (empty = tenant-wide, C3). */
+export async function setRoleDataScopes(
+  roleId: string,
+  orgUnitIds: string[],
+): Promise<RoleWithFunctions> {
+  const res = await apiFetch(`${API_BASE}/rbac/roles/${id(roleId)}/data-scopes`, {
+    method: "PUT",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ orgUnitIds }),
   });
   if (!res.ok) throw new Error(await readError(res));
   return (await res.json()) as RoleWithFunctions;

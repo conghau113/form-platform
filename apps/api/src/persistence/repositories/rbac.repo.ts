@@ -59,6 +59,14 @@ export interface TenantUserRecord {
   roleIds: string[];
 }
 
+/** One role a user holds in a tenant, paired with its data-scope (Phase C3). `functions` is the role's
+ *  granted codes; `scopeOrgUnitIds` is the org units it is scoped to — **empty means tenant-wide** (the
+ *  role reaches every project). The `ProjectsService` chokepoint combines these per project's org unit. */
+export interface ScopedGrant {
+  functions: string[];
+  scopeOrgUnitIds: string[];
+}
+
 export abstract class RbacRepo {
   /** Idempotently upsert the platform base function catalog (Phase C1; called at boot). */
   abstract seedFunctions(functions: FunctionSeed[]): Promise<void>;
@@ -78,6 +86,12 @@ export abstract class RbacRepo {
   /** The function codes currently granted to a role. */
   abstract listRoleFunctions(roleId: string): Promise<string[]>;
 
+  // --- Role data-scopes (Phase C3) ---
+  /** Replace the org units a role is scoped to (empty = tenant-wide). */
+  abstract setRoleDataScopes(roleId: string, orgUnitIds: string[]): Promise<void>;
+  /** The org-unit ids a role is currently scoped to (empty = tenant-wide). */
+  abstract listRoleDataScopes(roleId: string): Promise<string[]>;
+
   // --- User ↔ role assignments (many-to-many) ---
   /** The tenant's members with the role ids each holds in that tenant (Phase D1 admin user list). */
   abstract listTenantUsers(tenantId: string): Promise<TenantUserRecord[]>;
@@ -89,8 +103,12 @@ export abstract class RbacRepo {
 
   // --- Derived (enforcement) ---
   /** A user's effective permission set in a tenant: the union of function codes over the roles they
-   *  hold in that tenant. Includes {@link WILDCARD_FUNCTION} when an admin role is held. */
+   *  hold in that tenant. Includes {@link WILDCARD_FUNCTION} when an admin role is held. Tenant-wide —
+   *  used by the endpoint {@link FunctionGuard} and nav; per-project scoping uses {@link resolveScopedGrants}. */
   abstract resolveFunctions(userId: string, tenantId: string): Promise<string[]>;
+  /** The roles a user holds in a tenant, each with its functions and data-scope (Phase C3). The
+   *  `ProjectsService` chokepoint uses this to grant per-project access by the project's org unit. */
+  abstract resolveScopedGrants(userId: string, tenantId: string): Promise<ScopedGrant[]>;
   /** Idempotently ensure a tenant has an admin role (holding `*`) and that `userId` is assigned it.
    *  The login/provisioning path (auth.issue) calls this so a tenant owner keeps full access. */
   abstract ensureTenantAdmin(userId: string, tenantId: string): Promise<void>;

@@ -1,4 +1,5 @@
 import {
+  ApartmentOutlined,
   DeleteOutlined,
   EditOutlined,
   FolderOpenOutlined,
@@ -17,11 +18,13 @@ import {
   Space,
   Spin,
   Tag,
+  TreeSelect,
   Typography,
 } from "antd";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { buildOrgTree, useOrgUnits } from "../org-units";
 import { ShareDialog } from "./ShareDialog";
 import type { ProjectRecord } from "./types";
 import { useMyTenants, useProjects } from "./useWorkspace";
@@ -35,13 +38,18 @@ export function ProjectsPage() {
   const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { projects, loading, create, rename, remove } = useProjects();
+  const { projects, loading, create, rename, setOrgUnit, remove } = useProjects();
   const { tenants } = useMyTenants();
+  const { units } = useOrgUnits(true);
+  const orgTree = useMemo(() => buildOrgTree(units), [units]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [tenantChoice, setTenantChoice] = useState<string | undefined>(undefined);
+  const [orgChoice, setOrgChoice] = useState<string | undefined>(undefined);
   const [renaming, setRenaming] = useState<ProjectRecord | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [placing, setPlacing] = useState<ProjectRecord | null>(null);
+  const [placeValue, setPlaceValue] = useState<string | undefined>(undefined);
   const [sharing, setSharing] = useState<ProjectRecord | null>(null);
 
   // Workspaces the user may create a project in (B4: editor+ per their RBAC role in the tenant).
@@ -56,6 +64,7 @@ export function ProjectsPage() {
         name: name.trim(),
         // Personal is the server default — only send an explicit target for a team workspace.
         ...(target && !target.personal ? { tenantId: target.id } : {}),
+        ...(orgChoice ? { orgUnitId: orgChoice } : {}),
       });
       setCreating(false);
       setName("");
@@ -70,6 +79,17 @@ export function ProjectsPage() {
     try {
       await rename(renaming.id, renameValue.trim());
       setRenaming(null);
+    } catch (e) {
+      message.error((e as Error).message);
+    }
+  }
+
+  async function onPlace() {
+    if (!placing) return;
+    try {
+      await setOrgUnit(placing.id, placeValue ?? null); // cleared → unplace
+      message.success("Đã cập nhật đơn vị");
+      setPlacing(null);
     } catch (e) {
       message.error((e as Error).message);
     }
@@ -136,6 +156,9 @@ export function ProjectsPage() {
                     ...(owned
                       ? [
                           { key: "rename", icon: <EditOutlined />, label: "Đổi tên" },
+                          ...(units.length > 0
+                            ? [{ key: "org", icon: <ApartmentOutlined />, label: "Đặt đơn vị" }]
+                            : []),
                           {
                             key: "delete",
                             icon: <DeleteOutlined />,
@@ -151,6 +174,9 @@ export function ProjectsPage() {
                     else if (key === "rename") {
                       setRenaming(project);
                       setRenameValue(project.name);
+                    } else if (key === "org") {
+                      setPlacing(project);
+                      setPlaceValue(project.orgUnitId ?? undefined);
                     } else if (key === "delete") onDelete(project);
                   },
                 }}
@@ -185,6 +211,7 @@ export function ProjectsPage() {
           if (!open) {
             setName("");
             setTenantChoice(undefined);
+            setOrgChoice(undefined);
           }
         }}
       >
@@ -207,7 +234,37 @@ export function ProjectsPage() {
               }))}
             />
           )}
+          {units.length > 0 && (
+            <TreeSelect
+              style={{ width: "100%" }}
+              treeData={orgTree}
+              value={orgChoice}
+              onChange={(v) => setOrgChoice(v as string | undefined)}
+              placeholder="Đơn vị (tùy chọn)"
+              treeDefaultExpandAll
+              allowClear
+            />
+          )}
         </Space>
+      </Modal>
+
+      <Modal
+        open={placing !== null}
+        title="Đặt đơn vị cho dự án"
+        okText="Lưu"
+        cancelText="Hủy"
+        onOk={onPlace}
+        onCancel={() => setPlacing(null)}
+      >
+        <TreeSelect
+          style={{ width: "100%" }}
+          treeData={orgTree}
+          value={placeValue}
+          onChange={(v) => setPlaceValue(v as string | undefined)}
+          placeholder="Không thuộc đơn vị nào"
+          treeDefaultExpandAll
+          allowClear
+        />
       </Modal>
 
       <Modal

@@ -1,5 +1,6 @@
 import { Result, Spin, Tabs, Typography } from "antd";
 import { hasFunction, useAuth } from "../auth";
+import { OrgUnitsPanel } from "../org-units";
 import { FormsPanel, InstancesPanel, VersionsPanel, WorkflowsPanel } from "./CatalogPanels";
 import { RolesPanel } from "./RolesPanel";
 import { UsersPanel } from "./UsersPanel";
@@ -18,6 +19,7 @@ export function AdminPage() {
   const canRoles = hasFunction(functions, "role.admin");
   const canForms = hasFunction(functions, "form.admin");
   const canWorkflows = hasFunction(functions, "workflow.admin");
+  const canOrg = hasFunction(functions, "org.admin");
 
   // Both RBAC tabs want the roles list (names for the assign picker; rows for the roles table). The
   // server accepts either admin function for reading roles (any-of gate).
@@ -31,7 +33,7 @@ export function AdminPage() {
     );
   }
 
-  if (!canUsers && !canRoles && !canForms && !canWorkflows) {
+  if (!canUsers && !canRoles && !canForms && !canWorkflows && !canOrg) {
     return (
       <Result
         status="403"
@@ -56,6 +58,7 @@ export function AdminPage() {
     canWorkflows && { key: "workflows", label: "Quy trình", children: <WorkflowsPanel /> },
     canForms && { key: "versions", label: "Phiên bản", children: <VersionsPanel /> },
     canWorkflows && { key: "instances", label: "Case đang chạy", children: <InstancesPanel /> },
+    canOrg && { key: "org-units", label: "Đơn vị", children: <OrgUnitsPanel /> },
   ].filter((x): x is Exclude<typeof x, false> => Boolean(x));
 
   return (

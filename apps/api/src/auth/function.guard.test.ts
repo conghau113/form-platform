@@ -15,6 +15,13 @@ class StubRbacRepo extends RbacRepo {
   async resolveFunctions(): Promise<string[]> {
     return this.held;
   }
+  async resolveScopedGrants(): Promise<{ functions: string[]; scopeOrgUnitIds: string[] }[]> {
+    return [{ functions: this.held, scopeOrgUnitIds: [] }];
+  }
+  async setRoleDataScopes(): Promise<void> {}
+  async listRoleDataScopes(): Promise<never[]> {
+    return [];
+  }
   async seedFunctions(): Promise<void> {}
   async listFunctions(): Promise<never[]> {
     return [];

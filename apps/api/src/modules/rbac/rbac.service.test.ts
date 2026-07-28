@@ -14,6 +14,7 @@ import {
 } from "../../persistence/repositories/rbac.repo.js";
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
 import { type UserRecord, UserRepo } from "../../persistence/repositories/user.repo.js";
+import { FakeOrgUnitRepo } from "../../testing/fake-tenant-rbac.js";
 import { RbacService } from "./rbac.service.js";
 
 let seq = 0;
@@ -83,6 +84,13 @@ class FakeRbacRepo extends RbacRepo {
   async listRoleFunctions(roleId: string): Promise<string[]> {
     return [...(this.roleFns.get(roleId) ?? [])];
   }
+  roleScopes = new Map<string, Set<string>>(); // roleId -> org-unit ids
+  async setRoleDataScopes(roleId: string, orgUnitIds: string[]): Promise<void> {
+    this.roleScopes.set(roleId, new Set(orgUnitIds));
+  }
+  async listRoleDataScopes(roleId: string): Promise<string[]> {
+    return [...(this.roleScopes.get(roleId) ?? [])];
+  }
   tenantUsers = new Map<string, TenantUserRecord[]>(); // tenantId -> member records
   async listTenantUsers(tenantId: string): Promise<TenantUserRecord[]> {
     return this.tenantUsers.get(tenantId) ?? [];
@@ -106,6 +114,20 @@ class FakeRbacRepo extends RbacRepo {
       for (const c of this.roleFns.get(roleId) ?? []) codes.add(c);
     }
     return [...codes];
+  }
+  async resolveScopedGrants(
+    userId: string,
+    tenantId: string,
+  ): Promise<{ functions: string[]; scopeOrgUnitIds: string[] }[]> {
+    const grants: { functions: string[]; scopeOrgUnitIds: string[] }[] = [];
+    for (const roleId of this.userRoles.get(userId) ?? []) {
+      if (this.roles.get(roleId)?.tenantId !== tenantId) continue;
+      grants.push({
+        functions: [...(this.roleFns.get(roleId) ?? [])],
+        scopeOrgUnitIds: [...(this.roleScopes.get(roleId) ?? [])],
+      });
+    }
+    return grants;
   }
   async ensureTenantAdmin(userId: string, tenantId: string): Promise<void> {
     const role = await this.createRole({ tenantId, name: "Admin", system: true });
@@ -183,6 +205,7 @@ describe("RbacService", () => {
   let tenants: FakeTenantRepo;
   let users: FakeUserRepo;
   let audit: FakeAuditRepo;
+  let orgUnits: FakeOrgUnitRepo;
   let service: RbacService;
 
   beforeEach(async () => {
@@ -190,7 +213,8 @@ describe("RbacService", () => {
     tenants = new FakeTenantRepo();
     users = new FakeUserRepo();
     audit = new FakeAuditRepo();
-    service = new RbacService(rbac, tenants, users, audit);
+    orgUnits = new FakeOrgUnitRepo();
+    service = new RbacService(rbac, tenants, users, audit, orgUnits);
     await service.onModuleInit(); // seed the catalog
   });
 
@@ -236,6 +260,35 @@ describe("RbacService", () => {
     await expect(
       service.setRoleFunctions("alice", role.id, { functions: ["form.manage", "bogus.code"] }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("sets and clears a role's data-scope org units (C3)", async () => {
+    orgUnits.seed("hr", "tenantA", null);
+    const role = await service.createRole("alice", { name: "HR Editor" });
+    expect(role.dataScopes).toEqual([]); // a fresh role is tenant-wide
+    const scoped = await service.setRoleDataScopes("alice", role.id, { orgUnitIds: ["hr"] });
+    expect(scoped.dataScopes).toEqual(["hr"]);
+    const cleared = await service.setRoleDataScopes("alice", role.id, { orgUnitIds: [] });
+    expect(cleared.dataScopes).toEqual([]); // back to tenant-wide
+  });
+
+  it("rejects a data-scope org unit from another tenant (400)", async () => {
+    orgUnits.seed("sales", "tenantB", null); // lives in bob's tenant
+    const role = await service.createRole("alice", { name: "HR Editor" });
+    await expect(
+      service.setRoleDataScopes("alice", role.id, { orgUnitIds: ["sales"] }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.setRoleDataScopes("alice", role.id, { orgUnitIds: ["ghost"] }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("audits a data-scope change with tenant + actor (§8 write-side)", async () => {
+    orgUnits.seed("hr", "tenantA", null);
+    const role = await service.createRole("alice", { name: "HR Editor" });
+    await service.setRoleDataScopes("alice", role.id, { orgUnitIds: ["hr"] });
+    const entry = audit.entries.find((e) => e.action === "role.set-data-scopes");
+    expect(entry).toMatchObject({ tenantId: "tenantA", actorId: "alice", targetId: role.id });
   });
 
   it("unions functions across a user's roles (1 user, many roles)", async () => {

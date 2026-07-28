@@ -8,6 +8,8 @@ import {
 import { BASE_FUNCTIONS } from "../../auth/function-catalog.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { OrgUnitRepo } from "../../persistence/repositories/org-unit.repo.js";
 import type {
   FunctionRecord,
   RoleRecord,
@@ -20,13 +22,16 @@ import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { UserRepo } from "../../persistence/repositories/user.repo.js";
 import type { AddMemberDto } from "./dto/add-member.dto.js";
+import type { SetRoleDataScopesDto } from "./dto/set-role-data-scopes.dto.js";
 import type { SetRoleFunctionsDto } from "./dto/set-role-functions.dto.js";
 import type { SetUserRolesDto } from "./dto/set-user-roles.dto.js";
 import type { UpsertRoleDto } from "./dto/upsert-role.dto.js";
 
-/** A role plus the function codes it grants (the shape the admin UI edits). */
+/** A role plus the function codes it grants and its data-scope org units (the shape the admin UI
+ *  edits). `dataScopes` empty = tenant-wide (C3). */
 export interface RoleWithFunctions extends RoleRecord {
   functions: string[];
+  dataScopes: string[];
 }
 
 /**
@@ -43,7 +48,17 @@ export class RbacService implements OnModuleInit {
     private readonly tenants: TenantRepo,
     private readonly users: UserRepo,
     private readonly audit: AuditRepo,
+    private readonly orgUnits: OrgUnitRepo,
   ) {}
+
+  /** A role paired with its granted functions + data-scope org units (the admin UI shape). */
+  private async withGrants(role: RoleRecord): Promise<RoleWithFunctions> {
+    const [functions, dataScopes] = await Promise.all([
+      this.rbac.listRoleFunctions(role.id),
+      this.rbac.listRoleDataScopes(role.id),
+    ]);
+    return { ...role, functions, dataScopes };
+  }
 
   /** Seed the immutable base function catalog (idempotent; safe to run every boot). */
   async onModuleInit(): Promise<void> {
@@ -65,9 +80,7 @@ export class RbacService implements OnModuleInit {
   async listRoles(userId: string): Promise<RoleWithFunctions[]> {
     const tenantId = await this.requireTenant(userId);
     const roles = await this.rbac.listRoles(tenantId);
-    return Promise.all(
-      roles.map(async (r) => ({ ...r, functions: await this.rbac.listRoleFunctions(r.id) })),
-    );
+    return Promise.all(roles.map((r) => this.withGrants(r)));
   }
 
   async createRole(userId: string, dto: UpsertRoleDto): Promise<RoleWithFunctions> {
@@ -87,7 +100,7 @@ export class RbacService implements OnModuleInit {
         targetId: role.id,
         detail: { name: role.name },
       });
-      return { ...role, functions: [] };
+      return { ...role, functions: [], dataScopes: [] };
     } catch (err) {
       throw toConflict(err, `A role named "${dto.name.trim()}" already exists`);
     }
@@ -108,7 +121,7 @@ export class RbacService implements OnModuleInit {
         targetId: id,
         detail: { name: updated.name },
       });
-      return { ...updated, functions: await this.rbac.listRoleFunctions(id) };
+      return this.withGrants(updated);
     } catch (err) {
       throw toConflict(err, `A role named "${dto.name?.trim()}" already exists`);
     }
@@ -144,7 +157,38 @@ export class RbacService implements OnModuleInit {
       targetId: id,
       detail: { functions: dto.functions },
     });
-    return { ...role, functions: await this.rbac.listRoleFunctions(id) };
+    return this.withGrants(role);
+  }
+
+  /** Replace a role's data-scope org units (C3); every unit must live in the role's tenant. An empty
+   *  set clears the scope (tenant-wide). */
+  async setRoleDataScopes(
+    userId: string,
+    id: string,
+    dto: SetRoleDataScopesDto,
+  ): Promise<RoleWithFunctions> {
+    const role = await this.requireEditableRole(userId, id);
+    await this.assertOrgUnitsInTenant(dto.orgUnitIds, role.tenantId);
+    await this.rbac.setRoleDataScopes(id, dto.orgUnitIds);
+    await this.audit.record({
+      tenantId: role.tenantId,
+      actorId: userId,
+      action: "role.set-data-scopes",
+      targetType: "role",
+      targetId: id,
+      detail: { orgUnitIds: dto.orgUnitIds },
+    });
+    return this.withGrants(role);
+  }
+
+  /** Assert every org unit exists and lives in `tenantId` (C3 data-scope validation); 400 otherwise. */
+  private async assertOrgUnitsInTenant(orgUnitIds: string[], tenantId: string): Promise<void> {
+    for (const orgUnitId of new Set(orgUnitIds)) {
+      const unit = await this.orgUnits.findById(orgUnitId);
+      if (!unit || unit.tenantId !== tenantId) {
+        throw new BadRequestException(`Org unit not in tenant: ${orgUnitId}`);
+      }
+    }
   }
 
   /** The caller's tenant members with the roles each holds (Phase D1 admin user list). */

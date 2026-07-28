@@ -9,9 +9,11 @@ import {
   Space,
   Table,
   Tag,
+  TreeSelect,
   Typography,
 } from "antd";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { buildOrgTree, useOrgUnits } from "../org-units";
 import type { RoleWithFunctions } from "./client";
 import { useRbacFunctions, useRoleMutations } from "./useAdmin";
 
@@ -23,7 +25,10 @@ import { useRbacFunctions, useRoleMutations } from "./useAdmin";
 export function RolesPanel({ roles, loading }: { roles: RoleWithFunctions[]; loading: boolean }) {
   const { message } = AntApp.useApp();
   const { functions: catalog } = useRbacFunctions(true);
+  const { units } = useOrgUnits(true);
   const mutations = useRoleMutations();
+  const orgTree = useMemo(() => buildOrgTree(units), [units]);
+  const orgName = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
 
   // One modal for create + edit: `editing` is null (closed), "new" (create) or the role.
   const [editing, setEditing] = useState<RoleWithFunctions | "new" | null>(null);
@@ -31,6 +36,8 @@ export function RolesPanel({ roles, loading }: { roles: RoleWithFunctions[]; loa
   const [description, setDescription] = useState("");
   const [granting, setGranting] = useState<RoleWithFunctions | null>(null);
   const [codes, setCodes] = useState<string[]>([]);
+  const [scoping, setScoping] = useState<RoleWithFunctions | null>(null);
+  const [scopeIds, setScopeIds] = useState<string[]>([]);
 
   function openEditor(role: RoleWithFunctions | "new") {
     setEditing(role);
@@ -60,6 +67,17 @@ export function RolesPanel({ roles, loading }: { roles: RoleWithFunctions[]; loa
       await mutations.setFunctions(granting.id, codes);
       message.success("Đã cập nhật quyền");
       setGranting(null);
+    } catch (e) {
+      message.error((e as Error).message);
+    }
+  }
+
+  async function onSaveScopes() {
+    if (!scoping) return;
+    try {
+      await mutations.setDataScopes(scoping.id, scopeIds);
+      message.success("Đã cập nhật phạm vi dữ liệu");
+      setScoping(null);
     } catch (e) {
       message.error((e as Error).message);
     }
@@ -107,12 +125,28 @@ export function RolesPanel({ roles, loading }: { roles: RoleWithFunctions[]; loa
               ),
           },
           {
+            title: "Phạm vi dữ liệu",
+            dataIndex: "dataScopes",
+            render: (scopes: string[], row) =>
+              row.system || scopes.length === 0 ? (
+                <Typography.Text type="secondary">Toàn tổ chức</Typography.Text>
+              ) : (
+                <Space size={[0, 4]} wrap>
+                  {scopes.map((unitId) => (
+                    <Tag key={unitId} color="blue">
+                      {orgName.get(unitId) ?? unitId}
+                    </Tag>
+                  ))}
+                </Space>
+              ),
+          },
+          {
             title: "",
             key: "actions",
-            width: 220,
+            width: 300,
             render: (_, row) =>
               row.system ? null : (
-                <Space>
+                <Space wrap>
                   <Button size="small" onClick={() => openEditor(row)}>
                     Sửa
                   </Button>
@@ -124,6 +158,15 @@ export function RolesPanel({ roles, loading }: { roles: RoleWithFunctions[]; loa
                     }}
                   >
                     Phân quyền
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setScoping(row);
+                      setScopeIds(row.dataScopes);
+                    }}
+                  >
+                    Phạm vi
                   </Button>
                   <Popconfirm
                     title="Xóa vai trò này?"
@@ -193,6 +236,33 @@ export function RolesPanel({ roles, loading }: { roles: RoleWithFunctions[]; loa
               ),
             }))}
         />
+      </Modal>
+
+      <Modal
+        open={scoping !== null}
+        title={`Phạm vi dữ liệu — ${scoping?.name ?? ""}`}
+        okText="Lưu"
+        cancelText="Hủy"
+        onOk={onSaveScopes}
+        onCancel={() => setScoping(null)}
+      >
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Typography.Text type="secondary">
+            Chọn các đơn vị mà vai trò được phép truy cập (bao gồm cả đơn vị con). Để trống = toàn
+            tổ chức.
+          </Typography.Text>
+          <TreeSelect
+            style={{ width: "100%" }}
+            treeData={orgTree}
+            value={scopeIds}
+            onChange={(v) => setScopeIds(v as string[])}
+            treeCheckable
+            showCheckedStrategy={TreeSelect.SHOW_ALL}
+            placeholder="Toàn tổ chức (không giới hạn)"
+            treeDefaultExpandAll
+            allowClear
+          />
+        </Space>
       </Modal>
     </div>
   );

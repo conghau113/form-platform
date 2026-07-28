@@ -151,6 +151,10 @@ class FakeRbacRepo extends RbacRepo {
   async listRoleFunctions(): Promise<never[]> {
     return [];
   }
+  async setRoleDataScopes(): Promise<void> {}
+  async listRoleDataScopes(): Promise<never[]> {
+    return [];
+  }
   async listTenantUsers(): Promise<never[]> {
     return [];
   }
@@ -159,6 +163,9 @@ class FakeRbacRepo extends RbacRepo {
     return [];
   }
   async resolveFunctions(): Promise<never[]> {
+    return [];
+  }
+  async resolveScopedGrants(): Promise<never[]> {
     return [];
   }
 }

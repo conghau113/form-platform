@@ -8,6 +8,7 @@ import {
   type RoleCreateInput,
   type RoleRecord,
   type RoleUpdateInput,
+  type ScopedGrant,
   type TenantUserRecord,
   WILDCARD_FUNCTION,
 } from "../repositories/rbac.repo.js";
@@ -115,6 +116,25 @@ export class PrismaRbacRepo extends RbacRepo {
     return rows.map((r) => r.functionCode);
   }
 
+  async setRoleDataScopes(roleId: string, orgUnitIds: string[]): Promise<void> {
+    const ids = [...new Set(orgUnitIds)];
+    await this.prisma.$transaction([
+      this.prisma.dataScope.deleteMany({ where: { roleId } }),
+      this.prisma.dataScope.createMany({
+        data: ids.map((orgUnitId) => ({ roleId, orgUnitId })),
+        skipDuplicates: true,
+      }),
+    ]);
+  }
+
+  async listRoleDataScopes(roleId: string): Promise<string[]> {
+    const rows = await this.prisma.dataScope.findMany({
+      where: { roleId },
+      select: { orgUnitId: true },
+    });
+    return rows.map((r) => r.orgUnitId);
+  }
+
   async listTenantUsers(tenantId: string): Promise<TenantUserRecord[]> {
     // Members come from Membership (the tenant↔user link); each user's roles are filtered to this
     // tenant so cross-tenant assignments never leak. One query with nested includes (no N+1).
@@ -166,6 +186,20 @@ export class PrismaRbacRepo extends RbacRepo {
       select: { functionCode: true },
     });
     return [...new Set(grants.map((g) => g.functionCode))];
+  }
+
+  async resolveScopedGrants(userId: string, tenantId: string): Promise<ScopedGrant[]> {
+    const roles = await this.prisma.role.findMany({
+      where: { tenantId, users: { some: { userId } } },
+      select: {
+        functions: { select: { functionCode: true } },
+        dataScopes: { select: { orgUnitId: true } },
+      },
+    });
+    return roles.map((r) => ({
+      functions: r.functions.map((f) => f.functionCode),
+      scopeOrgUnitIds: r.dataScopes.map((d) => d.orgUnitId),
+    }));
   }
 
   async ensureTenantAdmin(userId: string, tenantId: string): Promise<void> {

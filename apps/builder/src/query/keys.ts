@@ -17,6 +17,9 @@ export const qk = {
   adminWorkflows: ["admin", "workflows"] as const,
   adminFormVersions: ["admin", "form-versions"] as const,
   adminInstances: ["admin", "workflow-instances"] as const,
+  // The caller's tenant org-unit tree (C3): powers the org-units admin panel, role data-scope
+  // editor, and the project placement picker.
+  orgUnits: ["org-units"] as const,
   projects: ["projects"] as const,
   // The user's tenant memberships (B4): powers the New-project workspace picker.
   myTenants: ["tenants", "mine"] as const,

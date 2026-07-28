@@ -7,7 +7,7 @@ describe("shell nav catalog (§6.7 rollout + D1 function gate)", () => {
     expect(NAV_SECTIONS.map((s) => s.key)).toEqual(["design", "operate", "admin"]);
   });
 
-  it("reveals Admin to any admin function (user/role/form/workflow.admin) or the * wildcard", () => {
+  it("reveals Admin to any admin function (user/role/form/workflow/org.admin) or the * wildcard", () => {
     // A plain manage grant is not an admin function — no admin section.
     expect(visibleSections(["form.manage"]).map((s) => s.key)).toEqual(["design"]);
     for (const held of [
@@ -15,6 +15,7 @@ describe("shell nav catalog (§6.7 rollout + D1 function gate)", () => {
       ["role.admin"],
       ["form.admin"],
       ["workflow.admin"],
+      ["org.admin"],
       ["*"],
     ]) {
       expect(visibleSections(held).map((s) => s.key)).toEqual(["design", "admin"]);

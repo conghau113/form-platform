@@ -1,6 +1,8 @@
+import { type OrgUnitRecord, OrgUnitRepo } from "../persistence/repositories/org-unit.repo.js";
 import type {
   FunctionRecord,
   RoleRecord,
+  ScopedGrant,
   TenantUserRecord,
 } from "../persistence/repositories/rbac.repo.js";
 import { RbacRepo } from "../persistence/repositories/rbac.repo.js";
@@ -65,19 +67,30 @@ export class FakeTenantRepo extends TenantRepo {
 }
 
 /**
- * {@link RbacRepo} stub for service tests (B3): only `resolveFunctions` is real — seed grants via
- * {@link grant}. ProjectsService touches nothing else; the rest throws to catch accidental use.
+ * {@link RbacRepo} stub for service tests (B3/C3): `resolveScopedGrants` + `resolveFunctions` are real —
+ * seed grants via {@link grant} (tenant-wide) or {@link grantScoped} (C3 org-scoped). ProjectsService
+ * touches nothing else; the rest throws to catch accidental use.
  */
 export class FakeRbacRepo extends RbacRepo {
-  private readonly grants = new Map<string, string[]>();
+  private readonly grants = new Map<string, ScopedGrant[]>();
 
-  /** Test helper: set the user's effective function codes within a tenant. */
+  /** Test helper: set the user's effective function codes within a tenant (one tenant-wide role). */
   grant(userId: string, tenantId: string, functions: string[]): void {
-    this.grants.set(`${userId}:${tenantId}`, functions);
+    this.grants.set(`${userId}:${tenantId}`, [{ functions, scopeOrgUnitIds: [] }]);
+  }
+
+  /** Test helper: set the user's per-role scoped grants within a tenant (C3). */
+  grantScoped(userId: string, tenantId: string, grants: ScopedGrant[]): void {
+    this.grants.set(`${userId}:${tenantId}`, grants);
+  }
+
+  async resolveScopedGrants(userId: string, tenantId: string): Promise<ScopedGrant[]> {
+    return this.grants.get(`${userId}:${tenantId}`) ?? [];
   }
 
   async resolveFunctions(userId: string, tenantId: string): Promise<string[]> {
-    return this.grants.get(`${userId}:${tenantId}`) ?? [];
+    const grants = this.grants.get(`${userId}:${tenantId}`) ?? [];
+    return [...new Set(grants.flatMap((g) => g.functions))];
   }
 
   async seedFunctions(): Promise<void> {
@@ -107,6 +120,12 @@ export class FakeRbacRepo extends RbacRepo {
   async listRoleFunctions(): Promise<string[]> {
     throw new Error("not used");
   }
+  async setRoleDataScopes(): Promise<void> {
+    throw new Error("not used");
+  }
+  async listRoleDataScopes(): Promise<string[]> {
+    throw new Error("not used");
+  }
   async listTenantUsers(): Promise<TenantUserRecord[]> {
     throw new Error("not used");
   }
@@ -117,6 +136,47 @@ export class FakeRbacRepo extends RbacRepo {
     throw new Error("not used");
   }
   async ensureTenantAdmin(): Promise<void> {
+    throw new Error("not used");
+  }
+}
+
+/**
+ * {@link OrgUnitRepo} stub for ProjectsService tests (C3): seed a flat tree via {@link seed}; only
+ * `list` + `findById` are real (the chokepoint's data-scope resolution reads the tree). The rest
+ * throws to catch accidental use.
+ */
+export class FakeOrgUnitRepo extends OrgUnitRepo {
+  readonly rows = new Map<string, OrgUnitRecord>();
+
+  /** Test helper: add a unit `{ id, tenantId, parentId }` to the tree. */
+  seed(id: string, tenantId: string, parentId: string | null): void {
+    this.rows.set(id, {
+      id,
+      tenantId,
+      parentId,
+      name: id,
+      kind: null,
+      order: 0,
+      createdAt: new Date(0),
+    });
+  }
+
+  async list(tenantId: string): Promise<OrgUnitRecord[]> {
+    return [...this.rows.values()].filter((u) => u.tenantId === tenantId);
+  }
+  async findById(id: string): Promise<OrgUnitRecord | null> {
+    return this.rows.get(id) ?? null;
+  }
+  async create(): Promise<OrgUnitRecord> {
+    throw new Error("not used");
+  }
+  async update(): Promise<OrgUnitRecord> {
+    throw new Error("not used");
+  }
+  async delete(): Promise<void> {
+    throw new Error("not used");
+  }
+  async countChildren(): Promise<{ units: number; members: number }> {
     throw new Error("not used");
   }
 }
