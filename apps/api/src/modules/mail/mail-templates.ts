@@ -76,3 +76,38 @@ Nếu không phải bạn thực hiện, hãy dùng chức năng "Quên mật kh
 <p>Nếu không phải bạn thực hiện, hãy dùng chức năng &quot;Quên mật khẩu&quot; để lấy lại quyền kiểm soát ngay.</p>`,
   };
 }
+
+/** Tell someone a work-order case is now theirs (product-roadmap Phase E). No link: the case lives
+ *  behind auth and a deep link would only bounce off the login screen. */
+export function caseAssignedEmail(input: {
+  displayName: string;
+  caseLabel: string | null;
+  statusLabel: string | null;
+  projectName: string;
+}): MailContent {
+  const subject = input.caseLabel?.trim()
+    ? `Việc mới: ${input.caseLabel.trim()}`
+    : "Bạn có việc mới";
+  const caseName = input.caseLabel?.trim() ?? "(chưa có nhãn)";
+  const status = input.statusLabel?.trim() ?? "(chưa rõ)";
+  return {
+    subject,
+    text: `Chào ${input.displayName},
+
+Bạn vừa được giao một việc trong Form Platform:
+
+- Việc: ${caseName}
+- Trạng thái: ${status}
+- Dự án: ${input.projectName}
+
+Mở mục "Vận hành" trong Form Platform để xử lý.`,
+    html: `<p>Chào ${escapeHtml(input.displayName)},</p>
+<p>Bạn vừa được giao một việc trong Form Platform:</p>
+<ul>
+<li>Việc: ${escapeHtml(caseName)}</li>
+<li>Trạng thái: ${escapeHtml(status)}</li>
+<li>Dự án: ${escapeHtml(input.projectName)}</li>
+</ul>
+<p>Mở mục &quot;Vận hành&quot; trong Form Platform để xử lý.</p>`,
+  };
+}

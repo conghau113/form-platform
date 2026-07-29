@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CURRENT_WORKFLOW_VERSION, workflowDefinitionSchema } from "./index.js";
+import {
+  CURRENT_WORKFLOW_VERSION,
+  workflowDefinitionSchema,
+  workflowInstanceSchema,
+} from "./index.js";
 
 const validDef = {
   workflowVersion: CURRENT_WORKFLOW_VERSION,
@@ -88,5 +92,33 @@ describe("workflowDefinitionSchema", () => {
     expect(out.locales).toEqual(["vi"]);
     expect(out.nodes[0].i18n?.status.vi).toBe("Đã tạo");
     expect(out.transitions[0].i18n?.action.vi).toBe("Tiếp");
+  });
+});
+
+describe("workflowInstanceSchema history actor (Phase E)", () => {
+  const base = {
+    id: "case-1",
+    definitionId: "wf",
+    definitionVersion: CURRENT_WORKFLOW_VERSION,
+    current: "b",
+    data: {},
+  };
+
+  it("parses history written before `actor` existed", () => {
+    const out = workflowInstanceSchema.parse({
+      ...base,
+      history: [{ from: "a", to: "b", action: "next", at: "2026-07-30T00:00:00.000Z" }],
+    });
+    expect(out.history[0].actor).toBeUndefined();
+  });
+
+  it("parses history carrying the actor that fired the action", () => {
+    const out = workflowInstanceSchema.parse({
+      ...base,
+      history: [
+        { from: "a", to: "b", action: "next", at: "2026-07-30T00:00:00.000Z", actor: "usr_1" },
+      ],
+    });
+    expect(out.history[0].actor).toBe("usr_1");
   });
 });

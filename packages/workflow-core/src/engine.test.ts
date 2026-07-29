@@ -95,3 +95,17 @@ describe("advance", () => {
     expect(i0.history).toHaveLength(0);
   });
 });
+
+describe("advance actor (Phase E)", () => {
+  it("records the actor on the history entry when one is supplied", () => {
+    const r = advance(def, createInstance(def), "submit", { actor: "usr_1" });
+    if (!r.ok) throw new Error("expected the advance to succeed");
+    expect(r.instance.history[0].actor).toBe("usr_1");
+  });
+
+  it("omits the key entirely when no actor is supplied", () => {
+    const r = advance(def, createInstance(def), "submit");
+    if (!r.ok) throw new Error("expected the advance to succeed");
+    expect(r.instance.history[0]).not.toHaveProperty("actor");
+  });
+});

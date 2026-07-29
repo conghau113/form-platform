@@ -80,6 +80,16 @@ export class PrismaWorkflowRepo extends WorkflowRepo {
     return rows.map(toSummary);
   }
 
+  async listByProjects(projectIds: string[]): Promise<WorkflowSummary[]> {
+    if (projectIds.length === 0) return [];
+    const rows = await this.prisma.workflowRecord.findMany({
+      where: { projectId: { in: projectIds } },
+      select: summarySelect,
+      orderBy: { updatedAt: "desc" },
+    });
+    return rows.map(toSummary);
+  }
+
   async move(id: string, folderId: string | null): Promise<WorkflowSummary | null> {
     const row = await this.prisma.workflowRecord.update({
       where: { id },

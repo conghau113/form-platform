@@ -32,6 +32,7 @@ import { RbacRepo } from "../../persistence/repositories/rbac.repo.js";
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
 import type { CreateProjectDto } from "./dto/create-project.dto.js";
 import {
+  canRunWorkflow,
   collectAncestors,
   hasScopedGrant,
   projectRoleFromFunctions,
@@ -248,6 +249,37 @@ export class ProjectsService {
     if (!role) throw new NotFoundException(`Project not found: ${id}`);
     if (!roleSatisfies(role, minRole)) {
       throw new ForbiddenException(`Requires ${minRole} role on project: ${id}`);
+    }
+    return project;
+  }
+
+  /**
+   * Load a project and assert the user may RUN its workflow cases (product-roadmap Phase E:
+   * start / advance / assign). Passing means either they already hold `editor` (design-time power
+   * implies runtime power) or their tenant grants carry a run function that applies to this project
+   * ({@link canRunWorkflow}, data-scoped exactly like every other read). No access at all → 404
+   * (no existence leak, same as {@link requireAccess}); can see the project but may not operate it
+   * → 403.
+   *
+   * This is the ONLY authorization boundary for running a case: a transition's `role` is not one —
+   * callers self-declare workflow roles (WF4 gap), so the engine's role check is workflow modelling,
+   * not security.
+   */
+  async requireRunAccess(userId: string, projectId: string): Promise<ProjectRecord> {
+    const project = await this.projects.findById(projectId);
+    if (!project) throw new NotFoundException(`Project not found: ${projectId}`);
+    const role = await this.resolveRoleForProject(userId, project);
+    if (!role) throw new NotFoundException(`Project not found: ${projectId}`);
+    if (roleSatisfies(role, "editor")) return project;
+
+    const grants = await this.rbac.resolveScopedGrants(userId, project.tenantId);
+    let ancestors = new Set<string>();
+    if (project.orgUnitId && hasScopedGrant(grants)) {
+      const units = await this.orgUnits.list(project.tenantId);
+      ancestors = collectAncestors(units, project.orgUnitId);
+    }
+    if (!canRunWorkflow(grants, ancestors)) {
+      throw new ForbiddenException(`Requires workflow.run on project: ${projectId}`);
     }
     return project;
   }

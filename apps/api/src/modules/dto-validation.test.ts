@@ -4,6 +4,8 @@ import { CreateFolderDto } from "./folders/dto/create-folder.dto.js";
 import { UpdateFolderDto } from "./folders/dto/update-folder.dto.js";
 import { CreateProjectDto } from "./projects/dto/create-project.dto.js";
 import { GrantMemberDto } from "./projects/dto/grant-member.dto.js";
+import { ListWorkOrdersDto } from "./work-orders/dto/list-work-orders.dto.js";
+import { AssignInstanceDto } from "./workflows/dto/assign-instance.dto.js";
 
 /**
  * R6: pins the edge validation the global `ValidationPipe` applies to NON-contract request bodies.
@@ -63,5 +65,39 @@ describe("edge DTO validation (global ValidationPipe)", () => {
 
     const moveToRoot = (await pipe.transform({ parentId: null }, as(UpdateFolderDto))) as object;
     expect("parentId" in moveToRoot).toBe(true); // explicit null IS a move to the root
+  });
+});
+
+describe("Phase E work-order DTOs", () => {
+  it("accepts an explicit assignee and an explicit null (unassign)", async () => {
+    await expect(pipe.transform({ assigneeId: "usr_1" }, as(AssignInstanceDto))).resolves.toEqual({
+      assigneeId: "usr_1",
+    });
+    await expect(pipe.transform({ assigneeId: null }, as(AssignInstanceDto))).resolves.toEqual({
+      assigneeId: null,
+    });
+  });
+
+  it("rejects a missing or misspelled assigneeId instead of silently doing nothing", async () => {
+    // Without this, `{}` would reach the service as `undefined`: Prisma skips the column, so the
+    // assignment never changes — yet an audit entry claims it did.
+    await expect(pipe.transform({}, as(AssignInstanceDto))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(
+      pipe.transform({ assigneeid: "usr_1" }, as(AssignInstanceDto)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("coerces work-order paging and rejects an oversized page", async () => {
+    await expect(
+      pipe.transform({ page: "2", pageSize: "50", sort: "createdAt" }, as(ListWorkOrdersDto)),
+    ).resolves.toEqual({ page: 2, pageSize: 50, sort: "createdAt" });
+    await expect(
+      pipe.transform({ pageSize: "9999" }, as(ListWorkOrdersDto)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(pipe.transform({ sort: "label" }, as(ListWorkOrdersDto))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 });

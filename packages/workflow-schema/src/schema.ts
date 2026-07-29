@@ -101,6 +101,12 @@ export const historyEntrySchema = z.object({
   to: z.string(),
   action: z.string(),
   at: z.string(),
+  /** Who fired the action (a user id) — the "ai đã làm" half of work-order tracking (Phase E).
+   *  The engine only records it when the caller supplies one, so entries written before this key
+   *  existed keep parsing and nothing about an anonymous advance changes. Additive/optional ⇒ NO
+   *  workflowVersion bump (same character as `i18n`/`statusCode`). Never a display name: names are
+   *  resolved at read time so a renamed user isn't frozen into history. */
+  actor: z.string().optional(),
 });
 
 /**

@@ -73,6 +73,9 @@ class FakeWorkflowRepo extends WorkflowRepo {
         (query.folderId === undefined || s.folderId === query.folderId),
     );
   }
+  async listByProjects(projectIds: string[]): Promise<WorkflowSummary[]> {
+    return [...this.summaries.values()].filter((s) => projectIds.includes(s.projectId));
+  }
   async move(id: string, folderId: string | null): Promise<WorkflowSummary | null> {
     const s = this.summaries.get(id);
     if (!s) return null;
@@ -173,6 +176,9 @@ class UnusedFormRepo extends FormRepo {
     return null;
   }
   async listSummaries(): Promise<never[]> {
+    return [];
+  }
+  async listByProjects(): Promise<never[]> {
     return [];
   }
   async move(): Promise<null> {

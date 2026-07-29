@@ -73,6 +73,7 @@ export class FakeTenantRepo extends TenantRepo {
  */
 export class FakeRbacRepo extends RbacRepo {
   private readonly grants = new Map<string, ScopedGrant[]>();
+  private readonly tenantUsers = new Map<string, TenantUserRecord[]>();
 
   /** Test helper: set the user's effective function codes within a tenant (one tenant-wide role). */
   grant(userId: string, tenantId: string, functions: string[]): void {
@@ -126,8 +127,13 @@ export class FakeRbacRepo extends RbacRepo {
   async listRoleDataScopes(): Promise<string[]> {
     throw new Error("not used");
   }
-  async listTenantUsers(): Promise<TenantUserRecord[]> {
-    throw new Error("not used");
+  /** Test helper: the members a tenant reports (Phase E assignee picker). */
+  setTenantUsers(tenantId: string, users: TenantUserRecord[]): void {
+    this.tenantUsers.set(tenantId, users);
+  }
+
+  async listTenantUsers(tenantId: string): Promise<TenantUserRecord[]> {
+    return this.tenantUsers.get(tenantId) ?? [];
   }
   async setUserRoles(): Promise<void> {
     throw new Error("not used");

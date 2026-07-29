@@ -1,14 +1,38 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
-import { advance, createInstance, validateGraph } from "@org/workflow-core";
-import type { WorkflowInstance } from "@org/workflow-schema";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
+import { maskData } from "@org/form-core";
+import { type FormSchema, migrate } from "@org/form-schema";
+import { advance, createInstance, deriveCaseLabel, validateGraph } from "@org/workflow-core";
+import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema";
 import { assertId } from "../../common/file-store.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { FormRepo } from "../../persistence/repositories/form.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
 import type { ProjectRole } from "../../persistence/repositories/project-member.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { UserRepo } from "../../persistence/repositories/user.repo.js";
 import type { WorkflowSummary } from "../../persistence/repositories/workflow.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { WorkflowRepo } from "../../persistence/repositories/workflow.repo.js";
-import type { WorkflowInstanceSummary } from "../../persistence/repositories/workflow-instance.repo.js";
+import type {
+  WorkflowInstanceMeta,
+  WorkflowInstanceSummary,
+} from "../../persistence/repositories/workflow-instance.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { WorkflowInstanceRepo } from "../../persistence/repositories/workflow-instance.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { MailService } from "../mail/mail.service.js";
+import { caseAssignedEmail } from "../mail/mail-templates.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
 
@@ -16,6 +40,8 @@ import { ProjectsService } from "../projects/projects.service.js";
 export interface StartInstanceOptions {
   id?: string;
   data?: Record<string, unknown>;
+  /** Domain roles the caller declares — drives field masking of the RESPONSE only. */
+  roles?: string[];
 }
 
 /** Input to fire an action against a running case. */
@@ -27,10 +53,16 @@ export interface AdvanceInstanceOptions {
 }
 
 /**
- * Workflow runtime (WF3): server-authoritative instance lifecycle. Starting/advancing is a write
- * (project role `editor`); reading is `viewer`. The pure engine (`@org/workflow-core`) does ALL the
- * logic — this service only loads (definition, instance), runs the engine, and persists the result
- * via {@link WorkflowInstanceRepo}. Mirrors {@link WorkflowsService}'s access pattern.
+ * Workflow runtime (WF3): server-authoritative instance lifecycle. Reading is project `viewer`;
+ * starting/advancing/assigning goes through {@link ProjectsService.requireRunAccess} — running a
+ * case is its OWN permission (`workflow.run`), not a side effect of design-time `editor` (Phase E).
+ * The pure engine (`@org/workflow-core`) does ALL the logic — this service only loads (definition,
+ * instance), runs the engine, and persists the result via {@link WorkflowInstanceRepo}.
+ *
+ * Field-level RBAC: every response carrying case data is masked against the form bound to the case's
+ * current state, exactly like {@link SubmissionsService.load}. Masking is a READ concern only — what
+ * is persisted is always the full, unmasked instance, so a reader who cannot see a field can never
+ * erase it.
  */
 @Injectable()
 export class WorkflowInstancesService {
@@ -38,15 +70,21 @@ export class WorkflowInstancesService {
     private readonly instances: WorkflowInstanceRepo,
     private readonly workflows: WorkflowRepo,
     private readonly projectsService: ProjectsService,
+    private readonly forms: FormRepo,
+    private readonly versions: FormVersionRepo,
+    private readonly tenants: TenantRepo,
+    private readonly users: UserRepo,
+    private readonly audit: AuditRepo,
+    private readonly mail: MailService,
   ) {}
 
-  /** Start a new case at the workflow's start node (writes ⇒ requires `editor`). */
+  /** Start a new case at the workflow's start node (requires run access). */
   async start(
     ownerId: string,
     workflowId: string,
     opts: StartInstanceOptions = {},
   ): Promise<WorkflowInstance> {
-    const summary = await this.requireWorkflowAccess(ownerId, workflowId, "editor");
+    const summary = await this.requireWorkflowRunAccess(ownerId, workflowId);
     const def = await this.workflows.load(workflowId);
     if (!def) throw new NotFoundException(`Workflow not found: ${workflowId}`);
     const errors = validateGraph(def);
@@ -56,19 +94,32 @@ export class WorkflowInstancesService {
         errors,
       });
     }
+    // `upsert` writes by id, and the id may be client-chosen — so starting a case with an id that
+    // already exists would REWRITE that case and drag it into this project. Refuse instead. (Phase E
+    // makes this reachable with `workflow.run`, where it previously needed `editor`.)
+    if (opts.id && (await this.instances.findSummary(opts.id))) {
+      throw new ConflictException(`Workflow instance already exists: ${opts.id}`);
+    }
     const instance = createInstance(def, { id: opts.id, data: opts.data });
-    return this.instances.upsert(instance, {
+    const stored = await this.instances.upsert(instance, {
       workflowId,
       projectId: summary.projectId,
+      ...(await this.denormalize(def, instance)),
     });
+    return this.maskInstance(ownerId, summary.projectId, def, stored, opts.roles);
   }
 
   /** Load a running case by id (read ⇒ requires `viewer`). */
-  async load(ownerId: string, instanceId: string): Promise<WorkflowInstance> {
-    await this.requireInstanceAccess(ownerId, instanceId, "viewer");
+  async load(
+    ownerId: string,
+    instanceId: string,
+    declaredRoles?: string[],
+  ): Promise<WorkflowInstance> {
+    const summary = await this.requireInstanceAccess(ownerId, instanceId, "viewer");
     const instance = await this.instances.load(instanceId);
     if (!instance) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
-    return instance;
+    const def = await this.workflows.load(instance.definitionId);
+    return this.maskInstance(ownerId, summary.projectId, def, instance, declaredRoles);
   }
 
   /** List a workflow's cases (read ⇒ requires `viewer`). */
@@ -83,7 +134,7 @@ export class WorkflowInstancesService {
     instanceId: string,
     opts: AdvanceInstanceOptions,
   ): Promise<WorkflowInstance> {
-    const summary = await this.requireInstanceAccess(ownerId, instanceId, "editor");
+    const summary = await this.requireInstanceRunAccess(ownerId, instanceId);
     const instance = await this.instances.load(instanceId);
     if (!instance) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
     const def = await this.workflows.load(instance.definitionId);
@@ -93,19 +144,150 @@ export class WorkflowInstancesService {
     // (owner|editor|viewer) doubles as an implicit workflow role, merged with any roles the caller
     // self-declares. A transition guarded on a literal "editor"/"viewer"/"owner" is thus satisfiable
     // by project membership — acceptable until domain roles exist; revisit when WF4 adds them.
+    // Because the caller may declare roles freely, `transition.role` is workflow MODELLING, never a
+    // security boundary: `requireInstanceRunAccess` above is the boundary.
     const role = await this.projectsService.resolveRole(ownerId, summary.projectId);
     const roles = [...(opts.roles ?? []), ...(role ? [role] : [])];
-    const result = advance(def, instance, opts.action, { data: opts.data, roles });
+    const result = advance(def, instance, opts.action, {
+      data: opts.data,
+      roles,
+      actor: ownerId,
+    });
     if (!result.ok) {
       throw new UnprocessableEntityException({
         message: `Cannot advance instance: ${result.reason}`,
         reason: result.reason,
       });
     }
-    return this.instances.upsert(result.instance, {
+    const stored = await this.instances.upsert(result.instance, {
       workflowId: summary.workflowId,
       projectId: summary.projectId,
+      ...(await this.denormalize(def, result.instance)),
     });
+    return this.maskInstance(ownerId, summary.projectId, def, stored, opts.roles);
+  }
+
+  /**
+   * Assign the case to a tenant member, or clear it with `null` (Phase E). The target must belong to
+   * the project's tenant — assigning work to someone who cannot reach the project would create a
+   * silent dead end. Notification is best-effort: {@link MailService.send} already swallows and logs
+   * transport failures, so a broken SMTP never fails the assignment.
+   */
+  async assign(
+    ownerId: string,
+    instanceId: string,
+    assigneeId: string | null,
+  ): Promise<WorkflowInstanceSummary> {
+    const summary = await this.requireInstanceRunAccess(ownerId, instanceId);
+    const project = await this.projectsService.requireRunAccess(ownerId, summary.projectId);
+
+    if (assigneeId && !(await this.tenants.isMember(assigneeId, project.tenantId))) {
+      throw new BadRequestException(`User is not a member of this workspace: ${assigneeId}`);
+    }
+    await this.instances.setAssignee(instanceId, assigneeId);
+    await this.audit.record({
+      tenantId: project.tenantId,
+      actorId: ownerId,
+      action: "case.assign",
+      targetType: "workflow-instance",
+      targetId: instanceId,
+      detail: { assigneeId },
+    });
+    if (assigneeId) await this.notifyAssignee(assigneeId, summary, project.name);
+
+    const updated = await this.instances.findSummary(instanceId);
+    if (!updated) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
+    return updated;
+  }
+
+  /** Email the new assignee that a case is waiting for them (best-effort, never throws). */
+  private async notifyAssignee(
+    assigneeId: string,
+    summary: WorkflowInstanceSummary,
+    projectName: string,
+  ): Promise<void> {
+    const user = await this.users.findById(assigneeId);
+    if (!user) return;
+    await this.mail.send(
+      user.email,
+      caseAssignedEmail({
+        displayName: user.displayName ?? user.email,
+        caseLabel: summary.label,
+        statusLabel: summary.statusLabel,
+        projectName,
+      }),
+    );
+  }
+
+  /**
+   * Mask the case data a response carries (FS2 reuse: `maskData` + the reader's roles).
+   *
+   * Masking runs against EVERY form the definition binds, not just the current node's. A case
+   * accumulates data across states, so a field gated in step 1's form is still in `data` at step 3 —
+   * masking only the current node's form would hand it over the moment the case moved on (or land
+   * on a node with no form at all and mask nothing). `maskData` only touches fields the given form
+   * declares, so applying the forms in turn yields exactly the union of their gates.
+   *
+   * ⚠️ Read-side only. `advance` persists the merged, UNMASKED instance, so a field the actor cannot
+   * see survives their advance — with one limit: that merge is shallow, so a client echoing back a
+   * whole ARRAY it received masked replaces that array, dropping row-level gated values. Known gap
+   * (Phase E); top-level gated fields are unaffected.
+   */
+  private async maskInstance(
+    ownerId: string,
+    projectId: string,
+    def: WorkflowDefinition | null,
+    instance: WorkflowInstance,
+    declaredRoles: string[] | undefined,
+  ): Promise<WorkflowInstance> {
+    const forms = await this.boundForms(def);
+    if (forms.length === 0) return instance;
+
+    const role = await this.projectsService.resolveRole(ownerId, projectId);
+    const roles = [...(declaredRoles ?? []), ...(role ? [role] : [])];
+    const data = forms.reduce((acc, form) => maskData(form, acc, { roles }), instance.data);
+    return { ...instance, data };
+  }
+
+  /** The form to mask against: the active published version when there is one, else the draft. */
+  private async resolveSnapshot(formId: string): Promise<FormSchema | null> {
+    const active = await this.versions.loadActive(formId);
+    if (active) return migrate(active.body);
+    return this.forms.load(formId);
+  }
+
+  /** Every form the definition binds, deduped — what masking and labelling both resolve against. */
+  private async boundForms(def: WorkflowDefinition | null): Promise<FormSchema[]> {
+    const formIds = [...new Set((def?.nodes ?? []).flatMap((n) => (n.formId ? [n.formId] : [])))];
+    if (formIds.length === 0) return [];
+    return (await Promise.all(formIds.map((id) => this.resolveSnapshot(id)))).filter(
+      (f): f is FormSchema => f != null,
+    );
+  }
+
+  /**
+   * The denormalized columns written on every case write: the display label plus the current node's
+   * status (Phase E).
+   *
+   * The label is derived from the case data with EVERY role-gated field removed
+   * (`maskData(..., { roles: [] })`). It has to be: the label is stored once and shown to everyone —
+   * in the work-order list, in the assignment email, and it is substring-searchable via `?q=` — while
+   * `deriveCaseLabel` picks "the first non-empty string", which is quite happy to pick a
+   * `viewRoles`-gated answer. Deriving it from the ungated subset keeps one shared label honest for
+   * every reader instead of turning the search box into an oracle over gated values.
+   */
+  private async denormalize(
+    def: WorkflowDefinition,
+    instance: WorkflowInstance,
+  ): Promise<Pick<WorkflowInstanceMeta, "label" | "statusLabel" | "statusKind">> {
+    const forms = await this.boundForms(def);
+    const ungated = forms.reduce((acc, form) => maskData(form, acc, { roles: [] }), instance.data);
+    const node = def.nodes.find((n) => n.id === instance.current);
+    return {
+      label: deriveCaseLabel(ungated) ?? null,
+      statusLabel: node?.status ?? null,
+      statusKind: node?.kind ?? null,
+    };
   }
 
   /** Resolve a workflow's project and assert the user holds at least `minRole` on it. */
@@ -121,6 +303,18 @@ export class WorkflowInstancesService {
     return summary;
   }
 
+  /** Resolve a workflow's project and assert the user may run its cases. */
+  private async requireWorkflowRunAccess(
+    ownerId: string,
+    workflowId: string,
+  ): Promise<WorkflowSummary> {
+    assertId(workflowId, "workflow");
+    const summary = await this.workflows.findSummary(workflowId);
+    if (!summary) throw new NotFoundException(`Workflow not found: ${workflowId}`);
+    await this.projectsService.requireRunAccess(ownerId, summary.projectId);
+    return summary;
+  }
+
   /** Resolve an instance's project and assert the user holds at least `minRole` on it. */
   private async requireInstanceAccess(
     ownerId: string,
@@ -131,6 +325,18 @@ export class WorkflowInstancesService {
     const summary = await this.instances.findSummary(instanceId);
     if (!summary) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
     await this.projectsService.requireAccess(ownerId, summary.projectId, minRole);
+    return summary;
+  }
+
+  /** Resolve an instance's project and assert the user may run it. */
+  private async requireInstanceRunAccess(
+    ownerId: string,
+    instanceId: string,
+  ): Promise<WorkflowInstanceSummary> {
+    assertId(instanceId, "workflow instance");
+    const summary = await this.instances.findSummary(instanceId);
+    if (!summary) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
+    await this.projectsService.requireRunAccess(ownerId, summary.projectId);
     return summary;
   }
 }

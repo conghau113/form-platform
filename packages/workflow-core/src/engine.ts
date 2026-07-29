@@ -11,6 +11,9 @@ export interface AdvanceContext {
   data?: Record<string, unknown>;
   /** Roles the actor holds; checked against a transition's required `role`. */
   roles?: string[];
+  /** Who is firing the action (a user id) — recorded on the history entry (Phase E work-order).
+   *  Omitted ⇒ the entry is written exactly as before, so existing callers are unaffected. */
+  actor?: string;
 }
 
 export type AdvanceFailure = "unknown-state" | "no-transition" | "guard-failed" | "role-denied";
@@ -101,6 +104,9 @@ export function advance(
           to: transition.to,
           action: transition.action,
           at: new Date().toISOString(),
+          // Only present when the caller identified the actor — keeps entries byte-identical for
+          // callers that don't (and keeps `actor` genuinely optional in the contract).
+          ...(ctx.actor ? { actor: ctx.actor } : {}),
         },
       ],
     };

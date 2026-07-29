@@ -1,17 +1,22 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { deriveCaseLabel } from "@org/workflow-core";
+import { CURRENT_FORM_VERSION, type FormSchema } from "@org/form-schema";
 import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { AuditEntry } from "../../persistence/repositories/audit.repo.js";
+import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
 import type {
   FolderChildCounts,
   FolderRecord,
 } from "../../persistence/repositories/folder.repo.js";
 import { FolderRepo } from "../../persistence/repositories/folder.repo.js";
 import { FormRepo } from "../../persistence/repositories/form.repo.js";
+import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
 import {
   type ProjectCreateInput,
   type ProjectRecord,
@@ -22,6 +27,8 @@ import {
   type ProjectMemberRecord,
   ProjectMemberRepo,
 } from "../../persistence/repositories/project-member.repo.js";
+import type { UserRecord } from "../../persistence/repositories/user.repo.js";
+import { UserRepo } from "../../persistence/repositories/user.repo.js";
 import {
   type WorkflowListQuery,
   WorkflowRepo,
@@ -34,6 +41,7 @@ import {
   type WorkflowInstanceSummary,
 } from "../../persistence/repositories/workflow-instance.repo.js";
 import { FakeOrgUnitRepo, FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
+import type { MailService } from "../mail/mail.service.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import { WorkflowInstancesService } from "./workflow-instances.service.js";
 
@@ -101,6 +109,9 @@ class FakeWorkflowRepo extends WorkflowRepo {
   async listSummaries(query: WorkflowListQuery): Promise<WorkflowSummary[]> {
     return [...this.summaries.values()].filter((s) => s.projectId === query.projectId);
   }
+  async listByProjects(projectIds: string[]): Promise<WorkflowSummary[]> {
+    return [...this.summaries.values()].filter((s) => projectIds.includes(s.projectId));
+  }
   async move(): Promise<null> {
     return null;
   }
@@ -114,6 +125,8 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
   readonly bodies = new Map<string, WorkflowInstance>();
   readonly meta = new Map<string, WorkflowInstanceMeta>();
   readonly updatedAt = new Map<string, Date>();
+  /** Kept OUTSIDE `meta` on purpose — mirrors production, where `upsert` never writes it. */
+  readonly assignees = new Map<string, string | null>();
   async upsert(instance: WorkflowInstance, meta: WorkflowInstanceMeta): Promise<WorkflowInstance> {
     this.bodies.set(instance.id, instance);
     this.meta.set(instance.id, meta);
@@ -132,7 +145,10 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
       workflowId: meta.workflowId,
       projectId: meta.projectId,
       current: instance.current,
-      label: deriveCaseLabel(instance.data) ?? null,
+      label: meta.label,
+      assigneeId: this.assignees.get(id) ?? null,
+      statusLabel: meta.statusLabel,
+      statusKind: meta.statusKind,
       createdAt: this.updatedAt.get(id) ?? new Date(),
       updatedAt: this.updatedAt.get(id) ?? new Date(),
     };
@@ -145,6 +161,12 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
       if (s) out.push(s);
     }
     return out;
+  }
+  async listByProjects(): Promise<{ rows: never[]; total: number }> {
+    throw new Error("not used — see work-orders.service.test.ts");
+  }
+  async setAssignee(id: string, assigneeId: string | null): Promise<void> {
+    this.assignees.set(id, assigneeId);
   }
   async delete(id: string): Promise<void> {
     this.bodies.delete(id);
@@ -210,12 +232,13 @@ class FakeFolderRepo extends FolderRepo {
   }
 }
 
-class UnusedFormRepo extends FormRepo {
+class FakeFormRepo extends FormRepo {
+  readonly bodies = new Map<string, FormSchema>();
   async upsert(): Promise<never> {
     throw new Error("not used");
   }
-  async load(): Promise<null> {
-    return null;
+  async load(id: string): Promise<FormSchema | null> {
+    return this.bodies.get(id) ?? null;
   }
   async findSummary(): Promise<null> {
     return null;
@@ -257,11 +280,72 @@ class FakeProjectMemberRepo extends ProjectMemberRepo {
   }
 }
 
+/** Minimal collaborators for the Phase E additions (assign + masking) — none is exercised by the
+ *  WF3 lifecycle tests, so they stay deliberately dumb. */
+class FakeFormVersionRepo extends FormVersionRepo {
+  async loadActive(): Promise<null> {
+    return null;
+  }
+  async listByForm(): Promise<never[]> {
+    return [];
+  }
+  async publish(): Promise<never> {
+    throw new Error("not used");
+  }
+  async load(): Promise<null> {
+    return null;
+  }
+}
+
+class FakeUserRepo extends UserRepo {
+  readonly rows = new Map<string, UserRecord>();
+  seed(id: string, email: string): void {
+    this.rows.set(id, {
+      id,
+      email,
+      passwordHash: "x",
+      displayName: null,
+      emailVerifiedAt: null,
+    } as UserRecord);
+  }
+  async findByEmail(email: string): Promise<UserRecord | null> {
+    return [...this.rows.values()].find((u) => u.email === email) ?? null;
+  }
+  async findById(id: string): Promise<UserRecord | null> {
+    return this.rows.get(id) ?? null;
+  }
+  async create(): Promise<never> {
+    throw new Error("not used");
+  }
+  async updatePassword(): Promise<void> {}
+  async markEmailVerified(): Promise<void> {}
+}
+
+class FakeAuditRepo extends AuditRepo {
+  readonly entries: AuditEntry[] = [];
+  async record(entry: AuditEntry): Promise<void> {
+    this.entries.push(entry);
+  }
+}
+
+class FakeMailService {
+  readonly sent: { to: string; subject: string }[] = [];
+  async send(to: string, content: { subject: string }): Promise<void> {
+    this.sent.push({ to, subject: content.subject });
+  }
+}
+
 const OWNER = "owner-a";
 let instanceRepo: FakeWorkflowInstanceRepo;
 let workflowRepo: FakeWorkflowRepo;
 let projectRepo: FakeProjectRepo;
 let memberRepo: FakeProjectMemberRepo;
+let tenantRepo: FakeTenantRepo;
+let rbacRepo: FakeRbacRepo;
+let formRepo: FakeFormRepo;
+let userRepo: FakeUserRepo;
+let auditRepo: FakeAuditRepo;
+let mail: FakeMailService;
 let service: WorkflowInstancesService;
 let project: ProjectRecord;
 
@@ -282,16 +366,32 @@ beforeEach(async () => {
   workflowRepo = new FakeWorkflowRepo();
   projectRepo = new FakeProjectRepo();
   memberRepo = new FakeProjectMemberRepo();
+  tenantRepo = new FakeTenantRepo();
+  rbacRepo = new FakeRbacRepo();
+  formRepo = new FakeFormRepo();
+  userRepo = new FakeUserRepo();
+  auditRepo = new FakeAuditRepo();
+  mail = new FakeMailService();
   const projects = new ProjectsService(
     projectRepo,
     new FakeFolderRepo(),
-    new UnusedFormRepo(),
+    new FakeFormRepo(),
     memberRepo,
-    new FakeTenantRepo(),
-    new FakeRbacRepo(),
+    tenantRepo,
+    rbacRepo,
     new FakeOrgUnitRepo(),
   );
-  service = new WorkflowInstancesService(instanceRepo, workflowRepo, projects);
+  service = new WorkflowInstancesService(
+    instanceRepo,
+    workflowRepo,
+    projects,
+    formRepo,
+    new FakeFormVersionRepo(),
+    tenantRepo,
+    userRepo,
+    auditRepo,
+    mail as unknown as MailService,
+  );
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });
 });
 
@@ -396,5 +496,186 @@ describe("WorkflowInstancesService", () => {
     await service.start(OWNER, "wf1", { id: "wf1-case-2" });
     await expect(service.list(OWNER, "wf1")).resolves.toHaveLength(2);
     await expect(service.list("stranger", "wf1")).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+/** A form whose `secret` field is only viewable by the `hr` role (FS2 field-level RBAC). */
+function gatedForm(id = "f1"): FormSchema {
+  return {
+    formVersion: CURRENT_FORM_VERSION,
+    id,
+    title: "Case form",
+    fields: [
+      { type: "text", name: "subject", label: "Subject" },
+      { type: "text", name: "secret", label: "Secret", permissions: { viewRoles: ["hr"] } },
+    ],
+  } as unknown as FormSchema;
+}
+
+describe("WorkflowInstancesService — running is its own permission (Phase E)", () => {
+  const OPERATOR = "operator-1";
+  const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+
+  /** Make OPERATOR a tenant member holding exactly one function code. */
+  function grantOperator(...functions: string[]): void {
+    tenantRepo.join(OPERATOR, tenantId);
+    rbacRepo.grant(OPERATOR, tenantId, functions);
+  }
+
+  it("lets a workflow.run holder start and advance, though they are only a viewer", async () => {
+    await seedWorkflow();
+    grantOperator("workflow.run");
+
+    const started = await service.start(OPERATOR, "wf1");
+    const advanced = await service.advance(OPERATOR, started.id, { action: "submit" });
+    expect(advanced.current).toBe("review");
+  });
+
+  it("still refuses a read-only member (403, not 404 — they can see the project)", async () => {
+    await seedWorkflow();
+    grantOperator("workflow.read");
+
+    await expect(service.start(OPERATOR, "wf1")).rejects.toBeInstanceOf(ForbiddenException);
+    const started = await service.start(OWNER, "wf1");
+    await expect(
+      service.advance(OPERATOR, started.id, { action: "submit" }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("hides the case entirely from someone with no grant at all (404)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await expect(
+      service.advance("stranger", started.id, { action: "submit" }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("records who advanced the case and denormalizes the new state", async () => {
+    await seedWorkflow();
+    grantOperator("workflow.run");
+    const started = await service.start(OWNER, "wf1");
+
+    const advanced = await service.advance(OPERATOR, started.id, { action: "submit" });
+    expect(advanced.history.at(-1)?.actor).toBe(OPERATOR);
+    expect(instanceRepo.meta.get(started.id)?.statusLabel).toBe("review");
+  });
+});
+
+describe("WorkflowInstancesService.assign (Phase E)", () => {
+  const MEMBER = "member-1";
+  const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+
+  beforeEach(() => {
+    tenantRepo.join(OWNER, tenantId);
+    tenantRepo.join(MEMBER, tenantId);
+    userRepo.seed(MEMBER, "member@example.com");
+  });
+
+  it("assigns to a workspace member, audits it and emails them", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    const summary = await service.assign(OWNER, started.id, MEMBER);
+    expect(summary.assigneeId).toBe(MEMBER);
+    expect(auditRepo.entries).toEqual([
+      expect.objectContaining({ action: "case.assign", tenantId, actorId: OWNER }),
+    ]);
+    expect(mail.sent).toEqual([expect.objectContaining({ to: "member@example.com" })]);
+  });
+
+  it("refuses someone who is not a member of the project's workspace (400)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await expect(service.assign(OWNER, started.id, "outsider")).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it("clears the assignment with null, without emailing anyone", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await service.assign(OWNER, started.id, MEMBER);
+    mail.sent.length = 0;
+
+    const summary = await service.assign(OWNER, started.id, null);
+    expect(summary.assigneeId).toBeNull();
+    expect(mail.sent).toEqual([]);
+  });
+
+  it("keeps the assignee when the case is later advanced (upsert must not clobber it)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await service.assign(OWNER, started.id, MEMBER);
+
+    await service.advance(OWNER, started.id, { action: "submit" });
+    const summary = await instanceRepo.findSummary(started.id);
+    expect(summary?.assigneeId).toBe(MEMBER);
+  });
+});
+
+describe("WorkflowInstancesService — field-level RBAC on case data (Phase E)", () => {
+  /** The workflow's start node binds the gated form. */
+  function formBoundDef(): WorkflowDefinition {
+    const d = def();
+    d.nodes[0] = { ...d.nodes[0], formId: "f1" };
+    return d;
+  }
+
+  beforeEach(async () => {
+    formRepo.bodies.set("f1", gatedForm());
+    await workflowRepo.upsert(formBoundDef(), { projectId: project.id });
+  });
+
+  it("masks fields the reader may not view, on both load and the advance response", async () => {
+    // OWNER's project role is `owner`, which is not the `hr` role the field is gated to.
+    const started = await service.start(OWNER, "wf1", { data: { subject: "s", secret: "top" } });
+    expect(started.data).toEqual({ subject: "s" });
+
+    const loaded = await service.load(OWNER, started.id);
+    expect(loaded.data).toEqual({ subject: "s" });
+
+    const advanced = await service.advance(OWNER, started.id, { action: "submit" });
+    expect(advanced.data).not.toHaveProperty("secret");
+  });
+
+  it("shows the field to a reader who declares the gating role", async () => {
+    const started = await service.start(OWNER, "wf1", { data: { subject: "s", secret: "top" } });
+    const loaded = await service.load(OWNER, started.id, ["hr"]);
+    expect(loaded.data).toEqual({ subject: "s", secret: "top" });
+  });
+
+  it("stores the unmasked value, so a reader who cannot see it cannot erase it", async () => {
+    const started = await service.start(OWNER, "wf1", { data: { subject: "s", secret: "top" } });
+    // The masked reader echoes back what they saw — the hidden field must survive.
+    await service.advance(OWNER, started.id, { action: "submit", data: { subject: "s2" } });
+    expect(instanceRepo.bodies.get(started.id)?.data).toEqual({ subject: "s2", secret: "top" });
+  });
+});
+
+describe("WorkflowInstancesService — reviewer-found hardening (Phase E)", () => {
+  it("refuses to start a case whose id already exists (409, never overwrites)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1", { id: "case-x", data: { subject: "first" } });
+
+    await expect(service.start(OWNER, "wf1", { id: "case-x" })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(instanceRepo.bodies.get(started.id)?.data).toEqual({ subject: "first" });
+  });
+
+  it("never derives the case label from a role-gated field", async () => {
+    // `deriveCaseLabel` takes the first non-empty string — here that would be the gated `secret`.
+    // The label is stored once and shown to everyone (list, email, `?q=` search), so it must come
+    // from the ungated subset only.
+    formRepo.bodies.set("f1", gatedForm());
+    const d = def();
+    d.nodes[0] = { ...d.nodes[0], formId: "f1" };
+    await workflowRepo.upsert(d, { projectId: project.id });
+
+    const started = await service.start(OWNER, "wf1", {
+      data: { secret: "TOP SECRET", subject: "Đơn nghỉ phép" },
+    });
+    const summary = await instanceRepo.findSummary(started.id);
+    expect(summary?.label).toBe("Đơn nghỉ phép");
   });
 });

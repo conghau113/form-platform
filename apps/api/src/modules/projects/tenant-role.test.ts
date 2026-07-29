@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canRunWorkflow,
   collectAncestors,
   hasScopedGrant,
   projectRoleFromFunctions,
@@ -112,5 +113,45 @@ describe("hasScopedGrant (C3)", () => {
     expect(hasScopedGrant([{ functions: ["form.read"], scopeOrgUnitIds: [] }])).toBe(false);
     expect(hasScopedGrant([{ functions: ["form.read"], scopeOrgUnitIds: ["hr"] }])).toBe(true);
     expect(hasScopedGrant([])).toBe(false);
+  });
+});
+
+describe("canRunWorkflow (Phase E — running is its own permission)", () => {
+  const unscoped = (...functions: string[]) => [{ functions, scopeOrgUnitIds: [] }];
+  const none = new Set<string>();
+
+  it("lets workflow.run operate a case even though it only maps to viewer", () => {
+    // The point of the whole function: `projectRoleFromFunctions(["workflow.run"]) === "viewer"`,
+    // yet an operator holding just that code must still be able to advance and assign.
+    expect(projectRoleFromFunctions(["workflow.run"])).toBe("viewer");
+    expect(canRunWorkflow(unscoped("workflow.run"), none)).toBe(true);
+  });
+
+  it("lets workflow.manage and the * wildcard run too", () => {
+    expect(canRunWorkflow(unscoped("workflow.manage"), none)).toBe(true);
+    expect(canRunWorkflow(unscoped("*"), none)).toBe(true);
+  });
+
+  it("denies read-only and unrelated design functions", () => {
+    expect(canRunWorkflow(unscoped("workflow.read"), none)).toBe(false);
+    expect(canRunWorkflow(unscoped("form.manage", "version.publish"), none)).toBe(false);
+    expect(canRunWorkflow([], none)).toBe(false);
+  });
+
+  it("honours data scope: a role scoped elsewhere cannot run this project's cases (C3)", () => {
+    const scoped = [{ functions: ["workflow.run"], scopeOrgUnitIds: ["eng"] }];
+    expect(canRunWorkflow(scoped, new Set(["eng"]))).toBe(true);
+    expect(canRunWorkflow(scoped, new Set(["hr", "sales"]))).toBe(false);
+    // An unplaced project (no ancestors) is out of every scoped role's reach.
+    expect(canRunWorkflow(scoped, none)).toBe(false);
+  });
+
+  it("unions across roles — one scoped run grant is enough", () => {
+    const grants = [
+      { functions: ["form.read"], scopeOrgUnitIds: [] },
+      { functions: ["workflow.run"], scopeOrgUnitIds: ["eng"] },
+    ];
+    expect(canRunWorkflow(grants, new Set(["eng"]))).toBe(true);
+    expect(canRunWorkflow(grants, new Set(["sales"]))).toBe(false);
   });
 });

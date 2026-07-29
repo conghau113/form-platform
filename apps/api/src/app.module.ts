@@ -17,6 +17,7 @@ import { StatusCatalogModule } from "./modules/status-catalog/status-catalog.mod
 import { SubmissionsModule } from "./modules/submissions/submissions.module.js";
 import { TenantsModule } from "./modules/tenants/tenants.module.js";
 import { ThemesModule } from "./modules/themes/themes.module.js";
+import { WorkOrdersModule } from "./modules/work-orders/work-orders.module.js";
 import { WorkflowsModule } from "./modules/workflows/workflows.module.js";
 import { PersistenceModule } from "./persistence/persistence.module.js";
 
@@ -67,6 +68,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     StatusCatalogModule,
     SubmissionsModule,
     AdminCatalogModule,
+    WorkOrdersModule,
     AiModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

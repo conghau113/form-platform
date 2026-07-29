@@ -13,6 +13,8 @@ import type { WorkflowInstanceSummary } from "../../persistence/repositories/wor
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { AdvanceInstanceDto } from "./dto/advance-instance.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { AssignInstanceDto } from "./dto/assign-instance.dto.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { StartInstanceDto } from "./dto/start-instance.dto.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
 import { WorkflowInstancesService } from "./workflow-instances.service.js";
@@ -58,6 +60,16 @@ export class WorkflowInstancesController {
     @Param("instanceId") instanceId: string,
   ): Promise<WorkflowInstance> {
     return this.instances.load(ownerId, instanceId);
+  }
+
+  /** Make a tenant member responsible for the case (`assigneeId: null` unassigns) — Phase E. */
+  @Post("workflow-instances/:instanceId/assign")
+  assign(
+    @CurrentOwner() ownerId: string,
+    @Param("instanceId") instanceId: string,
+    @Body() dto: AssignInstanceDto,
+  ): Promise<WorkflowInstanceSummary> {
+    return this.instances.assign(ownerId, instanceId, dto.assigneeId);
   }
 
   /** Fire an action against a case; returns the advanced instance or 422 with the failure reason. */

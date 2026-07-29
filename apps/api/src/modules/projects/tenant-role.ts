@@ -42,6 +42,31 @@ export function projectRoleFromScopedGrants(
   return projectRoleFromFunctions([...effective]);
 }
 
+/** Functions that let a user RUN a workflow case (start / advance / assign) on a project. */
+const RUN_FUNCTIONS = ["workflow.run", "workflow.manage"];
+
+/**
+ * Whether a user's scoped grants let them operate a case on one project (product-roadmap Phase E).
+ *
+ * Running is a permission of its OWN, deliberately not folded into {@link projectRoleFromFunctions}:
+ * `workflow.run` maps to `viewer` there (it confers no design-time power), yet an operator holding
+ * only that code must still be able to advance the cases they were given. Mapping it to `editor`
+ * instead would hand every operator the right to rewrite forms, folders and workflow definitions —
+ * the opposite of least privilege. Applicability is the same data-scope rule as
+ * {@link projectRoleFromScopedGrants}, so a role scoped away from a project cannot run its cases.
+ */
+export function canRunWorkflow(grants: ScopedGrant[], projectAncestorIds: Set<string>): boolean {
+  for (const grant of grants) {
+    const applies =
+      grant.scopeOrgUnitIds.length === 0 ||
+      grant.scopeOrgUnitIds.some((id) => projectAncestorIds.has(id));
+    if (!applies) continue;
+    if (grant.functions.includes(WILDCARD_FUNCTION)) return true;
+    if (RUN_FUNCTIONS.some((code) => grant.functions.includes(code))) return true;
+  }
+  return false;
+}
+
 /** Whether any grant is scoped (has data-scope org units) — the chokepoint only needs the org tree
  *  when a scoped grant might apply to a placed project, so this gates that extra lookup. */
 export function hasScopedGrant(grants: ScopedGrant[]): boolean {

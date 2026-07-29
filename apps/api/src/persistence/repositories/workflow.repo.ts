@@ -38,6 +38,11 @@ export abstract class WorkflowRepo {
   abstract findSummary(id: string): Promise<WorkflowSummary | null>;
   /** List workflow summaries (no body) for a project/folder, most-recently-updated first. */
   abstract listSummaries(query: WorkflowListQuery): Promise<WorkflowSummary[]>;
+  /**
+   * Summaries across several projects in one query — the "which workflows can I start a case of?"
+   * picker (Phase E). The CALLER decides which projects it may see; this applies no access rules.
+   */
+  abstract listByProjects(projectIds: string[]): Promise<WorkflowSummary[]>;
   /** Move a workflow to another folder within its project (`null` → project root). */
   abstract move(id: string, folderId: string | null): Promise<WorkflowSummary | null>;
   /** Delete a workflow by id; no-op if already absent. */

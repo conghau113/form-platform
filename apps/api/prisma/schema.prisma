@@ -231,6 +231,7 @@ model User {
   verificationTokens VerificationToken[]
   memberships   Membership[]
   roles         UserRole[]
+  assignedCases WorkflowInstanceRecord[]
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 }
@@ -387,14 +388,29 @@ model WorkflowInstanceRecord {
   /// Denormalized human label derived from the case data (deriveCaseLabel) so a case list shows the
   /// subject (e.g. an employee name) without loading each body. Null when no label can be derived.
   label      String?
+  /// Who is responsible for the case right now (product-roadmap Phase E work-order). Null = unassigned.
+  /// Only ever set through the assign endpoint, which checks the target is a member of the project's
+  /// tenant — hence a real FK here (unlike `Project.ownerId`, which may predate the `User` table).
+  /// `SetNull` so deleting an account leaves the case standing, merely unassigned.
+  assigneeId String?
+  /// Denormalized display state, snapshotted from the definition node at every write (same character
+  /// as `label`): `statusLabel` is the node's human status and `statusKind` its engine category
+  /// (start|normal|end). Lets the work-order list show, filter and sort by a readable status — and
+  /// answer "still open?" (`statusKind != 'end'`) — without loading each workflow definition.
+  statusLabel String?
+  statusKind  String?
   body       Json
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   workflow   WorkflowRecord @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee   User?          @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
 
   @@index([workflowId])
   @@index([projectId])
+  @@index([assigneeId])
+  /// The work-order list orders a tenant's cases by recency across many projects.
+  @@index([projectId, updatedAt])
 }
 
 /// Reusable field template. W0 stores them global (scope="global"); W3 adds per-project scope.
