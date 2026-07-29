@@ -17,6 +17,10 @@ import {
 } from "antd";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { hasFunction, useAuth } from "../auth";
+// Submodule import (not the barrel): the Run view wants the two work-order hooks, not the whole
+// Operate screen pulled into this chunk.
+import { useAssignCase, useAssignees } from "../operate/useWorkOrders";
 import { actionLabel, isTerminalState, runActions } from "./run-actions";
 import { workflowRoles } from "./run-roles";
 import { indexStatusCatalog, resolveStatusStyle, useStatusCatalog } from "./status-catalog";
@@ -273,6 +277,31 @@ function CaseRunner({
   const { entries } = useStatusCatalog(projectId);
   const byCode = useMemo(() => indexStatusCatalog(entries), [entries]);
 
+  // Phase E: who the case belongs to. It lives on the case SUMMARY (org index), not in the engine
+  // contract, so it comes from the workflow's case list — free when arriving from the launcher,
+  // one extra summary fetch when deep-linked from the Vận hành table. Names resolve through the
+  // work-order member list, which needs `workflow.run`; without it we show no name at all rather
+  // than a raw user id.
+  const { user, functions } = useAuth();
+  const canSeeMembers = hasFunction(functions, "workflow.run");
+  const { nameOf } = useAssignees(canSeeMembers);
+  const { instances } = useWorkflowInstances(workflowId);
+  const summary = instances.find((i) => i.id === instanceId);
+  const assign = useAssignCase();
+  const [assigning, setAssigning] = useState(false);
+
+  const claim = async (assigneeId: string | null) => {
+    setAssigning(true);
+    try {
+      await assign({ instanceId, assigneeId, workflowId });
+      message.success(assigneeId ? "Bạn đã nhận việc này" : "Đã bỏ nhận việc");
+    } catch (e) {
+      message.error((e as Error).message);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   // WF4b: a localized view for display (title/status/action labels + the bound form). Actions still
   // fire on the ORIGINAL `def` — `action` is the engine identifier, never the localized label.
   const localeOptions = useMemo(() => localeOptionsOf(def), [def]);
@@ -364,6 +393,29 @@ function CaseRunner({
           </Space>
         </Space>
 
+        <Space size="small" wrap>
+          <Text type="secondary">Người phụ trách:</Text>
+          {summary?.assigneeId ? (
+            <Tag color="blue">{nameOf(summary.assigneeId) ?? "Đã giao"}</Tag>
+          ) : (
+            <Tag>Chưa giao</Tag>
+          )}
+          {/* Claiming needs run access; `workflow.run` is the grant that confers it and the gate
+              the whole work-order feature already stands behind, so a plain viewer sees the
+              assignee but no button instead of a guaranteed 403 after the click. */}
+          {user &&
+            canSeeMembers &&
+            (summary?.assigneeId === user.id ? (
+              <Button size="small" loading={assigning} onClick={() => void claim(null)}>
+                Bỏ nhận
+              </Button>
+            ) : (
+              <Button size="small" loading={assigning} onClick={() => void claim(user.id)}>
+                Nhận việc
+              </Button>
+            ))}
+        </Space>
+
         <Card size="small">
           {node?.formId ? (
             formLoading ? (
@@ -426,6 +478,9 @@ function CaseRunner({
                     <Text strong>{h.action}</Text>: {h.from} → {h.to}{" "}
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       {new Date(h.at).toLocaleString()}
+                      {/* Phase E: entries recorded before this (or by a user we can't name) simply
+                          show no actor — never a raw user id. */}
+                      {nameOf(h.actor) ? ` · ${nameOf(h.actor)}` : ""}
                     </Text>
                   </span>
                 ),

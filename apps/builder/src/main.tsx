@@ -16,6 +16,7 @@ import {
   ResetPasswordPage,
   VerifyEmailPage,
 } from "./auth/index.js";
+import { OperatePage } from "./operate/index.js";
 import { createQueryClient } from "./query/index.js";
 import { AppShell, SettingsPage } from "./shell/index.js";
 import { SubmissionsRoute } from "./submissions/index.js";
@@ -50,6 +51,7 @@ const router = createBrowserRouter(
           children: [
             { path: "/", element: <Navigate to="/projects" replace /> },
             { path: "/projects", element: <ProjectsPage /> },
+            { path: "/operate", element: <OperatePage /> },
             { path: "/admin", element: <AdminPage /> },
             { path: "/settings", element: <SettingsPage /> },
             {

@@ -17,6 +17,14 @@ export const qk = {
   adminWorkflows: ["admin", "workflows"] as const,
   adminFormVersions: ["admin", "form-versions"] as const,
   adminInstances: ["admin", "workflow-instances"] as const,
+  // Work-order manager (Phase E): one page of cases in the active workspace + its two pickers.
+  // The list key carries the serialized query so every filter/page/sort combination caches apart.
+  // `workOrderPages` is the invalidation prefix — one assignment refreshes every cached page
+  // WITHOUT re-fetching the two pickers, whose contents an assignment cannot change.
+  workOrderPages: ["work-orders", "list"] as const,
+  workOrders: (search: string) => ["work-orders", "list", search] as const,
+  workOrderAssignees: ["work-orders", "assignees"] as const,
+  workOrderWorkflows: ["work-orders", "workflows"] as const,
   // The caller's tenant org-unit tree (C3): powers the org-units admin panel, role data-scope
   // editor, and the project placement picker.
   orgUnits: ["org-units"] as const,

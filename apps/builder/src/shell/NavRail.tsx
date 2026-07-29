@@ -1,4 +1,9 @@
-import { AppstoreOutlined, SettingOutlined, TeamOutlined } from "@ant-design/icons";
+import {
+  AppstoreOutlined,
+  ScheduleOutlined,
+  SettingOutlined,
+  TeamOutlined,
+} from "@ant-design/icons";
 import { Menu, Tooltip } from "antd";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -9,6 +14,7 @@ import { TenantSwitcher } from "./TenantSwitcher";
 /** Icon per section key. Kept here (not in the pure `nav.ts`) so the catalog stays JSX-free. */
 const SECTION_ICONS: Record<string, ReactNode> = {
   design: <AppstoreOutlined />,
+  operate: <ScheduleOutlined />,
   admin: <TeamOutlined />,
 };
 

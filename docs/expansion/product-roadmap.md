@@ -467,6 +467,52 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
   theo người xử lý/trạng thái). (phỏng `web-admin/workOrder` + `workflowTicket`)
 - Tái dùng: workflow-core engine + form submission runtime + field-level RBAC (maskData).
 
+> **✅ ĐÃ LÀM E1 (2026-07-29).** Phạm vi owner chốt: *tối thiểu-nhưng-thật* — 1 người phụ trách + audit,
+> **tách quyền runtime**, maskData cho case data, tạo case từ trang Vận hành, phân trang/sắp xếp
+> server-side, nhãn trạng thái thật, mail báo giao việc. Plan `~/.claude/plans/sunny-skipping-coral.md`
+> đã qua vòng **`plan-reviewer` độc lập trước khi code** (cơ chế mới, xem `CLAUDE.md`).
+>
+> - **Lỗ hổng nền phát hiện lúc lập plan (crux của phase):** `tenant-role.ts` xếp `workflow.run` vào
+>   `VIEWER_FUNCTIONS`, trong khi `advance()` đòi `editor` ⇒ **operator được cấp đúng quyền vẫn 403**.
+>   Fix: `canRunWorkflow` + `ProjectsService.requireRunAccess` — "chạy case" là quyền RIÊNG, không kéo
+>   theo quyền sửa form/quy trình. KHÔNG đụng `EDITOR_FUNCTIONS`/`VIEWER_FUNCTIONS` (blast-radius chỉ
+>   trong runtime workflow).
+> - **Contract (additive, KHÔNG bump `CURRENT_WORKFLOW_VERSION`):** `historyEntry.actor?` +
+>   `AdvanceContext.actor` — engine chỉ ghi khóa khi caller cung cấp ⇒ entry cũ byte-identical. 2 changeset patch.
+> - **Dữ liệu:** migration `20260730000000_add_work_order` — `assigneeId` (FK→User, SetNull) ·
+>   `statusLabel` · `statusKind` (denormalize từ node của definition, ghi tại mỗi upsert) · 2 index.
+>   Nhờ denormalize, list/lọc/sắp xếp không phải nạp definition và cột trạng thái hiện **nhãn người đọc được**.
+> - **API:** module `work-orders` (list + filter + paging + assignees + runnable workflows) gate
+>   `@RequireFunction("workflow.run")` — **KHÔNG kèm `workflow.admin`** (`resolveFunctions` không nở
+>   `parentCode` ⇒ người chỉ có `workflow.admin` sẽ qua guard nhưng map ra role `null` = trang rỗng) ·
+>   `POST /workflow-instances/:id/assign` + audit `case.assign` + mail Mailpit · **maskData cho case data**
+>   ở `load`/`start`/`advance` (che ở đường ĐỌC; bản persist vẫn chưa che, nếu che rồi ghi lại sẽ **xoá**
+>   dữ liệu của trường bị ẩn) · danh sách luôn narrow về **1 workspace** (`ProjectsService.list` cố ý
+>   không lọc W5-share theo tenant — đúng cho màn Thiết kế, sai cho Vận hành vì mọi lựa chọn người nhận
+>   lệch tenant đều 400).
+> - **Builder:** feature-folder `src/operate/` (client · hooks react-query · filters · bảng phân trang
+>   **server-side** · modal Tạo việc · OperatePage) · nav `operate` bật với `anyFunction:["workflow.run"]`
+>   (khớp server) · route `/operate` · Run-view thêm **Người phụ trách** + "Nhận việc" và hiện **tên người
+>   thực hiện** trong lịch sử (id không khớp ⇒ để trống, không bao giờ hiện id thô). Cột "Người xử lý" là
+>   Select gán tại chỗ, **khoá theo cờ `canRun` server trả về từng dòng** thay vì để người dùng ăn 403.
+> - **3 lỗ hổng `plan-reviewer` bắt được trước khi code (đều đã sửa + có test):** (1) `advance` trả
+>   instance **chưa che** ⇒ vô hiệu hoá mask của `load`; (2) `start` với `id` client-chọn **ghi đè case
+>   project khác** (E hạ ngưỡng xuống `workflow.run` nên với tới được) ⇒ nay 409; (3) `label` denormalize
+>   có thể chính là field bị gate mà lại hiện cho mọi người + search `?q=` ⇒ nay derive từ
+>   `maskData(..., {roles: []})`.
+> - **Verify:** api **282 test** · schema 24 · core 37 · builder **403 test** · typecheck 2 app · biome sạch ·
+>   **live-smoke HTTP 31/31** (`node dist` :3011 + Postgres + Mailpit) · **UI smoke playwright** (rail hiện
+>   Vận hành → 22 case: trang 2 đúng 2 dòng → gán tại chỗ → lọc "Việc của tôi" → tìm theo nhãn → Tạo việc
+>   (kèm giao luôn) → mở case: Người phụ trách + lịch sử có tên + Nhận việc/Bỏ nhận → console sạch) ·
+>   subagent `reviewer` (2 finding `required` đã sửa: đổi quy trình giữ lại trạng thái node cũ ⇒ list rỗng
+>   vĩnh viễn; nút "Nhận việc" hiện cho người chắc chắn bị 403).
+> - **⚠️ Known-gap (CỐ Ý hoãn):** chưa có due-date/priority/bình luận · **1 người phụ trách** (không phải
+>   nhiều vai trò kiểu `ticket_role_values` của EVN) · gán chỉ kiểm người nhận là member tenant (không kiểm
+>   họ có quyền trên project) · thông báo chỉ qua email (chưa in-app) · **field gated nằm trong row của
+>   array có thể bị mất khi client echo lại cả mảng** (merge nông ở engine) · trang Vận hành luôn thuộc
+>   **một** workspace (khác `/projects` vốn union khi chưa chọn) · `transition.role` vẫn là gap WF4 (caller
+>   tự khai roles) — biên thật là `requireRunAccess`.
+
 ### Phase F — Form nâng cao (mẫu EVN: trường phụ thuộc, modal-chọn→apply→autofill)
 - Nhiều đã có: **conditions** (JSONLogic ẩn/hiện), **reactions** (trường phụ thuộc giá trị nhau),
   **datasource** (options remote/tree). → phase này **mở rộng**, không làm lại.

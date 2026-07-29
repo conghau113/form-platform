@@ -65,6 +65,11 @@ export interface WorkflowInstanceSummary {
   current: string;
   /** Denormalized human label derived from the case data (#1), or null when none was derived. */
   label: string | null;
+  /** Who is responsible for the case (Phase E), or null when unassigned. */
+  assigneeId: string | null;
+  /** The current node's human status + engine kind, snapshotted at the last write (Phase E). */
+  statusLabel: string | null;
+  statusKind: string | null;
   createdAt: string;
   updatedAt: string;
 }
