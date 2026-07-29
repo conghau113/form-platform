@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
+import { ActiveTenant } from "../../auth/active-tenant.decorator.js";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import type { ProjectRecord } from "../../persistence/repositories/project.repo.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
@@ -13,14 +14,23 @@ import { ProjectsService } from "./projects.service.js";
 export class ProjectsController {
   constructor(private readonly projects: ProjectsService) {}
 
+  /** Creates into the caller's active workspace unless `dto.tenantId` names another one. */
   @Post()
-  create(@CurrentOwner() ownerId: string, @Body() dto: CreateProjectDto): Promise<ProjectRecord> {
-    return this.projects.create(ownerId, dto);
+  create(
+    @CurrentOwner() ownerId: string,
+    @Body() dto: CreateProjectDto,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<ProjectRecord> {
+    return this.projects.create(ownerId, dto, activeTenantId);
   }
 
+  /** Projects visible in the caller's active workspace (plus anything shared with them directly). */
   @Get()
-  list(@CurrentOwner() ownerId: string): Promise<ProjectRecord[]> {
-    return this.projects.list(ownerId);
+  list(
+    @CurrentOwner() ownerId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<ProjectRecord[]> {
+    return this.projects.list(ownerId, activeTenantId);
   }
 
   @Get(":id")

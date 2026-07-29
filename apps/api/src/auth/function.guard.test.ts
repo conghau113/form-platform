@@ -3,6 +3,7 @@ import { Reflector } from "@nestjs/core";
 import { describe, expect, it } from "vitest";
 import { RbacRepo, WILDCARD_FUNCTION } from "../persistence/repositories/rbac.repo.js";
 import { TenantRepo } from "../persistence/repositories/tenant.repo.js";
+import { FakeRbacRepo, FakeTenantRepo } from "../testing/fake-tenant-rbac.js";
 import { FunctionGuard } from "./function.guard.js";
 import type { AuthedRequest } from "./jwt-payload.js";
 import { REQUIRE_FUNCTION_KEY } from "./require-function.decorator.js";
@@ -79,8 +80,12 @@ class StubTenantRepo extends TenantRepo {
 }
 
 /** Build an ExecutionContext exposing a request with the given principal + a fixed required-metadata. */
-function ctx(user: AuthedRequest["user"], required: string[] | undefined) {
-  const request: AuthedRequest = { user, headers: {} };
+function ctx(
+  user: AuthedRequest["user"],
+  required: string[] | undefined,
+  headers: AuthedRequest["headers"] = {},
+) {
+  const request: AuthedRequest = { user, headers };
   return {
     switchToHttp: () => ({ getRequest: () => request }),
     getHandler: () => ({ [REQUIRE_FUNCTION_KEY]: required }),
@@ -142,5 +147,41 @@ describe("FunctionGuard", () => {
     await expect(guard.canActivate(ctx(alice, ["role.admin"]))).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+});
+
+describe("FunctionGuard active tenant (X-Tenant-Id)", () => {
+  const bob = { sub: "bob", email: "b@x.io" };
+  const PERSONAL = "tnt_bob";
+  const TEAM = "tnt_team";
+  const required = ["role.admin"];
+
+  /** Bob is an admin in the team tenant but holds nothing in his personal one (joined first). */
+  function guard() {
+    const tenants = new FakeTenantRepo();
+    tenants.join("bob", PERSONAL);
+    tenants.join("bob", TEAM);
+    const rbac = new FakeRbacRepo();
+    rbac.grant("bob", PERSONAL, []);
+    rbac.grant("bob", TEAM, ["role.admin"]);
+    const reflector = new Reflector();
+    reflector.getAllAndOverride = (() => required) as typeof reflector.getAllAndOverride;
+    return new FunctionGuard(reflector, rbac, tenants);
+  }
+
+  it("gates on the requested workspace, not the personal-first default", async () => {
+    expect(await guard().canActivate(ctx(bob, required, { "x-tenant-id": TEAM }))).toBe(true);
+  });
+
+  it("falls back to the personal-first default when no workspace is requested", async () => {
+    await expect(guard().canActivate(ctx(bob, required))).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it("ignores a workspace the caller is not a member of (no privilege widening)", async () => {
+    await expect(
+      guard().canActivate(ctx(bob, required, { "x-tenant-id": "tnt_someone_else" })),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

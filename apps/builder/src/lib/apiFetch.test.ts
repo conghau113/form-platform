@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setActiveTenantId } from "./activeTenant";
 import { apiFetch, setSessionExpiredHandler } from "./apiFetch";
 
 /** A minimal Response stand-in — apiFetch reads `.status`; ensureRefresh reads `.ok`. */
@@ -69,5 +70,42 @@ describe("apiFetch", () => {
     expect(b.status).toBe(200);
     const refreshCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes("/auth/refresh"));
     expect(refreshCalls).toHaveLength(1);
+  });
+
+  describe("active workspace header", () => {
+    afterEach(() => {
+      setActiveTenantId(null);
+    });
+
+    /** Header value of the Nth fetch call (0-indexed), or undefined when none was set. */
+    const tenantHeaderOf = (call: number) =>
+      new Headers(fetchMock.mock.calls[call][1]?.headers).get("X-Tenant-Id") ?? undefined;
+
+    it("sends no header when no workspace is selected", async () => {
+      fetchMock.mockResolvedValueOnce(resp(200));
+      await apiFetch("/api/projects");
+      expect(tenantHeaderOf(0)).toBeUndefined();
+    });
+
+    it("stamps the selected workspace on the request", async () => {
+      setActiveTenantId("tnt_team");
+      fetchMock.mockResolvedValueOnce(resp(200));
+      await apiFetch("/api/projects", { headers: { "Content-Type": "application/json" } });
+      expect(tenantHeaderOf(0)).toBe("tnt_team");
+      // Caller-supplied headers survive.
+      expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("Content-Type")).toBe(
+        "application/json",
+      );
+    });
+
+    it("keeps the header on the retry after a refresh", async () => {
+      setActiveTenantId("tnt_team");
+      fetchMock
+        .mockResolvedValueOnce(resp(401)) // original
+        .mockResolvedValueOnce(resp(200)) // refresh
+        .mockResolvedValueOnce(resp(200)); // retry
+      await apiFetch("/api/projects");
+      expect(tenantHeaderOf(2)).toBe("tnt_team");
+    });
   });
 });

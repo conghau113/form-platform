@@ -67,10 +67,21 @@ export class ProjectsService {
     private readonly orgUnits: OrgUnitRepo,
   ) {}
 
-  async create(ownerId: string, dto: CreateProjectDto): Promise<ProjectRecord> {
+  async create(
+    ownerId: string,
+    dto: CreateProjectDto,
+    activeTenantId?: string,
+  ): Promise<ProjectRecord> {
     if (!dto.name?.trim()) throw new BadRequestException("Project name is required");
     const personal = await this.tenants.ensureTenantForOwner(ownerId);
-    const tenantId = dto.tenantId ?? personal;
+    // Default target is the workspace the caller selected; `dto.tenantId` still overrides it (the
+    // New-project picker). With no selection this stays exactly the pre-switcher behaviour —
+    // unconditionally personal, NOT the oldest membership, which those two only usually agree on.
+    // Either way a non-personal target keeps the editor+ check below.
+    const active = activeTenantId?.trim()
+      ? ((await this.tenants.resolveTenantForUser(ownerId, activeTenantId)) ?? personal)
+      : personal;
+    const tenantId = dto.tenantId ?? active;
     if (tenantId !== personal) {
       // B4: creating into a team tenant needs an editor-level role there (same mapping as B3
       // reads). Not a member → 404 (no existence leak); member below editor → 403.
@@ -98,28 +109,45 @@ export class ProjectsService {
   }
 
   /**
-   * Projects the user can see (most-recent first): ones they own, ones shared with them (W5),
-   * and — B3 — ones in tenants where their RBAC functions confer at least `viewer`.
+   * Projects the user can see (most-recent first): ones they own, ones in a tenant where their RBAC
+   * functions confer at least `viewer` (B3), and ones shared with them directly (W5).
+   *
+   * When the caller names an active workspace, owned + tenant projects narrow to it. Without one the
+   * B3 union across every tenant stands, so a client that has never picked a workspace still sees
+   * everything it could before. W5 shares are never filtered either way: an explicit person-to-person
+   * grant can point at a tenant the caller isn't a member of, so scoping them would strand the
+   * project in no workspace at all. Owned projects are safe to filter — one always sits in a tenant
+   * the owner belongs to, so it reappears by switching back.
    */
-  async list(userId: string): Promise<ProjectRecord[]> {
+  async list(userId: string, activeTenantId?: string): Promise<ProjectRecord[]> {
+    const scoped = !!activeTenantId?.trim();
+    const activeTenant = scoped
+      ? await this.tenants.resolveTenantForUser(userId, activeTenantId)
+      : null;
+    const tenantIds = scoped
+      ? activeTenant
+        ? [activeTenant]
+        : []
+      : await this.tenants.listTenantIdsForUser(userId);
+
     const sharedIds = await this.members.listProjectIdsForUser(userId);
     const [owned, shared, tenantProjects] = await Promise.all([
       this.projects.list(userId),
       this.projects.findByIds(sharedIds), // one query, not one findById per shared id
-      this.listTenantProjects(userId),
+      this.listTenantProjects(userId, tenantIds),
     ]);
-    const byId = new Map(owned.map((p) => [p.id, p]));
+    const byId = new Map<string, ProjectRecord>();
+    for (const p of owned) if (!scoped || p.tenantId === activeTenant) byId.set(p.id, p);
     for (const p of [...shared, ...tenantProjects]) if (!byId.has(p.id)) byId.set(p.id, p);
     return [...byId.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
   /**
-   * Projects the user can see in their tenants, filtered per-project by data-scope (C3). For each
-   * tenant (a user has 1–2 in practice) their scoped RBAC grants decide which placed projects they
-   * reach; the org tree is loaded once per tenant and only when a scoped grant might apply.
+   * Projects the user can see in the given tenants, filtered per-project by data-scope (C3). For each
+   * tenant their scoped RBAC grants decide which placed projects they reach; the org tree is loaded
+   * once per tenant and only when a scoped grant might apply.
    */
-  private async listTenantProjects(userId: string): Promise<ProjectRecord[]> {
-    const tenantIds = await this.tenants.listTenantIdsForUser(userId);
+  private async listTenantProjects(userId: string, tenantIds: string[]): Promise<ProjectRecord[]> {
     const result: ProjectRecord[] = [];
     for (const tenantId of tenantIds) {
       const grants = await this.rbac.resolveScopedGrants(userId, tenantId);

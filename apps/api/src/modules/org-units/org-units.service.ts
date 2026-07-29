@@ -18,7 +18,7 @@ import type { UpdateOrgUnitDto } from "./dto/update-org-unit.dto.js";
 
 /**
  * Org-unit CRUD (product-roadmap Phase B2). Every operation is scoped to the caller's tenant, resolved
- * from the authenticated user's {@link TenantRepo.findTenantIdForUser membership}: a unit is created in
+ * from the authenticated user's {@link TenantRepo.resolveTenantForUser active tenant}: a unit is created in
  * the caller's tenant, and reads/mutations of a unit whose `tenantId` differs return 404 (no existence
  * leak) — the first genuine cross-tenant enforcement. Moves are guarded against cycles
  * ({@link wouldCreateCycle}, reused from folders → 409); a non-empty unit (sub-units or members) can't
@@ -31,13 +31,17 @@ export class OrgUnitsService {
     private readonly tenants: TenantRepo,
   ) {}
 
-  async list(userId: string): Promise<OrgUnitRecord[]> {
-    return this.units.list(await this.requireTenant(userId));
+  async list(userId: string, activeTenantId?: string): Promise<OrgUnitRecord[]> {
+    return this.units.list(await this.requireTenant(userId, activeTenantId));
   }
 
-  async create(userId: string, dto: CreateOrgUnitDto): Promise<OrgUnitRecord> {
+  async create(
+    userId: string,
+    dto: CreateOrgUnitDto,
+    activeTenantId?: string,
+  ): Promise<OrgUnitRecord> {
     if (!dto.name?.trim()) throw new BadRequestException("Org unit name is required");
-    const tenantId = await this.requireTenant(userId);
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     if (dto.parentId) await this.requireParentInTenant(dto.parentId, tenantId);
     return this.units.create({
       tenantId,
@@ -47,8 +51,13 @@ export class OrgUnitsService {
     });
   }
 
-  async update(userId: string, id: string, dto: UpdateOrgUnitDto): Promise<OrgUnitRecord> {
-    const unit = await this.requireOwned(userId, id);
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateOrgUnitDto,
+    activeTenantId?: string,
+  ): Promise<OrgUnitRecord> {
+    const unit = await this.requireOwned(userId, id, activeTenantId);
 
     const patch: OrgUnitUpdateInput = {
       name: dto.name?.trim(),
@@ -69,8 +78,13 @@ export class OrgUnitsService {
     return this.units.update(id, patch);
   }
 
-  async remove(userId: string, id: string, cascade: boolean): Promise<void> {
-    await this.requireOwned(userId, id);
+  async remove(
+    userId: string,
+    id: string,
+    cascade: boolean,
+    activeTenantId?: string,
+  ): Promise<void> {
+    await this.requireOwned(userId, id, activeTenantId);
     if (!cascade) {
       const { units, members } = await this.units.countChildren(id);
       if (units > 0 || members > 0) {
@@ -82,16 +96,20 @@ export class OrgUnitsService {
     await this.units.delete(id);
   }
 
-  /** The caller's tenant (B1 guarantees every logged-in user has one); absent → 404 (defensive). */
-  private async requireTenant(userId: string): Promise<string> {
-    const tenantId = await this.tenants.findTenantIdForUser(userId);
+  /** The caller's active tenant (B1 guarantees at least one); absent → 404 (defensive). */
+  private async requireTenant(userId: string, activeTenantId?: string): Promise<string> {
+    const tenantId = await this.tenants.resolveTenantForUser(userId, activeTenantId);
     if (!tenantId) throw new NotFoundException("No tenant for user");
     return tenantId;
   }
 
   /** Load a unit and assert it lives in the caller's tenant (404 otherwise — no existence leak). */
-  private async requireOwned(userId: string, id: string): Promise<OrgUnitRecord> {
-    const tenantId = await this.requireTenant(userId);
+  private async requireOwned(
+    userId: string,
+    id: string,
+    activeTenantId?: string,
+  ): Promise<OrgUnitRecord> {
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     const unit = await this.units.findById(id);
     if (!unit || unit.tenantId !== tenantId)
       throw new NotFoundException(`Org unit not found: ${id}`);

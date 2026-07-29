@@ -65,9 +65,9 @@ export class RbacService implements OnModuleInit {
     await this.rbac.seedFunctions(BASE_FUNCTIONS);
   }
 
-  /** The caller's effective function codes in their tenant (seam for nav gating, §6.7). */
-  async myFunctions(userId: string): Promise<string[]> {
-    const tenantId = await this.tenants.findTenantIdForUser(userId);
+  /** The caller's effective function codes in their active tenant (seam for nav gating, §6.7). */
+  async myFunctions(userId: string, activeTenantId?: string): Promise<string[]> {
+    const tenantId = await this.tenants.resolveTenantForUser(userId, activeTenantId);
     if (!tenantId) return [];
     return this.rbac.resolveFunctions(userId, tenantId);
   }
@@ -77,15 +77,19 @@ export class RbacService implements OnModuleInit {
     return this.rbac.listFunctions();
   }
 
-  async listRoles(userId: string): Promise<RoleWithFunctions[]> {
-    const tenantId = await this.requireTenant(userId);
+  async listRoles(userId: string, activeTenantId?: string): Promise<RoleWithFunctions[]> {
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     const roles = await this.rbac.listRoles(tenantId);
     return Promise.all(roles.map((r) => this.withGrants(r)));
   }
 
-  async createRole(userId: string, dto: UpsertRoleDto): Promise<RoleWithFunctions> {
+  async createRole(
+    userId: string,
+    dto: UpsertRoleDto,
+    activeTenantId?: string,
+  ): Promise<RoleWithFunctions> {
     if (!dto.name?.trim()) throw new BadRequestException("Role name is required");
-    const tenantId = await this.requireTenant(userId);
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     try {
       const role = await this.rbac.createRole({
         tenantId,
@@ -106,8 +110,13 @@ export class RbacService implements OnModuleInit {
     }
   }
 
-  async updateRole(userId: string, id: string, dto: UpsertRoleDto): Promise<RoleWithFunctions> {
-    const role = await this.requireEditableRole(userId, id); // tenant + non-system guard
+  async updateRole(
+    userId: string,
+    id: string,
+    dto: UpsertRoleDto,
+    activeTenantId?: string,
+  ): Promise<RoleWithFunctions> {
+    const role = await this.requireEditableRole(userId, id, activeTenantId); // tenant + non-system
     try {
       const updated = await this.rbac.updateRole(id, {
         name: dto.name?.trim(),
@@ -127,8 +136,8 @@ export class RbacService implements OnModuleInit {
     }
   }
 
-  async deleteRole(userId: string, id: string): Promise<void> {
-    const role = await this.requireEditableRole(userId, id);
+  async deleteRole(userId: string, id: string, activeTenantId?: string): Promise<void> {
+    const role = await this.requireEditableRole(userId, id, activeTenantId);
     await this.rbac.deleteRole(id);
     await this.audit.record({
       tenantId: role.tenantId,
@@ -145,8 +154,9 @@ export class RbacService implements OnModuleInit {
     userId: string,
     id: string,
     dto: SetRoleFunctionsDto,
+    activeTenantId?: string,
   ): Promise<RoleWithFunctions> {
-    const role = await this.requireEditableRole(userId, id);
+    const role = await this.requireEditableRole(userId, id, activeTenantId);
     await this.assertKnownFunctions(dto.functions);
     await this.rbac.setRoleFunctions(id, dto.functions);
     await this.audit.record({
@@ -166,8 +176,9 @@ export class RbacService implements OnModuleInit {
     userId: string,
     id: string,
     dto: SetRoleDataScopesDto,
+    activeTenantId?: string,
   ): Promise<RoleWithFunctions> {
-    const role = await this.requireEditableRole(userId, id);
+    const role = await this.requireEditableRole(userId, id, activeTenantId);
     await this.assertOrgUnitsInTenant(dto.orgUnitIds, role.tenantId);
     await this.rbac.setRoleDataScopes(id, dto.orgUnitIds);
     await this.audit.record({
@@ -192,8 +203,8 @@ export class RbacService implements OnModuleInit {
   }
 
   /** The caller's tenant members with the roles each holds (Phase D1 admin user list). */
-  async listUsers(userId: string): Promise<TenantUserRecord[]> {
-    const tenantId = await this.requireTenant(userId);
+  async listUsers(userId: string, activeTenantId?: string): Promise<TenantUserRecord[]> {
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     return this.rbac.listTenantUsers(tenantId);
   }
 
@@ -202,8 +213,12 @@ export class RbacService implements OnModuleInit {
    * personal tenant into a team). Idempotent; the user arrives with no roles (assign separately).
    * Real email invitations (users who don't exist yet) are Phase A2 (needs SMTP).
    */
-  async addMember(userId: string, dto: AddMemberDto): Promise<TenantUserRecord[]> {
-    const tenantId = await this.requireTenant(userId);
+  async addMember(
+    userId: string,
+    dto: AddMemberDto,
+    activeTenantId?: string,
+  ): Promise<TenantUserRecord[]> {
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     const target = await this.users.findByEmail(dto.email.trim().toLowerCase());
     // 404 reveals whether an email is registered — acceptable: the caller already holds user.admin.
     if (!target) throw new NotFoundException(`No user with email: ${dto.email}`);
@@ -220,8 +235,12 @@ export class RbacService implements OnModuleInit {
   }
 
   /** The role ids currently assigned to a user (within the caller's tenant). */
-  async getUserRoles(userId: string, targetUserId: string): Promise<string[]> {
-    const tenantId = await this.requireTenant(userId);
+  async getUserRoles(
+    userId: string,
+    targetUserId: string,
+    activeTenantId?: string,
+  ): Promise<string[]> {
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     await this.requireMember(targetUserId, tenantId);
     return this.rbac.listUserRoleIds(targetUserId, tenantId);
   }
@@ -232,8 +251,9 @@ export class RbacService implements OnModuleInit {
     userId: string,
     targetUserId: string,
     dto: SetUserRolesDto,
+    activeTenantId?: string,
   ): Promise<string[]> {
-    const tenantId = await this.requireTenant(userId);
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     await this.requireMember(targetUserId, tenantId);
     for (const roleId of dto.roleIds) {
       const role = await this.rbac.findRoleById(roleId);
@@ -253,9 +273,9 @@ export class RbacService implements OnModuleInit {
     return this.rbac.listUserRoleIds(targetUserId, tenantId);
   }
 
-  /** The caller's tenant (B1 guarantees one); absent → 404 (defensive). */
-  private async requireTenant(userId: string): Promise<string> {
-    const tenantId = await this.tenants.findTenantIdForUser(userId);
+  /** The caller's active tenant (B1 guarantees at least one); absent → 404 (defensive). */
+  private async requireTenant(userId: string, activeTenantId?: string): Promise<string> {
+    const tenantId = await this.tenants.resolveTenantForUser(userId, activeTenantId);
     if (!tenantId) throw new NotFoundException("No tenant for user");
     return tenantId;
   }
@@ -268,8 +288,12 @@ export class RbacService implements OnModuleInit {
   }
 
   /** Load a role, assert it lives in the caller's tenant (404) and is not a system role (400). */
-  private async requireEditableRole(userId: string, id: string): Promise<RoleRecord> {
-    const tenantId = await this.requireTenant(userId);
+  private async requireEditableRole(
+    userId: string,
+    id: string,
+    activeTenantId?: string,
+  ): Promise<RoleRecord> {
+    const tenantId = await this.requireTenant(userId, activeTenantId);
     const role = await this.rbac.findRoleById(id);
     if (!role || role.tenantId !== tenantId) throw new NotFoundException(`Role not found: ${id}`);
     if (role.system) throw new BadRequestException("The built-in admin role can't be modified");

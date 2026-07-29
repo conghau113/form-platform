@@ -364,4 +364,41 @@ describe("RbacService", () => {
       expect(e.actorId).toBe("alice");
     }
   });
+
+  describe("active tenant (workspace selection)", () => {
+    // alice's personal tenant is tenantA; she is also a member of tenantB.
+    beforeEach(async () => {
+      await tenants.addMember("tenantB", "alice");
+    });
+
+    it("administers the selected workspace, not the personal-first default", async () => {
+      const inB = await service.createRole("alice", { name: "Designer" }, "tenantB");
+      expect(inB.tenantId).toBe("tenantB");
+      expect((await service.listRoles("alice", "tenantB")).map((r) => r.id)).toEqual([inB.id]);
+      expect(await service.listRoles("alice")).toHaveLength(0); // tenantA is untouched
+    });
+
+    it("resolves the caller's functions in the selected workspace", async () => {
+      const role = await service.createRole("alice", { name: "Designer" }, "tenantB");
+      await service.setRoleFunctions("alice", role.id, { functions: ["form.manage"] }, "tenantB");
+      await service.setUserRoles("alice", "alice", { roleIds: [role.id] }, "tenantB");
+
+      expect(await service.myFunctions("alice", "tenantB")).toEqual(["form.manage"]);
+      expect(await service.myFunctions("alice")).toEqual([]); // nothing in tenantA
+    });
+
+    it("ignores a workspace the caller isn't a member of (falls back, no leak)", async () => {
+      const inA = await service.createRole("alice", { name: "Designer" });
+      // bob's tenant — alice is not a member, so the header is dropped rather than honoured.
+      expect((await service.listRoles("alice", "tenantB-not-mine")).map((r) => r.id)).toEqual([
+        inA.id,
+      ]);
+    });
+
+    it("audits into the selected workspace", async () => {
+      audit.entries = [];
+      await service.createRole("alice", { name: "Designer" }, "tenantB");
+      expect(audit.entries.map((e) => e.tenantId)).toEqual(["tenantB"]);
+    });
+  });
 });

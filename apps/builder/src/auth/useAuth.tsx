@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useEffect, useMemo } from "react";
+import { setActiveTenantId } from "../lib/activeTenant";
 import { setSessionExpiredHandler } from "../lib/apiFetch";
 import { qk } from "../query";
 import * as api from "./client";
@@ -47,7 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setSessionExpiredHandler(null);
   }, [qc]);
 
-  const setUser = (user: UserProfile) => qc.setQueryData(qk.me, user);
+  const setUser = (user: UserProfile) => {
+    // A workspace choice belongs to the account that made it: a second account signing in on this
+    // browser (without the first having logged out) must not inherit it.
+    setActiveTenantId(null);
+    qc.setQueryData(qk.me, user);
+  };
 
   const loginM = useMutation({
     mutationFn: ({ email, password }: { email: string; password: string }) =>
@@ -64,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onSuccess: () => {
       // Drop every cached query of the outgoing session; the /auth/me observer refetches → anon.
       qc.clear();
+      // The next account must not inherit this one's workspace choice.
+      setActiveTenantId(null);
     },
   });
 

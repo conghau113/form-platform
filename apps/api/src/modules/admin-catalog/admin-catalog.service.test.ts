@@ -81,4 +81,30 @@ describe("AdminCatalogService (D2–D4)", () => {
     expect(await service.listFormVersions("ghost")).toEqual([]);
     expect(await service.listInstances("ghost")).toEqual([]);
   });
+
+  it("lists the selected workspace, not the personal-first default", async () => {
+    const tenants = new FakeTenantRepo();
+    const catalog = new FakeAdminCatalogRepo();
+    tenants.join("u1", tenantA); // personal (oldest membership)
+    tenants.join("u1", tenantB); // team
+    catalog.forms.set(tenantA, [formRow("mine")]);
+    catalog.forms.set(tenantB, [formRow("team")]);
+
+    const service = new AdminCatalogService(catalog, tenants);
+
+    expect((await service.listForms("u1", tenantB)).map((r) => r.id)).toEqual(["team"]);
+    expect((await service.listForms("u1")).map((r) => r.id)).toEqual(["mine"]);
+  });
+
+  it("ignores a workspace the caller isn't a member of (§8 leak test)", async () => {
+    const tenants = new FakeTenantRepo();
+    const catalog = new FakeAdminCatalogRepo();
+    tenants.join("u1", tenantA);
+    catalog.forms.set(tenantA, [formRow("mine")]);
+    catalog.forms.set(tenantB, [formRow("theirs")]);
+
+    const rows = await new AdminCatalogService(catalog, tenants).listForms("u1", tenantB);
+
+    expect(rows.map((r) => r.id)).toEqual(["mine"]);
+  });
 });

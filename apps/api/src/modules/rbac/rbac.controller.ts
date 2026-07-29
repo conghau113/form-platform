@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from "@nestjs/common";
+import { ActiveTenant } from "../../auth/active-tenant.decorator.js";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import { RequireFunction } from "../../auth/require-function.decorator.js";
 import type { FunctionRecord, TenantUserRecord } from "../../persistence/repositories/rbac.repo.js";
@@ -21,6 +22,9 @@ import { RbacService } from "./rbac.service.js";
  * {@link FunctionGuard} (`role.admin` / `user.admin`); `me/functions` is open to any authenticated
  * caller (it returns only their own permissions — the seam that drives nav gating, §6.7). Existing
  * owner-scoped routes are untouched in this slice; RBAC enforcement lands here first.
+ *
+ * Every route reads {@link ActiveTenant}, so administration targets the workspace the caller has
+ * selected rather than always their personal tenant.
  */
 @Controller("rbac")
 export class RbacController {
@@ -28,8 +32,11 @@ export class RbacController {
 
   /** The caller's own effective function codes (drives client-side nav gating). */
   @Get("me/functions")
-  myFunctions(@CurrentOwner() userId: string): Promise<string[]> {
-    return this.rbac.myFunctions(userId);
+  myFunctions(
+    @CurrentOwner() userId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<string[]> {
+    return this.rbac.myFunctions(userId, activeTenantId);
   }
 
   /** The platform function catalog (for the role editor). */
@@ -42,8 +49,11 @@ export class RbacController {
   /** Any-of gate: the user admin also needs the tenant's roles (names) to display/assign them. */
   @Get("roles")
   @RequireFunction("role.admin", "user.admin")
-  listRoles(@CurrentOwner() userId: string): Promise<RoleWithFunctions[]> {
-    return this.rbac.listRoles(userId);
+  listRoles(
+    @CurrentOwner() userId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<RoleWithFunctions[]> {
+    return this.rbac.listRoles(userId, activeTenantId);
   }
 
   @Post("roles")
@@ -51,8 +61,9 @@ export class RbacController {
   createRole(
     @CurrentOwner() userId: string,
     @Body() dto: UpsertRoleDto,
+    @ActiveTenant() activeTenantId?: string,
   ): Promise<RoleWithFunctions> {
-    return this.rbac.createRole(userId, dto);
+    return this.rbac.createRole(userId, dto, activeTenantId);
   }
 
   @Patch("roles/:id")
@@ -61,15 +72,20 @@ export class RbacController {
     @CurrentOwner() userId: string,
     @Param("id") id: string,
     @Body() dto: UpsertRoleDto,
+    @ActiveTenant() activeTenantId?: string,
   ): Promise<RoleWithFunctions> {
-    return this.rbac.updateRole(userId, id, dto);
+    return this.rbac.updateRole(userId, id, dto, activeTenantId);
   }
 
   @Delete("roles/:id")
   @RequireFunction("role.admin")
   @HttpCode(204)
-  deleteRole(@CurrentOwner() userId: string, @Param("id") id: string): Promise<void> {
-    return this.rbac.deleteRole(userId, id);
+  deleteRole(
+    @CurrentOwner() userId: string,
+    @Param("id") id: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<void> {
+    return this.rbac.deleteRole(userId, id, activeTenantId);
   }
 
   /** Replace a role's granted function codes. */
@@ -79,8 +95,9 @@ export class RbacController {
     @CurrentOwner() userId: string,
     @Param("id") id: string,
     @Body() dto: SetRoleFunctionsDto,
+    @ActiveTenant() activeTenantId?: string,
   ): Promise<RoleWithFunctions> {
-    return this.rbac.setRoleFunctions(userId, id, dto);
+    return this.rbac.setRoleFunctions(userId, id, dto, activeTenantId);
   }
 
   /** Replace a role's data-scope org units (C3); empty clears the scope (tenant-wide). */
@@ -90,15 +107,19 @@ export class RbacController {
     @CurrentOwner() userId: string,
     @Param("id") id: string,
     @Body() dto: SetRoleDataScopesDto,
+    @ActiveTenant() activeTenantId?: string,
   ): Promise<RoleWithFunctions> {
-    return this.rbac.setRoleDataScopes(userId, id, dto);
+    return this.rbac.setRoleDataScopes(userId, id, dto, activeTenantId);
   }
 
   /** The tenant's members with the roles each holds (drives the admin user list). */
   @Get("users")
   @RequireFunction("user.admin")
-  listUsers(@CurrentOwner() userId: string): Promise<TenantUserRecord[]> {
-    return this.rbac.listUsers(userId);
+  listUsers(
+    @CurrentOwner() userId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<TenantUserRecord[]> {
+    return this.rbac.listUsers(userId, activeTenantId);
   }
 
   /** Add an existing user (by email) to the caller's tenant; returns the refreshed member list. */
@@ -107,8 +128,9 @@ export class RbacController {
   addMember(
     @CurrentOwner() userId: string,
     @Body() dto: AddMemberDto,
+    @ActiveTenant() activeTenantId?: string,
   ): Promise<TenantUserRecord[]> {
-    return this.rbac.addMember(userId, dto);
+    return this.rbac.addMember(userId, dto, activeTenantId);
   }
 
   @Get("users/:userId/roles")
@@ -116,8 +138,9 @@ export class RbacController {
   getUserRoles(
     @CurrentOwner() userId: string,
     @Param("userId") targetUserId: string,
+    @ActiveTenant() activeTenantId?: string,
   ): Promise<string[]> {
-    return this.rbac.getUserRoles(userId, targetUserId);
+    return this.rbac.getUserRoles(userId, targetUserId, activeTenantId);
   }
 
   /** Replace a user's assigned roles (all roles must live in the caller's tenant). */
@@ -127,7 +150,8 @@ export class RbacController {
     @CurrentOwner() userId: string,
     @Param("userId") targetUserId: string,
     @Body() dto: SetUserRolesDto,
+    @ActiveTenant() activeTenantId?: string,
   ): Promise<string[]> {
-    return this.rbac.setUserRoles(userId, targetUserId, dto);
+    return this.rbac.setUserRoles(userId, targetUserId, dto, activeTenantId);
   }
 }

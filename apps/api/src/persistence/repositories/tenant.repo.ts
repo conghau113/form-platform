@@ -43,4 +43,19 @@ export abstract class TenantRepo {
    * provisioning path — establishing "every logged-in user has a tenant + membership".
    */
   abstract ensurePersonalTenant(userId: string, name?: string): Promise<string>;
+
+  /**
+   * The tenant a request should operate in: the one the caller asked for (the `X-Tenant-Id` header,
+   * surfaced by `@ActiveTenant()`) when they are actually a member of it, otherwise the personal-first
+   * default of {@link findTenantIdForUser}. This is the single place the active-workspace choice is
+   * honoured, so a forged or stale header can never widen access — membership is re-checked per
+   * request, and an unknown tenant silently falls back rather than erroring (no existence leak).
+   * Concrete on purpose: every `TenantRepo` implementation inherits it from `isMember` +
+   * `findTenantIdForUser`.
+   */
+  async resolveTenantForUser(userId: string, requestedTenantId?: string): Promise<string | null> {
+    const requested = requestedTenantId?.trim();
+    if (requested && (await this.isMember(userId, requested))) return requested;
+    return this.findTenantIdForUser(userId);
+  }
 }

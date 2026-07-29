@@ -426,6 +426,41 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
   publish/version/diff → nâng lên trang admin).
 - **D5 — Dashboard/audit** (tùy chọn): thống kê + nhật ký thao tác.
 
+### Active-tenant selection (đóng nợ xuyên B/C/D — chèn trước Phase E)
+> **✅ ĐÃ LÀM (2026-07-29).** Nợ này lặp trong known-gap của B3/B4/C/C3/D1/D2–D4: `findTenantIdForUser`
+> luôn trả **membership cũ nhất = tenant cá nhân**, nên với user đa-tenant thì quyền (FunctionGuard/nav),
+> RBAC admin, org-unit và catalog D2–D4 đều chạy trên tenant cá nhân thay vì tenant team họ đang làm.
+> Cả 9 call-site đi qua **1 repo method** ⇒ đóng trước Phase E rẻ hơn nhiều so với sau (E cũng tenant-scoped).
+>
+> - **Nguồn sự thật duy nhất:** `TenantRepo.resolveTenantForUser(userId, requestedTenantId?)` — method
+>   **concrete** trên lớp abstract (mọi impl + test-fake thừa kế, 0 churn), chỉ chấp nhận tenant được yêu
+>   cầu khi `isMember`; không thì rơi về `findTenantIdForUser`. Header giả/cũ **không bao giờ nới quyền**.
+> - **Transport = header `X-Tenant-Id`** (không cookie, không claim JWT): `apiFetch` là chokepoint FE duy
+>   nhất nên chỉ gắn 1 chỗ; stateless, không phải cấp lại token khi đổi workspace; **vắng header ⇒ hành vi
+>   y hệt trước** (tương thích ngược tuyệt đối). Đọc qua `@ActiveTenant()` (param decorator) và
+>   `activeTenantFromRequest()` (cho guard).
+> - **Áp dụng:** `FunctionGuard` · `rbac` (11 method) · `org-units` (4) · `admin-catalog` (4) ·
+>   `projects.list/create`. Tham số service để **optional** — bắt buộc sẽ ép sửa ~70 call-site test
+>   đơn-tenant mà giá trị đúng là `undefined`; đổi lại có test đa-tenant riêng + live-smoke + reviewer.
+> - **`/projects` (owner chốt: lọc theo workspace đang chọn):** owned + tenant-project narrow về workspace
+>   đã chọn; **không chọn ⇒ GIỮ union B3** (nếu lọc luôn thì member team chưa kịp biết switcher sẽ thấy
+>   danh sách rỗng — 2 test B3/C3 bắt được đúng điều này); **W5 share trực tiếp KHÔNG bao giờ lọc** (có thể
+>   nằm ở tenant mình không phải member ⇒ lọc là khoá vĩnh viễn). `create` mặc định vào workspace đang chọn,
+>   check editor+ cho target ≠ personal giữ nguyên.
+> - **UI:** `shell/TenantSwitcher` (Dropdown đầu NavRail, **ẩn khi ≤1 tenant** ⇒ user hiện tại không thấy gì
+>   đổi) → lưu `localStorage` + `invalidateQueries()` toàn bộ (mọi cache đều tenant-scoped) → về `/projects`.
+>   Logout xoá lựa chọn. Picker New-project default = workspace đang xem và **luôn gửi `tenantId` tường minh**.
+> - **Verify:** api **245 test** · builder **394 test** · typecheck 2 app · biome sạch · **live-smoke HTTP
+>   30/30** (`node dist` :3011 + Postgres thật: quyền/guard/org-unit/project/create đều đổi theo header;
+>   tenant lạ → fallback không nới quyền; outsider mượn header → 404 no-leak) · **UI smoke playwright**
+>   (member 2 workspace: 4 dự án → đổi sang team còn 2 · `/admin` từ **7 tab (`*` cá nhân) → 3 tab**
+>   (form.admin+org.admin của team) · thấy "Team HQ" của tenant admin · reload giữ lựa chọn · logout xoá ·
+>   admin 1 workspace **không** thấy switcher · console sạch).
+> - **⚠️ Known-gap còn lại:** lựa chọn workspace là **per-browser** (localStorage), chưa lưu server ⇒ máy
+>   khác phải chọn lại · chưa có "Tất cả workspace" tường minh trong switcher (trạng thái union chỉ tồn tại
+>   khi CHƯA chọn lần nào) · `resolveTenantForUser` tốn thêm 1 truy vấn `isMember`/request khi có header
+>   (index unique `userId+tenantId`, chấp nhận được).
+
 ### Phase E — Ticket / Work-order (form + workflow → runtime công việc)
 - Từ 1 form + workflow đã cấu hình → **tạo ticket** (instance) chạy qua các bước; theo dõi "ai sẽ / đã /
   đang làm" (đã có Run-view + engine + case-label). Nâng thành trang **Work-order manager** (tạo/gán/lọc

@@ -1,4 +1,5 @@
 import { Controller, Get } from "@nestjs/common";
+import { ActiveTenant } from "../../auth/active-tenant.decorator.js";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import { RequireFunction } from "../../auth/require-function.decorator.js";
 import type {
@@ -23,28 +24,40 @@ export class AdminCatalogController {
   /** Every form in the caller's tenant, across all projects (D2). */
   @Get("forms")
   @RequireFunction("form.admin")
-  listForms(@CurrentOwner() userId: string): Promise<AdminFormRow[]> {
-    return this.admin.listForms(userId);
+  listForms(
+    @CurrentOwner() userId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<AdminFormRow[]> {
+    return this.admin.listForms(userId, activeTenantId);
   }
 
   /** Every workflow in the caller's tenant, across all projects (D3). */
   @Get("workflows")
   @RequireFunction("workflow.admin")
-  listWorkflows(@CurrentOwner() userId: string): Promise<AdminWorkflowRow[]> {
-    return this.admin.listWorkflows(userId);
+  listWorkflows(
+    @CurrentOwner() userId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<AdminWorkflowRow[]> {
+    return this.admin.listWorkflows(userId, activeTenantId);
   }
 
   /** Every published form version in the caller's tenant (D4). */
   @Get("form-versions")
   @RequireFunction("form.admin")
-  listFormVersions(@CurrentOwner() userId: string): Promise<AdminFormVersionRow[]> {
-    return this.admin.listFormVersions(userId);
+  listFormVersions(
+    @CurrentOwner() userId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<AdminFormVersionRow[]> {
+    return this.admin.listFormVersions(userId, activeTenantId);
   }
 
   /** Every running workflow case in the caller's tenant (D4). */
   @Get("workflow-instances")
   @RequireFunction("workflow.admin")
-  listInstances(@CurrentOwner() userId: string): Promise<AdminWorkflowInstanceRow[]> {
-    return this.admin.listInstances(userId);
+  listInstances(
+    @CurrentOwner() userId: string,
+    @ActiveTenant() activeTenantId?: string,
+  ): Promise<AdminWorkflowInstanceRow[]> {
+    return this.admin.listInstances(userId, activeTenantId);
   }
 }

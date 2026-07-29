@@ -7,6 +7,7 @@ import {
   type OrgUnitUpdateInput,
 } from "../../persistence/repositories/org-unit.repo.js";
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
+import { FakeTenantRepo as SharedFakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
 import { OrgUnitsService } from "./org-units.service.js";
 
 let seq = 0;
@@ -141,5 +142,41 @@ describe("OrgUnitsService", () => {
     await service.create(USER_A, { name: "child", parentId: root.id });
     await expect(service.remove(USER_A, root.id, false)).rejects.toBeInstanceOf(ConflictException);
     await expect(service.remove(USER_A, root.id, true)).resolves.toBeUndefined();
+  });
+});
+
+describe("OrgUnitsService active tenant (workspace selection)", () => {
+  const PERSONAL = SharedFakeTenantRepo.tenantIdFor("multi");
+  const TEAM = SharedFakeTenantRepo.tenantIdFor("boss");
+  let units: FakeOrgUnitRepo;
+  let service: OrgUnitsService;
+
+  beforeEach(() => {
+    units = new FakeOrgUnitRepo();
+    const tenants = new SharedFakeTenantRepo();
+    tenants.join("multi", PERSONAL); // oldest membership
+    tenants.join("multi", TEAM);
+    service = new OrgUnitsService(units, tenants);
+  });
+
+  it("creates and lists in the selected workspace, not the personal-first default", async () => {
+    const teamUnit = await service.create("multi", { name: "Team HQ" }, TEAM);
+    expect(teamUnit.tenantId).toBe(TEAM);
+    await service.create("multi", { name: "My HQ" });
+
+    expect((await service.list("multi", TEAM)).map((u) => u.name)).toEqual(["Team HQ"]);
+    expect((await service.list("multi")).map((u) => u.name)).toEqual(["My HQ"]);
+  });
+
+  it("ignores a workspace the caller isn't a member of (falls back, 404 on its units)", async () => {
+    const teamUnit = await service.create("multi", { name: "Team HQ" }, TEAM);
+    const tenants = new SharedFakeTenantRepo();
+    tenants.join("outsider", SharedFakeTenantRepo.tenantIdFor("outsider"));
+    const outsiderService = new OrgUnitsService(units, tenants);
+
+    expect(await outsiderService.list("outsider", TEAM)).toEqual([]);
+    await expect(
+      outsiderService.update("outsider", teamUnit.id, { name: "Hijacked" }, TEAM),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

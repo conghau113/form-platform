@@ -497,6 +497,81 @@ describe("ProjectsService tenant writes (B4)", () => {
   });
 });
 
+describe("ProjectsService active tenant (workspace selection)", () => {
+  const TENANT = FakeTenantRepo.tenantIdFor(OWNER);
+  const PERSONAL = FakeTenantRepo.tenantIdFor("member-u");
+
+  const joinTenant = (userId: string, functions: string[]) => {
+    tenantRepo.join(userId, FakeTenantRepo.tenantIdFor(userId));
+    tenantRepo.join(userId, TENANT);
+    rbacRepo.grant(userId, TENANT, functions);
+    rbacRepo.grant(userId, FakeTenantRepo.tenantIdFor(userId), ["*"]);
+  };
+
+  it("narrows the list to the selected workspace (owned + tenant projects)", async () => {
+    const team = await projects.create(OWNER, { name: "Team" });
+    joinTenant("member-u", ["form.read"]);
+    const mine = await projects.create("member-u", { name: "Mine" });
+
+    const inTeam = (await projects.list("member-u", TENANT)).map((p) => p.id);
+    expect(inTeam).toContain(team.id);
+    expect(inTeam).not.toContain(mine.id);
+
+    const inPersonal = (await projects.list("member-u", PERSONAL)).map((p) => p.id);
+    expect(inPersonal).toContain(mine.id);
+    expect(inPersonal).not.toContain(team.id);
+  });
+
+  it("keeps the B3 union when no workspace is selected", async () => {
+    const team = await projects.create(OWNER, { name: "Team" });
+    joinTenant("member-u", ["form.read"]);
+    const mine = await projects.create("member-u", { name: "Mine" });
+
+    const ids = (await projects.list("member-u")).map((p) => p.id);
+    expect(ids).toContain(team.id);
+    expect(ids).toContain(mine.id);
+  });
+
+  it("still shows W5 shares from a workspace the caller isn't a member of", async () => {
+    const shared = await projects.create("third-owner", { name: "Shared" });
+    await memberRepo.upsert({ projectId: shared.id, userId: "member-u", role: "viewer" });
+    joinTenant("member-u", ["form.read"]);
+
+    const ids = (await projects.list("member-u", PERSONAL)).map((p) => p.id);
+    expect(ids).toContain(shared.id);
+  });
+
+  it("ignores a workspace the caller isn't a member of (falls back, no leak)", async () => {
+    const team = await projects.create(OWNER, { name: "Team" });
+    tenantRepo.join("outsider", FakeTenantRepo.tenantIdFor("outsider"));
+    const ids = (await projects.list("outsider", TENANT)).map((p) => p.id);
+    expect(ids).not.toContain(team.id);
+  });
+
+  it("creates into the selected workspace without an explicit tenantId", async () => {
+    joinTenant("editor-u", ["form.manage"]);
+    const p = await projects.create("editor-u", { name: "Team Project" }, TENANT);
+    expect(p.tenantId).toBe(TENANT);
+  });
+
+  it("creates into the personal tenant with no selection, even when a team membership is older", async () => {
+    // Joined to the team tenant first, so the "oldest membership" default would pick the team one.
+    tenantRepo.join("late-u", TENANT);
+    tenantRepo.join("late-u", FakeTenantRepo.tenantIdFor("late-u"));
+    rbacRepo.grant("late-u", TENANT, ["form.manage"]);
+
+    const p = await projects.create("late-u", { name: "Mine" });
+    expect(p.tenantId).toBe(FakeTenantRepo.tenantIdFor("late-u"));
+  });
+
+  it("still enforces editor+ in the selected workspace (viewer → 403)", async () => {
+    joinTenant("viewer-u", ["form.read"]);
+    await expect(projects.create("viewer-u", { name: "Nope" }, TENANT)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+});
+
 describe("MembersService (W5)", () => {
   it("lets the owner grant, change, and revoke a collaborator", async () => {
     const p = await projects.create(OWNER, { name: "P" });

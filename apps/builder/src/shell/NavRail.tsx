@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { UserMenu, useAuth } from "../auth";
 import { activeNavKey, visibleSections } from "./nav";
+import { TenantSwitcher } from "./TenantSwitcher";
 
 /** Icon per section key. Kept here (not in the pure `nav.ts`) so the catalog stays JSX-free. */
 const SECTION_ICONS: Record<string, ReactNode> = {
@@ -35,6 +36,7 @@ export function NavRail() {
         borderRight: "1px solid rgba(5, 5, 5, 0.06)",
       }}
     >
+      <TenantSwitcher />
       <Menu
         mode="inline"
         inlineCollapsed

@@ -24,6 +24,7 @@ import {
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { getActiveTenantId } from "../lib/activeTenant";
 import { buildOrgTree, useOrgUnits } from "../org-units";
 import { ShareDialog } from "./ShareDialog";
 import type { ProjectRecord } from "./types";
@@ -54,7 +55,13 @@ export function ProjectsPage() {
 
   // Workspaces the user may create a project in (B4: editor+ per their RBAC role in the tenant).
   const creatable = tenants.filter((t) => t.projectRole === "owner" || t.projectRole === "editor");
-  const defaultTenantId = (creatable.find((t) => t.personal) ?? creatable[0])?.id;
+  // Default to the workspace being viewed, so creating lands where the user is looking.
+  const activeTenantId = getActiveTenantId();
+  const defaultTenantId = (
+    creatable.find((t) => t.id === activeTenantId) ??
+    creatable.find((t) => t.personal) ??
+    creatable[0]
+  )?.id;
 
   async function onCreate() {
     if (!name.trim()) return;
@@ -62,8 +69,9 @@ export function ProjectsPage() {
       const target = creatable.find((t) => t.id === (tenantChoice ?? defaultTenantId));
       const project = await create({
         name: name.trim(),
-        // Personal is the server default — only send an explicit target for a team workspace.
-        ...(target && !target.personal ? { tenantId: target.id } : {}),
+        // Always explicit: the server's own default is the active workspace, which may differ from
+        // what the picker shows (e.g. picking "personal" while viewing a team workspace).
+        ...(target ? { tenantId: target.id } : {}),
         ...(orgChoice ? { orgUnitId: orgChoice } : {}),
       });
       setCreating(false);
