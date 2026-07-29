@@ -40,6 +40,29 @@ describe("buildZodSchema", () => {
     expect(Object.keys(clean)).toEqual(["name"]);
   });
 
+  it("validates a lookup as the picked record's scalar value", () => {
+    const fields: FormSchema["fields"] = [
+      {
+        type: "lookup",
+        name: "customer",
+        label: "Customer",
+        required: true,
+        dataSource: { url: "/api/customers", labelKey: "name", valueKey: "code" },
+      },
+    ];
+    const schema = buildZodSchema(form(fields));
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(schema.safeParse({ customer: "" }).success).toBe(false);
+    expect(schema.safeParse({ customer: "C1" }).success).toBe(true);
+  });
+
+  it("lets an optional lookup stay empty", () => {
+    const schema = buildZodSchema(
+      form([{ type: "lookup", name: "customer", label: "Customer" }]),
+    );
+    expect(schema.safeParse({}).success).toBe(true);
+  });
+
   it("does not validate a field hidden by visibleWhen=false", () => {
     const schema = buildZodSchema(
       form([

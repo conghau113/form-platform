@@ -27,6 +27,7 @@ import type {
 import { numberFormatProps } from "../internal/number-format.js";
 import { CascaderControl } from "./CascaderControl.js";
 import { CheckboxGroupControl } from "./CheckboxGroupControl.js";
+import { LookupControl } from "./LookupControl.js";
 import { SelectControl } from "./SelectControl.js";
 import { TreeSelectControl } from "./TreeSelectControl.js";
 
@@ -63,14 +64,27 @@ export function FieldControl(props: {
   depValues?: Record<string, unknown>;
   /** Options injected by a reaction `effect: "options"` (select/radio/checkbox-group). */
   optionsOverride?: ReactionOption[];
+  /** Write SEVERAL other fields at once (`lookup` Apply). Only threaded for the field
+   *  types that can write outside themselves; every other control ignores it. */
+  onApply?: (patch: Record<string, unknown>) => void;
   /** DOM id linking the control to its Form.Item label (htmlFor). */
   id?: string;
   /** The form's `settings.submitUrl`, used by `upload` to upload for real (otherwise files
    *  stay local). */
   submitUrl?: string;
 }) {
-  const { node, value, disabled, readOnly, onChange, depValues, optionsOverride, id, submitUrl } =
-    props;
+  const {
+    node,
+    value,
+    disabled,
+    readOnly,
+    onChange,
+    depValues,
+    optionsOverride,
+    onApply,
+    id,
+    submitUrl,
+  } = props;
   switch (node.type) {
     case "text":
       return (
@@ -202,6 +216,18 @@ export function FieldControl(props: {
           onChange={onChange}
           depValues={depValues}
           optionsOverride={optionsOverride}
+          id={id}
+        />
+      );
+    case "lookup":
+      return (
+        <LookupControl
+          node={node}
+          value={value}
+          disabled={disabled}
+          onChange={onChange}
+          onApply={onApply}
+          depValues={depValues}
           id={id}
         />
       );

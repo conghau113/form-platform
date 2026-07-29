@@ -603,10 +603,24 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
     // from inside a row reads the merged value (out of G4 scope to change — see plan risk #4).
     // Every option-sourced control (select/checkbox-group/cascader/tree-select) can
     // read options from a dependent dataSource.
-    const optionDs = isOptionSourced(node) ? node.dataSource : undefined;
+    // A `lookup` reads its RECORD list from the same remote shape, so it gates on the same
+    // dependency values even though it is not option-sourced.
+    const optionDs = isOptionSourced(node) || node.type === "lookup" ? node.dataSource : undefined;
     const depValues = optionDs
       ? Object.fromEntries(dataSourceDeps(optionDs).map((field) => [field, scopeValues[field]]))
       : undefined;
+    // Apply of a `lookup`: write SEVERAL sibling fields in one pass. `namePrefix` keeps the
+    // scope honest — inside an array row the targets resolve to that row's own cells
+    // (`array.{i}.{field}`), the same convention the reaction value-effects use above.
+    // Deliberately no `shouldValidate`: the form's validateTrigger decides when errors show,
+    // so autofilling must not paint errors on fields the user has not touched.
+    const applyValues =
+      node.type === "lookup"
+        ? (patch: Record<string, unknown>) => {
+            for (const [name, val] of Object.entries(patch))
+              setValue(`${namePrefix}${name}`, val, { shouldDirty: true });
+          }
+        : undefined;
     const fieldName = `${namePrefix}${node.name}`;
     // Non-blocking warning at this field's dotted path. An error always wins the
     // status + help slot; a warning shows antd's yellow state but never blocks.
@@ -646,6 +660,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                   onChange={field.onChange}
                   depValues={depValues}
                   optionsOverride={eff?.options}
+                  onApply={applyValues}
                   id={fieldName}
                   submitUrl={form.settings?.submitUrl}
                 />
@@ -665,6 +680,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                   onChange={field.onChange}
                   depValues={depValues}
                   optionsOverride={eff?.options}
+                  onApply={applyValues}
                   id={fieldName}
                   submitUrl={form.settings?.submitUrl}
                 />
@@ -678,6 +694,7 @@ export const FormRenderer = forwardRef<FormRendererHandle, FormRendererProps>(fu
                 onChange={field.onChange}
                 depValues={depValues}
                 optionsOverride={eff?.options}
+                onApply={applyValues}
                 id={fieldName}
                 submitUrl={form.settings?.submitUrl}
               />

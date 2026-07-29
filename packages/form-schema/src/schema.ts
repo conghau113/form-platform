@@ -373,6 +373,39 @@ export const selectFieldSchema = z.object({
   ...variantProp,
 });
 
+/** One column of the record table shown in a lookup's picker modal. `key` is the key
+ *  READ FROM the response row; `title` is the header text. */
+export const lookupColumnSchema = z.object({ key: z.string().min(1), title: z.string() });
+
+/** One Apply assignment of a lookup: take `from` out of the picked record and write it
+ *  into the field named `to`. Several entries = several fields filled from one pick —
+ *  the thing a `reaction` cannot express (it has a single target and a static value). */
+export const lookupMappingSchema = z.object({ from: z.string().min(1), to: z.string().min(1) });
+
+/** Record picker: the user opens a modal, picks one row from a remote list and Applies it.
+ *  The field itself stores the row's `valueKey` (like a select); `mapping` fills OTHER
+ *  fields from the same row. Additive: old JSON without it keeps parsing, so no formVersion
+ *  bump is required (same call as `display-text`). */
+export const lookupFieldSchema = z.object({
+  type: z.literal("lookup"),
+  ...commonFields,
+  /** Placeholder shown while nothing is picked. */
+  placeholder: z.string().optional(),
+  /** Show a clear (×) button. */
+  allowClear: z.boolean().optional(),
+  /** Where the records come from — the SAME remote shape a select uses (url + label/value
+   *  keys + dependency params + cache ttl). Optional so a freshly dropped, not-yet-configured
+   *  field still parses; the renderer disables the picker until a `url` is set. */
+  dataSource: selectDataSourceSchema.optional(),
+  /** Columns of the picker table. Absent ⇒ derived from labelKey/valueKey + every
+   *  `mapping[].from`, so a configured lookup is usable with no column authoring at all. */
+  columns: z.array(lookupColumnSchema).optional(),
+  /** Response key -> target field name assignments applied on Apply. */
+  mapping: z.array(lookupMappingSchema).optional(),
+  ...sizeProp,
+  ...variantProp,
+});
+
 /** Multi-select rendered as a group of checkboxes. Shares the option/dataSource shape
  *  with select (static `options` or a remote `dataSource`); value is an array of the
  *  chosen option values. */
@@ -591,6 +624,7 @@ export type LeafField =
   | z.infer<typeof textareaFieldSchema>
   | z.infer<typeof numberFieldSchema>
   | z.infer<typeof selectFieldSchema>
+  | z.infer<typeof lookupFieldSchema>
   | z.infer<typeof checkboxGroupFieldSchema>
   | z.infer<typeof cascaderFieldSchema>
   | z.infer<typeof treeSelectFieldSchema>
@@ -949,6 +983,7 @@ export const fieldNodeSchema: z.ZodType<FieldNode> = z.lazy(() =>
     textareaFieldSchema,
     numberFieldSchema,
     selectFieldSchema,
+    lookupFieldSchema,
     checkboxGroupFieldSchema,
     cascaderFieldSchema,
     treeSelectFieldSchema,

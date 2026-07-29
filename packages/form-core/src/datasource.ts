@@ -73,6 +73,25 @@ function mapRow(row: Record<string, unknown>, ds: SelectDataSource): DataSourceO
   return option;
 }
 
+/** One raw response row, with every key the endpoint returned. */
+export type DataSourceRow = Record<string, unknown>;
+
+/**
+ * Fetch the raw rows of a dataSource, keeping EVERY key of each row. Option consumers
+ * only need label/value (see `fetchDataSourceOptions`), but a record picker (`lookup`)
+ * maps other keys of the picked row onto other fields, so it needs the rows untouched.
+ * Throws on a non-ok response so callers can surface an error state.
+ */
+export async function fetchDataSourceRows(
+  ds: SelectDataSource,
+  values: Record<string, unknown>,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DataSourceRow[]> {
+  const res = await fetchImpl(buildDataSourceUrl(ds, values));
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return (await res.json()) as DataSourceRow[];
+}
+
 /**
  * Fetch and normalize remote select options. Maps each row via the dataSource's
  * `labelKey`/`valueKey`; a `childrenKey` maps rows recursively into a tree (for
@@ -85,8 +104,6 @@ export async function fetchDataSourceOptions(
   values: Record<string, unknown>,
   fetchImpl: typeof fetch = fetch,
 ): Promise<DataSourceOption[]> {
-  const res = await fetchImpl(buildDataSourceUrl(ds, values));
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  const rows = (await res.json()) as Array<Record<string, unknown>>;
+  const rows = await fetchDataSourceRows(ds, values, fetchImpl);
   return rows.map((row) => mapRow(row, ds));
 }

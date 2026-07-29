@@ -23,6 +23,9 @@ export type SelectField = Extract<LeafField, { type: "select" }>;
 export type CheckboxGroupField = Extract<LeafField, { type: "checkbox-group" }>;
 export type CascaderField = Extract<LeafField, { type: "cascader" }>;
 export type TreeSelectField = Extract<LeafField, { type: "tree-select" }>;
+/** Record picker. It sources RECORDS (not options) from a `dataSource`, so it is
+ *  deliberately NOT part of `OptionSourced` — no static options, no options override. */
+export type LookupField = Extract<LeafField, { type: "lookup" }>;
 /** A field that sources options from static `options` or a remote `dataSource`. */
 export type OptionSourced = SelectField | CheckboxGroupField | CascaderField | TreeSelectField;
 export type OptionList =

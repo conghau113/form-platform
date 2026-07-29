@@ -4,6 +4,7 @@ import {
   dataSourceDeps,
   dataSourceReady,
   fetchDataSourceOptions,
+  fetchDataSourceRows,
   type SelectDataSource,
 } from "./datasource.js";
 
@@ -154,6 +155,44 @@ describe("fetchDataSourceOptions", () => {
     } as Response);
 
     await expect(fetchDataSourceOptions(countries, {}, fetchImpl)).rejects.toThrow(
+      "Request failed (500)",
+    );
+  });
+});
+
+describe("fetchDataSourceRows", () => {
+  it("keeps every key of every row (a record picker maps the other columns)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([{ name: "Vietnam", code: "VN", currency: "VND" }]),
+    } as Response);
+
+    const rows = await fetchDataSourceRows(countries, {}, fetchImpl);
+
+    expect(rows).toEqual([{ name: "Vietnam", code: "VN", currency: "VND" }]);
+  });
+
+  it("builds the same dependency-aware url as the options fetch", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([]),
+    } as Response);
+
+    await fetchDataSourceRows(cities, { country: "VN" }, fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledWith("https://api.test/cities?country=VN");
+  });
+
+  it("throws on a non-ok response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve(null),
+    } as Response);
+
+    await expect(fetchDataSourceRows(countries, {}, fetchImpl)).rejects.toThrow(
       "Request failed (500)",
     );
   });

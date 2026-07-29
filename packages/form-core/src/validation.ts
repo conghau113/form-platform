@@ -186,6 +186,12 @@ function leafZodWith(
       }
       return required ? value.refine((v) => v !== "" && v != null, requiredMsg) : value.optional();
     }
+    case "lookup": {
+      // The picked record's `valueKey` — one scalar, exactly like a single select.
+      // What the pick writes into OTHER fields is validated by those fields' own rules.
+      const value = z.union([z.string(), z.number()]);
+      return required ? value.refine((v) => v !== "" && v != null, requiredMsg) : value.optional();
+    }
     case "checkbox":
     case "switch": {
       const b = z.boolean();

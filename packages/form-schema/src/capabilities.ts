@@ -72,6 +72,11 @@ export const FIELD_CAPABILITIES: readonly FieldCapability[] = [
   INPUT("number", "number", "Numeric input with optional min/max/step and display format."),
   INPUT("password", "string", "Masked single-line text input."),
   INPUT("select", "string", "Dropdown picking one option (or many with multiple).", true),
+  INPUT(
+    "lookup",
+    "string",
+    "Pick one record in a modal. Needs a `dataSource` (url + labelKey + valueKey) and a `mapping` of response keys to other field names, which Apply fills in; the field itself stores the record's valueKey.",
+  ),
   INPUT("radio", "string", "Choose exactly one option from a visible set.", true),
   INPUT("checkbox-group", "string[]", "Choose any number of options.", true),
   INPUT("checkbox", "boolean", "A single on/off checkbox."),

@@ -24,6 +24,73 @@ describe("schema field types", () => {
     expect(out.fields[0]).toMatchObject({ type: "textarea", rows: 5 });
   });
 
+  // A lookup is a purely ADDITIVE union member: a v3 document carrying one parses as-is,
+  // which is why Phase F adds no migration and does not bump CURRENT_FORM_VERSION.
+  it("accepts a lookup field alongside v3 fields (additive type, no version bump)", () => {
+    const doc = {
+      formVersion: 3,
+      id: "with-lookup",
+      title: "With lookup",
+      fields: [
+        {
+          type: "lookup",
+          name: "customer",
+          label: "Customer",
+          placeholder: "Pick a customer",
+          allowClear: true,
+          dataSource: { url: "/api/customers", labelKey: "name", valueKey: "code", ttlMs: 60000 },
+          columns: [
+            { key: "code", title: "Code" },
+            { key: "name", title: "Name" },
+          ],
+          mapping: [
+            { from: "taxCode", to: "taxCode" },
+            { from: "address", to: "address" },
+          ],
+        },
+        { type: "text", name: "taxCode", label: "Tax code" },
+        { type: "text", name: "address", label: "Address" },
+      ],
+    };
+    const out = formSchema.parse(doc);
+    expect(out.formVersion).toBe(3);
+    expect(out.fields[0]).toMatchObject({
+      type: "lookup",
+      mapping: [
+        { from: "taxCode", to: "taxCode" },
+        { from: "address", to: "address" },
+      ],
+    });
+  });
+
+  it("accepts a lookup with no dataSource yet (freshly dropped from the palette)", () => {
+    const doc = {
+      formVersion: 3,
+      id: "bare-lookup",
+      title: "Bare lookup",
+      fields: [{ type: "lookup", name: "lookup1", label: "Lookup" }],
+    };
+    expect(() => formSchema.parse(doc)).not.toThrow();
+  });
+
+  it("rejects a lookup mapping missing its target field", () => {
+    const doc = {
+      formVersion: 3,
+      id: "bad-lookup",
+      title: "Bad lookup",
+      fields: [
+        {
+          type: "lookup",
+          name: "customer",
+          label: "Customer",
+          dataSource: { url: "/api/customers", labelKey: "name", valueKey: "code" },
+          mapping: [{ from: "taxCode" }],
+        },
+      ],
+    };
+    expect(() => formSchema.parse(doc)).toThrow();
+  });
+
   it("accepts the readOnly/readPretty pattern flags and a required reaction effect (additive)", () => {
     const doc = {
       formVersion: 3,
