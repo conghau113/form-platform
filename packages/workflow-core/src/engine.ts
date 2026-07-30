@@ -29,13 +29,21 @@ export type AdvanceResult =
  * instance; it never mutates its inputs.
  */
 
-/** Start a fresh instance at the definition's `start` node, pinning the version. */
+/**
+ * Start a fresh instance at the definition's `start` node, pinning the version.
+ *
+ * A generated id is `<definition>-<millis>-<random>`. The random part is NOT decoration: the
+ * timestamp alone repeats for two cases started on the same workflow within the same millisecond,
+ * and a store that writes by id (the API upserts) would then silently overwrite one case with the
+ * other. `crypto.randomUUID` is available in every runtime this package targets (browsers and
+ * Node >= 18).
+ */
 export function createInstance(
   def: WorkflowDefinition,
   opts: { id?: string; data?: Record<string, unknown> } = {},
 ): WorkflowInstance {
   return {
-    id: opts.id ?? `${def.id}-${Date.now()}`,
+    id: opts.id ?? `${def.id}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
     definitionId: def.id,
     definitionVersion: def.workflowVersion,
     current: def.start,

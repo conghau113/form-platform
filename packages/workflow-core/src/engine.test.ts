@@ -1,5 +1,5 @@
 import type { WorkflowDefinition } from "@org/workflow-schema";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { advance, availableTransitions, createInstance } from "./index.js";
 
 // created --submit--> inprogress --approve(role:manager, guard:approved==true)--> done
@@ -33,6 +33,26 @@ describe("createInstance", () => {
     expect(inst.definitionId).toBe("wf");
     expect(inst.definitionVersion).toBe(1);
     expect(inst.history).toEqual([]);
+  });
+
+  it("generates distinct ids for cases started in the SAME millisecond", () => {
+    // The clock is frozen so both calls see one timestamp — the case a store that writes by id
+    // (the API upserts) used to collapse into a single overwritten case.
+    vi.useFakeTimers();
+    try {
+      const a = createInstance(def);
+      const b = createInstance(def);
+      // Both ids carry the same frozen timestamp — proof the clock really did not move — yet differ.
+      expect(a.id).toMatch(new RegExp(`^wf-${Date.now()}-`));
+      expect(b.id).toMatch(new RegExp(`^wf-${Date.now()}-`));
+      expect(a.id).not.toBe(b.id);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a caller-supplied id exactly as given", () => {
+    expect(createInstance(def, { id: "case-1" }).id).toBe("case-1");
   });
 });
 

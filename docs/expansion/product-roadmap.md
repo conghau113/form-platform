@@ -628,6 +628,21 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
 >   run-view gate bằng `workflow.run` cấp tenant, KHÔNG phải verdict per-project ⇒ vẫn có thể ăn 403 (tính
 >   chất sẵn có từ E1 với nút "Nhận việc") · xoá case song song lúc PATCH cho 500 (Prisma P2025), như `assign`.
 
+> **🔴 SỬA BUG CÓ SẴN — id case trùng nhau (2026-07-31).** Không thuộc E1/E2, phát hiện khi viết test E2.
+> `createInstance` (`packages/workflow-core/src/engine.ts`) sinh id `<workflow>-<millis>`, mà
+> `WorkflowInstanceRepo.upsert` ghi **theo id** ⇒ hai case tạo trên cùng workflow trong **cùng một
+> millisecond** nhận đúng một id và case sau **đè im lặng** lên case trước (mất trắng, không lỗi).
+> - **Sửa:** id sinh ra nay là `<workflow>-<millis>-<random>` (`crypto.randomUUID().slice(0, 8)`, có sẵn ở
+>   cả trình duyệt lẫn Node ≥ 18 nên `workflow-core` vẫn thuần, không import `node:`). Id do client tự
+>   truyền **giữ nguyên**; không chỗ nào trong repo phân tích/sắp xếp theo hình dạng id ⇒ dữ liệu cũ an toàn.
+> - **Test hồi quy 2 tầng** (cả hai đã được xác minh là **ĐỎ trên code cũ**): `engine.test.ts` đóng băng đồng
+>   hồ rồi tạo 2 instance (2 id khác nhau, cùng mốc thời gian) · `workflow-instances.service.test.ts` tạo 2
+>   case trong cùng millisecond rồi đòi `list()` trả về **2** — chính hành vi mất dữ liệu ở trên.
+> - Changeset `workflow-instance-id-collision.md` (**patch** cho `@org/workflow-core`).
+> - **Còn lại (cố ý, ngoài phạm vi):** `start()` vẫn ghi bằng `upsert`, nên nếu id có trùng thì vẫn là đè
+>   chứ không phải lỗi; muốn kín tuyệt đối thì dùng `create` cho case mới, hoặc mở rộng chốt 409 ở
+>   `workflow-instances.service.ts:100` (đang chỉ áp khi client tự truyền id) sang cả id tự sinh.
+
 ### Phase F — Form nâng cao (mẫu EVN: trường phụ thuộc, modal-chọn→apply→autofill)
 - Nhiều đã có: **conditions** (JSONLogic ẩn/hiện), **reactions** (trường phụ thuộc giá trị nhau),
   **datasource** (options remote/tree). → phase này **mở rộng**, không làm lại.

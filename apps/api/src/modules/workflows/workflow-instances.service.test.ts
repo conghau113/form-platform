@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { CURRENT_FORM_VERSION, type FormSchema } from "@org/form-schema";
 import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuditEntry } from "../../persistence/repositories/audit.repo.js";
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
 import type { CaseCommentRecord } from "../../persistence/repositories/case-comment.repo.js";
@@ -448,6 +448,21 @@ describe("WorkflowInstancesService", () => {
     await expect(service.load(OWNER, instance.id)).resolves.toMatchObject({ current: "draft" });
   });
 
+  it("keeps two cases started in the SAME millisecond apart (no silent overwrite)", async () => {
+    await seedWorkflow();
+    vi.useFakeTimers();
+    try {
+      // `upsert` writes by id, so a generated id that repeats does not fail — it REPLACES the case
+      // started a moment earlier, losing it without a word.
+      const a = await service.start(OWNER, "wf1", { data: { applicant: "Mai" } });
+      const b = await service.start(OWNER, "wf1", { data: { applicant: "Nam" } });
+      expect(a.id).not.toBe(b.id);
+      await expect(service.list(OWNER, "wf1")).resolves.toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("seeds case data on start", async () => {
     await seedWorkflow();
     const instance = await service.start(OWNER, "wf1", { data: { applicant: "Mai" } });
@@ -789,8 +804,7 @@ describe("CaseCommentsService (Phase E2)", () => {
 
   it("scopes the thread to its own case", async () => {
     await seedWorkflow();
-    // Explicit ids: `createInstance` derives one from `Date.now()`, so two cases of the same workflow
-    // started in the same millisecond would BE the same case.
+    // Explicit ids purely so the two cases read as distinct below.
     const a = await service.start(OWNER, "wf1", { id: "case-a" });
     const b = await service.start(OWNER, "wf1", { id: "case-b" });
     await comments.add(OWNER, a.id, "về case A");
