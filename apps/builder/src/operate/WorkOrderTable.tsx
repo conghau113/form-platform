@@ -1,9 +1,11 @@
 import type { StatusKind } from "@org/workflow-schema";
-import { Button, Select, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, DatePicker, Select, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { KIND_COLOR } from "../workflow/status-catalog";
 import type { AssigneeOption, WorkOrderRow } from "./client";
+import { isOverdue, PRIORITY_OPTIONS } from "./priority";
 import { applySort, type WorkOrderQueryState } from "./work-order-query";
 
 const { Text } = Typography;
@@ -48,6 +50,7 @@ export function WorkOrderTable({
   assignees,
   onState,
   onAssign,
+  onUpdate,
 }: {
   rows: WorkOrderRow[];
   total: number;
@@ -56,6 +59,7 @@ export function WorkOrderTable({
   assignees: AssigneeOption[];
   onState: (next: WorkOrderQueryState) => void;
   onAssign: (row: WorkOrderRow, assigneeId: string | null) => void;
+  onUpdate: (row: WorkOrderRow, patch: { dueAt?: string | null; priority?: number }) => void;
 }) {
   const navigate = useNavigate();
   const sortOrder = (field: string) =>
@@ -102,6 +106,53 @@ export function WorkOrderTable({
         </Tooltip>
       ),
     },
+    {
+      title: "Ưu tiên",
+      dataIndex: "priority",
+      width: 130,
+      sorter: true,
+      // Urgency sorts numerically, so the default first click (ascend) would open with "Thấp" — the
+      // opposite of what a queue is for. Most urgent first.
+      sortDirections: ["descend", "ascend"],
+      sortOrder: sortOrder("priority"),
+      render: (priority: number, row) => (
+        <Tooltip title={row.canRun ? undefined : "Bạn chỉ có quyền xem việc này"}>
+          <Select
+            size="small"
+            style={{ width: "100%" }}
+            disabled={!row.canRun}
+            value={priority}
+            onChange={(next) => onUpdate(row, { priority: next })}
+            options={PRIORITY_OPTIONS}
+          />
+        </Tooltip>
+      ),
+    },
+    {
+      title: "Hạn xử lý",
+      dataIndex: "dueAt",
+      width: 165,
+      sorter: true,
+      sortOrder: sortOrder("dueAt"),
+      render: (dueAt: string | null, row) => (
+        <Tooltip title={row.canRun ? undefined : "Bạn chỉ có quyền xem việc này"}>
+          <DatePicker
+            size="small"
+            style={{ width: "100%" }}
+            disabled={!row.canRun}
+            showTime={{ format: "HH:mm" }}
+            format="DD/MM/YYYY HH:mm"
+            placeholder="Chưa đặt"
+            // Red only while it still matters: a finished case past its date is not "late".
+            status={isOverdue(dueAt, row.statusKind) ? "error" : undefined}
+            value={dueAt ? dayjs(dueAt) : null}
+            // `toISOString()` is what the server demands — an instant WITH a timezone, so the same
+            // deadline means the same moment wherever the api runs.
+            onChange={(next) => onUpdate(row, { dueAt: next ? next.toISOString() : null })}
+          />
+        </Tooltip>
+      ),
+    },
     { title: "Dự án", dataIndex: "projectName", ellipsis: true },
     {
       title: "Cập nhật",
@@ -135,7 +186,7 @@ export function WorkOrderTable({
       loading={loading}
       columns={columns}
       dataSource={rows}
-      scroll={{ x: 900 }}
+      scroll={{ x: 1200 }}
       pagination={{
         current: state.page,
         pageSize: state.pageSize,

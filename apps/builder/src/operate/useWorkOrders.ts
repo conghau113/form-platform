@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { qk } from "../query";
-import type { AssigneeOption, RunnableWorkflow, WorkOrderPage } from "./client";
+import type { AssigneeOption, CaseComment, RunnableWorkflow, WorkOrderPage } from "./client";
 import * as api from "./client";
 import { type WorkOrderQueryState, workOrderSearch } from "./work-order-query";
 
@@ -86,4 +86,57 @@ export function useAssignCase(): (input: {
     },
   });
   return (input) => assign.mutateAsync(input);
+}
+
+/**
+ * Set a case's deadline / urgency (Phase E2). Invalidates the same keys as assignment: every cached
+ * page can hold the row, and the workflow's own case list shows it too.
+ */
+export function useUpdateWorkOrder(): (input: {
+  instanceId: string;
+  patch: { dueAt?: string | null; priority?: number };
+  workflowId?: string;
+}) => Promise<void> {
+  const qc = useQueryClient();
+  const update = useMutation({
+    mutationFn: (input: {
+      instanceId: string;
+      patch: { dueAt?: string | null; priority?: number };
+      workflowId?: string;
+    }) => api.updateWorkOrder(input.instanceId, input.patch),
+    onSuccess: (_data, input) => {
+      qc.invalidateQueries({ queryKey: qk.workOrderPages });
+      if (input.workflowId) qc.invalidateQueries({ queryKey: qk.instances(input.workflowId) });
+    },
+  });
+  return (input) => update.mutateAsync(input);
+}
+
+/** A case's comment thread. Reading only needs `viewer`, so every case reader may fetch it. */
+export function useCaseComments(instanceId: string): {
+  comments: CaseComment[];
+  loading: boolean;
+  error: string | null;
+} {
+  const query = useQuery({
+    queryKey: qk.caseComments(instanceId),
+    queryFn: () => api.listCaseComments(instanceId),
+  });
+  return {
+    comments: query.data ?? [],
+    loading: query.isPending,
+    error: query.error ? (query.error as Error).message : null,
+  };
+}
+
+/** Post a comment; rejects with the server's message (a viewer is refused with 403). */
+export function useAddCaseComment(instanceId: string): (body: string) => Promise<void> {
+  const qc = useQueryClient();
+  const add = useMutation({
+    mutationFn: (body: string) => api.addCaseComment(instanceId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.caseComments(instanceId) }),
+  });
+  return async (body) => {
+    await add.mutateAsync(body);
+  };
 }

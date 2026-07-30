@@ -70,6 +70,10 @@ export interface WorkflowInstanceSummary {
   /** The current node's human status + engine kind, snapshotted at the last write (Phase E). */
   statusLabel: string | null;
   statusKind: string | null;
+  /** Deadline as an ISO instant, or null when none was set (Phase E2). */
+  dueAt: string | null;
+  /** Urgency (Phase E2): 1 = low, 2 = normal, 3 = high. */
+  priority: number;
   createdAt: string;
   updatedAt: string;
 }

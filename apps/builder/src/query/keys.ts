@@ -27,6 +27,8 @@ export const qk = {
   workOrders: (search: string) => ["work-orders", "list", search] as const,
   workOrderAssignees: ["work-orders", "assignees"] as const,
   workOrderWorkflows: ["work-orders", "workflows"] as const,
+  /** One case's comment thread (Phase E2) — keyed by case, not by the work-order list query. */
+  caseComments: (instanceId: string) => ["case-comments", instanceId] as const,
   // The caller's tenant org-unit tree (C3): powers the org-units admin panel, role data-scope
   // editor, and the project placement picker.
   orgUnits: ["org-units"] as const,

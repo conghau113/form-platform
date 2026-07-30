@@ -22,6 +22,10 @@ export interface WorkOrderRow {
   statusLabel: string | null;
   /** Engine category of the current node — `start` | `normal` | `end`. */
   statusKind: string | null;
+  /** Deadline as an ISO instant, or null when none was set (Phase E2). */
+  dueAt: string | null;
+  /** Urgency (Phase E2): 1 = low, 2 = normal, 3 = high. */
+  priority: number;
   createdAt: string;
   updatedAt: string;
   workflowTitle: string;
@@ -52,6 +56,16 @@ export interface RunnableWorkflow {
   title: string;
   status: string | null;
   updatedAt: string;
+}
+
+/** One note on a case (Phase E2). `authorName` is what the server snapshotted when it was written. */
+export interface CaseComment {
+  id: string;
+  instanceId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
 }
 
 async function readError(res: Response): Promise<string> {
@@ -93,4 +107,49 @@ export async function assignCase(instanceId: string, assigneeId: string | null):
     },
   );
   if (!res.ok) throw new Error(`Giao việc thất bại: ${await readError(res)}`);
+}
+
+/**
+ * Set a case's deadline and/or urgency. Only the keys passed are written — `dueAt: null` clears the
+ * deadline, an absent key leaves that attribute alone. `dueAt` must be an ISO instant WITH a
+ * timezone (the server refuses offset-less values, which would otherwise mean different instants on
+ * different machines); `Date.toISOString()` produces exactly that.
+ */
+export async function updateWorkOrder(
+  instanceId: string,
+  patch: { dueAt?: string | null; priority?: number },
+): Promise<void> {
+  const res = await apiFetch(
+    `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/work-order`,
+    {
+      method: "PATCH",
+      headers: { ...ownerHeaders(), "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+  );
+  if (!res.ok) throw new Error(`Cập nhật việc thất bại: ${await readError(res)}`);
+}
+
+/** A case's comment thread, oldest first. Reading only needs `viewer` on the project. */
+export async function listCaseComments(instanceId: string): Promise<CaseComment[]> {
+  const res = await apiFetch(
+    `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/comments`,
+    { headers: ownerHeaders() },
+  );
+  if (!res.ok) throw new Error(`Tải bình luận thất bại: ${await readError(res)}`);
+  return (await res.json()) as CaseComment[];
+}
+
+/** Append a comment — the server requires run access, so a viewer gets a 403 here. */
+export async function addCaseComment(instanceId: string, body: string): Promise<CaseComment> {
+  const res = await apiFetch(
+    `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/comments`,
+    {
+      method: "POST",
+      headers: { ...ownerHeaders(), "content-type": "application/json" },
+      body: JSON.stringify({ body }),
+    },
+  );
+  if (!res.ok) throw new Error(`Gửi bình luận thất bại: ${await readError(res)}`);
+  return (await res.json()) as CaseComment;
 }

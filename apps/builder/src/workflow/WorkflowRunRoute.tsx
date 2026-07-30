@@ -6,6 +6,7 @@ import {
   App as AntApp,
   Button,
   Card,
+  DatePicker,
   Empty,
   Segmented,
   Select,
@@ -15,12 +16,21 @@ import {
   Timeline,
   Typography,
 } from "antd";
+import dayjs from "dayjs";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { hasFunction, useAuth } from "../auth";
-// Submodule import (not the barrel): the Run view wants the two work-order hooks, not the whole
-// Operate screen pulled into this chunk.
-import { useAssignCase, useAssignees } from "../operate/useWorkOrders";
+// Submodule imports (not the barrel): the Run view wants the work-order hooks + the comment thread,
+// not the whole Operate screen pulled into this chunk.
+import { CaseComments } from "../operate/CaseComments";
+import {
+  isOverdue,
+  PRIORITY_COLOR,
+  PRIORITY_NORMAL,
+  PRIORITY_OPTIONS,
+  priorityLabel,
+} from "../operate/priority";
+import { useAssignCase, useAssignees, useUpdateWorkOrder } from "../operate/useWorkOrders";
 import { actionLabel, isTerminalState, runActions } from "./run-actions";
 import { workflowRoles } from "./run-roles";
 import { indexStatusCatalog, resolveStatusStyle, useStatusCatalog } from "./status-catalog";
@@ -285,9 +295,10 @@ function CaseRunner({
   const { user, functions } = useAuth();
   const canSeeMembers = hasFunction(functions, "workflow.run");
   const { nameOf } = useAssignees(canSeeMembers);
-  const { instances } = useWorkflowInstances(workflowId);
+  const { instances, loading: summaryLoading } = useWorkflowInstances(workflowId);
   const summary = instances.find((i) => i.id === instanceId);
   const assign = useAssignCase();
+  const updateWorkOrder = useUpdateWorkOrder();
   const [assigning, setAssigning] = useState(false);
 
   const claim = async (assigneeId: string | null) => {
@@ -299,6 +310,15 @@ function CaseRunner({
       message.error((e as Error).message);
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const patchWorkOrder = async (patch: { dueAt?: string | null; priority?: number }) => {
+    try {
+      await updateWorkOrder({ instanceId, patch, workflowId });
+      message.success("Đã cập nhật việc");
+    } catch (e) {
+      message.error((e as Error).message);
     }
   };
 
@@ -416,6 +436,52 @@ function CaseRunner({
             ))}
         </Space>
 
+        {/* Phase E2: the same two work-order attributes the Vận hành table edits inline. Gated like
+            the claim button above — and, like it, the tenant-level `workflow.run` is not the exact
+            per-project verdict, so a scoped-away grant can still meet a 403 on save. */}
+        <Space size="small" wrap>
+          <Text type="secondary">Ưu tiên:</Text>
+          {/* While the summary is still loading, `summary` is undefined — showing the defaults would
+              state "Bình thường / Chưa đặt" as fact and then flip once the data lands. */}
+          {summaryLoading ? (
+            <Spin size="small" />
+          ) : canSeeMembers ? (
+            <Select
+              size="small"
+              style={{ width: 140 }}
+              value={summary?.priority ?? PRIORITY_NORMAL}
+              onChange={(priority) => void patchWorkOrder({ priority })}
+              options={PRIORITY_OPTIONS}
+            />
+          ) : (
+            <Tag color={PRIORITY_COLOR[summary?.priority ?? PRIORITY_NORMAL]}>
+              {priorityLabel(summary?.priority ?? PRIORITY_NORMAL)}
+            </Tag>
+          )}
+          <Text type="secondary">Hạn xử lý:</Text>
+          {summaryLoading ? (
+            <Spin size="small" />
+          ) : canSeeMembers ? (
+            <DatePicker
+              size="small"
+              showTime={{ format: "HH:mm" }}
+              format="DD/MM/YYYY HH:mm"
+              placeholder="Chưa đặt"
+              status={
+                isOverdue(summary?.dueAt ?? null, summary?.statusKind ?? null) ? "error" : undefined
+              }
+              value={summary?.dueAt ? dayjs(summary.dueAt) : null}
+              onChange={(next) => void patchWorkOrder({ dueAt: next ? next.toISOString() : null })}
+            />
+          ) : summary?.dueAt ? (
+            <Text type={isOverdue(summary.dueAt, summary.statusKind) ? "danger" : undefined}>
+              {new Date(summary.dueAt).toLocaleString()}
+            </Text>
+          ) : (
+            <Tag>Chưa đặt</Tag>
+          )}
+        </Space>
+
         <Card size="small">
           {node?.formId ? (
             formLoading ? (
@@ -487,6 +553,12 @@ function CaseRunner({
               }))}
             />
           )}
+        </Card>
+
+        {/* Phase E2. Reading a thread only needs `viewer`, so this renders for every case reader;
+            only the composer is gated, matching the server. */}
+        <Card size="small">
+          <CaseComments instanceId={instanceId} canWrite={canSeeMembers} />
         </Card>
       </Space>
     </div>

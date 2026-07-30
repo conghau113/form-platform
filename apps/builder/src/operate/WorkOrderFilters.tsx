@@ -1,6 +1,7 @@
 import { Input, Select, Space } from "antd";
 import { useWorkflow } from "../workflow/useWorkflows";
 import type { AssigneeOption, RunnableWorkflow } from "./client";
+import { PRIORITY_OPTIONS } from "./priority";
 import type { WorkOrderFilters as Filters, WorkOrderQueryState } from "./work-order-query";
 
 /** Engine categories the server can filter on — mirrors `@IsIn(["start","normal","end"])` in the
@@ -71,6 +72,24 @@ export function WorkOrderFilters({
           { value: "none", label: "Chưa giao" },
           ...assignees.map((a) => ({ value: a.id, label: a.displayName || a.email })),
         ]}
+      />
+      <Select
+        allowClear
+        placeholder="Ưu tiên"
+        style={{ width: 150 }}
+        value={state.priority}
+        onChange={(priority) => onChange({ priority })}
+        options={PRIORITY_OPTIONS}
+      />
+      <Select
+        allowClear
+        placeholder="Hạn xử lý"
+        style={{ width: 150 }}
+        value={state.overdue ? "overdue" : undefined}
+        // One option, not a yes/no pair: "not overdue" is not a queue anyone works from, and the
+        // server reads the flag as an opt-in.
+        onChange={(v) => onChange({ overdue: v === "overdue" ? true : undefined })}
+        options={[{ value: "overdue", label: "Quá hạn" }]}
       />
       <Input.Search
         allowClear

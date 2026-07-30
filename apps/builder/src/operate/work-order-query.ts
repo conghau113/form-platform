@@ -7,8 +7,9 @@
  */
 
 /** Columns the server can sort by — mirrors `WORK_ORDER_SORTS` in the api's
- *  `list-work-orders.dto.ts`. `label` is deliberately absent there: it is often null. */
-export const WORK_ORDER_SORTS = ["updatedAt", "createdAt", "current"] as const;
+ *  `list-work-orders.dto.ts`. `label` is deliberately absent there: it is often null. `dueAt` IS
+ *  sortable even though it is nullable — the server pins undated cases last, both directions. */
+export const WORK_ORDER_SORTS = ["updatedAt", "createdAt", "current", "dueAt", "priority"] as const;
 export type WorkOrderSort = (typeof WORK_ORDER_SORTS)[number];
 
 /** The filter half of the query — everything the user can narrow the list by. */
@@ -22,6 +23,10 @@ export interface WorkOrderFilters {
   assignee?: string;
   /** Case-insensitive substring of the case label. */
   q?: string;
+  /** Urgency: 1 = low, 2 = normal, 3 = high. */
+  priority?: number;
+  /** Only cases past their deadline and not finished. Never sent as `false` — see below. */
+  overdue?: boolean;
 }
 
 export interface WorkOrderQueryState extends WorkOrderFilters {
@@ -52,6 +57,11 @@ export function workOrderSearch(state: WorkOrderQueryState): string {
   if (state.assignee) params.set("assignee", state.assignee);
   const q = state.q?.trim();
   if (q) params.set("q", q);
+  if (state.priority) params.set("priority", String(state.priority));
+  // Only ever sent when ON: the server reads `overdue` as an opt-in and rejects anything that is not
+  // the literal `true`/`false`, and "not filtering" must produce the same key-set as never having
+  // touched the control — otherwise two equivalent states would cache separately.
+  if (state.overdue) params.set("overdue", "true");
   params.set("page", String(state.page));
   params.set("pageSize", String(state.pageSize));
   params.set("sort", state.sort);

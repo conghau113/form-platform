@@ -577,12 +577,56 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
 >   (kèm giao luôn) → mở case: Người phụ trách + lịch sử có tên + Nhận việc/Bỏ nhận → console sạch) ·
 >   subagent `reviewer` (2 finding `required` đã sửa: đổi quy trình giữ lại trạng thái node cũ ⇒ list rỗng
 >   vĩnh viễn; nút "Nhận việc" hiện cho người chắc chắn bị 403).
-> - **⚠️ Known-gap (CỐ Ý hoãn):** chưa có due-date/priority/bình luận · **1 người phụ trách** (không phải
+> - **⚠️ Known-gap (CỐ Ý hoãn):** ~~chưa có due-date/priority/bình luận~~ (đã đóng ở **E2** bên dưới) ·
+>   **1 người phụ trách** (không phải
 >   nhiều vai trò kiểu `ticket_role_values` của EVN) · gán chỉ kiểm người nhận là member tenant (không kiểm
 >   họ có quyền trên project) · thông báo chỉ qua email (chưa in-app) · **field gated nằm trong row của
 >   array có thể bị mất khi client echo lại cả mảng** (merge nông ở engine) · trang Vận hành luôn thuộc
 >   **một** workspace (khác `/projects` vốn union khi chưa chọn) · `transition.role` vẫn là gap WF4 (caller
 >   tự khai roles) — biên thật là `requireRunAccess`.
+
+> **✅ ĐÃ LÀM (2026-07-30) — E2 "làm dày work-order": hạn xử lý · độ ưu tiên · bình luận.**
+> Owner chốt: sửa **tại chỗ trên bảng Vận hành + run-view** (không thêm màn hình) · ưu tiên **3 mức**
+> (Thấp/Bình thường/Cao) · bình luận **ĐỌC = `viewer`, VIẾT = quyền chạy case** · **KHÔNG thêm email**.
+> - **Schema:** `WorkflowInstanceRecord.dueAt/priority` + bảng `WorkflowInstanceComment`
+>   (migration `20260731000000_add_work_order_e2`, `priority` NOT NULL DEFAULT 2 nên hàng cũ tự có giá trị).
+>   `priority` là **INT** vì bảng sort server-side theo cột này — `low|normal|high` sắp theo alphabet là vô
+>   nghĩa và Prisma `orderBy` không nhận biểu thức CASE.
+> - **Luật sở hữu cột (quan trọng):** hai cột mới nằm NGOÀI `WorkflowInstanceMeta`, do `setWorkOrderFields`
+>   ghi riêng — y như `assigneeId`. Chạy/advance case KHÔNG bao giờ xoá hạn hay ưu tiên (có test hồi quy).
+> - **Hai cái bẫy đã xử lý:** (1) lọc **quá hạn** phải viết rõ nhánh NULL — `statusKind` nullable với case
+>   trước Phase E, mà `statusKind <> 'end'` trong SQL loại luôn NULL ⇒ việc quá hạn cũ sẽ mất tích;
+>   (2) sort theo `dueAt` **ghim NULL xuống cuối ở CẢ hai chiều** (Postgres mặc định để NULL lên đầu khi
+>   DESC ⇒ "hạn xa nhất trước" lại mở đầu bằng toàn việc không có hạn).
+> - **Bình luận:** `authorName` chụp lúc ghi, `authorId` không FK — cùng lý lẽ `AuditLog` (sống lâu hơn tài
+>   khoản) và `label`/`statusLabel`. Nội dung bình luận **không** vào audit trail (chỉ `commentId`).
+> - **API:** `PATCH /workflow-instances/:id/work-order` (hậu tố `/work-order` cố ý: route trần dễ bị đọc là
+>   "patch chính case", tức state của engine, thứ endpoint này không đụng tới) · `GET|POST
+>   /workflow-instances/:id/comments` · list thêm filter `priority`/`overdue` + sort `dueAt`/`priority`.
+> - **Builder:** 2 cột sửa tại chỗ trên bảng Vận hành (khoá theo `canRun` như cột Người xử lý, ngày quá hạn
+>   tô đỏ **chỉ khi case còn mở**) · 2 bộ lọc mới · `operate/priority.ts` là **nơi duy nhất** biết số→nhãn/màu ·
+>   `operate/CaseComments.tsx` gắn vào run-view dưới Lịch sử · thêm dep `dayjs` (API `DatePicker` của antd
+>   chính là dayjs; luật peerDeps chỉ áp cho renderer, không áp cho app).
+> - **2 lỗ hổng `reviewer` bắt (đã sửa + có test):** `@IsISO8601()` nhận cả `20260815`/`2026-W33-1`
+>   (Date INVALID ⇒ **500** chứ không phải 400) **lẫn** dạng không có offset (`2026-08-15T09:00` bị đọc theo
+>   **giờ máy chủ** ⇒ cùng một request lưu ra hai thời điểm khác nhau tuỳ nơi deploy). Nay bắt buộc ISO-8601
+>   **có offset** + chốt phòng thủ khi dựng `Date`.
+> - **Verify:** typecheck 22/22 · api **332** test (nền 315) · builder **427** (nền 417) · biome sạch trên
+>   file đã đổi · migration `migrate deploy` + xác minh psql · **live-smoke HTTP 47/47** · **UI smoke
+>   playwright** (2 cột hiện đúng, sửa ưu tiên tại chỗ ghi xuống DB, chỉ hàng quá hạn tô đỏ, lọc Quá hạn ra
+>   đúng 1 việc, sort theo Hạn để NULL cuối ở cả hai chiều, mở case thấy Ưu tiên/Hạn + gửi bình luận hiện
+>   đúng tên, advance xong hạn/ưu tiên/bình luận còn nguyên, console sạch).
+> - **⚠️ Known-gap E2 (CỐ Ý):** bình luận **không sửa/xoá được**, không đính kèm, không @mention, không
+>   thông báo · `authorName` là ảnh chụp ⇒ đổi tên hiển thị không lan vào bình luận cũ · bình luận **không
+>   bị field-RBAC mask** (ai `viewer` được case thì đọc được cả luồng, kể cả tên thành viên mà màn Vận hành
+>   vốn giấu sau `workflow.run`) · thread **chưa phân trang** · hạn là **một thời điểm**, không có lịch làm
+>   việc/SLA/nhắc trước hạn · lọc hạn chỉ có **Quá hạn** · hạn/ưu tiên **không vào workflow contract** nên
+>   không transition nào guard theo chúng được · **tô đỏ quá hạn dùng đồng hồ TRÌNH DUYỆT còn bộ lọc
+>   "Quá hạn" dùng đồng hồ MÁY CHỦ** ⇒ máy lệch giờ có thể thấy hàng đỏ mà bộ lọc không trả về (và một hạn
+>   trôi qua khi tab đang mở chỉ đổi màu ở lần tải lại sau) · sửa hạn/ưu tiên **làm `updatedAt` nhảy** (cột "Cập nhật" vì
+>   thế phản ánh cả thao tác metadata, và hàng vừa sửa nhảy lên đầu khi đang sort mặc định) · ô sửa trong
+>   run-view gate bằng `workflow.run` cấp tenant, KHÔNG phải verdict per-project ⇒ vẫn có thể ăn 403 (tính
+>   chất sẵn có từ E1 với nút "Nhận việc") · xoá case song song lúc PATCH cho 500 (Prisma P2025), như `assign`.
 
 ### Phase F — Form nâng cao (mẫu EVN: trường phụ thuộc, modal-chọn→apply→autofill)
 - Nhiều đã có: **conditions** (JSONLogic ẩn/hiện), **reactions** (trường phụ thuộc giá trị nhau),

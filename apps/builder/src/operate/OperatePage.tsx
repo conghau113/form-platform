@@ -6,7 +6,13 @@ import { getActiveTenantId } from "../lib/activeTenant";
 import { useMyTenants } from "../workspace/useWorkspace";
 import type { WorkOrderRow } from "./client";
 import { NewCaseModal } from "./NewCaseModal";
-import { useAssignCase, useAssignees, useRunnableWorkflows, useWorkOrders } from "./useWorkOrders";
+import {
+  useAssignCase,
+  useAssignees,
+  useRunnableWorkflows,
+  useUpdateWorkOrder,
+  useWorkOrders,
+} from "./useWorkOrders";
 import { WorkOrderFilters } from "./WorkOrderFilters";
 import { WorkOrderTable } from "./WorkOrderTable";
 import { applyFilters, DEFAULT_WORK_ORDER_QUERY } from "./work-order-query";
@@ -32,11 +38,24 @@ export function OperatePage() {
   const { workflows } = useRunnableWorkflows(canRun);
   const { tenants } = useMyTenants();
   const assign = useAssignCase();
+  const update = useUpdateWorkOrder();
 
   const onAssign = async (row: WorkOrderRow, assigneeId: string | null) => {
     try {
       await assign({ instanceId: row.id, assigneeId, workflowId: row.workflowId });
       message.success(assigneeId ? "Đã giao việc" : "Đã bỏ giao việc");
+    } catch (e) {
+      message.error((e as Error).message);
+    }
+  };
+
+  const onUpdate = async (
+    row: WorkOrderRow,
+    patch: { dueAt?: string | null; priority?: number },
+  ) => {
+    try {
+      await update({ instanceId: row.id, patch, workflowId: row.workflowId });
+      message.success("Đã cập nhật việc");
     } catch (e) {
       message.error((e as Error).message);
     }
@@ -65,7 +84,13 @@ export function OperatePage() {
   // workspace to switch to for the advice to mean anything.
   const activeId = getActiveTenantId();
   const filtered = Boolean(
-    state.workflowId || state.current || state.statusKind || state.assignee || state.q,
+    state.workflowId ||
+      state.current ||
+      state.statusKind ||
+      state.assignee ||
+      state.q ||
+      state.priority ||
+      state.overdue,
   );
   const activeTenant =
     tenants.length > 1 && !filtered
@@ -73,7 +98,9 @@ export function OperatePage() {
       : undefined;
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto", width: "100%", overflow: "auto" }}>
+    // 1400, not 1200: the table needs ~1200px for its nine columns (Phase E2 added two), and a
+    // container narrower than its own content would scroll horizontally at every viewport size.
+    <div style={{ padding: 24, maxWidth: 1400, margin: "0 auto", width: "100%", overflow: "auto" }}>
       <Space style={{ justifyContent: "space-between", width: "100%", marginBottom: 16 }} wrap>
         <Typography.Title level={4} style={{ margin: 0 }}>
           Vận hành
@@ -117,6 +144,7 @@ export function OperatePage() {
           assignees={assignees}
           onState={setState}
           onAssign={(row, assigneeId) => void onAssign(row, assigneeId)}
+          onUpdate={(row, patch) => void onUpdate(row, patch)}
         />
       )}
 
