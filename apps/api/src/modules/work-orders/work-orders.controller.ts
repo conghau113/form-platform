@@ -40,6 +40,8 @@ export class WorkOrdersController {
         statusKind: dto.statusKind,
         assignee: dto.assignee,
         search: dto.q,
+        priority: dto.priority,
+        overdue: dto.overdue,
         page: {
           offset: ((dto.page ?? 1) - 1) * pageSize,
           limit: pageSize,

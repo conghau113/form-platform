@@ -1,9 +1,11 @@
 import { Transform } from "class-transformer";
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { WORK_ORDER_PRIORITIES } from "../../../common/work-order-priority.js";
 
 /** Sortable columns. `label` is deliberately absent — it is often null, so ordering by it reads as
- *  broken; sort by recency or state instead. */
-export const WORK_ORDER_SORTS = ["updatedAt", "createdAt", "current"] as const;
+ *  broken; sort by recency, state, deadline or urgency instead. (`dueAt` IS sortable despite being
+ *  nullable: the repo pins its NULLs last, so undated cases sink instead of leading.) */
+export const WORK_ORDER_SORTS = ["updatedAt", "createdAt", "current", "dueAt", "priority"] as const;
 export type WorkOrderSort = (typeof WORK_ORDER_SORTS)[number];
 
 /** Hard ceiling on a page: a work-order list is a screen, not an export. */
@@ -13,6 +15,13 @@ const toInt = ({ value }: { value: unknown }): unknown => {
   if (typeof value !== "string" || value.trim() === "") return undefined;
   const n = Number(value);
   return Number.isInteger(n) ? n : value;
+};
+
+/** A query string carries no booleans — only the literal `true` opts in; anything else 400s. */
+const toBool = ({ value }: { value: unknown }): unknown => {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return typeof value === "string" && value.trim() === "" ? undefined : value;
 };
 
 /**
@@ -42,6 +51,19 @@ export class ListWorkOrdersDto {
   @IsString()
   @MaxLength(200)
   q?: string;
+
+  /** Exact urgency (Phase E2): 1 = low, 2 = normal, 3 = high. */
+  @IsOptional()
+  @Transform(toInt)
+  @IsInt()
+  @IsIn(WORK_ORDER_PRIORITIES)
+  priority?: number;
+
+  /** `true` keeps only cases past their deadline and not yet finished (Phase E2). */
+  @IsOptional()
+  @Transform(toBool)
+  @IsBoolean()
+  overdue?: boolean;
 
   @IsOptional()
   @Transform(toInt)

@@ -10,6 +10,8 @@ import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema"
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AuditEntry } from "../../persistence/repositories/audit.repo.js";
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
+import type { CaseCommentRecord } from "../../persistence/repositories/case-comment.repo.js";
+import { CaseCommentRepo } from "../../persistence/repositories/case-comment.repo.js";
 import type {
   FolderChildCounts,
   FolderRecord,
@@ -43,6 +45,7 @@ import {
 import { FakeOrgUnitRepo, FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
 import type { MailService } from "../mail/mail.service.js";
 import { ProjectsService } from "../projects/projects.service.js";
+import { CaseCommentsService } from "./case-comments.service.js";
 import { WorkflowInstancesService } from "./workflow-instances.service.js";
 
 let seq = 0;
@@ -127,6 +130,8 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
   readonly updatedAt = new Map<string, Date>();
   /** Kept OUTSIDE `meta` on purpose — mirrors production, where `upsert` never writes it. */
   readonly assignees = new Map<string, string | null>();
+  /** Same deal for the Phase E2 work-order attributes: `upsert` must never touch them. */
+  readonly workOrder = new Map<string, { dueAt: Date | null; priority: number }>();
   async upsert(instance: WorkflowInstance, meta: WorkflowInstanceMeta): Promise<WorkflowInstance> {
     this.bodies.set(instance.id, instance);
     this.meta.set(instance.id, meta);
@@ -149,6 +154,8 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
       assigneeId: this.assignees.get(id) ?? null,
       statusLabel: meta.statusLabel,
       statusKind: meta.statusKind,
+      dueAt: this.workOrder.get(id)?.dueAt ?? null,
+      priority: this.workOrder.get(id)?.priority ?? 2,
       createdAt: this.updatedAt.get(id) ?? new Date(),
       updatedAt: this.updatedAt.get(id) ?? new Date(),
     };
@@ -167,6 +174,16 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
   }
   async setAssignee(id: string, assigneeId: string | null): Promise<void> {
     this.assignees.set(id, assigneeId);
+  }
+  async setWorkOrderFields(
+    id: string,
+    patch: { dueAt?: Date | null; priority?: number },
+  ): Promise<void> {
+    const current = this.workOrder.get(id) ?? { dueAt: null, priority: 2 };
+    this.workOrder.set(id, {
+      dueAt: patch.dueAt !== undefined ? patch.dueAt : current.dueAt,
+      priority: patch.priority !== undefined ? patch.priority : current.priority,
+    });
   }
   async delete(id: string): Promise<void> {
     this.bodies.delete(id);
@@ -328,6 +345,25 @@ class FakeAuditRepo extends AuditRepo {
   }
 }
 
+let commentSeq = 0;
+
+class FakeCaseCommentRepo extends CaseCommentRepo {
+  readonly rows: CaseCommentRecord[] = [];
+  async create(input: {
+    instanceId: string;
+    authorId: string;
+    authorName: string;
+    body: string;
+  }): Promise<CaseCommentRecord> {
+    const row = { id: `cmt_${++commentSeq}`, createdAt: new Date(), ...input };
+    this.rows.push(row);
+    return row;
+  }
+  async listByInstance(instanceId: string): Promise<CaseCommentRecord[]> {
+    return this.rows.filter((r) => r.instanceId === instanceId);
+  }
+}
+
 class FakeMailService {
   readonly sent: { to: string; subject: string }[] = [];
   async send(to: string, content: { subject: string }): Promise<void> {
@@ -347,6 +383,8 @@ let userRepo: FakeUserRepo;
 let auditRepo: FakeAuditRepo;
 let mail: FakeMailService;
 let service: WorkflowInstancesService;
+let commentRepo: FakeCaseCommentRepo;
+let comments: CaseCommentsService;
 let project: ProjectRecord;
 
 /** Seed a workflow `def` into the project so it can be started. */
@@ -392,6 +430,11 @@ beforeEach(async () => {
     auditRepo,
     mail as unknown as MailService,
   );
+  // Phase E2. Tested in THIS file rather than its own: `CaseCommentsService` delegates every access
+  // decision to the service above, so it needs the exact same fake graph — duplicating all of it
+  // would only risk the two copies drifting apart.
+  commentRepo = new FakeCaseCommentRepo();
+  comments = new CaseCommentsService(commentRepo, service, projects, userRepo, auditRepo);
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });
 });
 
@@ -610,6 +653,149 @@ describe("WorkflowInstancesService.assign (Phase E)", () => {
     await service.advance(OWNER, started.id, { action: "submit" });
     const summary = await instanceRepo.findSummary(started.id);
     expect(summary?.assigneeId).toBe(MEMBER);
+  });
+});
+
+describe("WorkflowInstancesService.updateWorkOrder (Phase E2)", () => {
+  const OPERATOR = "operator-2";
+  const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+  const DUE = new Date("2026-08-15T09:00:00.000Z");
+
+  it("sets a deadline and an urgency, and audits it", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    const summary = await service.updateWorkOrder(OWNER, started.id, { dueAt: DUE, priority: 3 });
+    expect(summary.dueAt).toEqual(DUE);
+    expect(summary.priority).toBe(3);
+    expect(auditRepo.entries).toEqual([
+      expect.objectContaining({ action: "case.set-work-order", tenantId, actorId: OWNER }),
+    ]);
+  });
+
+  it("leaves the other attribute alone when only one is patched", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await service.updateWorkOrder(OWNER, started.id, { dueAt: DUE, priority: 3 });
+
+    const summary = await service.updateWorkOrder(OWNER, started.id, { priority: 1 });
+    expect(summary.priority).toBe(1);
+    expect(summary.dueAt).toEqual(DUE);
+  });
+
+  it("clears the deadline with an explicit null", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await service.updateWorkOrder(OWNER, started.id, { dueAt: DUE });
+
+    const summary = await service.updateWorkOrder(OWNER, started.id, { dueAt: null });
+    expect(summary.dueAt).toBeNull();
+    expect(summary.priority).toBe(2);
+  });
+
+  it("refuses an empty patch (400) instead of writing an empty audit entry", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    await expect(service.updateWorkOrder(OWNER, started.id, {})).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(auditRepo.entries).toEqual([]);
+  });
+
+  it("refuses a read-only member (403) and hides the case from a stranger (404)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    tenantRepo.join(OPERATOR, tenantId);
+    rbacRepo.grant(OPERATOR, tenantId, ["workflow.read"]);
+
+    await expect(
+      service.updateWorkOrder(OPERATOR, started.id, { priority: 3 }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.updateWorkOrder("stranger", started.id, { priority: 3 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("keeps the deadline and urgency when the case is advanced (upsert must not clobber them)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await service.updateWorkOrder(OWNER, started.id, { dueAt: DUE, priority: 3 });
+
+    await service.advance(OWNER, started.id, { action: "submit" });
+
+    const summary = await instanceRepo.findSummary(started.id);
+    expect(summary?.dueAt).toEqual(DUE);
+    expect(summary?.priority).toBe(3);
+  });
+});
+
+describe("CaseCommentsService (Phase E2)", () => {
+  const OPERATOR = "operator-3";
+  const READER = "reader-1";
+  const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+
+  beforeEach(() => {
+    userRepo.seed(OWNER, "owner@example.com");
+    tenantRepo.join(OPERATOR, tenantId);
+    rbacRepo.grant(OPERATOR, tenantId, ["workflow.run"]);
+    userRepo.seed(OPERATOR, "operator@example.com");
+    tenantRepo.join(READER, tenantId);
+    rbacRepo.grant(READER, tenantId, ["workflow.read"]);
+    userRepo.seed(READER, "reader@example.com");
+  });
+
+  it("appends a comment, snapshots the author's name and audits it", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    const comment = await comments.add(OPERATOR, started.id, "Đang chờ hồ sơ gốc");
+    expect(comment.body).toBe("Đang chờ hồ sơ gốc");
+    expect(comment.authorId).toBe(OPERATOR);
+    expect(comment.authorName).toBe("operator@example.com");
+    expect(auditRepo.entries).toEqual([
+      expect.objectContaining({ action: "case.comment", tenantId, actorId: OPERATOR }),
+    ]);
+  });
+
+  it("keeps the comment text OUT of the audit trail", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await comments.add(OPERATOR, started.id, "số CMND 001234");
+
+    expect(JSON.stringify(auditRepo.entries)).not.toContain("001234");
+  });
+
+  it("lets a read-only member READ the thread but not write to it (403)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await comments.add(OPERATOR, started.id, "ghi chú");
+
+    await expect(comments.list(READER, started.id)).resolves.toHaveLength(1);
+    await expect(comments.add(READER, started.id, "tôi cũng muốn ghi")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it("hides the thread entirely from someone with no grant (404, no existence leak)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    await expect(comments.list("stranger", started.id)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(comments.add("stranger", started.id, "hi")).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it("scopes the thread to its own case", async () => {
+    await seedWorkflow();
+    // Explicit ids: `createInstance` derives one from `Date.now()`, so two cases of the same workflow
+    // started in the same millisecond would BE the same case.
+    const a = await service.start(OWNER, "wf1", { id: "case-a" });
+    const b = await service.start(OWNER, "wf1", { id: "case-b" });
+    await comments.add(OWNER, a.id, "về case A");
+
+    await expect(comments.list(OWNER, b.id)).resolves.toEqual([]);
   });
 });
 

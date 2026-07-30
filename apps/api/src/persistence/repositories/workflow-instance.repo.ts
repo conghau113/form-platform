@@ -5,7 +5,9 @@ import type { WorkflowInstance } from "@org/workflow-schema";
  * REQUIRED. `upsert` writes each of these columns unconditionally, so an optional field would be
  * silently NULLed by any call site that forgot it. `assigneeId` is pointedly NOT here: it is owned
  * by {@link WorkflowInstanceRepo.setAssignee} alone, so running a case never disturbs who it belongs
- * to.
+ * to. `dueAt`/`priority` (Phase E2) follow the same rule via
+ * {@link WorkflowInstanceRepo.setWorkOrderFields} — work-order metadata is not engine state, and
+ * advancing a case must never wipe its deadline.
  */
 export interface WorkflowInstanceMeta {
   workflowId: string;
@@ -35,6 +37,10 @@ export interface WorkflowInstanceSummary {
   assigneeId: string | null;
   statusLabel: string | null;
   statusKind: string | null;
+  /** When the case is due (Phase E2), or null when no deadline was set. */
+  dueAt: Date | null;
+  /** Urgency (Phase E2): 1 = low, 2 = normal, 3 = high. Never null — the column defaults to 2. */
+  priority: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,13 +62,26 @@ export interface WorkOrderFilter {
   unassigned?: boolean;
   /** Case-insensitive substring of the denormalized `label`. */
   search?: string;
+  /** Exact urgency (Phase E2): 1 | 2 | 3. */
+  priority?: number;
+  /**
+   * Keep only cases overdue as at this instant — `dueAt` before it AND the case not finished
+   * (Phase E2).
+   *
+   * Deliberately ONE field carrying the cutoff rather than an `overdue: boolean` plus a separate
+   * `now`: two independent fields let `overdue: true` arrive with the cutoff missing, which Prisma
+   * would render as `dueAt < undefined` — a condition it silently DROPS, quietly turning the filter
+   * into "every unfinished case". Here the cutoff's presence IS the switch, so it cannot go missing.
+   * The caller supplies the clock so this stays testable.
+   */
+  overdueBefore?: Date;
 }
 
 /** Server-side paging for the work-order list. `label` is NOT sortable — it is frequently null. */
 export interface WorkOrderPage {
   offset: number;
   limit: number;
-  sort: "updatedAt" | "createdAt" | "current";
+  sort: "updatedAt" | "createdAt" | "current" | "dueAt" | "priority";
   dir: "asc" | "desc";
 }
 
@@ -96,6 +115,16 @@ export abstract class WorkflowInstanceRepo {
   ): Promise<{ rows: WorkOrderRow[]; total: number }>;
   /** Set (or clear, with `null`) the case's assignee. */
   abstract setAssignee(id: string, assigneeId: string | null): Promise<void>;
+  /**
+   * Write the work-order attributes (Phase E2). Only the keys PRESENT in `patch` are written, so
+   * setting a deadline never resets the urgency; `dueAt: null` clears the deadline.
+   *
+   * Separate from {@link upsert} on purpose — see {@link WorkflowInstanceMeta}.
+   */
+  abstract setWorkOrderFields(
+    id: string,
+    patch: { dueAt?: Date | null; priority?: number },
+  ): Promise<void>;
   /** Delete an instance by id; no-op if already absent. */
   abstract delete(id: string): Promise<void>;
 }

@@ -40,6 +40,8 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
   readonly rows: WorkOrderRow[] = [];
   /** Last `projectIds` the service asked for — the scoping assertion. */
   lastProjectIds: string[] = [];
+  /** Last filter the service built — how the HTTP surface translated into repo terms. */
+  lastFilter: WorkOrderFilter | null = null;
 
   seed(row: Partial<WorkOrderRow> & { id: string; projectId: string }): void {
     this.rows.push({
@@ -49,6 +51,8 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
       assigneeId: null,
       statusLabel: "Nháp",
       statusKind: "normal",
+      dueAt: null,
+      priority: 2,
       createdAt: new Date(0),
       updatedAt: new Date(0),
       workflowTitle: "WF",
@@ -64,6 +68,7 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
     page: WorkOrderPage,
   ): Promise<{ rows: WorkOrderRow[]; total: number }> {
     this.lastProjectIds = projectIds;
+    this.lastFilter = filter;
     const matched = this.rows.filter(
       (r) =>
         projectIds.includes(r.projectId) &&
@@ -71,7 +76,11 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
         (!filter.statusKind || r.statusKind === filter.statusKind) &&
         (!filter.unassigned || r.assigneeId === null) &&
         (!filter.assigneeId || r.assigneeId === filter.assigneeId) &&
-        (!filter.search || (r.label ?? "").includes(filter.search)),
+        (!filter.search || (r.label ?? "").includes(filter.search)) &&
+        (!filter.priority || r.priority === filter.priority) &&
+        // Mirrors the Prisma branch, INCLUDING that a null `statusKind` counts as "not finished".
+        (!filter.overdueBefore ||
+          (r.dueAt !== null && r.dueAt < filter.overdueBefore && r.statusKind !== "end")),
     );
     return { rows: matched.slice(page.offset, page.offset + page.limit), total: matched.length };
   }
@@ -88,6 +97,7 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
     return [];
   }
   async setAssignee(): Promise<void> {}
+  async setWorkOrderFields(): Promise<void> {}
   async delete(): Promise<void> {}
 }
 
@@ -370,6 +380,39 @@ describe("WorkOrdersService.list — filters and paging (Phase E)", () => {
     const result = await service.list(OWNER, { page: { ...page, offset: 1, limit: 1 } }, TENANT);
     expect(result.rows).toHaveLength(1);
     expect(result.total).toBe(3);
+  });
+});
+
+describe("WorkOrdersService.list — deadline and urgency filters (Phase E2)", () => {
+  const past = new Date("2020-01-01T00:00:00.000Z");
+  const future = new Date("2999-01-01T00:00:00.000Z");
+
+  beforeEach(() => {
+    instances.seed({ id: "late", projectId: project.id, dueAt: past, priority: 3 });
+    instances.seed({ id: "later", projectId: project.id, dueAt: future, priority: 1 });
+    instances.seed({ id: "undated", projectId: project.id });
+    // A case written before Phase E denormalized the status — the NULL that a naive
+    // `statusKind <> 'end'` would drop from the overdue list.
+    instances.seed({ id: "legacy", projectId: project.id, dueAt: past, statusKind: null });
+    instances.seed({ id: "done", projectId: project.id, dueAt: past, statusKind: "end" });
+  });
+
+  it("filters by exact urgency", async () => {
+    const result = await service.list(OWNER, { priority: 3, page }, TENANT);
+    expect(result.rows.map((r) => r.id)).toEqual(["late"]);
+  });
+
+  it("keeps only unfinished cases past their deadline — including ones with no status yet", async () => {
+    const result = await service.list(OWNER, { overdue: true, page }, TENANT);
+    expect(result.rows.map((r) => r.id)).toEqual(["late", "legacy"]);
+  });
+
+  it("turns the caller's yes/no into a cutoff instant, so the filter can never lose its clock", async () => {
+    await service.list(OWNER, { overdue: true, page }, TENANT);
+    expect(instances.lastFilter?.overdueBefore).toBeInstanceOf(Date);
+
+    await service.list(OWNER, { page }, TENANT);
+    expect(instances.lastFilter?.overdueBefore).toBeUndefined();
   });
 });
 

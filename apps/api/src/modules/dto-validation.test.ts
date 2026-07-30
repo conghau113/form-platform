@@ -6,6 +6,7 @@ import { CreateProjectDto } from "./projects/dto/create-project.dto.js";
 import { GrantMemberDto } from "./projects/dto/grant-member.dto.js";
 import { ListWorkOrdersDto } from "./work-orders/dto/list-work-orders.dto.js";
 import { AssignInstanceDto } from "./workflows/dto/assign-instance.dto.js";
+import { UpdateWorkOrderDto } from "./workflows/dto/update-work-order.dto.js";
 
 /**
  * R6: pins the edge validation the global `ValidationPipe` applies to NON-contract request bodies.
@@ -99,5 +100,49 @@ describe("Phase E work-order DTOs", () => {
     await expect(pipe.transform({ sort: "label" }, as(ListWorkOrdersDto))).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it("coerces the Phase E2 list filters and rejects an unknown priority", async () => {
+    await expect(
+      pipe.transform({ priority: "3", overdue: "true" }, as(ListWorkOrdersDto)),
+    ).resolves.toEqual({ priority: 3, overdue: true });
+    await expect(pipe.transform({ priority: "4" }, as(ListWorkOrdersDto))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(pipe.transform({ overdue: "yes" }, as(ListWorkOrdersDto))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it("takes a partial work-order patch, including an explicit null deadline", async () => {
+    await expect(pipe.transform({ priority: 1 }, as(UpdateWorkOrderDto))).resolves.toEqual({
+      priority: 1,
+    });
+    // `null` clears the deadline; `undefined`/absent leaves it alone. Both must survive validation.
+    await expect(pipe.transform({ dueAt: null }, as(UpdateWorkOrderDto))).resolves.toEqual({
+      dueAt: null,
+    });
+    await expect(
+      pipe.transform({ dueAt: "2026-08-15T09:00:00.000Z" }, as(UpdateWorkOrderDto)),
+    ).resolves.toEqual({ dueAt: "2026-08-15T09:00:00.000Z" });
+    await expect(
+      pipe.transform({ dueAt: "tomorrow" }, as(UpdateWorkOrderDto)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("rejects deadlines that are ISO-8601 but not usable instants", async () => {
+    // All four pass `@IsISO8601()`, which is why this DTO does not use it. The first two are
+    // unparseable by `Date` (they would reach Prisma as an Invalid Date → 500, not 400); the last
+    // two carry no timezone, so `new Date()` would read them in the SERVER's local zone and store a
+    // different instant depending on where the api runs.
+    for (const dueAt of ["20260815", "2026-W33-1", "2026-08-15T09:00", "2026-08-15"]) {
+      await expect(pipe.transform({ dueAt }, as(UpdateWorkOrderDto))).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    }
+    // An offset — either form — is what makes a deadline mean one instant everywhere.
+    await expect(
+      pipe.transform({ dueAt: "2026-08-15T09:00:00+07:00" }, as(UpdateWorkOrderDto)),
+    ).resolves.toEqual({ dueAt: "2026-08-15T09:00:00+07:00" });
   });
 });

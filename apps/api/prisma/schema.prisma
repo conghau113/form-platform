@@ -401,18 +401,52 @@ model WorkflowInstanceRecord {
   /// answer "still open?" (`statusKind != 'end'`) — without loading each workflow definition.
   statusLabel String?
   statusKind  String?
+  /// When the case is due (Phase E2). Null = no deadline. Like `assigneeId` this is work-order
+  /// metadata, not engine state: it lives outside the `WorkflowInstance` contract and is written only
+  /// by `setWorkOrderFields`, so advancing a case never disturbs its deadline.
+  dueAt      DateTime?
+  /// How urgent the case is (Phase E2): 1 = low, 2 = normal, 3 = high. Stored as an INT rather than
+  /// a string like `statusKind` because the work-order list sorts on it server-side — `low|normal|high`
+  /// would order alphabetically (high, low, normal), and Prisma's `orderBy` cannot take a CASE
+  /// expression. Same ownership rule as `dueAt`.
+  priority   Int      @default(2)
   body       Json
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   workflow   WorkflowRecord @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee   User?          @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  comments   WorkflowInstanceComment[]
 
   @@index([workflowId])
   @@index([projectId])
   @@index([assigneeId])
   /// The work-order list orders a tenant's cases by recency across many projects.
   @@index([projectId, updatedAt])
+  /// …and by deadline / urgency (Phase E2), always within the same `projectId IN (...)` filter.
+  @@index([projectId, dueAt])
+  @@index([projectId, priority])
+}
+
+/// A note someone left on a running case (Phase E2). Reading needs project `viewer`; writing needs
+/// run access, the same boundary as advancing or assigning the case.
+///
+/// `authorId` carries no FK and `authorName` is denormalized at write time — both deliberate, for the
+/// two reasons already established elsewhere in this schema: `AuditLog` keeps plain string references
+/// so history outlives the actor's row, and `label`/`statusLabel` snapshot display state that must
+/// survive. A comment is a historical record, so the name as it stood when it was written is the
+/// right thing to show, and reading a thread costs zero user lookups. A later display-name change
+/// therefore does NOT propagate into old comments.
+model WorkflowInstanceComment {
+  id         String   @id @default(cuid())
+  instanceId String
+  authorId   String
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+  instance   WorkflowInstanceRecord @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt])
 }
 
 /// Reusable field template. W0 stores them global (scope="global"); W3 adds per-project scope.

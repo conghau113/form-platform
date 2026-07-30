@@ -2,6 +2,7 @@ import { Global, Module } from "@nestjs/common";
 import { PrismaService } from "./prisma/prisma.service.js";
 import { PrismaAdminCatalogRepo } from "./prisma/prisma-admin-catalog.repo.js";
 import { PrismaAuditRepo } from "./prisma/prisma-audit.repo.js";
+import { PrismaCaseCommentRepo } from "./prisma/prisma-case-comment.repo.js";
 import { PrismaFolderRepo } from "./prisma/prisma-folder.repo.js";
 import { PrismaFormRepo } from "./prisma/prisma-form.repo.js";
 import { PrismaFormVersionRepo } from "./prisma/prisma-form-version.repo.js";
@@ -21,6 +22,7 @@ import { PrismaWorkflowRepo } from "./prisma/prisma-workflow.repo.js";
 import { PrismaWorkflowInstanceRepo } from "./prisma/prisma-workflow-instance.repo.js";
 import { AdminCatalogRepo } from "./repositories/admin-catalog.repo.js";
 import { AuditRepo } from "./repositories/audit.repo.js";
+import { CaseCommentRepo } from "./repositories/case-comment.repo.js";
 import { FolderRepo } from "./repositories/folder.repo.js";
 import { FormRepo } from "./repositories/form.repo.js";
 import { FormVersionRepo } from "./repositories/form-version.repo.js";
@@ -67,6 +69,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: RbacRepo, useClass: PrismaRbacRepo },
     { provide: AuditRepo, useClass: PrismaAuditRepo },
     { provide: AdminCatalogRepo, useClass: PrismaAdminCatalogRepo },
+    { provide: CaseCommentRepo, useClass: PrismaCaseCommentRepo },
   ],
   exports: [
     PrismaService,
@@ -89,6 +92,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     RbacRepo,
     AuditRepo,
     AdminCatalogRepo,
+    CaseCommentRepo,
   ],
 })
 export class PersistenceModule {}

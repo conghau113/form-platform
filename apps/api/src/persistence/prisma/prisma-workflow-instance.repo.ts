@@ -22,6 +22,8 @@ const summarySelect = {
   assigneeId: true,
   statusLabel: true,
   statusKind: true,
+  dueAt: true,
+  priority: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -51,6 +53,8 @@ function toSummary(r: SummaryRow): WorkflowInstanceSummary {
     assigneeId: r.assigneeId,
     statusLabel: r.statusLabel,
     statusKind: r.statusKind,
+    dueAt: r.dueAt,
+    priority: r.priority,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
@@ -78,7 +82,37 @@ function buildWhere(
     ...(filter.unassigned ? { assigneeId: null } : {}),
     ...(filter.assigneeId && !filter.unassigned ? { assigneeId: filter.assigneeId } : {}),
     ...(filter.search ? { label: { contains: filter.search, mode: "insensitive" as const } } : {}),
+    ...(filter.priority !== undefined ? { priority: filter.priority } : {}),
+    ...(filter.overdueBefore
+      ? {
+          AND: [
+            { dueAt: { lt: filter.overdueBefore } },
+            // "Not finished" has to spell out the NULL case: `statusKind` is nullable (cases written
+            // before Phase E never got one), and SQL's `statusKind <> 'end'` evaluates to NULL for
+            // those rows, which excludes them — so an overdue legacy case would go unreported.
+            { OR: [{ statusKind: null }, { statusKind: { not: "end" } }] },
+          ],
+        }
+      : {}),
   };
+}
+
+/**
+ * `orderBy` for one page. `dueAt` needs the extended form so NULLs can be pinned LAST: Postgres puts
+ * them FIRST on a DESC sort, which would open "latest deadline first" with every case that has NO
+ * deadline — indistinguishable from a broken sort. The other columns are non-null, so they keep the
+ * short form.
+ */
+function buildOrderBy(
+  page: WorkOrderPage,
+): Prisma.WorkflowInstanceRecordOrderByWithRelationInput[] {
+  const primary: Prisma.WorkflowInstanceRecordOrderByWithRelationInput =
+    page.sort === "dueAt"
+      ? { dueAt: { sort: page.dir, nulls: "last" } }
+      : { [page.sort]: page.dir };
+  // Stable tiebreaker: without it, rows with an identical sort value can repeat or vanish between
+  // pages.
+  return [primary, { id: "asc" }];
 }
 
 @Injectable()
@@ -140,9 +174,7 @@ export class PrismaWorkflowInstanceRepo extends WorkflowInstanceRepo {
       this.prisma.workflowInstanceRecord.findMany({
         where,
         select: rowSelect,
-        // Stable tiebreaker: without it, rows with an identical sort value can repeat or vanish
-        // between pages.
-        orderBy: [{ [page.sort]: page.dir }, { id: "asc" }],
+        orderBy: buildOrderBy(page),
         skip: page.offset,
         take: page.limit,
       }),
@@ -153,6 +185,21 @@ export class PrismaWorkflowInstanceRepo extends WorkflowInstanceRepo {
 
   async setAssignee(id: string, assigneeId: string | null): Promise<void> {
     await this.prisma.workflowInstanceRecord.update({ where: { id }, data: { assigneeId } });
+  }
+
+  async setWorkOrderFields(
+    id: string,
+    patch: { dueAt?: Date | null; priority?: number },
+  ): Promise<void> {
+    // Spread only the keys that are present: an absent `priority` must stay untouched, while an
+    // explicit `dueAt: null` must clear the deadline.
+    await this.prisma.workflowInstanceRecord.update({
+      where: { id },
+      data: {
+        ...(patch.dueAt !== undefined ? { dueAt: patch.dueAt } : {}),
+        ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      },
+    });
   }
 
   async delete(id: string): Promise<void> {

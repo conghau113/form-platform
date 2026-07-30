@@ -55,6 +55,10 @@ export interface WorkOrderQuery {
   /** A user id, or the sentinels `me` (the caller) / `none` (unassigned). */
   assignee?: string;
   search?: string;
+  /** Exact urgency (Phase E2): 1 | 2 | 3. */
+  priority?: number;
+  /** Keep only cases past their deadline and not finished (Phase E2). */
+  overdue?: boolean;
   page: WorkOrderPage;
 }
 
@@ -97,6 +101,10 @@ export class WorkOrdersService {
         statusKind: query.statusKind,
         ...resolveAssignee(userId, query.assignee),
         search: query.search,
+        priority: query.priority,
+        // The HTTP surface asks a yes/no question; the repo wants the cutoff instant, so the clock is
+        // read HERE — one field down there means the filter can never be applied without it.
+        ...(query.overdue ? { overdueBefore: new Date() } : {}),
       },
       query.page,
     );

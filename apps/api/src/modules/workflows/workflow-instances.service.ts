@@ -200,6 +200,45 @@ export class WorkflowInstancesService {
     return updated;
   }
 
+  /**
+   * Write the work-order attributes of a case — deadline and urgency (Phase E2). Same boundary as
+   * {@link assign}: changing when work is due is operating the case, so it needs run access.
+   *
+   * Only the keys present in `patch` are written (`dueAt: null` clears the deadline), and none of
+   * them go through {@link WorkflowInstanceMeta} — see the note there on why advancing a case must
+   * never be able to wipe them.
+   */
+  async updateWorkOrder(
+    ownerId: string,
+    instanceId: string,
+    patch: { dueAt?: Date | null; priority?: number },
+  ): Promise<WorkflowInstanceSummary> {
+    if (patch.dueAt === undefined && patch.priority === undefined) {
+      throw new BadRequestException("Nothing to update: provide dueAt and/or priority");
+    }
+    const summary = await this.requireInstanceRunAccess(ownerId, instanceId);
+    const project = await this.projectsService.requireRunAccess(ownerId, summary.projectId);
+
+    await this.instances.setWorkOrderFields(instanceId, patch);
+    await this.audit.record({
+      tenantId: project.tenantId,
+      actorId: ownerId,
+      action: "case.set-work-order",
+      targetType: "workflow-instance",
+      targetId: instanceId,
+      // Serialize the date explicitly rather than relying on Prisma's implicit `Date.toJSON()`, so
+      // what lands in the JSON column is a stable, obvious shape.
+      detail: {
+        ...(patch.dueAt !== undefined ? { dueAt: patch.dueAt?.toISOString() ?? null } : {}),
+        ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      },
+    });
+
+    const updated = await this.instances.findSummary(instanceId);
+    if (!updated) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
+    return updated;
+  }
+
   /** Email the new assignee that a case is waiting for them (best-effort, never throws). */
   private async notifyAssignee(
     assigneeId: string,
@@ -315,8 +354,14 @@ export class WorkflowInstancesService {
     return summary;
   }
 
-  /** Resolve an instance's project and assert the user holds at least `minRole` on it. */
-  private async requireInstanceAccess(
+  /**
+   * Resolve an instance's project and assert the user holds at least `minRole` on it.
+   *
+   * `public` (like {@link requireInstanceRunAccess} below) so {@link CaseCommentsService} can reuse
+   * the exact same access decision instead of re-deriving it — one copy of "can this person touch
+   * this case" is the point. Not part of the HTTP surface.
+   */
+  async requireInstanceAccess(
     ownerId: string,
     instanceId: string,
     minRole: ProjectRole,
@@ -328,8 +373,8 @@ export class WorkflowInstancesService {
     return summary;
   }
 
-  /** Resolve an instance's project and assert the user may run it. */
-  private async requireInstanceRunAccess(
+  /** Resolve an instance's project and assert the user may run it (public — see above). */
+  async requireInstanceRunAccess(
     ownerId: string,
     instanceId: string,
   ): Promise<WorkflowInstanceSummary> {
