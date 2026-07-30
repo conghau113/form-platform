@@ -4,6 +4,7 @@ import { Button, Checkbox, Collapse, Form, Input, InputNumber, Select, Space } f
 import { type ReactNode, useState } from "react";
 import { DataSourceEditor, isOptionSourced } from "../datasource";
 import { usePins } from "../lib";
+import { LookupEditor } from "../lookup";
 import { ReactionsEditor } from "../reactions";
 import { DefaultValueEditor } from "./DefaultValueEditor";
 import { csv, mergePermissions, parseCsv, prop } from "./helpers";
@@ -152,6 +153,12 @@ export function FieldForm({
           tree-select) come from the shared static-vs-remote editor (params + cache). */}
       {isOptionSourced(field) && (
         <DataSourceEditor field={field} sourceNames={condFields} locales={locales} set={set} />
+      )}
+      {/* A record picker authors its source + picker columns + the Apply mapping. Targets
+          come from `targetNames` (not `condFields`): Apply writes by name through the same
+          scope reactions target, so a field inside a card/grid/tabs must be listed too. */}
+      {field.type === "lookup" && (
+        <LookupEditor field={field} sourceNames={condFields} targetNames={targetNames} set={set} />
       )}
       {isArray && <ItemFieldsEditor field={field} set={set} onConfigure={onDrill} />}
       <DefaultValueEditor field={field} set={set} />

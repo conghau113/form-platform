@@ -374,13 +374,17 @@ export const selectFieldSchema = z.object({
 });
 
 /** One column of the record table shown in a lookup's picker modal. `key` is the key
- *  READ FROM the response row; `title` is the header text. */
-export const lookupColumnSchema = z.object({ key: z.string().min(1), title: z.string() });
+ *  READ FROM the response row; `title` is the header text. Both are plain strings, like
+ *  `params[].name` and `option.label`: an author who has just added a row and not typed
+ *  the key yet must not make the whole document unparseable. */
+export const lookupColumnSchema = z.object({ key: z.string(), title: z.string() });
 
 /** One Apply assignment of a lookup: take `from` out of the picked record and write it
  *  into the field named `to`. Several entries = several fields filled from one pick —
- *  the thing a `reaction` cannot express (it has a single target and a static value). */
-export const lookupMappingSchema = z.object({ from: z.string().min(1), to: z.string().min(1) });
+ *  the thing a `reaction` cannot express (it has a single target and a static value).
+ *  Both keys are REQUIRED but may be empty while the row is being authored (see
+ *  {@link lookupColumnSchema}); a row with either end empty is skipped by Apply. */
+export const lookupMappingSchema = z.object({ from: z.string(), to: z.string() });
 
 /** Record picker: the user opens a modal, picks one row from a remote list and Applies it.
  *  The field itself stores the row's `valueKey` (like a select); `mapping` fills OTHER

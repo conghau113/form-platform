@@ -73,6 +73,28 @@ describe("schema field types", () => {
     expect(() => formSchema.parse(doc)).not.toThrow();
   });
 
+  // The builder seeds a fresh column/mapping row with empty keys, exactly like the
+  // params and options editors do. The row is meaningless until the author types, but
+  // it must not make the document unparseable while they are typing it.
+  it("accepts a half-authored column / mapping row (empty keys)", () => {
+    const doc = {
+      formVersion: 3,
+      id: "half-lookup",
+      title: "Half-authored lookup",
+      fields: [
+        {
+          type: "lookup",
+          name: "customer",
+          label: "Customer",
+          dataSource: { url: "/api/customers", labelKey: "name", valueKey: "code" },
+          columns: [{ key: "", title: "" }],
+          mapping: [{ from: "", to: "taxCode" }],
+        },
+      ],
+    };
+    expect(() => formSchema.parse(doc)).not.toThrow();
+  });
+
   it("rejects a lookup mapping missing its target field", () => {
     const doc = {
       formVersion: 3,

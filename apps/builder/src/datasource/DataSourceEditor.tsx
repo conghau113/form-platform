@@ -1,16 +1,7 @@
 import type { FieldNode, LeafField } from "@org/form-schema";
-import {
-  Button,
-  Divider,
-  Form,
-  Input,
-  InputNumber,
-  Segmented,
-  Select,
-  Space,
-  Typography,
-} from "antd";
+import { Divider, Form, Segmented } from "antd";
 import { OptionsEditor } from "../PropertyPanel";
+import { RemoteSourceFields } from "./RemoteSourceFields";
 import { TreeOptionsEditor } from "./TreeOptionsEditor";
 
 /** The leaf types that share the static-options / remote-dataSource shape. The two
@@ -21,7 +12,6 @@ type OptionSourcedField = Extract<
   { type: "select" | "checkbox-group" | "cascader" | "tree-select" }
 >;
 type DataSource = NonNullable<OptionSourcedField["dataSource"]>;
-type Param = NonNullable<DataSource["params"]>[number];
 
 /** Whether a leaf sources its options from static `options` or a remote `dataSource`
  *  (and therefore gets the DataSourceEditor in the property panel). */
@@ -65,14 +55,6 @@ export function DataSourceEditor({
       options: undefined,
     });
 
-  // A legacy `dependsOn` surfaces as a single param row; editing params normalizes it away.
-  const params: Param[] =
-    ds?.params ?? (ds?.dependsOn ? [{ name: ds.dependsOn, from: ds.dependsOn }] : []);
-  const setParams = (next: Param[]) =>
-    setDs({ params: next.length ? next : undefined, dependsOn: undefined });
-  const patchParam = (i: number, patch: Partial<Param>) =>
-    setParams(params.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
-
   return (
     <>
       <Divider orientation="left" plain>
@@ -115,80 +97,12 @@ export function DataSourceEditor({
           )}
         </Form.Item>
       ) : (
-        <>
-          <Form.Item label="URL">
-            <Input value={ds?.url ?? ""} onChange={(e) => setDs({ url: e.target.value })} />
-          </Form.Item>
-          <Space>
-            <Form.Item label="Khóa nhãn">
-              <Input
-                value={ds?.labelKey ?? ""}
-                onChange={(e) => setDs({ labelKey: e.target.value })}
-              />
-            </Form.Item>
-            <Form.Item label="Khóa giá trị">
-              <Input
-                value={ds?.valueKey ?? ""}
-                onChange={(e) => setDs({ valueKey: e.target.value })}
-              />
-            </Form.Item>
-          </Space>
-          {isTree && (
-            <Form.Item
-              label="Khóa con (cây)"
-              tooltip="Trường phản hồi chứa các hàng con của mỗi hàng; ánh xạ đệ quy thành cây."
-            >
-              <Input
-                placeholder="vd children"
-                value={ds?.childrenKey ?? ""}
-                onChange={(e) => setDs({ childrenKey: e.target.value || undefined })}
-              />
-            </Form.Item>
-          )}
-          <Form.Item label="TTL bộ nhớ đệm (ms)">
-            <InputNumber
-              style={{ width: "100%" }}
-              min={0}
-              value={ds?.ttlMs ?? null}
-              onChange={(v) => setDs({ ttlMs: v ?? undefined })}
-            />
-          </Form.Item>
-
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Tham số — gửi giá trị hiện tại của trường khác làm tham số truy vấn.
-          </Typography.Text>
-          {params.map((p, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: param rows have no stable id; index is fine for this small editor
-            <Space key={i} align="end" style={{ display: "flex", marginTop: 8 }}>
-              <Form.Item label="Tham số" style={{ marginBottom: 0 }}>
-                <Input
-                  placeholder="tên truy vấn"
-                  value={p.name}
-                  onChange={(e) => patchParam(i, { name: e.target.value })}
-                />
-              </Form.Item>
-              <Form.Item label="Từ trường" style={{ marginBottom: 0 }}>
-                <Select
-                  style={{ width: 130 }}
-                  value={p.from || undefined}
-                  options={sourceNames.map((n) => ({ label: n, value: n }))}
-                  onChange={(from) => patchParam(i, { from })}
-                />
-              </Form.Item>
-              <Button size="small" onClick={() => setParams(params.filter((_, idx) => idx !== i))}>
-                Xóa
-              </Button>
-            </Space>
-          ))}
-          <div style={{ marginTop: 8 }}>
-            <Button
-              size="small"
-              onClick={() => setParams([...params, { name: "", from: sourceNames[0] ?? "" }])}
-            >
-              Thêm tham số
-            </Button>
-          </div>
-        </>
+        <RemoteSourceFields
+          ds={ds}
+          setDs={setDs}
+          sourceNames={sourceNames}
+          showChildrenKey={isTree}
+        />
       )}
     </>
   );

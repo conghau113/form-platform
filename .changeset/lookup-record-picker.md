@@ -10,7 +10,9 @@ other fields from the same record via `mapping` (response key -> target field na
 
 - `form-schema`: `lookupFieldSchema` (+ `lookupColumnSchema` / `lookupMappingSchema`) and a
   capability entry. Purely additive — old documents keep parsing, so `CURRENT_FORM_VERSION`
-  stays at 3 and no migration is needed.
+  stays at 3 and no migration is needed. Column/mapping keys are plain strings (like
+  `params[].name` and `option.label`) so a row an author has only just added does not make
+  the whole document unparseable.
 - `form-core`: `fetchDataSourceRows` (raw rows, every key kept — `fetchDataSourceOptions`
   now builds on it) plus a pure `lookup` module (`lookupColumns`, `lookupPatch`,
   `filterLookupRows`) and the `lookup` validation arm.

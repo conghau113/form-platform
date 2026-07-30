@@ -13,7 +13,10 @@ export type LookupMapping = NonNullable<LookupField["mapping"]>[number];
  * Deduped, in that order; a derived column titles itself with its own key.
  */
 export function lookupColumns(node: LookupField): LookupColumn[] {
-  if (node.columns?.length) return node.columns;
+  // A row the author has added but not typed a key into yet is skipped, not rendered as
+  // a keyless column; if that leaves nothing authored, fall back to the derived set.
+  const authored = node.columns?.filter((c) => c.key);
+  if (authored?.length) return authored;
   const keys: string[] = [];
   const add = (key: string | undefined) => {
     if (key && !keys.includes(key)) keys.push(key);
@@ -25,17 +28,23 @@ export function lookupColumns(node: LookupField): LookupColumn[] {
 }
 
 /**
- * The values Apply writes into OTHER fields, keyed by target field name. Every mapping
- * is assigned even when the picked row lacks that key (the value becomes `undefined`,
- * which CLEARS the target): the mapping owns its target fields, so a row that carries
- * no address must not leave the previous record's address behind.
+ * The values Apply writes into OTHER fields, keyed by target field name. Every COMPLETE
+ * mapping is assigned even when the picked row lacks that key (the value becomes
+ * `undefined`, which CLEARS the target): the mapping owns its target fields, so a row
+ * that carries no address must not leave the previous record's address behind.
+ *
+ * A half-authored row (either end still empty) is skipped instead — it names no source
+ * and no target, so writing it would clear a field the author never pointed at.
  */
 export function lookupPatch(
   row: DataSourceRow,
   mapping: readonly LookupMapping[] | undefined,
 ): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
-  for (const m of mapping ?? []) patch[m.to] = row[m.from];
+  for (const m of mapping ?? []) {
+    if (!m.from || !m.to) continue;
+    patch[m.to] = row[m.from];
+  }
   return patch;
 }
 

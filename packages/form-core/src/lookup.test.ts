@@ -40,6 +40,19 @@ describe("lookupColumns", () => {
   it("returns nothing for an unconfigured lookup", () => {
     expect(lookupColumns({ type: "lookup", name: "l1", label: "L" })).toEqual([]);
   });
+
+  // The builder seeds a fresh column row with empty strings; it must not become a
+  // keyless table column (and two of them would collide on the same react key).
+  it("skips an authored column whose key has not been typed yet", () => {
+    const node: LookupField = {
+      ...customer,
+      columns: [
+        { key: "code", title: "Mã" },
+        { key: "", title: "" },
+      ],
+    };
+    expect(lookupColumns(node)).toEqual([{ key: "code", title: "Mã" }]);
+  });
 });
 
 describe("lookupPatch", () => {
@@ -58,6 +71,18 @@ describe("lookupPatch", () => {
 
   it("is empty without a mapping", () => {
     expect(lookupPatch(rows[0], undefined)).toEqual({});
+  });
+
+  // A half-authored row names neither a source nor a target. Assigning it would clear a
+  // field the author never pointed at (or write a `""` key), so it is skipped entirely —
+  // unlike a COMPLETE mapping whose key is simply absent from the row (test above).
+  it("skips a mapping row with either end still empty", () => {
+    const patch = lookupPatch(rows[0], [
+      { from: "", to: "taxCode" },
+      { from: "address", to: "" },
+      { from: "name", to: "customerName" },
+    ]);
+    expect(patch).toEqual({ customerName: "Alpha Ltd" });
   });
 });
 

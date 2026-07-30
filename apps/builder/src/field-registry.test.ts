@@ -65,6 +65,7 @@ describe("palette freeze", () => {
       "radio",
       "cascader",
       "tree-select",
+      "lookup",
       "checkbox",
       "switch",
       "slider",

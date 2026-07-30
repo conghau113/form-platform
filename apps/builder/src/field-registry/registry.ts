@@ -219,6 +219,24 @@ export const FIELD_REGISTRY: ComponentMeta[] = [
     named: true,
   },
   {
+    type: "lookup",
+    label: "Tra cứu bản ghi",
+    category: "Nhập liệu",
+    // The record source, picker columns and the Apply mapping are authored by the
+    // dedicated LookupEditor (property panel), not by flat settings.
+    defaults: {},
+    settings: [
+      placeholder,
+      { key: "allowClear", label: "Cho phép xóa", control: "checkbox" },
+      sizeSetting,
+      variantSetting,
+    ],
+    defaultValueKind: "text",
+    behavior: LEAF,
+    showInPalette: true,
+    named: true,
+  },
+  {
     type: "checkbox",
     label: "Hộp kiểm",
     category: "Nhập liệu",

@@ -518,7 +518,49 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
   **datasource** (options remote/tree). → phase này **mở rộng**, không làm lại.
 - Thêm mẫu **"modal chọn giá trị → Apply → gọi API → fill nhiều trường tương ứng từ response"**: kiểu
   field `lookup/reference` mở modal, chọn bản ghi, map response→các field (mở rộng datasource + reactions
-  + renderer). Δ: field-type mới → bump `formVersion` + migration + test migrate fixture cũ.
+  + renderer). Δ: field-type mới, **thuần additive ⇒ KHÔNG bump `formVersion`, không migration** — thêm
+  một member vào union `LeafField` không đổi hình dạng JSON cũ (JSON cũ parse nguyên vẹn, không có gì để
+  migrate) — `AGENTS.md` chỉ buộc bump khi **hình dạng JSON thay đổi**, và đây đúng tiền lệ
+  `display-text`. Đổi lại: renderer CŨ ghim v3 gặp form có `lookup` sẽ **fail ở `formSchema.parse`**
+  thay vì báo "mới hơn renderer này hỗ trợ" — cái giá đã biết, y hệt `display-text`.
+
+> **✅ ĐÃ LÀM (2026-07-30) — kiểu trường `lookup`.** Plan `~/.claude/plans/expressive-toasting-wind.md`
+> đã qua vòng **`plan-reviewer`** (5 finding `required` sửa hết trước khi code). 2 commit theo tiền lệ
+> Phase E: (1) hợp đồng + runtime, (2) builder + doc.
+>
+> - **3 mảnh hạ tầng còn thiếu, nay đã có** (đây mới là phần khó, không phải cái ô nhập):
+>   `reaction` chỉ có **một** `target` + `value` **tĩnh** ⇒ không biểu đạt được "ghi N trường từ dữ liệu
+>   API" · `fetchDataSourceOptions` **vứt bỏ mọi cột khác** của hàng ⇒ không còn bản ghi để map · control
+>   lá chỉ nhận `onChange` của **chính nó** ⇒ không control nào ghi được sang trường khác.
+> - **Hợp đồng (`form-schema`, additive):** `lookupFieldSchema` (+ `lookupColumnSchema`,
+>   `lookupMappingSchema`) **tái dùng nguyên `selectDataSourceSchema`** — không sinh ra khái niệm nguồn
+>   dữ liệu thứ hai. `dataSource`/`columns`/`mapping` đều optional ⇒ trường vừa kéo từ palette vẫn parse.
+>   Entry `capabilities` nêu rõ 2 khóa bắt buộc (AI sinh form đọc thẳng bảng này).
+> - **Runtime dùng chung (`form-core`):** `fetchDataSourceRows` giữ **mọi** cột (và
+>   `fetchDataSourceOptions` nay gọi lại nó — một đường fetch, không hai) · `lookup.ts` thuần:
+>   `lookupColumns` (cột khai báo thắng; vắng ⇒ suy ra từ label/value key + mọi `mapping[].from`) ·
+>   `lookupPatch` (**luôn gán mọi mapping, kể cả khóa vắng** ⇒ `undefined` xóa giá trị cũ: mapping làm
+>   chủ trường đích, không để lại dữ liệu mồ côi của bản ghi chọn trước) · `filterLookupRows`.
+> - **Renderer web:** `LookupControl` (Modal + Table, **chỉ fetch khi mở modal**, lọc client-side) và
+>   **đường ghi-nhiều-trường đầu tiên** của renderer: `applyValues` = `setValue` theo `namePrefix` ⇒ lookup
+>   đặt trong một hàng của `array` ghi đúng ô **cùng hàng**. Cố ý **không** `shouldValidate` (sẽ sơn đỏ
+>   N trường người dùng chưa đụng và chạy trọn resolver mỗi lần Áp dụng).
+> - **Builder:** entry palette "Tra cứu bản ghi" · `RemoteSourceFields` **tách ra dùng chung** với
+>   `DataSourceEditor` (DOM giữ y nguyên — `DataSourceEditor.test.tsx` xanh mà không sửa dòng nào) ·
+>   `LookupEditor` (nguồn + cột + ánh xạ). Danh sách trường đích lấy từ **`targetNames`**, KHÔNG phải
+>   `condFields`: `condFields` chỉ là anh-em cùng container ⇒ dùng nó thì mọi trường nằm trong
+>   `card`/`grid`/`tabs` sẽ không được liệt kê dù `setValue` ghi được bình thường.
+> - **⚠️ Known-gap (CỐ Ý):** tìm kiếm/lọc **client-side** trên toàn danh sách (endpoint rất lớn sẽ yếu) ·
+>   sau reload ô hiện **giá trị thô** (nhãn chỉ sống trong phiên) · chỉ chọn **một** bản ghi · tiêu đề cột
+>   chưa i18n · renderer native chưa có `lookup` (đang defer) · **Apply KHÔNG phải biên bảo mật** — patch
+>   ghi theo tên, không kiểm `canEdit` của trường đích, nên có thể điền vào trường đã gate bằng `editRoles`
+>   và giá trị đó được submit (submit chỉ lọc theo `canView`; API cũng không kiểm field-edit RBAC). Đây
+>   **đúng bằng** hành vi sẵn có của reaction value-effect ⇒ ghi nhận có chủ đích, siết chung một lượt ·
+>   một trường vừa là đích của lookup vừa là `target` của reaction `value` sẽ bị reaction **ghi đè im lặng**
+>   ở lần đổi assignment kế tiếp · danh sách đích có thể liệt kê cả tên trường `array` (chọn nhầm ⇒ ghi vô
+>   hướng vào chỗ đợi mảng) · với lookup nằm **bên trong một hàng array**, danh sách đích chỉ là anh-em
+>   trực tiếp của hàng (`PropertyPanel` dùng `siblingNames` khi đã drill xuống) nên trường nằm trong
+>   `card` lồng trong hàng đó không được liệt kê — **giới hạn y hệt reactions đang có**.
 
 ---
 
