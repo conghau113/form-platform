@@ -26,6 +26,21 @@ export interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
+ * Which external sign-in providers the API has configured (A3). Deliberately NOT part of
+ * {@link AuthContextValue}: it is deployment configuration, not session state, it is read on the
+ * unauthenticated login page, and it cannot change while the tab is open — hence `staleTime:
+ * Infinity` and a single fetch per session.
+ */
+export function useAuthProviders(): { google: boolean } {
+  const { data } = useQuery({
+    queryKey: qk.authProviders,
+    queryFn: api.fetchAuthProviders,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  return data ?? { google: false };
+}
+
+/**
  * Session provider (production-hardening 2B). A single `/auth/me` query is the source of truth for
  * "who am I" — mutations write its cache directly so the whole app re-renders authed/anon in step.
  * On logout we clear the query cache so no other user's cached workspace data lingers.

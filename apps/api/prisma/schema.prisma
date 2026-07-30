@@ -222,7 +222,9 @@ model ProjectMember {
 model User {
   id            String              @id @default(cuid())
   email         String              @unique
-  passwordHash  String
+  /// Null = the account signs in only through an external provider (product-roadmap A3, Google).
+  /// Such an account can still gain a password later through the forgot-password flow.
+  passwordHash  String?
   displayName   String?
   /// When the account proved it owns `email` (product-roadmap A2). Null = unverified; nothing
   /// *blocks* on it (soft verification) so every pre-A2 account keeps working untouched.

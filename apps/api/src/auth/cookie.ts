@@ -34,6 +34,37 @@ export function authCookieOptions(secure: boolean, maxAgeMs: number): AuthCookie
   return { httpOnly: true, sameSite: "strict", secure, path: "/", maxAge: maxAgeMs };
 }
 
+/** Name of the short-lived cookie holding the OAuth `state` nonce (product-roadmap A3). */
+export const OAUTH_STATE_COOKIE_NAME = "oauth_state";
+
+/** How long an in-flight Google sign-in may take before its `state` is stale. */
+const OAUTH_STATE_MAX_AGE_MS = 10 * 60_000;
+
+/** Same shape as {@link AuthCookieOptions} but deliberately `lax` — see below. */
+export interface OAuthStateCookieOptions extends Omit<AuthCookieOptions, "sameSite"> {
+  sameSite: "lax";
+}
+
+/**
+ * Options for the OAuth `state` cookie — the browser half of the double-submit check that stops a
+ * forged sign-in callback.
+ *
+ * ⚠️ `sameSite` MUST be `lax`, not `strict` like every other cookie here. The callback arrives as a
+ * top-level navigation FROM `accounts.google.com`, and a Strict cookie is withheld on exactly that
+ * request — the nonce would never come back and every single sign-in would fail. `lax` is the
+ * narrowest setting that still permits a top-level GET. Do not "unify" this with
+ * {@link authCookieOptions}.
+ */
+export function oauthStateCookieOptions(secure: boolean): OAuthStateCookieOptions {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure,
+    path: "/",
+    maxAge: OAUTH_STATE_MAX_AGE_MS,
+  };
+}
+
 /**
  * Parse a raw `Cookie` request header into a name→value map. Dependency-free (no `cookie-parser`
  * middleware): the guard only needs one cookie and this keeps the surface tiny. Missing/blank → {}.

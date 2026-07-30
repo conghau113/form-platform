@@ -35,21 +35,21 @@ export class PrismaUserRepo extends UserRepo {
   async create(input: {
     id?: string;
     email: string;
-    passwordHash: string;
+    passwordHash?: string | null;
     displayName?: string | null;
   }): Promise<UserRecord> {
     const row = await this.prisma.user.create({
       data: {
         id: input.id,
         email: input.email,
-        passwordHash: input.passwordHash,
+        passwordHash: input.passwordHash ?? null,
         displayName: input.displayName ?? null,
       },
     });
     return toRecord(row);
   }
 
-  async updatePassword(id: string, passwordHash: string): Promise<void> {
+  async updatePassword(id: string, passwordHash: string | null): Promise<void> {
     await this.prisma.user.update({ where: { id }, data: { passwordHash } });
   }
 

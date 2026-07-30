@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { authCookieOptions, parseCookies } from "./cookie.js";
+import { authCookieOptions, oauthStateCookieOptions, parseCookies } from "./cookie.js";
 
 describe("parseCookies", () => {
   it("parses a multi-pair cookie header into a map", () => {
@@ -35,5 +35,25 @@ describe("authCookieOptions", () => {
       maxAge: 1000,
     });
     expect(authCookieOptions(false, 5).secure).toBe(false);
+  });
+});
+
+describe("oauthStateCookieOptions", () => {
+  /**
+   * `lax` is load-bearing, not a style choice: the OAuth callback arrives as a top-level
+   * navigation from accounts.google.com, and a `strict` cookie is withheld on exactly that
+   * request — the nonce would never come back and every sign-in would fail. This test exists so
+   * that "unifying" it with authCookieOptions turns red instead of silently breaking sign-in.
+   */
+  it("is Lax (NOT Strict) + HttpOnly, at path / so clearCookie matches", () => {
+    expect(oauthStateCookieOptions(true)).toEqual({
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      maxAge: 600_000,
+    });
+    // `secure` still follows AUTH_COOKIE_SECURE like every other cookie here.
+    expect(oauthStateCookieOptions(false).secure).toBe(false);
   });
 });

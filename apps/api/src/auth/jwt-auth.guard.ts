@@ -39,6 +39,12 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwt.verifyAsync<JwtPayload>(token);
+      // A valid signature is not enough: only a token that actually names a subject is an access
+      // token. Defence in depth against any other JWT this app signs (A3's OAuth `state` is
+      // key-separated, but a subject-less token must never authenticate a request even if some
+      // future token type shares the secret) — a handler that reads no `sub` would otherwise treat
+      // it as a session.
+      if (!payload.sub?.trim()) throw new UnauthorizedException("Invalid or expired token");
       req.user = { sub: payload.sub, email: payload.email };
       return true;
     } catch {

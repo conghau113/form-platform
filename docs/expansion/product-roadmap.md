@@ -180,9 +180,70 @@ env-driven, secret CHỈ ở `.env` phía API.
   >   token-version/denylist nếu cần. (2) verify **mềm** — chưa nơi nào chặn theo `emailVerifiedAt` (đúng
   >   chủ đích; muốn siết thì gate ở guard + backfill user cũ). (3) `AUTH_BOOTSTRAP_*` admin không được
   >   verify tự động. (4) Chưa có UI đổi email.
-- **A3 — Google OAuth** 🔒 Google app (tùy chọn): `passport-google-oauth20`, `/auth/oauth/google` +
-  callback, liên kết account theo email đã verify. Cần **Google client-id/secret/redirect**.
-- Δ nhỏ: `User` thêm `emailVerifiedAt?`, `authProvider?`. Additive.
+- **A3 — Google OAuth** 🔒 Google app (tùy chọn): `/auth/oauth/google` + callback, liên kết account
+  theo email đã verify. Cần **Google client-id/secret** (redirect suy ra từ `APP_PUBLIC_URL`).
+- Δ nhỏ: `User` thêm `emailVerifiedAt?`; `passwordHash` thành **nullable**. Additive.
+
+> **✅ ĐÃ LÀM A3 (2026-07-30) — đăng nhập bằng Google, env-driven.** Plan
+> `~/.claude/plans/distributed-weaving-rocket.md` đã qua **`plan-reviewer`** (5 finding `required`
+> sửa hết trước khi code). **⚠️ Lệch có chủ đích so với 2 dòng mô tả ở trên (đã sửa lại cho khớp):
+> KHÔNG dùng `passport-google-oauth20` và KHÔNG thêm cột `authProvider`.**
+>
+> - **Không thêm một dependency nào.** Toàn bộ auth của repo vốn tự viết (`JwtAuthGuard`,
+>   `cookie.ts` tự parse, không `cookie-parser`, không passport); luồng này chỉ là 2 lệnh gọi —
+>   dựng URL authorize + POST đổi `code` lấy `id_token`. Thêm `@nestjs/passport` + 3 gói nữa cho
+>   đúng 1 provider là lệch nhà.
+> - **Tính năng TẮT khi chưa cấu hình** (nguyên tắc §3): thiếu `GOOGLE_CLIENT_ID`/`SECRET` ⇒
+>   `googleConfig()` trả `null` ⇒ `/auth/oauth/google` **404** và builder **ẩn nút**. `GET
+>   /auth/providers` là endpoint công khai để trang đăng nhập biết mà ẩn/hiện — khác A2 (mail
+>   suy biến ngầm, UI không cần biết) vì một cái nút bấm-vào-404 là lỗi nhìn thấy được.
+> - **`decodeIdToken` cố ý KHÔNG verify chữ ký** — token lấy thẳng từ token-endpoint của Google
+>   qua TLS server-to-server đổi bằng `client_secret` (URL là hằng số module, không lấy từ env),
+>   đúng khuyến cáo của Google ⇒ không cần JWKS. Vẫn kiểm `aud` cho chắc. Doc-comment cấm dùng
+>   hàm này cho token do client gửi lên.
+> - **CSRF (repo trước đây KHÔNG có gì cho luồng này):** nonce ngẫu nhiên đi tới Google trong
+>   `state` (JWT 10 phút) **và** nằm trong cookie ngắn hạn; callback chỉ chạy tiếp khi hai bên khớp.
+>   **Cookie `oauth_state` phải `SameSite=Lax`, KHÔNG `Strict`**: cookie Strict bị giữ lại trên
+>   đúng cái điều hướng top-level quay về từ `accounts.google.com` ⇒ mọi lần đăng nhập sẽ fail.
+>   Có test pin lại điều này (`cookie.test.ts`).
+> - **🔒 Lỗ hổng thứ hai — `reviewer` bắt được sau khi code (plan-reviewer đã bỏ sót):** `state` là
+>   JWT **phơi công khai** trong URL/history/log của Google. Bản đầu ký nó bằng chính `JWT_SECRET`
+>   ⇒ `JwtAuthGuard` (chỉ verify **chữ ký**, không verify mục đích) **chấp nhận nó như access-token**;
+>   phần lớn route sống sót nhờ `CurrentOwner` đòi `sub`, nhưng `ai.controller.ts` có 5 route
+>   protected **không đọc `sub`** ⇒ state token là thẻ vào thật trong 10 phút. Sửa **3 lớp**:
+>   (1) `state` ký bằng **khoá dẫn xuất riêng** `HMAC(JWT_SECRET, "oauth-state")` ⇒ về mặt cấu trúc
+>   không thể verify như access-token; (2) claim `typ:"oauth_state"` callback bắt buộc kiểm;
+>   (3) **`JwtAuthGuard` từ chối token không có `sub`** — chữ ký đúng không đủ để là access-token
+>   (có test riêng trong `jwt-auth.guard.test.ts`).
+> - **Token KHÔNG bao giờ vào URL** — callback set cookie HttpOnly rồi mới redirect. (Source tham
+>   chiếu `estd` nhét `accessToken`/`refreshToken` vào query-string; **không copy**.)
+> - **🔒 Lỗ hổng plan-reviewer bắt được, owner chốt cách xử lý — "trục xuất":** `POST /auth/register`
+>   là công khai và A2 xác minh chỉ "mềm", nên hôm nay **ai cũng đăng ký trước bằng email người khác
+>   được rồi nằm sẵn trong tài khoản đó**. Khi Google chứng minh quyền sở hữu một email mà tài khoản
+>   nội bộ **chưa từng xác minh**: thu hồi toàn bộ phiên + **xoá mật khẩu** + đánh dấu đã xác minh.
+>   Không ai bị khoá ngoài (vẫn vào bằng Google; muốn có mật khẩu thì đặt qua Quên-mật-khẩu).
+> - **Verify:** api **313 test** (+21: 10 `google-oauth`, 11 `auth.controller` mới) · builder **417**
+>   (+3) · typecheck 22/22 · biome sạch file đã đổi · **live smoke `node dist`**: chưa cấu hình ⇒
+>   `providers {google:false}` + route 404 + nút ẩn; có cấu hình ⇒ nút hiện, bấm → 302 sang
+>   `accounts.google.com` đủ tham số + `Set-Cookie: oauth_state … HttpOnly; SameSite=Lax`,
+>   `state` rác **và** nonce lệch đều ⇒ 302 `/login?error=oauth` mà **không set cookie auth nào**,
+>   đăng nhập mật khẩu cũ vẫn 200, console sạch. **Migration đã `migrate deploy`** (`psql \d "User"`
+>   xác nhận `passwordHash` nullable) và 53 user hiện có không hề hấn gì.
+> - ⚠️ **CHƯA chạy được vòng thật qua Google** (owner chưa cấp client-id/secret). Kết luận về
+>   SameSite ở trên là **suy luận theo spec + hành vi trình duyệt đã biết**, chưa kiểm chứng
+>   end-to-end; phần chạy được đã có test tự động phủ.
+> - **⚠️ Known-gap (CỐ Ý):** liên kết theo **email đã xác minh**, không lưu `googleId` ⇒ đổi email
+>   chính của tài khoản Google thì lần sau vào sẽ tạo tài khoản mới · **chưa có UI liên kết/gỡ**,
+>   chưa hiện "tài khoản này đăng nhập bằng Google" · tài khoản chỉ-Google không đăng nhập bằng
+>   mật khẩu được cho tới khi tự đặt qua Quên-mật-khẩu, mà đường đó **cần SMTP** (không SMTP ⇒ link
+>   chỉ nằm trong log API) · người dùng THẬT chưa xác minh email mà đăng nhập Google sẽ **mất mật
+>   khẩu đang dùng** (cái giá đã cân nhắc của việc trục xuất) · `state` không one-time-use ⇒ replay
+>   trong 10 phút chỉ khả thi nếu kẻ tấn công có **cả URL lẫn cookie HttpOnly của đúng trình duyệt
+>   đó** · redirect sau đăng nhập ghép thẳng `APP_PUBLIC_URL + "/projects"`, **bỏ qua
+>   `VITE_BASE_PATH`** (cùng giả định sẵn có của `authLink`) · `GOOGLE_REDIRECT_URI` cho phép override
+>   khi API ở domain khác SPA, nhưng **đó chưa phải đường đi được hỗ trợ**: cookie auth là
+>   `SameSite=Strict` nên API khác origin sẽ hỏng phiên của SPA, độc lập với OAuth · vẫn dính
+>   known-gap A2: access-token 15m không thu hồi được.
 
 ### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1–B4 ✅ DONE 2026-07-03 — PHASE B XONG] [làm TRƯỚC RBAC]
 Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 tenant). RBAC/form/workflow

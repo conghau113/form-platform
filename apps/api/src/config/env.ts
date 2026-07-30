@@ -95,6 +95,16 @@ export const envSchema = z
     /** Lifetimes of the one-time email tokens (A2), same duration syntax as the JWT vars. */
     AUTH_VERIFY_TOKEN_EXPIRES_IN: emptyAsUndefined(z.string().default("24h")),
     AUTH_RESET_TOKEN_EXPIRES_IN: emptyAsUndefined(z.string().default("1h")),
+    /**
+     * Google sign-in (product-roadmap A3) — **optional by design**, same principle as SMTP above.
+     * With either credential unset the feature is simply OFF: `/auth/oauth/google` 404s and the
+     * builder hides the button. `GOOGLE_REDIRECT_URI` defaults to `APP_PUBLIC_URL` +
+     * `/api/auth/oauth/google/callback`, but that default is computed in `googleConfig()` — a Zod
+     * key cannot read a sibling key from its own `.default()`.
+     */
+    GOOGLE_CLIENT_ID: emptyAsUndefined(z.string().optional()),
+    GOOGLE_CLIENT_SECRET: emptyAsUndefined(z.string().optional()),
+    GOOGLE_REDIRECT_URI: emptyAsUndefined(z.string().optional()),
   })
   .passthrough();
 

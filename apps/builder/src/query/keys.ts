@@ -8,6 +8,8 @@ export const qk = {
   me: ["auth", "me"] as const,
   // The session's effective function codes (D1): drives nav gating + the admin surface.
   myFunctions: ["auth", "my-functions"] as const,
+  // External sign-in providers this deployment has configured (A3): drives the login page button.
+  authProviders: ["auth", "providers"] as const,
   // RBAC admin data (D1): the platform function catalog, tenant roles, tenant members.
   rbacFunctions: ["rbac", "functions"] as const,
   rbacRoles: ["rbac", "roles"] as const,

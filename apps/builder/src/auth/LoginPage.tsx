@@ -1,7 +1,9 @@
-import { App as AntApp, Button, Card, Form, Input, Tabs, Typography } from "antd";
-import { useState } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "./useAuth";
+import { GoogleOutlined } from "@ant-design/icons";
+import { App as AntApp, Button, Card, Divider, Form, Input, Tabs, Typography } from "antd";
+import { useEffect, useRef, useState } from "react";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { googleSignInUrl } from "./client";
+import { useAuth, useAuthProviders } from "./useAuth";
 
 interface LoginValues {
   email: string;
@@ -25,9 +27,23 @@ function useRedirectTarget(): string {
 export function LoginPage() {
   const { message } = AntApp.useApp();
   const { status, login, register } = useAuth();
+  const providers = useAuthProviders();
   const navigate = useNavigate();
   const target = useRedirectTarget();
   const [submitting, setSubmitting] = useState(false);
+  const [params, setParams] = useSearchParams();
+
+  // The OAuth callback bounces failures back here with `?error=oauth` (it never leaks *why*).
+  // Consume the flag so a reload does not re-raise the toast. The ref is load-bearing: clearing
+  // the param is asynchronous, so StrictMode's double-invoked effect would otherwise toast twice.
+  const oauthFailed = params.get("error") === "oauth";
+  const oauthErrorShown = useRef(false);
+  useEffect(() => {
+    if (!oauthFailed || oauthErrorShown.current) return;
+    oauthErrorShown.current = true;
+    message.error("Đăng nhập bằng Google thất bại. Vui lòng thử lại.");
+    setParams({}, { replace: true });
+  }, [oauthFailed, message, setParams]);
 
   if (status === "authed") return <Navigate to={target} replace />;
 
@@ -115,6 +131,25 @@ export function LoginPage() {
             },
           ]}
         />
+        {/* Only offered when the deployment actually configured Google (A3) — a sign-in button
+            that leads to a 404 is worse than no button. A real navigation, not a fetch: the
+            OAuth consent screen has to own the top-level window. */}
+        {providers.google && (
+          <>
+            <Divider plain style={{ marginBottom: 12 }}>
+              hoặc
+            </Divider>
+            <Button
+              block
+              icon={<GoogleOutlined />}
+              onClick={() => {
+                window.location.href = googleSignInUrl;
+              }}
+            >
+              Đăng nhập với Google
+            </Button>
+          </>
+        )}
       </Card>
     </div>
   );

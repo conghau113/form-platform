@@ -31,6 +31,12 @@ import {
   resetPasswordMail,
   verifyEmailMail,
 } from "../mail/mail-templates.js";
+import {
+  decodeIdToken,
+  GOOGLE_TOKEN_ENDPOINT,
+  type GoogleIdentity,
+  googleConfig,
+} from "./google-oauth.js";
 
 /** bcrypt work factor — 10 is the common default (~100ms/hash), a sane cost for a self-host API. */
 const SALT_ROUNDS = 10;
@@ -105,8 +111,10 @@ export class AuthService implements OnModuleInit {
 
   async login(email: string, password: string): Promise<AuthResult> {
     const user = await this.users.findByEmail(normalizeEmail(email));
-    // Compare against a real (or, when absent, dummy) hash either way to keep timing uniform.
-    const ok = user
+    // Compare against a real (or, when absent, dummy) hash either way to keep timing uniform. A
+    // provider-only account (A3, `passwordHash === null`) takes the dummy branch too, so password
+    // login on it fails exactly like an unknown email — it never leaks "this one is a Google account".
+    const ok = user?.passwordHash
       ? await bcrypt.compare(password, user.passwordHash)
       : await bcrypt.compare(password, DUMMY_HASH).then(() => false);
     if (!user || !ok) throw new UnauthorizedException("Invalid credentials");
@@ -209,6 +217,11 @@ export class AuthService implements OnModuleInit {
   ): Promise<AuthResult> {
     const user = await this.users.findById(userId);
     if (!user) throw new UnauthorizedException("Account no longer exists");
+    // A provider-only account (A3) has nothing to compare against; forgot-password is how it sets
+    // a first password, so say that instead of failing as "wrong password".
+    if (!user.passwordHash) {
+      throw new BadRequestException("Account has no password; use forgot-password to set one");
+    }
     if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
       throw new UnauthorizedException("Current password is incorrect");
     }
@@ -216,6 +229,66 @@ export class AuthService implements OnModuleInit {
     await this.refreshTokens.revokeAllForUser(user.id);
     await this.mail.send(user.email, passwordChangedMail());
     return this.issue(user);
+  }
+
+  /**
+   * Trade an authorization code for the signed-in identity (product-roadmap A3). Server-to-server
+   * over TLS, authenticated with `client_secret` — see {@link decodeIdToken} for why the returned
+   * `id_token` is read without verifying its signature. `fetchImpl` is a test seam only.
+   */
+  async exchangeGoogleCode(code: string, fetchImpl: typeof fetch = fetch): Promise<GoogleIdentity> {
+    const cfg = googleConfig();
+    if (!cfg) throw new BadRequestException("Google sign-in is not configured");
+    const res = await fetchImpl(GOOGLE_TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: cfg.clientId,
+        client_secret: cfg.clientSecret,
+        redirect_uri: cfg.redirectUri,
+        grant_type: "authorization_code",
+      }).toString(),
+    });
+    if (!res.ok) throw new BadRequestException("Google rejected the authorization code");
+    const body = (await res.json()) as { id_token?: string };
+    if (!body.id_token) throw new BadRequestException("Google returned no id_token");
+    return decodeIdToken(body.id_token, cfg.clientId);
+  }
+
+  /**
+   * Sign in (or sign up) with a Google-vouched identity (A3). Accounts are matched by **email**,
+   * which is only safe because we refuse anything Google has not itself verified.
+   *
+   * ⚠️ The unverified-local-account branch is a security decision, not an optimisation. `POST
+   * /auth/register` is public and A2 verification is soft, so anyone can register someone else's
+   * address today and sit inside that account. When Google proves ownership of an address whose
+   * local account was never verified, we treat the incumbent as a squatter: every session is
+   * revoked and the password cleared, so the proven owner takes the account over cleanly. Nobody
+   * is locked out — Google sign-in keeps working, and forgot-password sets a new password.
+   */
+  async loginWithGoogle(identity: GoogleIdentity): Promise<AuthResult> {
+    if (!identity.emailVerified) {
+      throw new UnauthorizedException("Google has not verified this email address");
+    }
+    const email = normalizeEmail(identity.email);
+    const existing = await this.users.findByEmail(email);
+    if (!existing) {
+      const user = await this.users.create({
+        email,
+        passwordHash: null,
+        displayName: identity.name?.trim() || null,
+      });
+      // Google already proved the address, so skip the A2 verification mail entirely.
+      await this.users.markEmailVerified(user.id);
+      return this.issue(user);
+    }
+    if (!existing.emailVerifiedAt) {
+      await this.refreshTokens.revokeAllForUser(existing.id);
+      await this.users.updatePassword(existing.id, null);
+      await this.users.markEmailVerified(existing.id);
+    }
+    return this.issue(existing);
   }
 
   private async issue(user: UserRecord): Promise<AuthResult> {

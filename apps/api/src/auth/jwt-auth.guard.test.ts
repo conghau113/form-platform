@@ -80,4 +80,20 @@ describe("JwtAuthGuard", () => {
     const { ctx } = context({ authorization: `Bearer ${token}` });
     await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  /**
+   * A correct signature does not make a token an access token. This app signs other JWTs (A3's
+   * OAuth `state`, which is publicly visible in URLs and history); those are key-separated, but a
+   * subject-less token must be refused here too — otherwise any handler that never reads `sub`
+   * (e.g. the AI routes) would happily treat it as a session.
+   */
+  it("rejects a correctly-signed token that names no subject", async () => {
+    const guard = new JwtAuthGuard(jwt, reflector(false));
+    for (const payload of [{ typ: "oauth_state", n: "abc" }, { sub: "" }, { sub: "   " }]) {
+      const token = await jwt.signAsync(payload);
+      const { ctx, req } = context({ authorization: `Bearer ${token}` });
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(req.user).toBeUndefined();
+    }
+  });
 });

@@ -68,6 +68,13 @@ services:
       MAIL_FROM: ${MAIL_FROM:-Form Platform <no-reply@form-platform.local>}
       # Base of the verify/reset links we email — the URL the *browser* uses (the builder below).
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+      # Google sign-in (A3) — optional. Unset => the feature is simply off (the route 404s and the
+      # builder hides the button). The redirect URI defaults to APP_PUBLIC_URL +
+      # /api/auth/oauth/google/callback, which nginx already proxies; only set GOOGLE_REDIRECT_URI
+      # when the API lives on a different origin than the SPA.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
     ports:
       - "${API_PORT:-3001}:3001"
     # GET /health runs a `SELECT 1`, so green = process up AND database reachable (1D).

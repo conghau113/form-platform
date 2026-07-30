@@ -6,7 +6,8 @@
 export interface UserRecord {
   id: string;
   email: string;
-  passwordHash: string;
+  /** `null` = external-provider-only account (A3); it has no password to compare against. */
+  passwordHash: string | null;
   displayName: string | null;
   /** When the account proved it owns `email` (A2); `null` = not verified yet. */
   emailVerifiedAt: Date | null;
@@ -26,11 +27,15 @@ export abstract class UserRepo {
   abstract create(input: {
     id?: string;
     email: string;
-    passwordHash: string;
+    /** Omit / `null` for an external-provider-only account (A3). */
+    passwordHash?: string | null;
     displayName?: string | null;
   }): Promise<UserRecord>;
-  /** Replace the stored password hash (A2: reset-password / change-password). */
-  abstract updatePassword(id: string, passwordHash: string): Promise<void>;
+  /**
+   * Replace the stored password hash (A2: reset-password / change-password). `null` CLEARS it,
+   * which A3 uses to evict whoever was squatting an unverified address.
+   */
+  abstract updatePassword(id: string, passwordHash: string | null): Promise<void>;
   /** Stamp `emailVerifiedAt` (A2: a redeemed verification token). Idempotent by design. */
   abstract markEmailVerified(id: string): Promise<void>;
 }

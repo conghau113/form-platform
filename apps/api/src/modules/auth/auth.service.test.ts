@@ -19,6 +19,7 @@ import {
 import { MailService } from "../mail/mail.service.js";
 import type { MailContent } from "../mail/mail-templates.js";
 import { AuthService } from "./auth.service.js";
+import { GOOGLE_TOKEN_ENDPOINT } from "./google-oauth.js";
 
 let seq = 0;
 
@@ -35,7 +36,7 @@ class FakeUserRepo extends UserRepo {
   async create(input: {
     id?: string;
     email: string;
-    passwordHash: string;
+    passwordHash?: string | null;
     displayName?: string | null;
   }): Promise<UserRecord> {
     if (this.rows.some((r) => r.email === input.email)) throw new Error("unique email");
@@ -44,7 +45,7 @@ class FakeUserRepo extends UserRepo {
     const row: UserRecord = {
       id,
       email: input.email,
-      passwordHash: input.passwordHash,
+      passwordHash: input.passwordHash ?? null,
       displayName: input.displayName ?? null,
       emailVerifiedAt: null,
       createdAt: new Date(),
@@ -53,7 +54,7 @@ class FakeUserRepo extends UserRepo {
     this.rows.push(row);
     return row;
   }
-  async updatePassword(id: string, passwordHash: string): Promise<void> {
+  async updatePassword(id: string, passwordHash: string | null): Promise<void> {
     const row = this.rows.find((r) => r.id === id);
     if (row) row.passwordHash = passwordHash;
   }
@@ -270,6 +271,8 @@ describe("AuthService", () => {
   afterEach(() => {
     delete process.env.AUTH_BOOTSTRAP_EMAIL;
     delete process.env.AUTH_BOOTSTRAP_PASSWORD;
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
   });
 
   it("registers a user: hashes the password, returns a verifiable token + password-free profile", async () => {
@@ -283,7 +286,7 @@ describe("AuthService", () => {
     // Password is stored hashed, not in plaintext.
     const stored = users.rows[0];
     expect(stored.passwordHash).not.toBe("supersecret");
-    expect(await bcrypt.compare("supersecret", stored.passwordHash)).toBe(true);
+    expect(await bcrypt.compare("supersecret", stored.passwordHash ?? "")).toBe(true);
 
     // Access token carries sub = user id.
     const payload = await jwt.verifyAsync<{ sub: string; email: string }>(res.accessToken);
@@ -562,6 +565,136 @@ describe("AuthService", () => {
         new FakeMailService(),
       ).onModuleInit();
       expect(users2.rows).toHaveLength(0);
+    });
+  });
+
+  describe("Google sign-in (A3)", () => {
+    const identity = { email: "Gina@Example.com", emailVerified: true, name: "Gina" };
+
+    it("creates a password-less, already-verified account for an unknown email", async () => {
+      const res = await service.loginWithGoogle(identity);
+
+      const stored = users.rows[0];
+      expect(stored.email).toBe("gina@example.com");
+      // No password at all — the whole point of an external-provider account.
+      expect(stored.passwordHash).toBeNull();
+      // Google already proved the address, so no verification mail is sent.
+      expect(stored.emailVerifiedAt).not.toBeNull();
+      expect(mail.sent).toHaveLength(0);
+      expect(res.accessToken).toBeTruthy();
+    });
+
+    it("links into an existing VERIFIED account and leaves its password alone", async () => {
+      await service.register("gina@example.com", "supersecret");
+      await users.markEmailVerified(users.rows[0].id);
+      const hashBefore = users.rows[0].passwordHash;
+
+      await service.loginWithGoogle(identity);
+
+      expect(users.rows).toHaveLength(1);
+      expect(users.rows[0].passwordHash).toBe(hashBefore);
+      // The password still works — nothing was taken away from a verified owner.
+      await expect(service.login("gina@example.com", "supersecret")).resolves.toBeTruthy();
+    });
+
+    // The security decision of A3: registration is public and A2 verification is soft, so an
+    // attacker can register someone else's address and lie in wait. Google proving ownership
+    // evicts them.
+    it("EVICTS the squatter of an UNVERIFIED account: clears the password, revokes sessions", async () => {
+      await service.register("gina@example.com", "attackerpw");
+      const squatter = users.rows[0];
+      expect(squatter.emailVerifiedAt).toBeNull();
+      expect(refreshTokens.rows.filter((r) => !r.revokedAt)).toHaveLength(1);
+
+      await service.loginWithGoogle(identity);
+
+      expect(users.rows).toHaveLength(1);
+      expect(users.rows[0].id).toBe(squatter.id);
+      expect(users.rows[0].passwordHash).toBeNull();
+      expect(users.rows[0].emailVerifiedAt).not.toBeNull();
+      // Every session the squatter held is dead; only the new Google session survives.
+      const live = refreshTokens.rows.filter((r) => !r.revokedAt);
+      expect(live).toHaveLength(1);
+      // The attacker's password no longer opens the account.
+      await expect(service.login("gina@example.com", "attackerpw")).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it("refuses an identity Google itself has not verified", async () => {
+      await expect(service.loginWithGoogle({ ...identity, emailVerified: false })).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(users.rows).toHaveLength(0);
+    });
+
+    it("exchanges a code through the injected fetch (no network in tests)", async () => {
+      process.env.GOOGLE_CLIENT_ID = "cid";
+      process.env.GOOGLE_CLIENT_SECRET = "secret";
+      const claims = {
+        iss: "accounts.google.com",
+        aud: "cid",
+        email: "gina@example.com",
+        email_verified: true,
+        name: "Gina",
+      };
+      const idToken = `h.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.s`;
+      let sentUrl = "";
+      let sentBody = "";
+      const fakeFetch = (async (url: string, init?: { body?: string }) => {
+        sentUrl = url;
+        sentBody = init?.body ?? "";
+        return { ok: true, json: async () => ({ id_token: idToken }) };
+      }) as unknown as typeof fetch;
+
+      const result = await service.exchangeGoogleCode("the-code", fakeFetch);
+
+      expect(result).toEqual({ email: "gina@example.com", emailVerified: true, name: "Gina" });
+      // Pinning the endpoint matters: "the token came straight from Google over TLS" is the whole
+      // reason `decodeIdToken` may skip signature verification.
+      expect(sentUrl).toBe(GOOGLE_TOKEN_ENDPOINT);
+      expect(sentBody).toContain("code=the-code");
+      expect(sentBody).toContain("grant_type=authorization_code");
+    });
+
+    it("surfaces a rejected code as a 400 rather than a crash", async () => {
+      process.env.GOOGLE_CLIENT_ID = "cid";
+      process.env.GOOGLE_CLIENT_SECRET = "secret";
+      const fakeFetch = (async () => ({
+        ok: false,
+        json: async () => ({}),
+      })) as unknown as typeof fetch;
+
+      await expect(service.exchangeGoogleCode("bad", fakeFetch)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it("password login on a password-less account fails exactly like an unknown email", async () => {
+      await service.loginWithGoogle(identity);
+
+      await expect(service.login("gina@example.com", "anything")).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it("change-password on a password-less account points at forgot-password", async () => {
+      const res = await service.loginWithGoogle(identity);
+
+      await expect(service.changePassword(res.user.id, "old", "newpassword")).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    // The documented escape hatch: a Google-only account CAN gain a password.
+    it("forgot-password lets a Google account set its first password, then log in normally", async () => {
+      await service.loginWithGoogle(identity);
+
+      await service.forgotPassword("gina@example.com");
+      await service.resetPassword(mail.lastToken(), "brandnewpassword");
+
+      const res = await service.login("gina@example.com", "brandnewpassword");
+      expect(res.user.email).toBe("gina@example.com");
     });
   });
 });

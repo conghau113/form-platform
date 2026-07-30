@@ -1,10 +1,25 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
+import { createHmac, randomBytes } from "node:crypto";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Post,
+  Query,
+  Req,
+  Res,
+} from "@nestjs/common";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
 import { ConfigService } from "@nestjs/config";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
+import { JwtService } from "@nestjs/jwt";
 import { Throttle } from "@nestjs/throttler";
 import {
   AUTH_COOKIE_NAME,
   authCookieOptions,
+  OAUTH_STATE_COOKIE_NAME,
+  oauthStateCookieOptions,
   parseCookies,
   REFRESH_COOKIE_NAME,
 } from "../../auth/cookie.js";
@@ -24,12 +39,21 @@ import {
 } from "./dto/password.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { RegisterDto } from "./dto/register.dto.js";
+import { googleAuthUrl, googleConfig } from "./google-oauth.js";
 
 /** The subset of the Express response the controller needs to (un)set the auth cookies. */
 interface CookieResponse {
   cookie(name: string, value: string, options: object): void;
   clearCookie(name: string, options?: object): void;
 }
+
+/** Response for the two OAuth handlers, which answer with a 302 instead of a body (A3). */
+interface RedirectResponse extends CookieResponse {
+  redirect(url: string): void;
+}
+
+/** Marks the `state` JWT as an OAuth nonce carrier — see `oauthStart` for why this matters. */
+const OAUTH_STATE_TYP = "oauth_state";
 
 /** The subset of the Express request the controller reads the refresh cookie from. */
 interface CookieRequest {
@@ -50,6 +74,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly config: ConfigService,
+    private readonly jwt: JwtService,
   ) {}
 
   @Public()
@@ -176,6 +201,103 @@ export class AuthController {
     const result = await this.auth.changePassword(ownerId, dto.currentPassword, dto.newPassword);
     this.setAuthCookies(res, result);
     return { user: result.user };
+  }
+
+  /**
+   * Which external sign-in providers this deployment has configured (A3). Public and unauthenticated
+   * because the login page asks BEFORE anyone is signed in. Unlike A2's mail (which degrades
+   * invisibly), the UI has to know: a sign-in button that leads to a 404 is a visible defect.
+   */
+  @Public()
+  @Get("providers")
+  providers(): { google: boolean } {
+    return { google: googleConfig() !== null };
+  }
+
+  /**
+   * Start Google sign-in (A3): redirect the browser to Google's consent screen.
+   *
+   * CSRF defence is a double submit — a random nonce travels to Google inside a signed `state`
+   * JWT *and* is stored in a short-lived cookie; the callback only proceeds when the two agree, so
+   * a callback URL forged by an attacker cannot sign a victim into the attacker's Google account.
+   *
+   * ⚠️ `state` is signed with the SAME `JWT_SECRET` as the access token and is fully visible in the
+   * URL bar and browser history, so it carries an explicit `typ` that the callback checks. Without
+   * that, a future payload change (anything resembling a `sub`) would silently turn this public
+   * string into a credential the global `JwtAuthGuard` would accept.
+   */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Get("oauth/google")
+  async oauthStart(@Res() res: RedirectResponse): Promise<void> {
+    const cfg = googleConfig();
+    // Not configured ⇒ the route does not exist, rather than a half-working endpoint.
+    if (!cfg) throw new NotFoundException();
+    const nonce = randomBytes(16).toString("hex");
+    const state = await this.jwt.signAsync(
+      { typ: OAUTH_STATE_TYP, n: nonce },
+      { secret: this.stateSecret(), expiresIn: "10m" },
+    );
+    res.cookie(OAUTH_STATE_COOKIE_NAME, nonce, this.oauthStateCookie());
+    res.redirect(googleAuthUrl(cfg, state));
+  }
+
+  /**
+   * Google's redirect back (A3). On success the session lands in the usual HttpOnly cookies and the
+   * browser continues into the SPA — deliberately NOT as tokens in the query string (they would
+   * leak into history, logs and `Referer`).
+   *
+   * Every failure funnels to the same `?error=oauth`: an attacker must not learn *why* their forged
+   * callback was rejected, and Google's own error text has no business in our URL.
+   */
+  @Public()
+  @Get("oauth/google/callback")
+  async oauthCallback(
+    @Req() req: CookieRequest,
+    @Res() res: RedirectResponse,
+    @Query("code") code?: string,
+    @Query("state") state?: string,
+  ): Promise<void> {
+    const appUrl = this.config
+      .get<string>("APP_PUBLIC_URL", "http://localhost:5173")
+      .replace(/\/$/, "");
+    // Whatever happens next, this nonce has been spent.
+    res.clearCookie(OAUTH_STATE_COOKIE_NAME, { path: "/" });
+    try {
+      if (!code || !state) throw new Error("missing code/state");
+      const payload = await this.jwt.verifyAsync<{ typ?: string; n?: string }>(state, {
+        secret: this.stateSecret(),
+      });
+      if (payload.typ !== OAUTH_STATE_TYP) throw new Error("wrong state token type");
+      const cookieNonce = parseCookies(req.headers.cookie)[OAUTH_STATE_COOKIE_NAME];
+      if (!payload.n || !cookieNonce || payload.n !== cookieNonce)
+        throw new Error("state mismatch");
+
+      const identity = await this.auth.exchangeGoogleCode(code);
+      const result = await this.auth.loginWithGoogle(identity);
+      this.setAuthCookies(res, result);
+      res.redirect(`${appUrl}/projects`);
+    } catch {
+      res.redirect(`${appUrl}/login?error=oauth`);
+    }
+  }
+
+  /**
+   * Signing key for the OAuth `state` token — derived from `JWT_SECRET`, never `JWT_SECRET` itself.
+   *
+   * The state token is published: it rides the URL bar, browser history and Google's logs. Signed
+   * with the access-token key it would BE an access token as far as {@link JwtAuthGuard} is
+   * concerned (it verifies a signature, not a purpose), and any handler that doesn't happen to read
+   * `sub` would accept it. Domain separation makes that structurally impossible; the `typ` claim
+   * and the guard's `sub` check are the second and third lines of defence.
+   */
+  private stateSecret(): string {
+    const base = this.config.get<string>("JWT_SECRET", "");
+    return createHmac("sha256", base).update("oauth-state").digest("hex");
+  }
+
+  private oauthStateCookie() {
+    return oauthStateCookieOptions(this.config.get<boolean>("AUTH_COOKIE_SECURE", false));
   }
 
   private setAuthCookies(res: CookieResponse, { accessToken, refreshToken }: AuthResult): void {

@@ -40,6 +40,20 @@ export async function fetchMyFunctions(): Promise<string[]> {
   return (await res.json()) as string[];
 }
 
+/**
+ * Which external sign-in providers the API has configured (A3). Raw `fetch` like {@link login}:
+ * this is asked before anyone is signed in, so there is no session for `apiFetch` to refresh. A
+ * failure reads as "none configured" so a hiccup hides the button rather than breaking the page.
+ */
+export async function fetchAuthProviders(): Promise<{ google: boolean }> {
+  const res = await fetch(`${API_BASE}/auth/providers`);
+  if (!res.ok) return { google: false };
+  return (await res.json()) as { google: boolean };
+}
+
+/** Where the browser goes to start Google sign-in. A real navigation — OAuth cannot ride on XHR. */
+export const googleSignInUrl = `${API_BASE}/auth/oauth/google`;
+
 export async function login(email: string, password: string): Promise<UserProfile> {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
