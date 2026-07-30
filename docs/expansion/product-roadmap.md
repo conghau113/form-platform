@@ -229,9 +229,19 @@ env-driven, secret CHỈ ở `.env` phía API.
 >   `state` rác **và** nonce lệch đều ⇒ 302 `/login?error=oauth` mà **không set cookie auth nào**,
 >   đăng nhập mật khẩu cũ vẫn 200, console sạch. **Migration đã `migrate deploy`** (`psql \d "User"`
 >   xác nhận `passwordHash` nullable) và 53 user hiện có không hề hấn gì.
-> - ⚠️ **CHƯA chạy được vòng thật qua Google** (owner chưa cấp client-id/secret). Kết luận về
->   SameSite ở trên là **suy luận theo spec + hành vi trình duyệt đã biết**, chưa kiểm chứng
->   end-to-end; phần chạy được đã có test tự động phủ.
+> - **✅ ĐÃ CHẠY TRỌN VÒNG THẬT QUA GOOGLE (owner tự bấm, cùng ngày):** OAuth client thật →
+>   màn hình chọn tài khoản của Google → callback → vào thẳng `/projects`. Kiểm chứng sau đó:
+>   `/auth/me` trả đúng danh tính, `displayName` lấy từ hồ sơ Google, `emailVerifiedAt` **tự
+>   đánh dấu**, `passwordHash` **NULL**, personal tenant + role `Admin` (`*`) auto-provision đúng,
+>   `document.cookie` **không đọc được** `access_token` (HttpOnly thật sự), console sạch.
+>   ⇒ kết luận về `SameSite=Lax` ở trên **không còn là suy luận**: cookie state đã sống sót qua
+>   đúng cái điều hướng top-level quay về từ `accounts.google.com`.
+> - ⚠️ **GOTCHA môi trường (mất thời gian nhất khi bật):** `pnpm dev` của owner proxy `/api` sang
+>   `:3001` = **container image CŨ** (404 mọi route A3). Tệ hơn: chạy song song 2 Vite cùng cổng
+>   5173 thì trên Windows `localhost` phân giải `::1` **trước** ⇒ trình duyệt trúng Vite kia còn
+>   `127.0.0.1:5173` trúng cái đúng, hai hostname cho kết quả khác nhau. Muốn dùng lại stack
+>   compose thì phải **build lại image api**, và credential khi đó phải nằm ở **`.env` thư mục
+>   GỐC** (compose đọc root, không đọc `apps/api/.env`).
 > - **⚠️ Known-gap (CỐ Ý):** liên kết theo **email đã xác minh**, không lưu `googleId` ⇒ đổi email
 >   chính của tài khoản Google thì lần sau vào sẽ tạo tài khoản mới · **chưa có UI liên kết/gỡ**,
 >   chưa hiện "tài khoản này đăng nhập bằng Google" · tài khoản chỉ-Google không đăng nhập bằng
