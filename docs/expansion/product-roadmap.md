@@ -843,3 +843,22 @@ sản phẩm cuối, dựa trên nền đã vững. Có thể chèn A2 sớm n�
   bị chặn (401/403). Ưu tiên test negative.
 - **Migration an toàn:** mọi Δ (ownerId→tenantId, cột User, field-type mới) → additive + test migrate
   fixture cũ (golden rule repo: additive schema, không phá JSON đã lưu; xem `AGENTS.md`).
+- **Suite test phải xanh ổn định (✅ 2026-07-31):** `pnpm test` từng đỏ ngẫu nhiên — không phải lỗi code
+  mà do **quá tải song song**. turbo mặc định chạy 10 **tác vụ** cùng lúc, mỗi vitest lại tự dựng pool
+  worker riêng ⇒ trên máy 8 lõi có hàng chục tiến trình tranh CPU, và các suite render vượt trần
+  `testTimeout` 5s mặc định. **Đo được:** cùng cấu hình, `--concurrency=10` xanh 7m42 rồi ĐỎ 6m02
+  (builder `PropertyPanel.validation` 4 fail · renderer 3 fail *dù đã nâng trần lên 20s* · api
+  `import-files-to-db` chết ở **health-check 120s của Testcontainers**, thứ mà `hookTimeout` không với
+  tới); `--concurrency=2` xanh 3 lần liên tiếp ở **cùng wall-time** (7m46 / 7m30 / 6m22). ⇒ Chốt:
+  `pnpm test` và bước Test trong `.github/workflows/ci.yml` đều dùng **`--concurrency=2`**, kèm lớp đệm
+  `testTimeout: 20_000` (builder + form-renderer-web) và `hookTimeout: 360_000` (api, ≈1.9× số đo xấu
+  nhất 190s của test importer).
+  **Bài học:** nâng timeout chỉ chữa triệu chứng — trần cứ nâng là lại bị vượt; giới hạn song song mới
+  chạm nguyên nhân, và ở đây nó KHÔNG tốn thêm thời gian chạy.
+  ⚠️ **Đánh đổi đã chấp nhận:** trần cao hơn ⇒ một test/hook treo THẬT sẽ báo lỗi chậm hơn (tối đa
+  +15s mỗi test render; +300s cho `beforeAll` của api). Bù lại đã đặt `timeout-minutes: 30` cho job
+  `verify` để một hook treo không đốt hết 360 phút mặc định của GitHub.
+  ⚠️ **3 lần xanh là bằng chứng, không phải chứng minh:** nguyên nhân sâu là suite renderer/builder
+  vốn chậm bất thường (renderer: 126 test ~210s test-time, nặng vì antd barrel + jsdom + userEvent).
+  `--concurrency=2` mua biên an toàn ~4×, không xoá được cái chậm đó. Muốn bền hơn thì phải giảm chi
+  phí render của chính test.

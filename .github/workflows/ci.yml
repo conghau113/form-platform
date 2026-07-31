@@ -22,6 +22,9 @@ jobs:
   verify:
     name: Lint · Typecheck · Build · Test
     runs-on: ubuntu-latest
+    # The importer test's beforeAll gets a 360s hookTimeout (see apps/api/vitest.config.ts), so a
+    # genuinely hung hook would otherwise burn the runner for GitHub's 360-minute default.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,7 +76,11 @@ jobs:
         # The single DB-touching test (import-files-to-db) uses Testcontainers, which
         # works out of the box on ubuntu-latest (Docker pre-installed). The AI live
         # test self-skips without an API key.
-        run: pnpm turbo run test
+        # --concurrency=2: turbo defaults to 10 tasks at once and each vitest spawns its own
+        # worker pool, which oversubscribes the runner and makes the render suites fail on
+        # timeouts alone. Measured locally: concurrency 10 flipped green/red at the same wall
+        # time that concurrency 2 finished green.
+        run: pnpm turbo run test --concurrency=2
 
   changeset:
     name: Changeset gate
