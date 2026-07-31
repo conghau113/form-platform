@@ -97,6 +97,22 @@ export abstract class WorkflowInstanceRepo {
     instance: WorkflowInstance,
     meta: WorkflowInstanceMeta,
   ): Promise<WorkflowInstance>;
+  /**
+   * Insert a NEW case, or return `null` when `instance.id` is already taken.
+   *
+   * Starting a case must never go through {@link upsert}: that writes by id, so a collision would
+   * silently REWRITE the existing case (and drag it into the caller's project) instead of failing.
+   * The "does it exist?" check the service does first still races — two concurrent starts can both
+   * see "free" — so the insert itself has to be the decider. Returning `null` rather than throwing
+   * keeps Prisma's error types out of the service, which maps `null` → 409.
+   *
+   * NOTE: `null` means "id taken" only because `id` is the record's ONLY unique constraint. Adding an
+   * `@@unique` to the model would make this branch report the wrong conflict — narrow it then.
+   */
+  abstract create(
+    instance: WorkflowInstance,
+    meta: WorkflowInstanceMeta,
+  ): Promise<WorkflowInstance | null>;
   /** Load an instance by id, or `null` when absent (service maps null → 404). */
   abstract load(id: string): Promise<WorkflowInstance | null>;
   /** The org-index summary of an instance (no body), or `null` — for access checks. */

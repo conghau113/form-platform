@@ -115,6 +115,25 @@ function buildOrderBy(
   return [primary, { id: "asc" }];
 }
 
+/**
+ * The columns an instance write owns, shared by `upsert` and `create` so the two can never drift.
+ *
+ * NOTE: every key here is written on UPDATE too, so nothing the case owns elsewhere may appear in
+ * this object — `assigneeId` in particular is only ever written by `setAssignee`, and `dueAt`/
+ * `priority` only by `setWorkOrderFields`.
+ */
+function writeData(instance: WorkflowInstance, meta: WorkflowInstanceMeta) {
+  return {
+    workflowId: meta.workflowId,
+    projectId: meta.projectId,
+    current: instance.current,
+    label: meta.label,
+    statusLabel: meta.statusLabel,
+    statusKind: meta.statusKind,
+    body: instance as unknown as Prisma.InputJsonValue,
+  };
+}
+
 @Injectable()
 export class PrismaWorkflowInstanceRepo extends WorkflowInstanceRepo {
   constructor(private readonly prisma: PrismaService) {
@@ -122,23 +141,31 @@ export class PrismaWorkflowInstanceRepo extends WorkflowInstanceRepo {
   }
 
   async upsert(instance: WorkflowInstance, meta: WorkflowInstanceMeta): Promise<WorkflowInstance> {
-    // NOTE: every key here is written on update too, so nothing the case owns elsewhere may appear
-    // in this object — `assigneeId` in particular is only ever written by `setAssignee`.
-    const data = {
-      workflowId: meta.workflowId,
-      projectId: meta.projectId,
-      current: instance.current,
-      label: meta.label,
-      statusLabel: meta.statusLabel,
-      statusKind: meta.statusKind,
-      body: instance as unknown as Prisma.InputJsonValue,
-    };
+    const data = writeData(instance, meta);
     await this.prisma.workflowInstanceRecord.upsert({
       where: { id: instance.id },
       update: data,
       create: { id: instance.id, ...data },
     });
     return instance;
+  }
+
+  async create(
+    instance: WorkflowInstance,
+    meta: WorkflowInstanceMeta,
+  ): Promise<WorkflowInstance | null> {
+    try {
+      await this.prisma.workflowInstanceRecord.create({
+        data: { id: instance.id, ...writeData(instance, meta) },
+      });
+      return instance;
+    } catch (err) {
+      // P2002 = unique violation, i.e. the id is taken. Anything else is a real failure.
+      if (typeof err === "object" && err !== null && "code" in err && err.code === "P2002") {
+        return null;
+      }
+      throw err;
+    }
   }
 
   async load(id: string): Promise<WorkflowInstance | null> {

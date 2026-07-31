@@ -87,6 +87,9 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
   async upsert(): Promise<never> {
     throw new Error("not used");
   }
+  async create(): Promise<never> {
+    throw new Error("not used — see workflow-instances.service.test.ts");
+  }
   async load(): Promise<null> {
     return null;
   }

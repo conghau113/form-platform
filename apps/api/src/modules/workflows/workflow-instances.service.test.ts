@@ -138,6 +138,14 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
     this.updatedAt.set(instance.id, new Date());
     return instance;
   }
+  /** Insert-only, like the real repo: a taken id yields `null` instead of overwriting. */
+  async create(
+    instance: WorkflowInstance,
+    meta: WorkflowInstanceMeta,
+  ): Promise<WorkflowInstance | null> {
+    if (this.bodies.has(instance.id)) return null;
+    return this.upsert(instance, meta);
+  }
   async load(id: string): Promise<WorkflowInstance | null> {
     return this.bodies.get(id) ?? null;
   }
@@ -852,6 +860,9 @@ describe("WorkflowInstancesService — field-level RBAC on case data (Phase E)",
   });
 });
 
+/** Any valid uuid: `createInstance` slices the first 8 chars of it into the generated id. */
+const FIXED_UUID = "00000000-0000-4000-8000-000000000000" as const;
+
 describe("WorkflowInstancesService — reviewer-found hardening (Phase E)", () => {
   it("refuses to start a case whose id already exists (409, never overwrites)", async () => {
     await seedWorkflow();
@@ -861,6 +872,26 @@ describe("WorkflowInstancesService — reviewer-found hardening (Phase E)", () =
       ConflictException,
     );
     expect(instanceRepo.bodies.get(started.id)?.data).toEqual({ subject: "first" });
+  });
+
+  it("refuses to overwrite when a GENERATED id collides (409, not a silent replace)", async () => {
+    // The pre-check above only runs for a client-supplied id, so a collision between two generated
+    // ids used to reach `upsert` unguarded and replace the first case. Force the collision by
+    // freezing both halves of the generated id — the clock and the random suffix.
+    await seedWorkflow();
+    vi.useFakeTimers();
+    const uuid = vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(FIXED_UUID);
+    try {
+      const first = await service.start(OWNER, "wf1", { data: { subject: "first" } });
+      const second = service.start(OWNER, "wf1", { data: { subject: "second" } });
+      await expect(second).rejects.toBeInstanceOf(ConflictException);
+      // The first case is untouched, and no second row appeared.
+      expect(instanceRepo.bodies.get(first.id)?.data).toEqual({ subject: "first" });
+      await expect(service.list(OWNER, "wf1")).resolves.toHaveLength(1);
+    } finally {
+      uuid.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("never derives the case label from a role-gated field", async () => {

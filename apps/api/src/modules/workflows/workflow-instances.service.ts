@@ -94,18 +94,24 @@ export class WorkflowInstancesService {
         errors,
       });
     }
-    // `upsert` writes by id, and the id may be client-chosen — so starting a case with an id that
-    // already exists would REWRITE that case and drag it into this project. Refuse instead. (Phase E
-    // makes this reachable with `workflow.run`, where it previously needed `editor`.)
+    // Starting a case with an id that already exists must never REWRITE that case and drag it into
+    // this project. (Phase E makes this reachable with `workflow.run`, where it previously needed
+    // `editor`.) This check is the friendly path — it reports the conflict before the work of
+    // `denormalize` — but it is not the guarantee: it races, and it only covers client-chosen ids.
+    // The insert below is what actually decides.
     if (opts.id && (await this.instances.findSummary(opts.id))) {
       throw new ConflictException(`Workflow instance already exists: ${opts.id}`);
     }
     const instance = createInstance(def, { id: opts.id, data: opts.data });
-    const stored = await this.instances.upsert(instance, {
+    const stored = await this.instances.create(instance, {
       workflowId,
       projectId: summary.projectId,
       ...(await this.denormalize(def, instance)),
     });
+    // `null` = the id was taken between the check above and this insert, or a generated id collided.
+    if (!stored) {
+      throw new ConflictException(`Workflow instance already exists: ${instance.id}`);
+    }
     return this.maskInstance(ownerId, summary.projectId, def, stored, opts.roles);
   }
 

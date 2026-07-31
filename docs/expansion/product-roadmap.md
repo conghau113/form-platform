@@ -874,3 +874,21 @@ sản phẩm cuối, dựa trên nền đã vững. Có thể chèn A2 sớm n�
   `DesignCanvas.tsx:138` chỉ dùng làm nhãn gộp một thao tác kéo cho undo, không phải khoá lưu trữ.
   Các chỗ sinh id khác (`presets/patch.ts`, `presets/ai/draft.ts`, `newForm.ts`, `newWorkflow.ts`)
   đã dùng `crypto.randomUUID` từ trước.
+- **Bắt đầu một case phải là INSERT, không được là upsert (✅ 2026-08-01, P1):** `start()` ghi case mới
+  bằng `instances.upsert(...)`, mà upsert **ghi theo id** ⇒ nếu id đã tồn tại thì case cũ bị **ghi đè
+  im lặng** và bị kéo sang dự án của người gọi. Chốt 409 có sẵn chỉ chạy khi **client tự truyền id**,
+  nên id TỰ SINH trùng nhau (sau `d6ae663` là hiếm, nhưng vẫn có thể) đi thẳng vào đường ghi đè; và
+  ngay cả với id client, chốt đó **vẫn race** — kiểm rồi mới ghi.
+  ⇒ Thêm `WorkflowInstanceRepo.create(instance, meta)` trả **`null` khi id đã tồn tại** (repo bắt
+  `P2002`, KHÔNG để lỗi Prisma lọt ra ngoài; service map `null → 409`). `start()` dùng `create`;
+  **`advance()` vẫn dùng `upsert`** — đó mới là ghi-đè-có-chủ-đích. Chốt cũ giữ lại làm đường báo lỗi
+  sớm (đẹp hơn, đỡ phí `denormalize`), nhưng **INSERT mới là thứ quyết định**.
+  **Luật rút ra:** "kiểm tra tồn tại rồi mới ghi" không bao giờ là bảo đảm — phải để chính phép ghi
+  (ràng buộc unique của DB) làm trọng tài.
+  **Đã xác minh:** test hồi quy id-tự-sinh-trùng (đóng băng đồng hồ + stub `crypto.randomUUID`) **ĐỎ
+  trên code cũ**; live-smoke Postgres 9/9; và một probe riêng gọi thẳng `PrismaWorkflowInstanceRepo.
+  create` hai lần cùng id để chứng minh nhánh `P2002` **thật sự trả `null` chứ không ném** (unit test
+  dùng fake nên không phủ được nhánh này).
+  ⚠️ **Known-gap P1 KHÔNG đóng (có chủ đích):** `id` vẫn do client truyền được và `findSummary` tra
+  **toàn cục** (không giới hạn dự án/tenant) ⇒ 409-hay-201 vẫn là **oracle tồn tại** cho một id lạ.
+  P1 chỉ đóng đường **ghi đè**. Chấp nhận; đừng tưởng P1 đã bịt luôn chỗ này.
