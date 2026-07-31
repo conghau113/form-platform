@@ -102,6 +102,18 @@ export function isTemplateArray(v: unknown): v is Template[] {
   return Array.isArray(v) && v.every(isTemplate);
 }
 
+/**
+ * Id for a user-saved template: `user-<millis>-<random>`.
+ *
+ * The random part is not decoration. Two saves inside the same millisecond used to get the same
+ * id, and since the list is keyed by id, `remove` would then drop both entries at once (and React
+ * would warn about duplicate keys). Same random-suffix convention as `slugId` in
+ * `workspace/newForm.ts`.
+ */
+export function newTemplateId(): string {
+  return `user-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
 /** User-saved templates, persisted to localStorage (newest first). */
 export function useUserTemplates(): {
   templates: Template[];
@@ -116,7 +128,7 @@ export function useUserTemplates(): {
   const save = useCallback(
     (title: string, schema: FormSchema) => {
       const tpl: Template = {
-        id: `user-${Date.now()}`,
+        id: newTemplateId(),
         title: title.trim() || "Mẫu chưa đặt tên",
         description: "Đã lưu từ trình thiết kế",
         schema,

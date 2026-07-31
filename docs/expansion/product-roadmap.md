@@ -862,3 +862,15 @@ sản phẩm cuối, dựa trên nền đã vững. Có thể chèn A2 sớm n�
   vốn chậm bất thường (renderer: 126 test ~210s test-time, nặng vì antd barrel + jsdom + userEvent).
   `--concurrency=2` mua biên an toàn ~4×, không xoá được cái chậm đó. Muốn bền hơn thì phải giảm chi
   phí render của chính test.
+- **Id sinh theo đồng hồ phải kèm phần ngẫu nhiên (✅ 2026-07-31, P0b):** cùng loại lỗi vừa sửa ở
+  `workflow-core` (`d6ae663`), còn một chỗ nữa trong builder — `templates.ts` đặt id mẫu người dùng là
+  `user-${Date.now()}`. Hai lần lưu trong **cùng một millisecond** nhận đúng một id, mà danh sách mẫu
+  lại **khoá theo id** ⇒ xoá một mẫu thì mất luôn mẫu kia (và React cảnh báo trùng `key`). Tách hàm
+  thuần `newTemplateId()` = `user-<millis>-<random>` (cùng hình dạng với `slugId` ở `workspace/newForm.ts`
+  và với `createInstance` sau khi sửa) + test đóng băng đồng hồ, **đã xác minh ĐỎ trên code cũ**.
+  **Luật rút ra:** id sinh từ `Date.now()` mà được dùng làm **khoá ghi/xoá** thì bắt buộc có phần
+  ngẫu nhiên. Đã rà toàn `apps/builder/src` (`grep Date.now()`), còn đúng 2 chỗ và **cả hai đều an
+  toàn, không sửa**: `workflow/workflow-model.ts:182` có sẵn biến đếm đơn điệu nối vào đuôi; canvas
+  `DesignCanvas.tsx:138` chỉ dùng làm nhãn gộp một thao tác kéo cho undo, không phải khoá lưu trữ.
+  Các chỗ sinh id khác (`presets/patch.ts`, `presets/ai/draft.ts`, `newForm.ts`, `newWorkflow.ts`)
+  đã dùng `crypto.randomUUID` từ trước.

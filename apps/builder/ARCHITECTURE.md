@@ -13,13 +13,22 @@ folder, never a new top-level `*.tsx` (the `feature-module` skill rule #1, enfor
 |---|---|
 | App shell — wiring + 3-pane layout only (logic lives in `editor/`) | `App.tsx` |
 | Entry — router (`createBrowserRouter`) + `QueryClientProvider` | `main.tsx` |
-| Editor state + persistence hooks + the only form/theme `fetch` | `editor/` (`useFormEditor`, `useEditorShortcuts`, `useFormPersistence`, `useNavigationGuard`, `history`, `client.ts`) |
+| Editor state + persistence hooks + the form/theme client | `editor/` (`useFormEditor`, `useEditorShortcuts`, `useFormPersistence`, `useNavigationGuard`, `history`, `client.ts`) |
 | Design canvas + `DesignerContext` + dnd-kit drag controller | `canvas/` (`DesignCanvas`, `DesignerContext`, `useDragon`) |
 | Palette of draggable field types | `palette/` |
-| Preset gallery + linked-field control + `fetch` client | `presets/` |
-| Workspace explorer (projects/folders), routes + `fetch` client | `workspace/` |
+| Preset gallery + linked-field control + client | `presets/` |
+| Workspace explorer (projects/folders), routes + client | `workspace/` |
 | react-query — `QueryClient`, `qk` key factory, test helpers | `query/` |
-| Theme editor · templates gallery · workflow editor (early) | `theme/` · `templates/` · `workflow/` |
+| Theme editor · templates gallery · workflow editor | `theme/` · `templates/` · `workflow/` |
+| Application chrome — `AppShell` layout route, `NavRail` (nav gated by `functions`), workspace switcher, settings page | `shell/` |
+| Auth screens (login/register/forgot/reset/verify) + `RequireAuth` + `useAuth` + the `hasFunction` gate | `auth/` |
+| Admin — RBAC (users, roles, function catalog) + tenant-wide catalogs (forms/workflows/versions/live cases) + the org-unit panel | `admin/` |
+| Org-unit tree panel | `org-units/` |
+| Operate — work orders / cases: table, filters, new-case modal, comments | `operate/` |
+| Form submissions route + hooks | `submissions/` |
+| Publish control + version list/diff | `versions/` |
+| Lookup-field editor (used from the property panel) | `lookup/` |
+| AI assistant drawer + generate hooks + credentials | `ai/` |
 | Bespoke editors reused by the panel | `datasource/`, `reactions/` |
 | Undo/redo wrapper + JSON import/export + UI pins | `lib/` (`io`, `pins`) |
 | Tree engine (immutable node ops, paths, insert guard, geometry) | `engine/` |
@@ -28,12 +37,18 @@ folder, never a new top-level `*.tsx` (the `feature-module` skill rule #1, enfor
 | **Property panel** (the right-hand field editor) | `PropertyPanel/` |
 
 ## Data fetching — react-query only
-Server state (workspace, presets, form/theme save) goes through react-query: a feature's
-`client.ts` (the **only** place `fetch` is allowed) → a `useQuery`/`useMutation` hook → the
-component. Keys come from `query/keys.ts` (`qk`); mutations `invalidateQueries` rather than
+Server state goes through react-query: a feature's `client.ts` → a `useQuery`/`useMutation` hook →
+the component. Keys come from `query/keys.ts` (`qk`); mutations `invalidateQueries` rather than
 re-fetching by hand. There is no `useState`+`useEffect`+`alive`-flag fetching and no manual
-`reload()` left in the tree (refactor R4/R5). `fetch(` appears only in `editor/client.ts`,
-`workspace/client.ts`, and `presets/client.ts`.
+`reload()` left in the tree (refactor R4/R5).
+
+`lib/apiFetch.ts` is the **single transport**: it stamps the selected workspace as `X-Tenant-Id`
+and turns a `401` into one deduplicated `POST /auth/refresh` + retry. So the rule is
+**`apiFetch` is only ever called inside a feature's `client.ts`** — components and hooks never
+call it directly. What is **not** universal is riding `apiFetch`: `auth/client.ts` deliberately uses
+raw `fetch` for the session-less endpoints (`providers`, `login`, `register`, `logout`,
+forgot/reset/verify) — there is no session yet for a 401-refresh to rescue, and login/logout set or
+clear the cookies themselves. (`googleSignInUrl` is a full-page navigation, not a fetch at all.)
 
 ## `field-registry/` — the meta-driven registry
 Single source of truth the builder derives palette, model factories, property panel,
