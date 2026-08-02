@@ -201,11 +201,12 @@ export class ProjectsService {
    * The role a user holds on a loaded project: the canonical owner, else the higher of their W5
    * grant and — B3/C3 — the role their RBAC grants in the project's tenant map to, data-scoped by
    * the project's org unit (union semantics: an explicit low grant never demotes a tenant admin).
+   *
+   * `public` so {@link ActorRolesService} can reuse the verdict for a project it has ALREADY loaded
+   * (it needs `tenantId` from the same row) instead of going through {@link resolveRole} and paying
+   * for a second lookup of the very same project. Not part of the HTTP surface.
    */
-  private async resolveRoleForProject(
-    userId: string,
-    project: ProjectRecord,
-  ): Promise<ProjectRole | null> {
+  async resolveRoleForProject(userId: string, project: ProjectRecord): Promise<ProjectRole | null> {
     if (project.ownerId === userId) return "owner";
     const [grant, grants] = await Promise.all([
       this.members.find(project.id, userId),
@@ -261,9 +262,10 @@ export class ProjectsService {
    * (no existence leak, same as {@link requireAccess}); can see the project but may not operate it
    * → 403.
    *
-   * This is the ONLY authorization boundary for running a case: a transition's `role` is not one —
-   * callers self-declare workflow roles (WF4 gap), so the engine's role check is workflow modelling,
-   * not security.
+   * This is the authorization boundary for running a case — passing it means "may operate this
+   * project's cases at all". A transition's `role` is a second, finer gate on top (Phase E3a: the
+   * acting roles are derived by `ActorRolesService`/`CaseActorRolesService`, no longer declared by
+   * the caller), not a substitute for this one.
    */
   async requireRunAccess(userId: string, projectId: string): Promise<ProjectRecord> {
     const project = await this.projects.findById(projectId);

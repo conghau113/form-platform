@@ -237,6 +237,9 @@ class FakeRbacRepo extends RbacRepo {
   async listUserRoleIds(): Promise<never[]> {
     return [];
   }
+  async listUserRoleNames(): Promise<never[]> {
+    return [];
+  }
   async resolveFunctions(): Promise<never[]> {
     return [];
   }

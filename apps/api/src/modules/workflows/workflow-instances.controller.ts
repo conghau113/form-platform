@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   HttpException,
   Param,
   Patch,
@@ -11,11 +13,17 @@ import {
 import type { WorkflowInstance } from "@org/workflow-schema";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
 import type { CaseCommentRecord } from "../../persistence/repositories/case-comment.repo.js";
+import type { CaseParticipantRecord } from "../../persistence/repositories/case-participant.repo.js";
 import type { WorkflowInstanceSummary } from "../../persistence/repositories/workflow-instance.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
 import { CaseCommentsService } from "./case-comments.service.js";
+import type { CaseCastView } from "./case-participants.service.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference (emitDecoratorMetadata).
+import { CaseParticipantsService } from "./case-participants.service.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { AddCommentDto } from "./dto/add-comment.dto.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { AddParticipantDto } from "./dto/add-participant.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { AdvanceInstanceDto } from "./dto/advance-instance.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
@@ -51,6 +59,7 @@ export class WorkflowInstancesController {
   constructor(
     private readonly instances: WorkflowInstancesService,
     private readonly comments: CaseCommentsService,
+    private readonly participants: CaseParticipantsService,
   ) {}
 
   /** Start a fresh case of a workflow at its start node. */
@@ -135,6 +144,36 @@ export class WorkflowInstancesController {
     return this.comments.add(ownerId, instanceId, dto.body);
   }
 
+  /** The case's cast + the caller's own effective roles — read needs `viewer` (Phase E3a). */
+  @Get("workflow-instances/:instanceId/participants")
+  listParticipants(
+    @CurrentOwner() ownerId: string,
+    @Param("instanceId") instanceId: string,
+  ): Promise<CaseCastView> {
+    return this.participants.list(ownerId, instanceId);
+  }
+
+  /** Cast a workspace member into a domain role on the case — needs run access (Phase E3a). */
+  @Post("workflow-instances/:instanceId/participants")
+  addParticipant(
+    @CurrentOwner() ownerId: string,
+    @Param("instanceId") instanceId: string,
+    @Body() dto: AddParticipantDto,
+  ): Promise<CaseParticipantRecord> {
+    return this.participants.add(ownerId, instanceId, dto);
+  }
+
+  /** Remove someone from the cast — needs run access (Phase E3a). */
+  @Delete("workflow-instances/:instanceId/participants/:participantId")
+  @HttpCode(204)
+  removeParticipant(
+    @CurrentOwner() ownerId: string,
+    @Param("instanceId") instanceId: string,
+    @Param("participantId") participantId: string,
+  ): Promise<void> {
+    return this.participants.remove(ownerId, instanceId, participantId);
+  }
+
   /** Fire an action against a case; returns the advanced instance or 422 with the failure reason. */
   @Post("workflow-instances/:instanceId/advance")
   async advance(
@@ -146,7 +185,6 @@ export class WorkflowInstancesController {
       return await this.instances.advance(ownerId, instanceId, {
         action: dto.action,
         data: dto.data,
-        roles: dto.roles,
       });
     } catch (err) {
       if (err instanceof HttpException) throw err;

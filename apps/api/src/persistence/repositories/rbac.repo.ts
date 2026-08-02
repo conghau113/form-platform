@@ -100,6 +100,17 @@ export abstract class RbacRepo {
   abstract setUserRoles(userId: string, tenantId: string, roleIds: string[]): Promise<void>;
   /** The role ids currently assigned to a user (optionally narrowed to one tenant). */
   abstract listUserRoleIds(userId: string, tenantId?: string): Promise<string[]>;
+  /**
+   * The NAMES of the roles a user holds in a tenant (Phase E3a) — the bridge between "role in the
+   * Quản trị screen" and "role in a workflow definition", which is how a case actor gets domain
+   * roles the server can vouch for.
+   *
+   * Deliberately its own single query rather than `listUserRoleIds` + `listRoles(tenantId)`: this is
+   * read on every advance / load / masked response, and the latter would load the tenant's whole
+   * role table each time. Names are returned raw — filtering out the codes the platform reserves
+   * (`owner`, `editor`, `assignee`, …) is a policy decision that belongs in `actor-roles.ts`.
+   */
+  abstract listUserRoleNames(userId: string, tenantId: string): Promise<string[]>;
 
   // --- Derived (enforcement) ---
   /** A user's effective permission set in a tenant: the union of function codes over the roles they

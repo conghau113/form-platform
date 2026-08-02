@@ -68,6 +68,22 @@ export interface CaseComment {
   createdAt: string;
 }
 
+/** One person cast into a domain role on a case (Phase E3a). */
+export interface CaseParticipant {
+  id: string;
+  instanceId: string;
+  roleCode: string;
+  userId: string;
+  addedBy: string;
+  createdAt: string;
+}
+
+/** A case's cast plus the roles the SERVER says the caller acts in on it. */
+export interface CaseCast {
+  participants: CaseParticipant[];
+  myRoles: string[];
+}
+
 async function readError(res: Response): Promise<string> {
   const data = (await res.json().catch(() => ({}))) as { message?: string };
   return data.message ?? res.statusText;
@@ -128,6 +144,50 @@ export async function updateWorkOrder(
     },
   );
   if (!res.ok) throw new Error(`Cập nhật việc thất bại: ${await readError(res)}`);
+}
+
+/**
+ * A case's cast + the caller's own roles on it (Phase E3a). Reading only needs `viewer`.
+ *
+ * `myRoles` is the server's verdict, not a preference: it is what the engine checks
+ * `transition.role` against and what decides which gated fields come back unmasked.
+ */
+export async function listCaseParticipants(instanceId: string): Promise<CaseCast> {
+  const res = await apiFetch(
+    `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/participants`,
+    { headers: ownerHeaders() },
+  );
+  if (!res.ok) throw new Error(`Tải vai trò trên case thất bại: ${await readError(res)}`);
+  return (await res.json()) as CaseCast;
+}
+
+/** Cast a workspace member into a role — the server requires run access (a viewer gets 403). */
+export async function addCaseParticipant(
+  instanceId: string,
+  input: { roleCode: string; userId: string },
+): Promise<CaseParticipant> {
+  const res = await apiFetch(
+    `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/participants`,
+    {
+      method: "POST",
+      headers: { ...ownerHeaders(), "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!res.ok) throw new Error(`Thêm vai trò thất bại: ${await readError(res)}`);
+  return (await res.json()) as CaseParticipant;
+}
+
+/** Remove someone from a case's cast (run access required). */
+export async function removeCaseParticipant(
+  instanceId: string,
+  participantId: string,
+): Promise<void> {
+  const res = await apiFetch(
+    `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/participants/${encodeURIComponent(participantId)}`,
+    { method: "DELETE", headers: ownerHeaders() },
+  );
+  if (!res.ok) throw new Error(`Xóa vai trò thất bại: ${await readError(res)}`);
 }
 
 /** A case's comment thread, oldest first. Reading only needs `viewer` on the project. */

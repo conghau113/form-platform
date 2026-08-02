@@ -639,9 +639,89 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
 >   hồ rồi tạo 2 instance (2 id khác nhau, cùng mốc thời gian) · `workflow-instances.service.test.ts` tạo 2
 >   case trong cùng millisecond rồi đòi `list()` trả về **2** — chính hành vi mất dữ liệu ở trên.
 > - Changeset `workflow-instance-id-collision.md` (**patch** cho `@org/workflow-core`).
-> - **Còn lại (cố ý, ngoài phạm vi):** `start()` vẫn ghi bằng `upsert`, nên nếu id có trùng thì vẫn là đè
->   chứ không phải lỗi; muốn kín tuyệt đối thì dùng `create` cho case mới, hoặc mở rộng chốt 409 ở
->   `workflow-instances.service.ts:100` (đang chỉ áp khi client tự truyền id) sang cả id tự sinh.
+> - ~~**Còn lại (cố ý, ngoài phạm vi):** `start()` vẫn ghi bằng `upsert`…~~ → **đã đóng ở P1
+>   (2026-08-01)**, xem mục "Bắt đầu một case phải là INSERT" ở §Bài học cuối tài liệu.
+
+> **✅ ĐÃ LÀM (2026-08-02) — E3a "cast" nhiều vai trò + VAI TRÒ DO SERVER SUY RA.** Phase P2 của plan
+> `~/.claude/plans/gentle-spinning-adleman.md` (đã qua `plan-reviewer`, 7 finding `required` sửa hết
+> vào plan trước khi viết dòng code nào). Owner chốt: **siết nghiêm ngặt ngay, KHÔNG cờ env**.
+>
+> - **🔴 Lỗ leo thang quyền THẬT mà phase này sinh ra để bịt:** `transition.role` được engine kiểm,
+>   nhưng **tập vai trò lại do CLIENT tự khai** (`AdvanceInstanceDto.roles`). Vì `canView`
+>   (`packages/form-core/src/rbac.ts`) mở khoá khi tập vai trò giao với `permissions.viewRoles`, bất kỳ
+>   ai có quyền chạy case chỉ cần gửi `{"roles":["hr"]}` là **đọc được trường bị che**. Nay `roles` đã
+>   bị **xoá khỏi DTO**; `whitelist: true` của `ValidationPipe` **loại bỏ** nó nếu client cũ vẫn gửi.
+> - **Nguồn vai trò mới (server):** `ActorRolesService.forProject` = vai trò dự án
+>   (`owner|editor|viewer`, phát ra **nguyên văn** để định nghĩa đang gate `role:"editor"` không kẹt)
+>   ∪ **tên các `Role` tenant** người đó giữ. `CaseActorRolesService.forCase` = cái trên ∪ vai trò được
+>   **cử vào case** ∪ `"assignee"` nếu đúng người phụ trách.
+> - **🔴 Hai chốt do `plan-reviewer` bắt (cả hai đều có test đã xác minh ĐỎ khi gỡ chốt):**
+>   (1) **`RESERVED_ROLE_CODES = [owner, editor, viewer, assignee, creator]`** — `RbacRepo.createRole`
+>   không cấm tên nào, nên admin tenant có thể tạo `Role` **tên `assignee`/`editor`** rồi mọi người giữ
+>   nó tự thoả `transition.role:"assignee"` và mở khoá `viewRoles:["editor"]` trên MỌI dự án của tenant.
+>   Lọc **khớp chính xác** (sau `trim`), KHÔNG phân biệt-hoa-thường: engine so sánh chính xác nên
+>   `Editor` không thoả gì cả, và một vai trò nghiệp vụ tên `Editor` vẫn dùng được.
+>   (2) **`tenantId` lấy từ `project.tenantId`, TUYỆT ĐỐI không từ header `X-Tenant-Id`** — nếu không,
+>   member tenant A giữ `Role` tên `hr` chạy case ở tenant B chỉ cần gửi `X-Tenant-Id: A` là mở khoá
+>   trường `viewRoles:["hr"]` của B, tức đúng cái lỗ vừa bịt.
+> - **Dữ liệu:** `WorkflowInstanceParticipant` (migration `20260801000000_add_case_participants`, thuần
+>   additive, **không backfill**) — khoá tự nhiên `(instanceId, roleCode, userId)`, **KHÔNG có cột bước**
+>   (ma trận "(vai trò, hành động, trạng thái) → trạng thái kế" chính là `transitions`, thêm cột bước ở
+>   đây là nguồn sự thật thứ hai sẽ lệch ngay khi ai đó sửa graph). FK `userId` **Cascade** (khác
+>   `assigneeId` `SetNull`): xoá tài khoản thì rời cast, không để lại vai trò ma — cùng luật `UserRole`.
+>   `addedBy` là chuỗi trần không FK, theo tiền lệ `AuditLog.actorId`.
+> - **`start()` ghi 1 hàng `creator`** cho người tạo ⇒ case mới **luôn có cast**, và định nghĩa gate được
+>   "chỉ người lập được rút đơn" mà không phải cử ai.
+> - **API:** `GET|POST /workflow-instances/:id/participants` + `DELETE …/participants/:participantId`.
+>   ĐỌC = `viewer` (ai thấy case thì thấy ai đang trên case), GHI = quyền chạy — cùng cặp biên như bình
+>   luận E2. `GET` trả `{participants, myRoles}` (`myRoles` = **phán quyết của server**). Người được cử
+>   phải là member tenant **VÀ** `resolveRole(target, projectId) != null` → 400 (đóng luôn gap E1 "chỉ
+>   kiểm member"; nếu không, sang E3b họ sẽ **nhận thông báo mang nhãn case** mà không mở được dự án).
+>   Trùng → 409 · mã reserved → 400 · `roleCode` phải khớp `^[a-zA-Z0-9._-]{1,64}$` → 400 · xoá hàng
+>   thuộc case khác → **404** · audit `case.participant.add` / `case.participant.remove`. **Không** kiểm
+>   `roleCode` có trong định nghĩa: graph sửa được sau, cast không được vô hiệu vì người khác sửa graph.
+> - **Builder:** bỏ hẳn ô **"Đang đóng vai"** ở run-view (nó chính là giao diện của lỗ hổng); thay bằng
+>   `operate/CaseParticipants.tsx` — thẻ **"Vai trò của bạn" CHỈ ĐỌC** + danh sách cast + form cử người
+>   (gợi ý mã vai trò từ `workflowRoles(def)`, vẫn cho gõ tự do vì `viewRoles` của form có thể nêu vai
+>   trò mà graph không hề nhắc). `workflowRoles` giữ lại **chỉ để làm options**. Mutation invalidate cả
+>   `qk.instance` — được cử vai mới có thể mở khoá trường, không được để lại bản đã che trên màn hình.
+> - **Số đo trước khi siết (đo lại 2026-08-02 trên DB dev, đúng như plan yêu cầu):** 5 case đang sống ·
+>   **0 workflow** có `transition.role` ⇒ **0 case bị kẹt** · **0 form** dùng `viewRoles`/`editRoles` ⇒
+>   không trường nào bị che thêm · 64 `Role` với 3 tên phân biệt (`Admin`, `Chỉ đọc …`, `Vận hành …`),
+>   không tên nào đụng mã reserved.
+> - **Verify:** typecheck 22/22 · api **363** test (nền 334) · builder **435** (nền 428) · biome sạch
+>   file đã đổi · `migrate deploy` + `\d` psql · **live-smoke HTTP 24/24** (`node dist` :3011) —
+>   trong đó chứng minh trực tiếp lỗ đã bịt: `advance` kèm `{"roles":["hr","manager"]}` **vẫn che**
+>   trường gated **và vẫn 422** ở transition gate `manager`; cử vào vai `manager` → 201 `done`; cử vào
+>   vai `hr` → trường hiện ra; người ngoài tenant GET/POST/DELETE đều **404**.
+> - **⚠️ Known-gap E3a (CỐ Ý, đọc kỹ):**
+>   - **Người có quyền chạy case vẫn tự cử được chính mình vào vai bất kỳ** (kể cả `hr`) ⇒ họ vẫn đọc
+>     được trường gated. Khác biệt so với trước: đó giờ là **hành vi tường minh, có audit**, chứ không
+>     phải một khoá trong request body. Muốn chặt hơn thì phải tách quyền "quản trị cast" khỏi quyền
+>     chạy — chưa làm vì sẽ chặn đúng luồng vận hành mà phase này sinh ra để phục vụ.
+>   - Vai trò nghiệp vụ lấy từ **tên `Role` tenant** ⇒ buộc "tên vai trò trong form/quy trình" phải khớp
+>     "tên role trong Quản trị". Hôm nay 0 form gate nên vô hại, nhưng **người thiết kế form cần biết**.
+>   - Cast **không có hạn**, không lịch sử ai từng bị gỡ (chỉ còn trong audit) · không cử theo org-unit ·
+>     không có màn "việc tôi tham gia" · `GET participants` trả `userId` trần, tên phải tra qua danh sách
+>     thành viên (cần `workflow.run`) ⇒ **người chỉ `viewer` thấy vai trò nhưng không thấy tên**.
+>   - Tên `Role` tenant là **tenant-wide**, không đi qua data-scope C3 (`resolveScopedGrants`): data-scope
+>     quyết định *mở được dự án nào*, không quyết định *vai trò nghiệp vụ nào áp dụng khi đã vào trong*.
+>     Vô hại hôm nay (0 form gate), nhưng cần chốt trước khi tenant đầu tiên gate một trường.
+>   - Vi phạm `transition.role` vẫn trả **422** chứ không phải 403 — hình dạng có sẵn từ WF3, nhưng **ý
+>     nghĩa đã đổi** ở phase này (giờ nó là gate quyền thật) ⇒ 422 xác nhận với người không đủ quyền rằng
+>     hành động CÓ tồn tại và chỉ vai trò chặn.
+>   - `add()` phân biệt "không thuộc workspace" với "không mở được dự án" bằng 2 thông điệp 400 khác nhau
+>     ⇒ oracle dò thành viên (cùng dạng sẵn có ở `assign`, mức độ thấp).
+>   - `start()` **không transactional**: `instances.create` rồi `participants.create` — lỗi ở bước 2 để lại
+>     case không có `creator` kèm 500.
+>   - **`?roles=` ở submissions VẪN CÒN** (`GET /submissions/:id`, đường submit) — nửa còn lại của đúng
+>     lỗ này, là phạm vi phase kế (P4 trong plan).
+> - **2 finding `required` của `reviewer` (đã sửa + có test):** (1) `remove()` **xoá được hàng `creator`**
+>   mà `start()` là writer duy nhất ⇒ cửa một chiều, transition gate `role:"creator"` vĩnh viễn không bắn
+>   được; nay mã reserved bị từ chối ở CẢ `add` lẫn `remove` (và builder ẩn nút Xóa cho chúng).
+>   (2) `forProject` nay trả `[]` khi người đó **không có vai trò nào trên dự án** — trước đó vẫn phát ra
+>   tên `Role` tenant, nên một call-site tương lai quên `requireAccess` (P4 sẽ dùng lại đúng service này)
+>   sẽ mở khoá trường gated cho người ngoài.
 
 ### Phase F — Form nâng cao (mẫu EVN: trường phụ thuộc, modal-chọn→apply→autofill)
 - Nhiều đã có: **conditions** (JSONLogic ẩn/hiện), **reactions** (trường phụ thuộc giá trị nhau),

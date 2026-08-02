@@ -12,6 +12,8 @@ import type { AuditEntry } from "../../persistence/repositories/audit.repo.js";
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
 import type { CaseCommentRecord } from "../../persistence/repositories/case-comment.repo.js";
 import { CaseCommentRepo } from "../../persistence/repositories/case-comment.repo.js";
+import type { CaseParticipantRecord } from "../../persistence/repositories/case-participant.repo.js";
+import { CaseParticipantRepo } from "../../persistence/repositories/case-participant.repo.js";
 import type {
   FolderChildCounts,
   FolderRecord,
@@ -44,8 +46,11 @@ import {
 } from "../../persistence/repositories/workflow-instance.repo.js";
 import { FakeOrgUnitRepo, FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
 import type { MailService } from "../mail/mail.service.js";
+import { ActorRolesService } from "../projects/actor-roles.service.js";
 import { ProjectsService } from "../projects/projects.service.js";
+import { CaseActorRolesService } from "./case-actor-roles.js";
 import { CaseCommentsService } from "./case-comments.service.js";
+import { CaseParticipantsService } from "./case-participants.service.js";
 import { WorkflowInstancesService } from "./workflow-instances.service.js";
 
 let seq = 0;
@@ -372,6 +377,45 @@ class FakeCaseCommentRepo extends CaseCommentRepo {
   }
 }
 
+let participantSeq = 0;
+
+/** Mirrors the Prisma repo: `create` returns `null` on the (case, role, user) unique violation. */
+class FakeCaseParticipantRepo extends CaseParticipantRepo {
+  readonly rows: CaseParticipantRecord[] = [];
+  async create(input: {
+    instanceId: string;
+    roleCode: string;
+    userId: string;
+    addedBy: string;
+  }): Promise<CaseParticipantRecord | null> {
+    const clash = this.rows.some(
+      (r) =>
+        r.instanceId === input.instanceId &&
+        r.roleCode === input.roleCode &&
+        r.userId === input.userId,
+    );
+    if (clash) return null;
+    const row = { id: `pt_${++participantSeq}`, createdAt: new Date(), ...input };
+    this.rows.push(row);
+    return row;
+  }
+  async listByInstance(instanceId: string): Promise<CaseParticipantRecord[]> {
+    return this.rows.filter((r) => r.instanceId === instanceId);
+  }
+  async listRoleCodes(instanceId: string, userId: string): Promise<string[]> {
+    return this.rows
+      .filter((r) => r.instanceId === instanceId && r.userId === userId)
+      .map((r) => r.roleCode);
+  }
+  async findById(id: string): Promise<CaseParticipantRecord | null> {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+  async delete(id: string): Promise<void> {
+    const at = this.rows.findIndex((r) => r.id === id);
+    if (at >= 0) this.rows.splice(at, 1);
+  }
+}
+
 class FakeMailService {
   readonly sent: { to: string; subject: string }[] = [];
   async send(to: string, content: { subject: string }): Promise<void> {
@@ -393,7 +437,15 @@ let mail: FakeMailService;
 let service: WorkflowInstancesService;
 let commentRepo: FakeCaseCommentRepo;
 let comments: CaseCommentsService;
+let participantRepo: FakeCaseParticipantRepo;
+let participants: CaseParticipantsService;
+let caseActorRoles: CaseActorRolesService;
 let project: ProjectRecord;
+
+/** Cast someone into a role WITHOUT going through the endpoint — for tests about the engine. */
+async function cast(instanceId: string, roleCode: string, userId = OWNER): Promise<void> {
+  await participantRepo.create({ instanceId, roleCode, userId, addedBy: OWNER });
+}
 
 /** Seed a workflow `def` into the project so it can be started. */
 async function seedWorkflow(d = def()): Promise<void> {
@@ -427,6 +479,12 @@ beforeEach(async () => {
     rbacRepo,
     new FakeOrgUnitRepo(),
   );
+  participantRepo = new FakeCaseParticipantRepo();
+  // Phase E3a: the acting roles the engine checks are now derived here, from the server's own facts.
+  caseActorRoles = new CaseActorRolesService(
+    new ActorRolesService(projectRepo, projects, rbacRepo),
+    participantRepo,
+  );
   service = new WorkflowInstancesService(
     instanceRepo,
     workflowRepo,
@@ -437,12 +495,22 @@ beforeEach(async () => {
     userRepo,
     auditRepo,
     mail as unknown as MailService,
+    participantRepo,
+    caseActorRoles,
   );
-  // Phase E2. Tested in THIS file rather than its own: `CaseCommentsService` delegates every access
-  // decision to the service above, so it needs the exact same fake graph — duplicating all of it
-  // would only risk the two copies drifting apart.
+  // Phase E2/E3a. Tested in THIS file rather than their own: both services delegate every access
+  // decision to the service above, so they need the exact same fake graph — duplicating all of it
+  // would only risk the copies drifting apart.
   commentRepo = new FakeCaseCommentRepo();
   comments = new CaseCommentsService(commentRepo, service, projects, userRepo, auditRepo);
+  participants = new CaseParticipantsService(
+    participantRepo,
+    service,
+    projects,
+    caseActorRoles,
+    tenantRepo,
+    auditRepo,
+  );
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });
 });
 
@@ -511,9 +579,10 @@ describe("WorkflowInstancesService", () => {
   it("passes a guarded+roled transition when role and data satisfy it", async () => {
     await seedWorkflow();
     const review = await startAtReview();
+    // Phase E3a: the role is no longer declared in the request — it has to be on the case's cast.
+    await cast(review.id, "manager");
     const done = await service.advance(OWNER, review.id, {
       action: "approve",
-      roles: ["manager"],
       data: { approved: true },
     });
     expect(done.current).toBe("done");
@@ -523,12 +592,9 @@ describe("WorkflowInstancesService", () => {
   it("rejects a guarded transition whose guard fails (422 guard-failed)", async () => {
     await seedWorkflow();
     const review = await startAtReview();
+    await cast(review.id, "manager");
     await expect(
-      service.advance(OWNER, review.id, {
-        action: "approve",
-        roles: ["manager"],
-        data: { approved: false },
-      }),
+      service.advance(OWNER, review.id, { action: "approve", data: { approved: false } }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
@@ -846,9 +912,15 @@ describe("WorkflowInstancesService — field-level RBAC on case data (Phase E)",
     expect(advanced.data).not.toHaveProperty("secret");
   });
 
-  it("shows the field to a reader who declares the gating role", async () => {
+  it("shows the field only once the reader has actually been cast in the gating role", async () => {
     const started = await service.start(OWNER, "wf1", { data: { subject: "s", secret: "top" } });
-    const loaded = await service.load(OWNER, started.id, ["hr"]);
+    // Before E3a a reader simply SAID `roles: ["hr"]` and the field appeared. Now the cast decides.
+    await expect(service.load(OWNER, started.id)).resolves.toEqual(
+      expect.objectContaining({ data: { subject: "s" } }),
+    );
+
+    await cast(started.id, "hr");
+    const loaded = await service.load(OWNER, started.id);
     expect(loaded.data).toEqual({ subject: "s", secret: "top" });
   });
 
@@ -857,6 +929,273 @@ describe("WorkflowInstancesService — field-level RBAC on case data (Phase E)",
     // The masked reader echoes back what they saw — the hidden field must survive.
     await service.advance(OWNER, started.id, { action: "submit", data: { subject: "s2" } });
     expect(instanceRepo.bodies.get(started.id)?.data).toEqual({ subject: "s2", secret: "top" });
+  });
+});
+
+describe("WorkflowInstancesService — actor roles come from the SERVER (Phase E3a)", () => {
+  const OPERATOR = "operator-4";
+  const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+
+  /** Make OPERATOR a run-capable member of the project's tenant. */
+  function grantOperator(): void {
+    tenantRepo.join(OPERATOR, tenantId);
+    rbacRepo.grant(OPERATOR, tenantId, ["workflow.run"]);
+  }
+
+  it("records the starter as `creator`, so a case is never cast-less", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    expect(await participantRepo.listByInstance(started.id)).toEqual([
+      expect.objectContaining({ roleCode: "creator", userId: OWNER, addedBy: OWNER }),
+    ]);
+  });
+
+  it("lets a participant advance a role-gated transition, and refuses everyone else", async () => {
+    await seedWorkflow();
+    grantOperator();
+    const review = await startAtReview();
+
+    await expect(
+      service.advance(OPERATOR, review.id, { action: "approve", data: { approved: true } }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    await cast(review.id, "manager", OPERATOR);
+    const done = await service.advance(OPERATOR, review.id, {
+      action: "approve",
+      data: { approved: true },
+    });
+    expect(done.current).toBe("done");
+  });
+
+  it("grants a role held as a tenant Role NAME (the Quản trị ↔ workflow bridge)", async () => {
+    await seedWorkflow();
+    grantOperator();
+    rbacRepo.grantRoleNamed(OPERATOR, tenantId, "manager");
+    const review = await startAtReview();
+
+    const done = await service.advance(OPERATOR, review.id, {
+      action: "approve",
+      data: { approved: true },
+    });
+    expect(done.current).toBe("done");
+  });
+
+  it("grants NOTHING to someone who holds no role on the project, tenant roles included", async () => {
+    // Every caller today pre-checks access, so this only ever fires as defence in depth — but a
+    // future call site that forgets `requireAccess` must not unmask gated fields for an outsider.
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    rbacRepo.grantRoleNamed("stranger", tenantId, "manager");
+
+    const summary = await instanceRepo.findSummary(started.id);
+    expect(summary).not.toBeNull();
+    await expect(
+      caseActorRoles.forCase("stranger", summary as WorkflowInstanceSummary),
+    ).resolves.toEqual([]);
+  });
+
+  it("does NOT grant a role held in a DIFFERENT tenant", async () => {
+    // The tenant is read from `project.tenantId`, never from a caller-supplied header — otherwise a
+    // member of tenant A holding a role named `manager` could operate tenant B's cases as one.
+    await seedWorkflow();
+    grantOperator();
+    rbacRepo.grantRoleNamed(OPERATOR, "tnt_somewhere-else", "manager");
+    const review = await startAtReview();
+
+    await expect(
+      service.advance(OPERATOR, review.id, { action: "approve", data: { approved: true } }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it("does NOT let a tenant Role NAMED `assignee` satisfy an assignee-gated transition", async () => {
+    // The reserved-code list, exercised end-to-end: a tenant admin can create a role called
+    // `assignee`, but holding it must never be the same as actually being the assignee.
+    const gated = def();
+    gated.transitions[1] = { ...gated.transitions[1], role: "assignee", guard: undefined };
+    await workflowRepo.upsert(gated, { projectId: project.id });
+    grantOperator();
+    rbacRepo.grantRoleNamed(OPERATOR, tenantId, "assignee");
+    const review = await startAtReview();
+
+    await expect(
+      service.advance(OPERATOR, review.id, { action: "approve" }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    // …whereas being the real assignee does satisfy it.
+    tenantRepo.join(OPERATOR, tenantId);
+    userRepo.seed(OPERATOR, "operator4@example.com");
+    await service.assign(OWNER, review.id, OPERATOR);
+    await expect(
+      service.advance(OPERATOR, review.id, { action: "approve" }),
+    ).resolves.toMatchObject({ current: "done" });
+  });
+
+  it("keeps a gated field masked until the reader is cast, even for the case creator", async () => {
+    formRepo.bodies.set("f1", gatedForm());
+    const d = def();
+    d.nodes[0] = { ...d.nodes[0], formId: "f1" };
+    await workflowRepo.upsert(d, { projectId: project.id });
+
+    const started = await service.start(OWNER, "wf1", { data: { subject: "s", secret: "top" } });
+    expect(started.data).toEqual({ subject: "s" });
+
+    await cast(started.id, "hr");
+    await expect(service.load(OWNER, started.id)).resolves.toMatchObject({
+      data: { subject: "s", secret: "top" },
+    });
+  });
+});
+
+describe("CaseParticipantsService (Phase E3a)", () => {
+  const OPERATOR = "operator-5";
+  const MEMBER = "member-2";
+  const OUTSIDER_MEMBER = "member-3";
+  const READER = "reader-2";
+  const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+
+  beforeEach(() => {
+    tenantRepo.join(OWNER, tenantId);
+    tenantRepo.join(OPERATOR, tenantId);
+    rbacRepo.grant(OPERATOR, tenantId, ["workflow.run"]);
+    tenantRepo.join(MEMBER, tenantId);
+    rbacRepo.grant(MEMBER, tenantId, ["workflow.run"]);
+    tenantRepo.join(READER, tenantId);
+    rbacRepo.grant(READER, tenantId, ["workflow.read"]);
+    // In the workspace, but holding nothing that opens this project.
+    tenantRepo.join(OUTSIDER_MEMBER, tenantId);
+  });
+
+  it("casts a member into a role and audits it", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    const row = await participants.add(OPERATOR, started.id, {
+      roleCode: "manager",
+      userId: MEMBER,
+    });
+    expect(row).toMatchObject({ roleCode: "manager", userId: MEMBER, addedBy: OPERATOR });
+    expect(auditRepo.entries).toEqual([
+      expect.objectContaining({ action: "case.participant.add", tenantId, actorId: OPERATOR }),
+    ]);
+  });
+
+  it("lists the cast together with the caller's own effective roles", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await participants.add(OPERATOR, started.id, { roleCode: "manager", userId: MEMBER });
+
+    const view = await participants.list(MEMBER, started.id);
+    expect(view.participants).toHaveLength(2); // creator (OWNER) + manager (MEMBER)
+    expect(view.myRoles).toContain("manager");
+    expect(view.myRoles).not.toContain("creator");
+  });
+
+  it("refuses a reserved role code (400) — it would mint a project-level role", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    for (const roleCode of ["assignee", "editor", "owner", "viewer", "creator"]) {
+      await expect(
+        participants.add(OPERATOR, started.id, { roleCode, userId: MEMBER }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
+
+  it("refuses someone outside the workspace (400)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    await expect(
+      participants.add(OPERATOR, started.id, { roleCode: "manager", userId: "stranger" }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("refuses a workspace member who cannot open the project (400)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    await expect(
+      participants.add(OPERATOR, started.id, { roleCode: "manager", userId: OUTSIDER_MEMBER }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("refuses a duplicate cast (409)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await participants.add(OPERATOR, started.id, { roleCode: "manager", userId: MEMBER });
+
+    await expect(
+      participants.add(OPERATOR, started.id, { roleCode: "manager", userId: MEMBER }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("lets a read-only member READ the cast but not change it (403)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    await expect(participants.list(READER, started.id)).resolves.toMatchObject({
+      participants: [expect.objectContaining({ roleCode: "creator" })],
+    });
+    await expect(
+      participants.add(READER, started.id, { roleCode: "manager", userId: MEMBER }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("hides the cast entirely from someone with no grant (404, no existence leak)", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    await expect(participants.list("stranger", started.id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(
+      participants.add("stranger", started.id, { roleCode: "manager", userId: MEMBER }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(participants.remove("stranger", started.id, "pt_1")).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it("removes a cast row and audits it", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    const row = await participants.add(OPERATOR, started.id, {
+      roleCode: "manager",
+      userId: MEMBER,
+    });
+    auditRepo.entries.length = 0;
+
+    await participants.remove(OPERATOR, started.id, row.id);
+    expect(await participantRepo.listByInstance(started.id)).toHaveLength(1); // creator only
+    expect(auditRepo.entries).toEqual([
+      expect.objectContaining({ action: "case.participant.remove", tenantId, actorId: OPERATOR }),
+    ]);
+  });
+
+  it("refuses to remove the platform-owned `creator` row (400, one-way door)", async () => {
+    // `start()` is its only writer, so deleting it would permanently disarm any transition gated on
+    // `role: "creator"` with no way to put it back.
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    const creator = (await participantRepo.listByInstance(started.id))[0];
+
+    await expect(participants.remove(OPERATOR, started.id, creator.id)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(await participantRepo.findById(creator.id)).not.toBeNull();
+  });
+
+  it("404s removing a row that belongs to a DIFFERENT case (and leaves it standing)", async () => {
+    await seedWorkflow();
+    const a = await service.start(OWNER, "wf1", { id: "cast-a" });
+    const b = await service.start(OWNER, "wf1", { id: "cast-b" });
+    const row = await participants.add(OPERATOR, a.id, { roleCode: "manager", userId: MEMBER });
+
+    await expect(participants.remove(OPERATOR, b.id, row.id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(await participantRepo.findById(row.id)).not.toBeNull();
   });
 });
 

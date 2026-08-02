@@ -67,14 +67,10 @@ export function useStartInstance(
 export function useAdvanceInstance(
   instanceId: string | undefined,
   workflowId: string | undefined,
-): (input: {
-  action: string;
-  data?: Record<string, unknown>;
-  roles?: string[];
-}) => Promise<WorkflowInstance> {
+): (input: { action: string; data?: Record<string, unknown> }) => Promise<WorkflowInstance> {
   const qc = useQueryClient();
   const advance = useMutation({
-    mutationFn: (input: { action: string; data?: Record<string, unknown>; roles?: string[] }) =>
+    mutationFn: (input: { action: string; data?: Record<string, unknown> }) =>
       api.advanceInstance(instanceId as string, input),
     onSuccess: (next) => {
       qc.setQueryData(qk.instance(next.id), next);

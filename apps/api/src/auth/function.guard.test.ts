@@ -51,6 +51,9 @@ class StubRbacRepo extends RbacRepo {
   async listUserRoleIds(): Promise<never[]> {
     return [];
   }
+  async listUserRoleNames(): Promise<never[]> {
+    return [];
+  }
   async ensureTenantAdmin(): Promise<void> {}
 }
 

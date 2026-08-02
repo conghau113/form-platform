@@ -74,10 +74,23 @@ export class FakeTenantRepo extends TenantRepo {
 export class FakeRbacRepo extends RbacRepo {
   private readonly grants = new Map<string, ScopedGrant[]>();
   private readonly tenantUsers = new Map<string, TenantUserRecord[]>();
+  /** `userId:tenantId` → the NAMES of the roles they hold there (Phase E3a actor roles). */
+  private readonly roleNames = new Map<string, string[]>();
 
   /** Test helper: set the user's effective function codes within a tenant (one tenant-wide role). */
   grant(userId: string, tenantId: string, functions: string[]): void {
     this.grants.set(`${userId}:${tenantId}`, [{ functions, scopeOrgUnitIds: [] }]);
+  }
+
+  /**
+   * Test helper: give the user a tenant role by NAME (Phase E3a). Names are what
+   * `ActorRolesService` turns into domain roles, so this is how a test says "this person holds the
+   * `hr` role" — including the negative cases where the name collides with a reserved code.
+   */
+  grantRoleNamed(userId: string, tenantId: string, ...names: string[]): void {
+    const key = `${userId}:${tenantId}`;
+    const existing = this.roleNames.get(key) ?? [];
+    this.roleNames.set(key, [...new Set([...existing, ...names])]);
   }
 
   /** Test helper: set the user's per-role scoped grants within a tenant (C3). */
@@ -140,6 +153,9 @@ export class FakeRbacRepo extends RbacRepo {
   }
   async listUserRoleIds(): Promise<string[]> {
     throw new Error("not used");
+  }
+  async listUserRoleNames(userId: string, tenantId: string): Promise<string[]> {
+    return this.roleNames.get(`${userId}:${tenantId}`) ?? [];
   }
   async ensureTenantAdmin(): Promise<void> {
     throw new Error("not used");

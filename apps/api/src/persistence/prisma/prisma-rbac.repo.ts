@@ -180,6 +180,14 @@ export class PrismaRbacRepo extends RbacRepo {
     return rows.map((r) => r.roleId);
   }
 
+  async listUserRoleNames(userId: string, tenantId: string): Promise<string[]> {
+    const rows = await this.prisma.role.findMany({
+      where: { tenantId, users: { some: { userId } } },
+      select: { name: true },
+    });
+    return [...new Set(rows.map((r) => r.name))];
+  }
+
   async resolveFunctions(userId: string, tenantId: string): Promise<string[]> {
     const grants = await this.prisma.roleFunction.findMany({
       where: { role: { tenantId, users: { some: { userId } } } },

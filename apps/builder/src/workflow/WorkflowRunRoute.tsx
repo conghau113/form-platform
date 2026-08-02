@@ -23,6 +23,7 @@ import { hasFunction, useAuth } from "../auth";
 // Submodule imports (not the barrel): the Run view wants the work-order hooks + the comment thread,
 // not the whole Operate screen pulled into this chunk.
 import { CaseComments } from "../operate/CaseComments";
+import { CaseParticipants } from "../operate/CaseParticipants";
 import {
   isOverdue,
   PRIORITY_COLOR,
@@ -294,7 +295,7 @@ function CaseRunner({
   // than a raw user id.
   const { user, functions } = useAuth();
   const canSeeMembers = hasFunction(functions, "workflow.run");
-  const { nameOf } = useAssignees(canSeeMembers);
+  const { assignees, nameOf } = useAssignees(canSeeMembers);
   const { instances, loading: summaryLoading } = useWorkflowInstances(workflowId);
   const summary = instances.find((i) => i.id === instanceId);
   const assign = useAssignCase();
@@ -334,11 +335,10 @@ function CaseRunner({
   const node = instance ? view.nodes.find((n) => n.id === instance.current) : undefined;
   const { definition: form, loading: formLoading } = useFormDefinition(node?.formId);
 
-  // Domain roles the workflow gates transitions on; the operator declares which they act in
-  // ("Acting as"). Defaults to all of them so the owner can drive the whole flow, and can be
-  // narrowed to simulate a restricted actor. The server merges the project role + re-checks (WF4a).
-  const roles = useMemo(() => workflowRoles(def), [def]);
-  const [actingRoles, setActingRoles] = useState<string[]>(roles);
+  // Phase E3a: the domain roles this workflow gates transitions on are now only SUGGESTIONS for the
+  // cast picker. The roles the actor is actually judged by are the server's own (project role +
+  // workspace roles + this case's cast), shown read-only in the participants panel.
+  const roleOptions = useMemo(() => workflowRoles(def), [def]);
 
   const formRef = useRef<FormRendererHandle>(null);
   const pendingAction = useRef<string | null>(null);
@@ -347,7 +347,7 @@ function CaseRunner({
   const fire = async (action: string, data: Record<string, unknown>) => {
     setBusy(true);
     try {
-      await advance({ action, data, roles: actingRoles });
+      await advance({ action, data });
       message.success(`Đã thực hiện "${action}"`);
     } catch (e) {
       message.error((e as Error).message);
@@ -504,21 +504,17 @@ function CaseRunner({
           )}
         </Card>
 
-        {roles.length > 0 && (
-          <Space size="small" wrap>
-            <Text type="secondary">Đang đóng vai:</Text>
-            <Select
-              mode="multiple"
-              allowClear
-              size="small"
-              style={{ minWidth: 220 }}
-              placeholder="Chọn vai trò (không chọn = không có vai trò)"
-              value={actingRoles}
-              onChange={setActingRoles}
-              options={roles.map((r) => ({ label: r, value: r }))}
-            />
-          </Space>
-        )}
+        {/* Phase E3a. Reading the cast only needs `viewer`, so this renders for every case reader;
+            only the controls are gated, matching the server. */}
+        <Card size="small">
+          <CaseParticipants
+            instanceId={instanceId}
+            canRun={canSeeMembers}
+            roleOptions={roleOptions}
+            nameOf={nameOf}
+            members={assignees}
+          />
+        </Card>
 
         <Space wrap>
           {actions.length === 0 ? (

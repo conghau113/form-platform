@@ -115,10 +115,16 @@ export async function getInstance(instanceId: string): Promise<WorkflowInstance>
   return (await res.json()) as WorkflowInstance;
 }
 
-/** Fire an action against a case; the server advances it (or 422s with the failure reason). */
+/**
+ * Fire an action against a case; the server advances it (or 422s with the failure reason).
+ *
+ * There is no `roles` here on purpose (Phase E3a): the roles the actor is judged by are derived
+ * server-side from their project role, their workspace roles and this case's cast. A client that
+ * could name its own roles could unlock every field a form gates on `viewRoles`.
+ */
 export async function advanceInstance(
   instanceId: string,
-  input: { action: string; data?: Record<string, unknown>; roles?: string[] },
+  input: { action: string; data?: Record<string, unknown> },
 ): Promise<WorkflowInstance> {
   const res = await apiFetch(
     `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/advance`,

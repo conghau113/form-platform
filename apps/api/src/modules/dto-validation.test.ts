@@ -5,6 +5,8 @@ import { UpdateFolderDto } from "./folders/dto/update-folder.dto.js";
 import { CreateProjectDto } from "./projects/dto/create-project.dto.js";
 import { GrantMemberDto } from "./projects/dto/grant-member.dto.js";
 import { ListWorkOrdersDto } from "./work-orders/dto/list-work-orders.dto.js";
+import { AddParticipantDto } from "./workflows/dto/add-participant.dto.js";
+import { AdvanceInstanceDto } from "./workflows/dto/advance-instance.dto.js";
 import { AssignInstanceDto } from "./workflows/dto/assign-instance.dto.js";
 import { UpdateWorkOrderDto } from "./workflows/dto/update-work-order.dto.js";
 
@@ -144,5 +146,32 @@ describe("Phase E work-order DTOs", () => {
     await expect(
       pipe.transform({ dueAt: "2026-08-15T09:00:00+07:00" }, as(UpdateWorkOrderDto)),
     ).resolves.toEqual({ dueAt: "2026-08-15T09:00:00+07:00" });
+  });
+
+  it("STRIPS a `roles` claim from an advance body (Phase E3a escalation regression)", async () => {
+    // The field is gone from the DTO, and `whitelist: true` means an old (or hostile) client sending
+    // it gets it dropped rather than honoured. This is the pipe-level half of the fix; the service
+    // half is that it no longer has a parameter to receive it.
+    const out = (await pipe.transform(
+      { action: "approve", roles: ["hr"] },
+      as(AdvanceInstanceDto),
+    )) as Record<string, unknown>;
+    expect(out).toEqual({ action: "approve" });
+    expect("roles" in out).toBe(false);
+  });
+
+  it("accepts an identifier-shaped participant role code and rejects free text", async () => {
+    await expect(
+      pipe.transform({ roleCode: "hr_manager-2.a", userId: "u1" }, as(AddParticipantDto)),
+    ).resolves.toEqual({ roleCode: "hr_manager-2.a", userId: "u1" });
+    // Spaces, punctuation and emptiness are all out — the code lands in responses and audit entries.
+    for (const roleCode of ["hr manager", "hr;drop", "", "  ", "quản lý", "a".repeat(65)]) {
+      await expect(
+        pipe.transform({ roleCode, userId: "u1" }, as(AddParticipantDto)),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+    await expect(pipe.transform({ roleCode: "hr" }, as(AddParticipantDto))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 });

@@ -107,6 +107,13 @@ class FakeRbacRepo extends RbacRepo {
     if (!tenantId) return ids;
     return ids.filter((id) => this.roles.get(id)?.tenantId === tenantId);
   }
+  async listUserRoleNames(userId: string, tenantId: string): Promise<string[]> {
+    const ids = await this.listUserRoleIds(userId, tenantId);
+    return ids.flatMap((id) => {
+      const name = this.roles.get(id)?.name;
+      return name ? [name] : [];
+    });
+  }
   async resolveFunctions(userId: string, tenantId: string): Promise<string[]> {
     const codes = new Set<string>();
     for (const roleId of this.userRoles.get(userId) ?? []) {

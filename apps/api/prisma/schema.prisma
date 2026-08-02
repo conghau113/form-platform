@@ -234,6 +234,7 @@ model User {
   memberships   Membership[]
   roles         UserRole[]
   assignedCases WorkflowInstanceRecord[]
+  caseRoles     WorkflowInstanceParticipant[]
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 }
@@ -417,6 +418,7 @@ model WorkflowInstanceRecord {
   project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignee   User?          @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
   comments   WorkflowInstanceComment[]
+  participants WorkflowInstanceParticipant[]
 
   @@index([workflowId])
   @@index([projectId])
@@ -447,6 +449,38 @@ model WorkflowInstanceComment {
   instance   WorkflowInstanceRecord @relation(fields: [instanceId], references: [id], onDelete: Cascade)
 
   @@index([instanceId, createdAt])
+}
+
+/// Someone cast into a domain role on one running case (product-roadmap Phase E3a) — the "who is on
+/// this case, in what capacity" list, mirroring EVN's `ticket_role_values`.
+///
+/// It carries NO step/state column on purpose: the matrix of "(role, action, state) → next state" is
+/// already the workflow definition's `transitions`, so duplicating a step here would be a second
+/// source of truth that drifts from the graph the moment the graph is edited.
+///
+/// `roleCode` is matched against `transition.role` by the engine, so this table is what finally makes
+/// that check a security boundary: before E3a the acting roles were whatever the CLIENT declared in
+/// the request body, which meant anyone able to run a case could unlock `viewRoles`-gated fields by
+/// naming the role. `assignee` and `creator` are DERIVED codes (from `assigneeId` / the start event)
+/// and are refused here, so a role can never have two sources that disagree.
+///
+/// The `userId` FK cascades (unlike `assigneeId`, which is `SetNull`): deleting an account should
+/// remove it from the cast rather than leave a ghost holding a role — the same rule as `UserRole`.
+/// `addedBy` is a bare string with no FK, following `AuditLog.actorId`: it is a historical record of
+/// who cast this person, and must outlive that account.
+model WorkflowInstanceParticipant {
+  id         String   @id @default(cuid())
+  instanceId String
+  roleCode   String
+  userId     String
+  addedBy    String
+  createdAt  DateTime @default(now())
+  instance   WorkflowInstanceRecord @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, roleCode, userId])
+  @@index([instanceId])
+  @@index([userId])
 }
 
 /// Reusable field template. W0 stores them global (scope="global"); W3 adds per-project scope.

@@ -13,6 +13,8 @@ import { assertId } from "../../common/file-store.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { CaseParticipantRepo } from "../../persistence/repositories/case-participant.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { FormRepo } from "../../persistence/repositories/form.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
@@ -35,21 +37,19 @@ import { MailService } from "../mail/mail.service.js";
 import { caseAssignedEmail } from "../mail/mail-templates.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { CaseActorRolesService, CREATOR_ROLE_CODE } from "./case-actor-roles.js";
 
 /** Input to start a fresh case of a workflow. */
 export interface StartInstanceOptions {
   id?: string;
   data?: Record<string, unknown>;
-  /** Domain roles the caller declares — drives field masking of the RESPONSE only. */
-  roles?: string[];
 }
 
 /** Input to fire an action against a running case. */
 export interface AdvanceInstanceOptions {
   action: string;
   data?: Record<string, unknown>;
-  /** Workflow roles the caller declares; the actor's project role is added automatically. */
-  roles?: string[];
 }
 
 /**
@@ -63,6 +63,11 @@ export interface AdvanceInstanceOptions {
  * current state, exactly like {@link SubmissionsService.load}. Masking is a READ concern only — what
  * is persisted is always the full, unmasked instance, so a reader who cannot see a field can never
  * erase it.
+ *
+ * Actor roles (Phase E3a): the roles the engine checks `transition.role` against, and that masking
+ * resolves `viewRoles` with, come from {@link CaseActorRolesService} — the caller's project role,
+ * their tenant roles and the cast of this case. They are NOT taken from the request body any more;
+ * a caller who could name their own roles could read every gated field simply by asking.
  */
 @Injectable()
 export class WorkflowInstancesService {
@@ -76,6 +81,8 @@ export class WorkflowInstancesService {
     private readonly users: UserRepo,
     private readonly audit: AuditRepo,
     private readonly mail: MailService,
+    private readonly participants: CaseParticipantRepo,
+    private readonly caseActorRoles: CaseActorRolesService,
   ) {}
 
   /** Start a new case at the workflow's start node (requires run access). */
@@ -112,20 +119,25 @@ export class WorkflowInstancesService {
     if (!stored) {
       throw new ConflictException(`Workflow instance already exists: ${instance.id}`);
     }
-    return this.maskInstance(ownerId, summary.projectId, def, stored, opts.roles);
+    // Phase E3a: a case is never cast-less. The starter goes in as `creator`, which a definition can
+    // gate on ("only whoever raised this may withdraw it") without anyone having to cast them first.
+    await this.participants.create({
+      instanceId: stored.id,
+      roleCode: CREATOR_ROLE_CODE,
+      userId: ownerId,
+      addedBy: ownerId,
+    });
+    const scope = { id: stored.id, projectId: summary.projectId, assigneeId: null };
+    return this.maskInstance(def, stored, await this.caseActorRoles.forCase(ownerId, scope));
   }
 
   /** Load a running case by id (read ⇒ requires `viewer`). */
-  async load(
-    ownerId: string,
-    instanceId: string,
-    declaredRoles?: string[],
-  ): Promise<WorkflowInstance> {
+  async load(ownerId: string, instanceId: string): Promise<WorkflowInstance> {
     const summary = await this.requireInstanceAccess(ownerId, instanceId, "viewer");
     const instance = await this.instances.load(instanceId);
     if (!instance) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
     const def = await this.workflows.load(instance.definitionId);
-    return this.maskInstance(ownerId, summary.projectId, def, instance, declaredRoles);
+    return this.maskInstance(def, instance, await this.caseActorRoles.forCase(ownerId, summary));
   }
 
   /** List a workflow's cases (read ⇒ requires `viewer`). */
@@ -146,14 +158,12 @@ export class WorkflowInstancesService {
     const def = await this.workflows.load(instance.definitionId);
     if (!def) throw new NotFoundException(`Workflow not found: ${instance.definitionId}`);
 
-    // The runtime has no actor-role registry yet (WF4): the actor's project role
-    // (owner|editor|viewer) doubles as an implicit workflow role, merged with any roles the caller
-    // self-declares. A transition guarded on a literal "editor"/"viewer"/"owner" is thus satisfiable
-    // by project membership — acceptable until domain roles exist; revisit when WF4 adds them.
-    // Because the caller may declare roles freely, `transition.role` is workflow MODELLING, never a
-    // security boundary: `requireInstanceRunAccess` above is the boundary.
-    const role = await this.projectsService.resolveRole(ownerId, summary.projectId);
-    const roles = [...(opts.roles ?? []), ...(role ? [role] : [])];
+    // Phase E3a: the acting roles are the SERVER's answer — project role + tenant roles + this
+    // case's cast + `assignee` — never the caller's. `transition.role` is therefore a real check
+    // now, on top of (not instead of) `requireInstanceRunAccess`, which remains the access boundary.
+    // A project role still doubles as a workflow role, so definitions gating on a literal
+    // "editor"/"viewer"/"owner" keep working exactly as before.
+    const roles = await this.caseActorRoles.forCase(ownerId, summary);
     const result = advance(def, instance, opts.action, {
       data: opts.data,
       roles,
@@ -170,7 +180,7 @@ export class WorkflowInstancesService {
       projectId: summary.projectId,
       ...(await this.denormalize(def, result.instance)),
     });
-    return this.maskInstance(ownerId, summary.projectId, def, stored, opts.roles);
+    return this.maskInstance(def, stored, roles);
   }
 
   /**
@@ -279,17 +289,13 @@ export class WorkflowInstancesService {
    * (Phase E); top-level gated fields are unaffected.
    */
   private async maskInstance(
-    ownerId: string,
-    projectId: string,
     def: WorkflowDefinition | null,
     instance: WorkflowInstance,
-    declaredRoles: string[] | undefined,
+    roles: string[],
   ): Promise<WorkflowInstance> {
     const forms = await this.boundForms(def);
     if (forms.length === 0) return instance;
 
-    const role = await this.projectsService.resolveRole(ownerId, projectId);
-    const roles = [...(declaredRoles ?? []), ...(role ? [role] : [])];
     const data = forms.reduce((acc, form) => maskData(form, acc, { roles }), instance.data);
     return { ...instance, data };
   }
