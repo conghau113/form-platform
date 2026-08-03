@@ -7,6 +7,7 @@ import { PrismaCaseParticipantRepo } from "./prisma/prisma-case-participant.repo
 import { PrismaFolderRepo } from "./prisma/prisma-folder.repo.js";
 import { PrismaFormRepo } from "./prisma/prisma-form.repo.js";
 import { PrismaFormVersionRepo } from "./prisma/prisma-form-version.repo.js";
+import { PrismaNotificationRepo } from "./prisma/prisma-notification.repo.js";
 import { PrismaOrgUnitRepo } from "./prisma/prisma-org-unit.repo.js";
 import { PrismaPresetRepo } from "./prisma/prisma-preset.repo.js";
 import { PrismaProjectRepo } from "./prisma/prisma-project.repo.js";
@@ -28,6 +29,7 @@ import { CaseParticipantRepo } from "./repositories/case-participant.repo.js";
 import { FolderRepo } from "./repositories/folder.repo.js";
 import { FormRepo } from "./repositories/form.repo.js";
 import { FormVersionRepo } from "./repositories/form-version.repo.js";
+import { NotificationRepo } from "./repositories/notification.repo.js";
 import { OrgUnitRepo } from "./repositories/org-unit.repo.js";
 import { PresetRepo } from "./repositories/preset.repo.js";
 import { ProjectRepo } from "./repositories/project.repo.js";
@@ -73,6 +75,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: AdminCatalogRepo, useClass: PrismaAdminCatalogRepo },
     { provide: CaseCommentRepo, useClass: PrismaCaseCommentRepo },
     { provide: CaseParticipantRepo, useClass: PrismaCaseParticipantRepo },
+    { provide: NotificationRepo, useClass: PrismaNotificationRepo },
   ],
   exports: [
     PrismaService,
@@ -97,6 +100,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     AdminCatalogRepo,
     CaseCommentRepo,
     CaseParticipantRepo,
+    NotificationRepo,
   ],
 })
 export class PersistenceModule {}

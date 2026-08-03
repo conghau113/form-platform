@@ -35,6 +35,7 @@ it. `PrismaService` (the `PrismaClient` lifecycle) lives only in `persistence/pr
 | Projects (CRUD + RBAC `requireAccess` + `:id/tree`) | `modules/projects/{projects.*}` |
 | Server-derived domain roles (E3a) — pure merge + per-project service | `modules/projects/{actor-roles.ts,actor-roles.service.ts}` |
 | Case cast + per-case roles (E3a) | `modules/workflows/{case-participants.service.ts,case-actor-roles.ts}` |
+| In-app notifications (E3b) — inbox reads + the case-event fan-out | `modules/notifications/` |
 | Project members / sharing (W5) | `modules/projects/{members.*}` |
 | Folders (nested, cycle-guarded moves, cascade delete) | `modules/folders/` |
 | Forms (save/load/list/move/delete; body = the form contract) | `modules/forms/` |

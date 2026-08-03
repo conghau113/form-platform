@@ -8,6 +8,7 @@ import { Menu, Tooltip } from "antd";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { UserMenu, useAuth } from "../auth";
+import { NotificationBell } from "../notifications";
 import { activeNavKey, visibleSections } from "./nav";
 import { TenantSwitcher } from "./TenantSwitcher";
 
@@ -59,6 +60,7 @@ export function NavRail() {
         }))}
       />
       <div style={{ marginTop: "auto", padding: "8px 0", textAlign: "center" }}>
+        <NotificationBell />
         <Tooltip title="Cài đặt" placement="right">
           <SettingOutlined
             role="button"

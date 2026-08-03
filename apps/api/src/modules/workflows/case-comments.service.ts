@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
 import type { CaseCommentRecord } from "../../persistence/repositories/case-comment.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { CaseCommentRepo } from "../../persistence/repositories/case-comment.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { CaseParticipantRepo } from "../../persistence/repositories/case-participant.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { UserRepo } from "../../persistence/repositories/user.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { NotificationsService } from "../notifications/notifications.service.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
@@ -24,12 +28,16 @@ import { WorkflowInstancesService } from "./workflow-instances.service.js";
  */
 @Injectable()
 export class CaseCommentsService {
+  private readonly logger = new Logger(CaseCommentsService.name);
+
   constructor(
     private readonly comments: CaseCommentRepo,
     private readonly instancesService: WorkflowInstancesService,
     private readonly projectsService: ProjectsService,
     private readonly users: UserRepo,
     private readonly audit: AuditRepo,
+    private readonly participants: CaseParticipantRepo,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** The case's thread, oldest first (read ⇒ requires `viewer`). */
@@ -65,6 +73,37 @@ export class CaseCommentsService {
       // (known-gap D1) and a free-text note is the last thing that should be duplicated into it.
       detail: { commentId: comment.id },
     });
+    // Everyone on the case hears about it except the author. The comment TEXT is deliberately NOT in
+    // the notification: a thread is readable at `viewer`, but the body is free text nobody vetted,
+    // and a notification row is never masked at read time — the title says a comment arrived, and
+    // the link is how you go and read it.
+    //
+    // The whole block is swallowed, not just the write: reading the cast happens AFTER the comment
+    // has been stored, so a failure there would answer 500 to a comment that IS saved — and the
+    // author would retry and post it twice.
+    try {
+      const cast = await this.participants.listByInstance(instanceId);
+      await this.notifications.emitCaseEvent({
+        kind: "case.commented",
+        tenantId: project.tenantId,
+        actorId: ownerId,
+        recipientIds: [
+          ...cast.map((p) => p.userId),
+          ...(summary.assigneeId ? [summary.assigneeId] : []),
+        ],
+        case: {
+          id: instanceId,
+          projectId: summary.projectId,
+          workflowId: summary.workflowId,
+          label: summary.label,
+          statusLabel: summary.statusLabel,
+        },
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to notify case.commented on ${instanceId}: ${(err as Error).stack}`,
+      );
+    }
     return comment;
   }
 }

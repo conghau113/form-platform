@@ -235,6 +235,7 @@ model User {
   roles         UserRole[]
   assignedCases WorkflowInstanceRecord[]
   caseRoles     WorkflowInstanceParticipant[]
+  notifications Notification[]
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 }
@@ -481,6 +482,42 @@ model WorkflowInstanceParticipant {
   @@unique([instanceId, roleCode, userId])
   @@index([instanceId])
   @@index([userId])
+}
+
+/// One in-app notification for one person (product-roadmap Phase E3b).
+///
+/// Fanned out at WRITE time — an event that concerns five people writes five rows — rather than
+/// stored once and joined against a recipient list. That is what makes the unread badge, which every
+/// signed-in client polls, a single indexed `COUNT` on `(userId, tenantId, readAt)` instead of a join.
+///
+/// `title`/`body`/`link` are SNAPSHOTS taken when the event happened, like `WorkflowInstanceComment`
+/// and the denormalized case `label`: a notification is a historical statement ("this is what you
+/// were told, then"), so it must not silently re-render as the case moves on.
+///
+/// ⚠️ `title` may only ever be built from data that is already ungated (`WorkflowInstanceSummary.label`,
+/// derived through `maskData(..., { roles: [] })`). Building it from `instance.data` would turn the
+/// notification feed into a side channel that leaks exactly the `viewRoles`-gated values the case
+/// response masks. `tenantId` is carried per row so the bell follows the active workspace switch.
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  tenantId   String
+  /// Event type, e.g. `case.assigned` — the client maps it to an icon, never to access rules.
+  kind       String
+  title      String
+  body       String?
+  targetType String?
+  targetId   String?
+  /// In-app route to open the thing this is about, e.g.
+  /// `/projects/<id>/workflows/<id>/run/<caseId>`. A SNAPSHOT: if the route ever changes, old rows
+  /// keep pointing at the old one.
+  link       String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, tenantId, readAt])
+  @@index([userId, tenantId, createdAt])
 }
 
 /// Reusable field template. W0 stores them global (scope="global"); W3 adds per-project scope.

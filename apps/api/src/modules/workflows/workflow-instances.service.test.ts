@@ -21,6 +21,11 @@ import type {
 import { FolderRepo } from "../../persistence/repositories/folder.repo.js";
 import { FormRepo } from "../../persistence/repositories/form.repo.js";
 import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
+import type {
+  NewNotification,
+  NotificationRecord,
+} from "../../persistence/repositories/notification.repo.js";
+import { NotificationRepo } from "../../persistence/repositories/notification.repo.js";
 import {
   type ProjectCreateInput,
   type ProjectRecord,
@@ -46,6 +51,7 @@ import {
 } from "../../persistence/repositories/workflow-instance.repo.js";
 import { FakeOrgUnitRepo, FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
 import type { MailService } from "../mail/mail.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { ActorRolesService } from "../projects/actor-roles.service.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import { CaseActorRolesService } from "./case-actor-roles.js";
@@ -416,6 +422,63 @@ class FakeCaseParticipantRepo extends CaseParticipantRepo {
   }
 }
 
+let notificationSeq = 0;
+
+/** In-memory {@link NotificationRepo}; `failWrites` makes the fan-out throw (best-effort test). */
+class FakeNotificationRepo extends NotificationRepo {
+  readonly rows: NotificationRecord[] = [];
+  failWrites = false;
+
+  async createMany(rows: NewNotification[]): Promise<void> {
+    if (this.failWrites) throw new Error("notification store is down");
+    for (const row of rows) {
+      this.rows.push({
+        id: `ntf_${++notificationSeq}`,
+        body: null,
+        targetType: null,
+        targetId: null,
+        link: null,
+        readAt: null,
+        createdAt: new Date(),
+        ...row,
+      });
+    }
+  }
+  async listForUser(
+    userId: string,
+    tenantId: string,
+    limit: number,
+  ): Promise<NotificationRecord[]> {
+    return this.rows
+      .filter((r) => r.userId === userId && r.tenantId === tenantId)
+      .reverse()
+      .slice(0, limit);
+  }
+  async countUnread(userId: string, tenantId: string): Promise<number> {
+    return this.rows.filter((r) => r.userId === userId && r.tenantId === tenantId && !r.readAt)
+      .length;
+  }
+  async markRead(id: string, userId: string): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id && r.userId === userId);
+    if (!row) return false;
+    // Re-stamped unconditionally, like `updateMany` in the Prisma repo.
+    row.readAt = new Date();
+    return true;
+  }
+  async markAllRead(userId: string, tenantId: string): Promise<number> {
+    const rows = this.rows.filter(
+      (r) => r.userId === userId && r.tenantId === tenantId && !r.readAt,
+    );
+    for (const row of rows) row.readAt = new Date();
+    return rows.length;
+  }
+
+  /** Test helper: the titles this person was sent, newest last. */
+  titlesFor(userId: string): string[] {
+    return this.rows.filter((r) => r.userId === userId).map((r) => r.title);
+  }
+}
+
 class FakeMailService {
   readonly sent: { to: string; subject: string }[] = [];
   async send(to: string, content: { subject: string }): Promise<void> {
@@ -439,6 +502,8 @@ let commentRepo: FakeCaseCommentRepo;
 let comments: CaseCommentsService;
 let participantRepo: FakeCaseParticipantRepo;
 let participants: CaseParticipantsService;
+let notificationRepo: FakeNotificationRepo;
+let notifications: NotificationsService;
 let caseActorRoles: CaseActorRolesService;
 let project: ProjectRecord;
 
@@ -480,6 +545,11 @@ beforeEach(async () => {
     new FakeOrgUnitRepo(),
   );
   participantRepo = new FakeCaseParticipantRepo();
+  // Phase E3b: the REAL notification service over a fake store, so the delivery rules it owns
+  // (drop the actor, dedupe, drop anyone who can no longer open the project, never throw) are what
+  // these tests exercise rather than a stub that re-states them.
+  notificationRepo = new FakeNotificationRepo();
+  notifications = new NotificationsService(notificationRepo, tenantRepo, projects);
   // Phase E3a: the acting roles the engine checks are now derived here, from the server's own facts.
   caseActorRoles = new CaseActorRolesService(
     new ActorRolesService(projectRepo, projects, rbacRepo),
@@ -497,12 +567,21 @@ beforeEach(async () => {
     mail as unknown as MailService,
     participantRepo,
     caseActorRoles,
+    notifications,
   );
   // Phase E2/E3a. Tested in THIS file rather than their own: both services delegate every access
   // decision to the service above, so they need the exact same fake graph — duplicating all of it
   // would only risk the copies drifting apart.
   commentRepo = new FakeCaseCommentRepo();
-  comments = new CaseCommentsService(commentRepo, service, projects, userRepo, auditRepo);
+  comments = new CaseCommentsService(
+    commentRepo,
+    service,
+    projects,
+    userRepo,
+    auditRepo,
+    participantRepo,
+    notifications,
+  );
   participants = new CaseParticipantsService(
     participantRepo,
     service,
@@ -510,6 +589,7 @@ beforeEach(async () => {
     caseActorRoles,
     tenantRepo,
     auditRepo,
+    notifications,
   );
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });
 });
@@ -1247,5 +1327,162 @@ describe("WorkflowInstancesService — reviewer-found hardening (Phase E)", () =
     });
     const summary = await instanceRepo.findSummary(started.id);
     expect(summary?.label).toBe("Đơn nghỉ phép");
+  });
+});
+
+describe("Case runtime — in-app notifications (Phase E3b)", () => {
+  const MEMBER = "member-e3b";
+  const READER = "reader-e3b";
+  const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+
+  beforeEach(() => {
+    tenantRepo.join(OWNER, tenantId);
+    userRepo.seed(OWNER, "owner@example.com");
+    tenantRepo.join(MEMBER, tenantId);
+    rbacRepo.grant(MEMBER, tenantId, ["workflow.run"]);
+    userRepo.seed(MEMBER, "member-e3b@example.com");
+    tenantRepo.join(READER, tenantId);
+    rbacRepo.grant(READER, tenantId, ["workflow.read"]);
+  });
+
+  it("tells the new assignee, exactly once", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1", { data: { subject: "Đơn nghỉ phép" } });
+
+    await service.assign(OWNER, started.id, MEMBER);
+    expect(notificationRepo.titlesFor(MEMBER)).toEqual(["Bạn được giao việc: Đơn nghỉ phép"]);
+    expect(notificationRepo.rows[0]).toMatchObject({
+      tenantId,
+      link: `/projects/${project.id}/workflows/wf1/run/${started.id}`,
+    });
+  });
+
+  it("tells nobody when someone takes the case themselves", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    await service.assign(OWNER, started.id, OWNER);
+    expect(notificationRepo.rows).toEqual([]);
+  });
+
+  it("tells the cast and the assignee that the case moved — but not whoever moved it", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1", { data: { subject: "Đơn nghỉ phép" } });
+    await cast(started.id, "manager", MEMBER);
+    notificationRepo.rows.length = 0;
+
+    await service.advance(OWNER, started.id, { action: "submit" });
+    expect(notificationRepo.titlesFor(MEMBER)).toEqual(["Việc đã chuyển bước: Đơn nghỉ phép"]);
+    // OWNER is both the actor and the `creator` in the cast — they hear nothing.
+    expect(notificationRepo.titlesFor(OWNER)).toEqual([]);
+  });
+
+  it("sends ONE notification to someone who is both cast and responsible", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await cast(started.id, "manager", MEMBER);
+    await service.assign(OWNER, started.id, MEMBER);
+    notificationRepo.rows.length = 0;
+
+    await service.advance(OWNER, started.id, { action: "submit" });
+    expect(notificationRepo.titlesFor(MEMBER)).toHaveLength(1);
+  });
+
+  it("does NOT notify a participant who can no longer open the project", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await cast(started.id, "manager", MEMBER);
+    // Their grant is withdrawn after they were cast — the cast row stays, the access does not.
+    rbacRepo.grant(MEMBER, tenantId, []);
+    notificationRepo.rows.length = 0;
+
+    await service.advance(OWNER, started.id, { action: "submit" });
+    expect(notificationRepo.rows).toEqual([]);
+  });
+
+  it("still advances the case when the notification store is down", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await cast(started.id, "manager", MEMBER);
+    notificationRepo.failWrites = true;
+
+    const advanced = await service.advance(OWNER, started.id, { action: "submit" });
+    expect(advanced.current).toBe("review");
+    expect(instanceRepo.bodies.get(started.id)?.current).toBe("review");
+  });
+
+  // The write is not the only thing that can fail after the work has been committed: WORKING OUT
+  // WHO TO TELL is a second read against a second table, and it runs once the advance/comment is
+  // already stored. If it threw, the caller would get a 500 for work that DID happen — and would
+  // retry, posting the comment twice. `failWrites` above never reaches this line.
+  it("still advances the case when the participant table cannot be read", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    vi.spyOn(participantRepo, "listByInstance").mockRejectedValue(
+      new Error("participants are down"),
+    );
+
+    const advanced = await service.advance(OWNER, started.id, { action: "submit" });
+    expect(advanced.current).toBe("review");
+    expect(instanceRepo.bodies.get(started.id)?.current).toBe("review");
+    expect(notificationRepo.rows).toEqual([]);
+  });
+
+  it("still stores the comment when the participant table cannot be read", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    vi.spyOn(participantRepo, "listByInstance").mockRejectedValue(
+      new Error("participants are down"),
+    );
+
+    const comment = await comments.add(OWNER, started.id, "vẫn phải lưu được");
+    expect(comment.body).toBe("vẫn phải lưu được");
+    expect(await comments.list(OWNER, started.id)).toHaveLength(1);
+  });
+
+  it("tells the cast about a new comment, without quoting it, and never the author", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1", { data: { subject: "Đơn nghỉ phép" } });
+    await cast(started.id, "manager", MEMBER);
+    notificationRepo.rows.length = 0;
+
+    await comments.add(OWNER, started.id, "nội dung nhạy cảm");
+    expect(notificationRepo.titlesFor(MEMBER)).toEqual(["Bình luận mới trong việc: Đơn nghỉ phép"]);
+    expect(notificationRepo.rows.map((r) => r.body)).toEqual([null]);
+    expect(notificationRepo.titlesFor(OWNER)).toEqual([]);
+  });
+
+  it("tells someone they were cast, naming the role", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1", { data: { subject: "Đơn nghỉ phép" } });
+
+    await participants.add(OWNER, started.id, { roleCode: "manager", userId: MEMBER });
+    expect(notificationRepo.rows).toEqual([
+      expect.objectContaining({
+        userId: MEMBER,
+        kind: "case.participant-added",
+        title: "Bạn được cử tham gia việc: Đơn nghỉ phép",
+        body: "Vai trò: manager",
+      }),
+    ]);
+  });
+
+  it("never puts a role-gated value in a notification title", async () => {
+    // Same trap as the label test: `deriveCaseLabel` would happily pick the gated `secret`. A
+    // notification is shown WITHOUT a masking pass, so the title must come from the ungated subset.
+    formRepo.bodies.set("f1", gatedForm());
+    const d = def();
+    d.nodes[0] = { ...d.nodes[0], formId: "f1" };
+    await workflowRepo.upsert(d, { projectId: project.id });
+    const started = await service.start(OWNER, "wf1", {
+      data: { secret: "TOP SECRET", subject: "Đơn nghỉ phép" },
+    });
+    await cast(started.id, "manager", MEMBER);
+    notificationRepo.rows.length = 0;
+
+    await service.advance(OWNER, started.id, { action: "submit" });
+    const sent = notificationRepo.titlesFor(MEMBER);
+    expect(sent).toEqual(["Việc đã chuyển bước: Đơn nghỉ phép"]);
+    expect(sent.join(" ")).not.toContain("TOP SECRET");
   });
 });

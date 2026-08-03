@@ -11,6 +11,8 @@ import type { CaseParticipantRecord } from "../../persistence/repositories/case-
 import { CaseParticipantRepo } from "../../persistence/repositories/case-participant.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { TenantRepo } from "../../persistence/repositories/tenant.repo.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { isReservedRoleCode } from "../projects/actor-roles.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
@@ -48,6 +50,7 @@ export class CaseParticipantsService {
     private readonly caseActorRoles: CaseActorRolesService,
     private readonly tenants: TenantRepo,
     private readonly audit: AuditRepo,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** The case's cast + the caller's own roles (read ⇒ requires `viewer`). */
@@ -106,6 +109,22 @@ export class CaseParticipantsService {
       targetType: "workflow-instance",
       targetId: instanceId,
       detail: { participantId: row.id, roleCode, userId: input.userId },
+    });
+    // Only the person just cast is told — being cast is news to them, not to the rest of the case.
+    // (Casting yourself notifies nobody: `emitCaseEvent` drops the actor.)
+    await this.notifications.emitCaseEvent({
+      kind: "case.participant-added",
+      tenantId: project.tenantId,
+      actorId: ownerId,
+      recipientIds: [input.userId],
+      roleCode,
+      case: {
+        id: instanceId,
+        projectId: summary.projectId,
+        workflowId: summary.workflowId,
+        label: summary.label,
+        statusLabel: summary.statusLabel,
+      },
     });
     return row;
   }

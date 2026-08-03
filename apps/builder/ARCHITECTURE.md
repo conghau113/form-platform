@@ -25,6 +25,7 @@ folder, never a new top-level `*.tsx` (the `feature-module` skill rule #1, enfor
 | Admin — RBAC (users, roles, function catalog) + tenant-wide catalogs (forms/workflows/versions/live cases) + the org-unit panel | `admin/` |
 | Org-unit tree panel | `org-units/` |
 | Operate — work orders / cases: table, filters, new-case modal, comments | `operate/` |
+| Notification bell + feed panel (rendered by the `NavRail` footer) | `notifications/` |
 | Form submissions route + hooks | `submissions/` |
 | Publish control + version list/diff | `versions/` |
 | Lookup-field editor (used from the property panel) | `lookup/` |

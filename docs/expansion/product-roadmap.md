@@ -723,6 +723,54 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
 >   tên `Role` tenant, nên một call-site tương lai quên `requireAccess` (P4 sẽ dùng lại đúng service này)
 >   sẽ mở khoá trường gated cho người ngoài.
 
+> **✅ ĐÃ LÀM (2026-08-03) — E3b THÔNG BÁO TRONG ỨNG DỤNG (chuông + hộp thư).** Phase P3 của plan
+> `~/.claude/plans/gentle-spinning-adleman.md`. Trả lời câu hỏi mà E/E2/E3a để ngỏ: việc được giao,
+> chuyển bước, có bình luận, được cử vào cast — **người liên quan biết bằng cách nào**, khi mail chỉ
+> bắn lúc `assign` và không ai ngồi F5 màn Vận hành.
+>
+> - **Hợp đồng dữ liệu:** một bảng `Notification` (migration `20260802000000_add_notification`,
+>   **thuần additive**, không backfill) — `userId`+`tenantId`+`kind`+`title`+`body?`+`targetType?`+
+>   `targetId?`+`link?`+`readAt?`. 2 index tổ hợp: `(userId, tenantId, createdAt)` cho feed và
+>   `(userId, tenantId, readAt)` cho badge. FK `User` ON DELETE CASCADE.
+> - **4 endpoint, KHÔNG endpoint nào nhận userId:** `GET /notifications` · `GET /notifications/unread-count`
+>   · `POST /notifications/:id/read` (204) · `POST /notifications/read-all`. Chủ sở hữu **nằm trong mệnh đề
+>   WHERE** (`updateMany({ where: { id, userId } })`), không phải một câu `if` sau khi đã đọc ⇒ không có
+>   oracle tồn-tại: đánh dấu hàng của người khác trả **404 y hệt** id không tồn tại. Không `@RequireFunction`:
+>   hộp thư của chính mình không phải một chức năng cấu hình được.
+> - **3 luật giao nhận nằm MỘT chỗ** (`NotificationsService.emitCaseEvent`, không rải ra 4 call-site):
+>   (1) **bỏ chính người gây ra sự kiện** — tự nhận việc thì không tự báo mình; (2) **bỏ người không còn
+>   mở được dự án** (`ProjectsService` lọc lại từng người nhận) — đúng cái known-gap E3a đã cảnh báo ở
+>   dòng 679: hàng cast còn đó nhưng quyền đã bị rút, mà `title` thì **mang nhãn case**; (3) **nuốt +
+>   log mọi lỗi** — fan-out chạy SAU khi việc đã commit.
+> - **Tiêu đề lấy từ `denormalize()`/`summary.label`, KHÔNG BAO GIỜ từ `instance.data`.** `label` được
+>   suy ra qua `maskData(..., { roles: [] })` = tập **không gate** ⇒ một hàng thông báo (không hề được
+>   mask lúc đọc) không thể rò một trường `viewRoles`. Cùng lý do: **`case.commented` cố ý KHÔNG kèm nội
+>   dung bình luận** (`body: null`) — thread đọc được ở mức `viewer`, nhưng chữ tự do thì không ai kiểm.
+> - **Builder:** `notifications/` (client · hook · `NotificationBell`) gắn vào chân `NavRail`. Badge poll
+>   60s (`refetchInterval`), feed **chỉ fetch khi mở** panel (`enabled: open`); bấm một dòng = đánh dấu đã
+>   đọc + điều hướng tới case.
+> - **Verify:** typecheck 22/22 · api **396** test · builder **446** · biome sạch trên file đã đổi ·
+>   `migrate deploy` + `\d "Notification"` psql · **live-smoke HTTP 30/30** (`node dist` :3011) — trong đó
+>   chứng minh trực tiếp luật chéo-hộp-thư: A **404** khi đánh dấu hàng của B **và hàng của B vẫn
+>   `readAt: null`** sau đó.
+> - **2 finding `required` của `reviewer` (đã sửa + có test):** (1) **best-effort hụt một dòng** — việc
+>   *tra xem phải báo cho ai* (`requireRunAccess` + `participants.listByInstance`) nằm NGOÀI try/catch,
+>   mà nó chạy sau khi advance/comment đã ghi ⇒ lỗi ở đó biến việc **đã làm rồi** thành 500, và người
+>   dùng bấm lại sẽ **đăng bình luận hai lần**; test cũ chỉ bật `failWrites` trên `createMany` nên **không
+>   chạm tới đoạn này**. Nay cả khối được bọc, kèm 2 test bắt `listByInstance` ném lỗi. (2) **fake lệch
+>   Prisma** — `updateMany` dập lại `readAt` vô điều kiện, còn fake dùng `??=`, nên có một assert
+>   "timestamp không đổi" **chỉ đúng với fake**; nay fake dập lại như thật và test chỉ đòi "vẫn là đã đọc".
+> - **⚠️ Known-gap E3b (CỐ Ý):**
+>   - **Không push, không socket** — chuông poll 60s. Không có email digest, không nhắc "sắp đến hạn"
+>     (dù E2 đã có `dueAt`), không cho mỗi người tự tắt/bật loại thông báo.
+>   - **Không có retention** — bảng chỉ lớn lên, chưa có job dọn hàng cũ/đã đọc.
+>   - **`title` và `link` là ẢNH CHỤP** lúc phát: đổi nhãn case hay đổi route sau đó thì hàng cũ vẫn giữ
+>     chữ/đường dẫn cũ. Đổi lại: đọc feed không cần join, và không phát lại được nhãn cho người đã mất quyền.
+>   - **Fan-out chạy đồng bộ trong request** — case có cast lớn thì advance/comment chậm theo số người nhận.
+>   - **Chuông đi theo workspace đang chọn** (như màn Vận hành): thông báo mang `tenantId` của dự án, nên
+>     đứng ở workspace cá nhân sẽ **không thấy gì** cho tới khi chuyển workspace. Live-smoke có một check
+>     ghi lại đúng hành vi này để nó không bị hiểu nhầm là bug.
+
 ### Phase F — Form nâng cao (mẫu EVN: trường phụ thuộc, modal-chọn→apply→autofill)
 - Nhiều đã có: **conditions** (JSONLogic ẩn/hiện), **reactions** (trường phụ thuộc giá trị nhau),
   **datasource** (options remote/tree). → phase này **mở rộng**, không làm lại.

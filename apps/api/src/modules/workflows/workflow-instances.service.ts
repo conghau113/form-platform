@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
@@ -35,6 +36,8 @@ import { WorkflowInstanceRepo } from "../../persistence/repositories/workflow-in
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { MailService } from "../mail/mail.service.js";
 import { caseAssignedEmail } from "../mail/mail-templates.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { NotificationsService } from "../notifications/notifications.service.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
@@ -71,6 +74,8 @@ export interface AdvanceInstanceOptions {
  */
 @Injectable()
 export class WorkflowInstancesService {
+  private readonly logger = new Logger(WorkflowInstancesService.name);
+
   constructor(
     private readonly instances: WorkflowInstanceRepo,
     private readonly workflows: WorkflowRepo,
@@ -83,6 +88,7 @@ export class WorkflowInstancesService {
     private readonly mail: MailService,
     private readonly participants: CaseParticipantRepo,
     private readonly caseActorRoles: CaseActorRolesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Start a new case at the workflow's start node (requires run access). */
@@ -175,11 +181,16 @@ export class WorkflowInstancesService {
         reason: result.reason,
       });
     }
+    // Captured rather than inlined into the `upsert` call: the notification's title has to describe
+    // the case as it is AFTER the move (new status, possibly a new label), and it must come from the
+    // same ungated derivation the stored columns do — never from `result.instance.data`.
+    const meta = await this.denormalize(def, result.instance);
     const stored = await this.instances.upsert(result.instance, {
       workflowId: summary.workflowId,
       projectId: summary.projectId,
-      ...(await this.denormalize(def, result.instance)),
+      ...meta,
     });
+    await this.notifyCaseAdvanced(ownerId, summary, meta);
     return this.maskInstance(def, stored, roles);
   }
 
@@ -209,7 +220,22 @@ export class WorkflowInstancesService {
       targetId: instanceId,
       detail: { assigneeId },
     });
-    if (assigneeId) await this.notifyAssignee(assigneeId, summary, project.name);
+    if (assigneeId) {
+      await this.notifyAssignee(assigneeId, summary, project.name);
+      await this.notifications.emitCaseEvent({
+        kind: "case.assigned",
+        tenantId: project.tenantId,
+        actorId: ownerId,
+        recipientIds: [assigneeId],
+        case: {
+          id: instanceId,
+          projectId: summary.projectId,
+          workflowId: summary.workflowId,
+          label: summary.label,
+          statusLabel: summary.statusLabel,
+        },
+      });
+    }
 
     const updated = await this.instances.findSummary(instanceId);
     if (!updated) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
@@ -272,6 +298,49 @@ export class WorkflowInstancesService {
         projectName,
       }),
     );
+  }
+
+  /**
+   * Tell everyone on the case that it moved (Phase E3b): its cast plus whoever is responsible for
+   * it, minus the person who moved it — {@link NotificationsService.emitCaseEvent} applies that
+   * subtraction, the dedupe (being both cast and assignee earns one notification, not two) and the
+   * "can they still open the project" filter.
+   *
+   * The tenant comes from a second `requireRunAccess` call, exactly as `assign` and
+   * `CaseCommentsService.add` do it: {@link WorkflowInstanceSummary} carries no `tenantId`, and it
+   * must not start to — every column on that summary is spelled out by hand in the admin-catalog
+   * repo (the Phase E2 lesson).
+   */
+  private async notifyCaseAdvanced(
+    ownerId: string,
+    summary: WorkflowInstanceSummary,
+    meta: Pick<WorkflowInstanceMeta, "label" | "statusLabel">,
+  ): Promise<void> {
+    // The whole body is swallowed, not just the write: this runs AFTER the advance has been
+    // committed, so a failure gathering the recipients (a lock on the participant table while the
+    // instance table is fine) would turn work the engine has already done into a 500.
+    try {
+      const project = await this.projectsService.requireRunAccess(ownerId, summary.projectId);
+      const cast = await this.participants.listByInstance(summary.id);
+      await this.notifications.emitCaseEvent({
+        kind: "case.advanced",
+        tenantId: project.tenantId,
+        actorId: ownerId,
+        recipientIds: [
+          ...cast.map((p) => p.userId),
+          ...(summary.assigneeId ? [summary.assigneeId] : []),
+        ],
+        case: {
+          id: summary.id,
+          projectId: summary.projectId,
+          workflowId: summary.workflowId,
+          label: meta.label,
+          statusLabel: meta.statusLabel,
+        },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to notify case.advanced on ${summary.id}: ${(err as Error).stack}`);
+    }
   }
 
   /**
