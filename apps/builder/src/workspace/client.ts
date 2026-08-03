@@ -83,6 +83,21 @@ export async function getProjectTree(id: string): Promise<ProjectTree> {
   return (await res.json()) as ProjectTree;
 }
 
+/**
+ * The domain roles the SERVER says the caller acts in on this project (E3c).
+ *
+ * Purely so a renderer can hide what the server is going to mask/strip anyway — it grants nothing,
+ * and passing it back would not unlock a thing. Replaces the old "Acting as" pickers, which let the
+ * operator claim a role the server never agreed to.
+ */
+export async function getMyProjectRoles(projectId: string): Promise<string[]> {
+  const res = await apiFetch(`${API_BASE}/projects/${encodeURIComponent(projectId)}/my-roles`, {
+    headers: ownerHeaders(),
+  });
+  if (!res.ok) throw new Error(`Load roles failed: ${await readError(res)}`);
+  return ((await res.json()) as { roles: string[] }).roles;
+}
+
 // --- Tenants (B4) -------------------------------------------------------------
 
 /** The user's tenants + the project role they hold in each (powers the workspace picker). */

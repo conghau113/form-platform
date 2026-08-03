@@ -153,8 +153,10 @@ Khi khởi động, API validate env bằng Zod — thiếu/sai biến bắt bu�
 | `THROTTLE_LIMIT` | | `120` | số request/IP trong cửa sổ |
 | `AI_*` | | — | cấu hình AI (BYOK, tùy chọn) — xem `apps/api/env.example` |
 
-> Lưu ý bảo mật: `x-owner-id` và `?roles=` hiện là **operator-declared**, CHƯA phải
-> ranh giới bảo mật (auth thật ở Phase 2).
+> Lưu ý bảo mật: `x-owner-id` là seam cũ **operator-declared**, KHÔNG phải ranh giới bảo mật
+> (danh tính thật đến từ auth JWT/cookie ở Phase 2A/2B). Còn `?roles=` thì **đã bị bỏ hẳn**
+> (Phase E3a cho workflow, E3c cho submissions): vai trò nghiệp vụ nay do server suy ra, client
+> không khai được nữa.
 
 ---
 

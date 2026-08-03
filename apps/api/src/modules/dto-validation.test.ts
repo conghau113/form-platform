@@ -4,6 +4,7 @@ import { CreateFolderDto } from "./folders/dto/create-folder.dto.js";
 import { UpdateFolderDto } from "./folders/dto/update-folder.dto.js";
 import { CreateProjectDto } from "./projects/dto/create-project.dto.js";
 import { GrantMemberDto } from "./projects/dto/grant-member.dto.js";
+import { SubmitDto } from "./submissions/dto/submit.dto.js";
 import { ListWorkOrdersDto } from "./work-orders/dto/list-work-orders.dto.js";
 import { AddParticipantDto } from "./workflows/dto/add-participant.dto.js";
 import { AdvanceInstanceDto } from "./workflows/dto/advance-instance.dto.js";
@@ -157,6 +158,19 @@ describe("Phase E work-order DTOs", () => {
       as(AdvanceInstanceDto),
     )) as Record<string, unknown>;
     expect(out).toEqual({ action: "approve" });
+    expect("roles" in out).toBe(false);
+  });
+
+  it("STRIPS a `roles` claim from a submit body too (Phase E3c — the other half)", async () => {
+    // Same promise on the submissions side, and the same reason to pin it: `main.ts` deliberately
+    // does NOT set `forbidNonWhitelisted`, so an old builder still sending `roles` keeps working
+    // (silently ignored) instead of getting a 400. Turning that option on would break every stale
+    // client — this test is what makes that a decision rather than an accident.
+    const out = (await pipe.transform(
+      { data: { email: "a@b.com" }, roles: ["hr"] },
+      as(SubmitDto),
+    )) as Record<string, unknown>;
+    expect(out).toEqual({ data: { email: "a@b.com" } });
     expect("roles" in out).toBe(false);
   });
 

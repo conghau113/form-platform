@@ -1,47 +1,14 @@
 import { FormRenderer } from "@org/form-renderer-web";
 import type { FormSchema } from "@org/form-schema";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, App as AntApp, Button, Card, Empty, Select, Space, Spin, Typography } from "antd";
-import { useMemo, useState } from "react";
+import { Alert, App as AntApp, Button, Card, Empty, Space, Spin, Typography } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 import { qk } from "../query";
 import { loadForm } from "../workspace/client";
-import { formRoles } from "./form-roles";
+import { useMyProjectRoles } from "../workspace/useWorkspace";
 import { useSubmission, useSubmissions, useSubmitForm } from "./useSubmissions";
 
 const { Title, Text } = Typography;
-
-/** "Acting as" role picker (FS2). The operator declares the domain roles they act in; the server
- *  masks/strips fields they can't view. Defaults to all roles (`value ?? roles`), so nothing is
- *  hidden until the operator narrows it. Hidden when the form gates no field on a role. */
-function ActingAsPicker({
-  roles,
-  value,
-  onChange,
-}: {
-  roles: string[];
-  value: string[];
-  onChange: (next: string[]) => void;
-}) {
-  if (roles.length === 0) return null;
-  return (
-    <Space>
-      <Text type="secondary" style={{ fontSize: 13 }}>
-        Đang thao tác với vai trò:
-      </Text>
-      <Select
-        mode="multiple"
-        allowClear
-        size="small"
-        style={{ minWidth: 220 }}
-        placeholder="(không vai trò nào)"
-        value={value}
-        onChange={onChange}
-        options={roles.map((r) => ({ label: r, value: r }))}
-      />
-    </Space>
-  );
-}
 
 /**
  * Form Submissions view (FS1) — the runtime counterpart to the form editor. Two modes share one
@@ -49,6 +16,11 @@ function ActingAsPicker({
  * read-only detail rendered from the submission's PINNED schema snapshot (so an old answer always
  * reads as the form was when submitted, regardless of later edits). The server is authoritative:
  * submitting POSTs `{data}` and `@org/form-core` re-validates — a failure surfaces as the 422 message.
+ *
+ * Field-level RBAC (E3c): the roles the renderer masks by come from `GET /projects/:id/my-roles`,
+ * the same derivation the server itself uses. There is no "Acting as" picker any more — it let the
+ * operator claim a role, which both unlocked gated fields (the escalation E3c closes) and, once the
+ * server stopped believing it, would have offered a box to type into whose value is silently dropped.
  */
 export function SubmissionsRoute() {
   const { projectId, formId, submissionId } = useParams<{
@@ -82,13 +54,11 @@ function SubmissionLauncher({
   const form = formQuery.data as FormSchema | undefined;
   const { submissions, loading } = useSubmissions(formId);
   const submit = useSubmitForm(formId);
-  const roles = useMemo(() => (form ? formRoles(form) : []), [form]);
-  const [actingRoles, setActingRoles] = useState<string[] | null>(null);
-  const effectiveRoles = actingRoles ?? roles; // default = all roles until the operator narrows it
+  const { roles, loading: rolesLoading } = useMyProjectRoles(projectId);
 
   const onSubmit = async (values: Record<string, unknown>) => {
     try {
-      await submit(values, effectiveRoles);
+      await submit(values);
       message.success("Đã ghi nhận câu trả lời");
     } catch (e) {
       message.error((e as Error).message);
@@ -102,19 +72,15 @@ function SubmissionLauncher({
           {form?.title ?? "Submissions"}
         </Title>
 
-        <ActingAsPicker roles={roles} value={effectiveRoles} onChange={setActingRoles} />
-
         <Card title="Câu trả lời mới" size="small">
-          {formQuery.isPending ? (
+          {formQuery.isPending || rolesLoading ? (
             <Spin />
           ) : form ? (
             <FormRenderer
-              key={
-                `${submissions.length}:${effectiveRoles.join(",")}` /* reset on submit / role change */
-              }
+              key={`${submissions.length}` /* reset the form after each submit */}
               schema={form}
               onSubmit={onSubmit}
-              access={{ roles: effectiveRoles }}
+              access={{ roles }}
               locale={form.defaultLocale}
             />
           ) : (
@@ -165,22 +131,13 @@ function SubmissionDetail({
   id: string;
 }) {
   const navigate = useNavigate();
-  // The role menu comes from the (live) form; masking itself uses the submission's pinned snapshot
-  // server-side. Loading the form first lets the picker default to all roles BEFORE the submission
-  // is fetched, so the detail opens unmasked rather than flashing project-role masking.
-  const formQuery = useQuery({
-    queryKey: qk.form(formId ?? ""),
-    queryFn: () => loadForm(formId as string),
-    enabled: !!formId,
-  });
-  const form = formQuery.data as FormSchema | undefined;
-  const roles = useMemo(() => (form ? formRoles(form) : []), [form]);
-  const [actingRoles, setActingRoles] = useState<string[] | null>(null);
-  const effectiveRoles = actingRoles ?? roles;
-  const { submission, loading, error } = useSubmission(form ? id : undefined, effectiveRoles);
+  // The live form is no longer needed to build a role menu (E3c) — the detail renders entirely from
+  // the submission's own pinned snapshot, which is also what the server masked against.
+  const { roles, loading: rolesLoading } = useMyProjectRoles(projectId);
+  const { submission, loading, error } = useSubmission(id);
   const back = () => navigate(`/projects/${projectId}/forms/${formId}/submissions`);
 
-  if (formQuery.isPending || loading) {
+  if (rolesLoading || loading) {
     return (
       <div style={{ display: "grid", placeItems: "center", height: "100%" }}>
         <Spin />
@@ -214,12 +171,11 @@ function SubmissionDetail({
             </Text>
           </div>
         </Space>
-        <ActingAsPicker roles={roles} value={effectiveRoles} onChange={setActingRoles} />
         <Card size="small">
           <FormRenderer
             schema={submission.schemaSnapshot}
             initialValues={submission.data}
-            access={{ roles: effectiveRoles }}
+            access={{ roles }}
             readPretty
             hideSubmit
             locale={submission.schemaSnapshot.defaultLocale}

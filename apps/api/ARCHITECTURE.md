@@ -76,16 +76,20 @@ Infrastructure-level only — **real authentication arrives in Phase 2**.
 > tenancy/RBAC shaping, not *who they are*. Verified identity arrived with the JWT/cookie auth of
 > production-hardening Phase 2A/2B.
 >
-> **Domain roles are no longer caller-declared (product-roadmap Phase E3a).** The workflow runtime
-> derives them server-side — `ActorRolesService.forProject` (project role + the names of the tenant
-> `Role`s the user holds, minus `RESERVED_ROLE_CODES`) extended per case by
-> `CaseActorRolesService.forCase` (the case's cast + `assignee`). The tenant is read from
-> `project.tenantId`, **never** from the `X-Tenant-Id` header, or a member of tenant A could unlock
-> tenant B's gated fields by naming A. `AdvanceInstanceDto.roles` is gone; `whitelist: true` strips
-> it from any old client still sending it.
+> **Domain roles are never caller-declared** (product-roadmap Phase E3a for workflows, **E3c for
+> submissions — the hole is now closed on both sides**). Every runtime derives them server-side —
+> `ActorRolesService.forProject` (project role + the names of the tenant `Role`s the user holds,
+> minus `RESERVED_ROLE_CODES`) extended per case by `CaseActorRolesService.forCase` (the case's cast
+> + `assignee`). The tenant is read from `project.tenantId`, **never** from the `X-Tenant-Id` header,
+> or a member of tenant A could unlock tenant B's gated fields by naming A.
 >
-> ⚠️ **Still caller-declared:** `?roles=` on `GET /submissions/:id` and the submit path
-> (`submissions.service.ts`). That is the remaining half of the same hole and is scheduled next.
+> `AdvanceInstanceDto.roles`, `SubmitDto.roles` and `?roles=` on `GET /submissions/:id` are all gone.
+> `whitelist: true` (and an unread query param) means an old client still sending them gets them
+> silently dropped rather than a 400 — the escalation closes without breaking anyone.
+>
+> `GET /projects/:id/my-roles` publishes the same derivation to the UI so a renderer can hide what
+> the server would mask anyway. It is read-only and grants nothing: passing its answer back would not
+> unlock a field, because no endpoint accepts roles from the caller.
 
 ## Access control (Track W5)
 `ProjectsService.requireAccess(userId, projectId, minRole)` is the single gate. The canonical owner

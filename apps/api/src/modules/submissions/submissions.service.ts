@@ -13,14 +13,13 @@ import type { SubmissionSummary } from "../../persistence/repositories/submissio
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { SubmissionRepo } from "../../persistence/repositories/submission.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
+import { ActorRolesService } from "../projects/actor-roles.service.js";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectsService } from "../projects/projects.service.js";
 
 /** Input to record a submission against a form. */
 export interface SubmitOptions {
   data: Record<string, unknown>;
-  /** Domain roles the submitter declares (FS2); the actor's project role is merged in. Drives
-   *  field-level RBAC so fields the submitter can't view are stripped server-side before storage. */
-  roles?: string[];
 }
 
 /**
@@ -31,6 +30,11 @@ export interface SubmitOptions {
  * form it was validated against (`schemaSnapshot`) so later edits to the form never change how an
  * old answer reads or re-validates. Mirrors {@link WorkflowInstancesService}'s access pattern;
  * submit/read both require project `viewer` (FS2 will refine submit/edit/export permissions).
+ *
+ * Field-level RBAC roles come from {@link ActorRolesService} (product-roadmap Phase E3c), NOT from
+ * the request: `?roles=` and `SubmitDto.roles` are gone. A caller who could name their own roles
+ * satisfied every `viewRoles` gate simply by asking for it — the same escalation E3a closed on the
+ * workflow side, through the other door.
  */
 @Injectable()
 export class SubmissionsService {
@@ -39,6 +43,7 @@ export class SubmissionsService {
     private readonly forms: FormRepo,
     private readonly versions: FormVersionRepo,
     private readonly projectsService: ProjectsService,
+    private readonly actorRoles: ActorRolesService,
   ) {}
 
   /** Validate `data` against the form server-side and store the (stripped) answer. The snapshot the
@@ -50,7 +55,7 @@ export class SubmissionsService {
 
     // Field-level RBAC (FS2): fields the submitter can't view are excluded from the validation
     // shape, so the server never stores answers the client wasn't allowed to set.
-    const roles = await this.actorRoles(ownerId, summary.projectId, opts.roles);
+    const roles = await this.actorRoles.forProject(ownerId, summary.projectId);
     const schema = buildZodSchema(snapshot, { values: opts.data, access: { roles } });
     const result = schema.safeParse(opts.data);
     if (!result.success) {
@@ -77,12 +82,12 @@ export class SubmissionsService {
 
   /** Load a single submission by id (read ⇒ requires `viewer`). Fields the reader can't view are
    *  masked server-side (FS2), against the submission's PINNED snapshot so masking is stable as the
-   *  live form changes. `roles` are the reader's declared domain roles; the project role is merged. */
-  async load(ownerId: string, id: string, declaredRoles?: string[]): Promise<Submission> {
+   *  live form changes. The reader's roles are the server's own, never the request's. */
+  async load(ownerId: string, id: string): Promise<Submission> {
     const summary = await this.requireSubmissionAccess(ownerId, id, "viewer");
     const submission = await this.submissions.load(id);
     if (!submission) throw new NotFoundException(`Submission not found: ${id}`);
-    const roles = await this.actorRoles(ownerId, summary.projectId, declaredRoles);
+    const roles = await this.actorRoles.forProject(ownerId, summary.projectId);
     return { ...submission, data: maskData(submission.schemaSnapshot, submission.data, { roles }) };
   }
 
@@ -100,17 +105,6 @@ export class SubmissionsService {
     const draft = await this.forms.load(formId);
     if (!draft) throw new NotFoundException(`Form not found: ${formId}`);
     return migrate(draft); // normalize to CURRENT_FORM_VERSION (pinned)
-  }
-
-  /** Field-level RBAC roles for the actor: the roles they self-declare plus their project role
-   *  (owner|editor|viewer), mirroring the workflow runtime. Empty unless a field gates on them. */
-  private async actorRoles(
-    ownerId: string,
-    projectId: string,
-    declared: string[] | undefined,
-  ): Promise<string[]> {
-    const role = await this.projectsService.resolveRole(ownerId, projectId);
-    return [...(declared ?? []), ...(role ? [role] : [])];
   }
 
   /** Resolve a form's project and assert the user holds at least `minRole` on it. */

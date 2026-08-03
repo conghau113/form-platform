@@ -24,19 +24,16 @@ export function useSubmissions(formId: string | undefined): {
   return { submissions: query.data ?? [], loading: query.isPending && !!formId };
 }
 
-/** Loads a single submission by id (for the detail view). `roles` are the reader's declared domain
- *  roles (FS2): they key the cache and are sent to the server, which masks fields they can't view. */
-export function useSubmission(
-  id: string | undefined,
-  roles: string[] = [],
-): {
+/** Loads a single submission by id (for the detail view). Masking is entirely the server's call
+ *  (E3c) — the reader has nothing to declare, so the id alone keys the cache. */
+export function useSubmission(id: string | undefined): {
   submission: Submission | null;
   loading: boolean;
   error: string | null;
 } {
   const query = useQuery({
-    queryKey: qk.submission(id ?? "", roles),
-    queryFn: () => api.getSubmission(id as string, roles),
+    queryKey: qk.submission(id ?? ""),
+    queryFn: () => api.getSubmission(id as string),
     enabled: !!id,
   });
   return {
@@ -52,14 +49,13 @@ export function useSubmission(
  */
 export function useSubmitForm(
   formId: string | undefined,
-): (data: Record<string, unknown>, roles?: string[]) => Promise<Submission> {
+): (data: Record<string, unknown>) => Promise<Submission> {
   const qc = useQueryClient();
   const submit = useMutation({
-    mutationFn: ({ data, roles }: { data: Record<string, unknown>; roles?: string[] }) =>
-      api.submitForm(formId as string, data, roles),
+    mutationFn: (data: Record<string, unknown>) => api.submitForm(formId as string, data),
     onSuccess: () => {
       if (formId) qc.invalidateQueries({ queryKey: qk.submissions(formId) });
     },
   });
-  return (data, roles) => submit.mutateAsync({ data, roles });
+  return (data) => submit.mutateAsync(data);
 }

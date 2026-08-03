@@ -42,6 +42,8 @@ export const qk = {
   // The user's tenant memberships (B4): powers the New-project workspace picker.
   myTenants: ["tenants", "mine"] as const,
   projectTree: (projectId: string) => ["projects", projectId, "tree"] as const,
+  // The caller's server-derived domain roles on a project (E3c) — what the renderer masks by.
+  myProjectRoles: (projectId: string) => ["projects", projectId, "my-roles"] as const,
   presets: (projectId?: string) => ["presets", projectId ?? null] as const,
   form: (formId: string) => ["forms", formId] as const,
   theme: (formId: string) => ["themes", formId] as const,
@@ -51,9 +53,9 @@ export const qk = {
   instance: (id: string) => ["workflow-instances", id] as const,
   statusCatalog: (projectId?: string) => ["status-catalog", projectId ?? null] as const,
   submissions: (formId: string) => ["forms", "submissions", formId] as const,
-  // `roles` is part of the key: changing the reader's declared roles (FS2) re-fetches, since the
-  // server masks fields the reader can't view differently per role set.
-  submission: (id: string, roles: string[] = []) => ["submissions", id, roles] as const,
+  // No `roles` in the key any more (E3c): masking follows the reader's server-derived roles, which
+  // do not change between two reads by the same person.
+  submission: (id: string) => ["submissions", id] as const,
   // Form publish/version history (FB1): the list, one frozen version, and the active published one.
   versions: (formId: string) => ["forms", "versions", formId] as const,
   version: (formId: string, version: number) => ["forms", "versions", formId, version] as const,

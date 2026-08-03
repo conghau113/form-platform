@@ -39,6 +39,7 @@ import {
   type SubmissionSummary,
 } from "../../persistence/repositories/submission.repo.js";
 import { FakeOrgUnitRepo, FakeRbacRepo, FakeTenantRepo } from "../../testing/fake-tenant-rbac.js";
+import { ActorRolesService } from "../projects/actor-roles.service.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import { SubmissionsService } from "./submissions.service.js";
 
@@ -271,6 +272,7 @@ let formRepo: FakeFormRepo;
 let versionRepo: FakeFormVersionRepo;
 let projectRepo: FakeProjectRepo;
 let memberRepo: FakeProjectMemberRepo;
+let rbacRepo: FakeRbacRepo;
 let service: SubmissionsService;
 let project: ProjectRecord;
 
@@ -285,16 +287,25 @@ beforeEach(async () => {
   versionRepo = new FakeFormVersionRepo();
   projectRepo = new FakeProjectRepo();
   memberRepo = new FakeProjectMemberRepo();
+  rbacRepo = new FakeRbacRepo();
   const projects = new ProjectsService(
     projectRepo,
     new FakeFolderRepo(),
     formRepo,
     memberRepo,
     new FakeTenantRepo(),
-    new FakeRbacRepo(),
+    rbacRepo,
     new FakeOrgUnitRepo(),
   );
-  service = new SubmissionsService(submissionRepo, formRepo, versionRepo, projects);
+  // Phase E3c: the REAL ActorRolesService, so the tests exercise the same derivation production
+  // does — the only way a submitter/reader gets `hr` is by actually holding a tenant Role named it.
+  service = new SubmissionsService(
+    submissionRepo,
+    formRepo,
+    versionRepo,
+    projects,
+    new ActorRolesService(projectRepo, projects, rbacRepo),
+  );
   project = await projectRepo.create({ ownerId: OWNER, name: "P", slug: "p" });
 });
 
@@ -369,30 +380,66 @@ describe("SubmissionsService", () => {
     expect(sub.data).toEqual({ email: "a@b.com" });
   });
 
-  it("keeps a role-gated field on submit when the submitter declares the role (FS2)", async () => {
+  it("keeps a role-gated field on submit when the submitter HOLDS the role (E3c)", async () => {
     await formRepo.upsert(rbacForm(), { projectId: project.id });
+    rbacRepo.grantRoleNamed(OWNER, project.tenantId, "hr");
     const sub = await service.submit(OWNER, "hrform", {
       data: { email: "a@b.com", salary: "999" },
-      roles: ["hr"],
     });
     expect(sub.data).toEqual({ email: "a@b.com", salary: "999" });
   });
 
-  it("masks a role-gated field on read unless the reader declares the role (FS2)", async () => {
+  it("masks a role-gated field on read unless the reader HOLDS the role (E3c)", async () => {
     await formRepo.upsert(rbacForm(), { projectId: project.id });
+    rbacRepo.grantRoleNamed(OWNER, project.tenantId, "hr");
     const sub = await service.submit(OWNER, "hrform", {
       data: { email: "a@b.com", salary: "999" },
-      roles: ["hr"],
     });
-    // Stored with salary, but a reader without `hr` sees it masked…
+    // The holder reads it back in full…
     await expect(service.load(OWNER, sub.id)).resolves.toMatchObject({
-      data: { email: "a@b.com" },
-    });
-    expect((await service.load(OWNER, sub.id)).data).not.toHaveProperty("salary");
-    // …and a reader who declares `hr` sees it.
-    await expect(service.load(OWNER, sub.id, ["hr"])).resolves.toMatchObject({
       data: { email: "a@b.com", salary: "999" },
     });
+    // …while a member of the same project who does NOT hold `hr` sees it masked.
+    await memberRepo.upsert({ projectId: project.id, userId: "viewer-u", role: "viewer" });
+    expect((await service.load("viewer-u", sub.id)).data).not.toHaveProperty("salary");
+  });
+
+  // The escalation this phase exists to close: before E3c the roles came off the request, so ANY
+  // project member could name `hr` and read (or write) the gated field. There is no longer a
+  // parameter to name it with — these assert the derivation is the only source.
+  it("does not unlock a gated field for a member who merely wants the role (E3c)", async () => {
+    await formRepo.upsert(rbacForm(), { projectId: project.id });
+    rbacRepo.grantRoleNamed(OWNER, project.tenantId, "hr");
+    const sub = await service.submit(OWNER, "hrform", {
+      data: { email: "a@b.com", salary: "999" },
+    });
+    await memberRepo.upsert({ projectId: project.id, userId: "nosy", role: "editor" });
+
+    // A submit from `nosy` still drops the field, and their read still masks it — with no
+    // `roles` argument in the signature there is nothing left for them to declare.
+    const theirs = await service.submit("nosy", "hrform", {
+      data: { email: "c@d.com", salary: "1" },
+    });
+    expect(theirs.data).toEqual({ email: "c@d.com" });
+    expect((await service.load("nosy", sub.id)).data).not.toHaveProperty("salary");
+  });
+
+  it("does not hand a tenant role to someone with no role on the project (E3c)", async () => {
+    await formRepo.upsert(rbacForm(), { projectId: project.id });
+    rbacRepo.grantRoleNamed(OWNER, project.tenantId, "hr");
+    const sub = await service.submit(OWNER, "hrform", {
+      data: { email: "a@b.com", salary: "999" },
+    });
+    // Holds `hr` in the tenant but was never added to the project ⇒ 404, not a masked read.
+    rbacRepo.grantRoleNamed("outsider", project.tenantId, "hr");
+    await expect(service.load("outsider", sub.id)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("does not gate a form that gates nothing — submit still stores every field (E3c)", async () => {
+    await seedForm();
+    await memberRepo.upsert({ projectId: project.id, userId: "plain", role: "viewer" });
+    const sub = await service.submit("plain", "contact", { data: { email: "a@b.com" } });
+    expect(sub.data).toEqual({ email: "a@b.com" });
   });
 
   it("validates against the current draft when the form was never published (FB1 fallback)", async () => {

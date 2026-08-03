@@ -72,6 +72,25 @@ export function useMyTenants(): { tenants: TenantSummary[]; loading: boolean } {
   return { tenants: query.data ?? [], loading: query.isPending };
 }
 
+/**
+ * The caller's server-derived domain roles on a project (E3c) — what the runtime views hand the
+ * renderer as `access`, so the form shows exactly the fields the server would let through.
+ *
+ * `[]` while it loads, which masks the most: a gated field must never flash into view before the
+ * answer arrives. Roles change only when an admin edits them, so this is cached, not polled.
+ */
+export function useMyProjectRoles(projectId: string | undefined): {
+  roles: string[];
+  loading: boolean;
+} {
+  const query = useQuery({
+    queryKey: qk.myProjectRoles(projectId ?? ""),
+    queryFn: () => api.getMyProjectRoles(projectId as string),
+    enabled: !!projectId,
+  });
+  return { roles: query.data ?? [], loading: query.isPending && !!projectId };
+}
+
 export interface ProjectTreeStore {
   tree: ProjectTree | null;
   loading: boolean;

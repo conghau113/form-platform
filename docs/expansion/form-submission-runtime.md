@@ -76,6 +76,12 @@ Form publish/submit/lưu/xem-lại end-to-end, server-side validated, pinned sna
   khi schema đổi.
 
 ### FS2 — Submission access control + field masking  ✅ DONE (reviewer PASS + live smoke PASS)
+
+> ⚠️ **NỬA "AI KHAI VAI TRÒ" CỦA MỤC NÀY ĐÃ BỊ THAY THẾ — đọc §E3c trong
+> `docs/expansion/product-roadmap.md` trước khi làm theo.** `SubmitDto.roles`, `?roles=a,b`,
+> `form-roles.ts`, ô "Acting as" và `qk.submission(id, roles)` **không còn tồn tại** (2026-08-03):
+> đó chính là một lỗ leo thang quyền — ai cũng tự khai được `hr`. Vai trò nay do server suy ra
+> (`ActorRolesService.forProject`). Phần `maskData` / strip-on-submit thì **vẫn đúng nguyên**.
 - [x] RBAC view submission theo role; server-side strip (submit) + mask (read) field non-viewable
   (`canView` của form-core). Submit gate giữ `viewer` (owner chốt); audit `submittedBy/submittedAt`
   của FS1 đủ cho MVP. (canEdit-gate + export masking + audit-log = follow-up.)

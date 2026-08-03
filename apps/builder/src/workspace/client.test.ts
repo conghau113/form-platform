@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createProject,
   deleteFolder,
+  getMyProjectRoles,
   grantMember,
   listForms,
   listMembers,
@@ -61,6 +62,14 @@ describe("workspace client", () => {
     const fetchFn = mockFetch({ json: async () => [] });
     await listMyTenants();
     expect(fetchFn).toHaveBeenCalledWith(`${API_BASE}/tenants`, { headers: ownerHeader });
+  });
+
+  it("getMyProjectRoles unwraps the server's role list (E3c)", async () => {
+    const fetchFn = mockFetch({ json: async () => ({ roles: ["editor", "hr"] }) });
+    await expect(getMyProjectRoles("p 1")).resolves.toEqual(["editor", "hr"]);
+    expect(fetchFn).toHaveBeenCalledWith(`${API_BASE}/projects/p%201/my-roles`, {
+      headers: ownerHeader,
+    });
   });
 
   it("listForms encodes projectId and folderId query params", async () => {

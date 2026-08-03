@@ -6,7 +6,6 @@ import {
   HttpException,
   Param,
   Post,
-  Query,
 } from "@nestjs/common";
 import type { Submission } from "@org/form-schema";
 import { CurrentOwner } from "../../auth/current-owner.decorator.js";
@@ -34,7 +33,7 @@ export class SubmissionsController {
     @Body() dto: SubmitDto,
   ): Promise<Submission> {
     try {
-      return await this.submissions.submit(ownerId, formId, { data: dto.data, roles: dto.roles });
+      return await this.submissions.submit(ownerId, formId, { data: dto.data });
     } catch (err) {
       if (err instanceof HttpException) throw err;
       throw new BadRequestException((err as Error).message);
@@ -50,24 +49,11 @@ export class SubmissionsController {
     return this.submissions.list(ownerId, formId);
   }
 
-  /** Load a single submission by id → 404 if missing or not accessible. Optional `?roles=a,b`
-   *  declares the reader's domain roles; fields they can't view are masked server-side (FS2). */
+  /** Load a single submission by id → 404 if missing or not accessible. Fields the reader can't
+   *  view are masked server-side (FS2) against roles the SERVER derives — there is no `?roles=`
+   *  any more (Phase E3c), because a reader who could name their own roles unmasked everything. */
   @Get("submissions/:id")
-  findOne(
-    @CurrentOwner() ownerId: string,
-    @Param("id") id: string,
-    @Query("roles") roles?: string,
-  ): Promise<Submission> {
-    return this.submissions.load(ownerId, id, parseRoles(roles));
+  findOne(@CurrentOwner() ownerId: string, @Param("id") id: string): Promise<Submission> {
+    return this.submissions.load(ownerId, id);
   }
-}
-
-/** Parse a `?roles=a,b,c` query into a clean role list (empty/blank ⇒ undefined). */
-function parseRoles(roles: string | undefined): string[] | undefined {
-  if (!roles) return undefined;
-  const parsed = roles
-    .split(",")
-    .map((r) => r.trim())
-    .filter((r) => r.length > 0);
-  return parsed.length > 0 ? parsed : undefined;
 }

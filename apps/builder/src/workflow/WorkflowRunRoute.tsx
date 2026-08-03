@@ -31,6 +31,7 @@ import {
   PRIORITY_OPTIONS,
   priorityLabel,
 } from "../operate/priority";
+import { useCaseParticipants } from "../operate/useCaseParticipants";
 import { useAssignCase, useAssignees, useUpdateWorkOrder } from "../operate/useWorkOrders";
 import { actionLabel, isTerminalState, runActions } from "./run-actions";
 import { workflowRoles } from "./run-roles";
@@ -340,6 +341,16 @@ function CaseRunner({
   // workspace roles + this case's cast), shown read-only in the participants panel.
   const roleOptions = useMemo(() => workflowRoles(def), [def]);
 
+  // E3c: mask the bound form by the SERVER's own verdict on this actor. `FormRenderer` defaults to
+  // `access: {roles: []}`, so until now the run view OVER-masked — a `viewRoles`-gated field was
+  // hidden from everyone, including the very people E3a exists to give it to.
+  //
+  // It must be the per-CASE set (`myRoles` = project role + workspace roles + this case's cast +
+  // `assignee`), not `forProject`: that is what the server masks `instance.data` with and what the
+  // engine checks `transition.role` against. Free here — `<CaseParticipants>` below already fetches
+  // the same query, and unlike project roles it is invalidated whenever the cast changes.
+  const { cast, loading: rolesLoading } = useCaseParticipants(instanceId);
+
   const formRef = useRef<FormRendererHandle>(null);
   const pendingAction = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -484,13 +495,14 @@ function CaseRunner({
 
         <Card size="small">
           {node?.formId ? (
-            formLoading ? (
+            formLoading || rolesLoading ? (
               <Spin />
             ) : form ? (
               <FormRenderer
                 ref={formRef}
                 schema={form}
                 initialValues={instance.data}
+                access={{ roles: cast.myRoles }}
                 hideSubmit
                 onSubmit={onSubmit}
                 locale={locale}

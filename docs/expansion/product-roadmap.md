@@ -714,8 +714,7 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
 >     ⇒ oracle dò thành viên (cùng dạng sẵn có ở `assign`, mức độ thấp).
 >   - `start()` **không transactional**: `instances.create` rồi `participants.create` — lỗi ở bước 2 để lại
 >     case không có `creator` kèm 500.
->   - **`?roles=` ở submissions VẪN CÒN** (`GET /submissions/:id`, đường submit) — nửa còn lại của đúng
->     lỗ này, là phạm vi phase kế (P4 trong plan).
+>   - ~~**`?roles=` ở submissions VẪN CÒN**~~ → **đã đóng ở E3c (2026-08-03)**, xem mục E3c bên dưới.
 > - **2 finding `required` của `reviewer` (đã sửa + có test):** (1) `remove()` **xoá được hàng `creator`**
 >   mà `start()` là writer duy nhất ⇒ cửa một chiều, transition gate `role:"creator"` vĩnh viễn không bắn
 >   được; nay mã reserved bị từ chối ở CẢ `add` lẫn `remove` (và builder ẩn nút Xóa cho chúng).
@@ -770,6 +769,53 @@ Feature-folders mới trong `apps/builder` (theo convention `feature-module`), g
 >   - **Chuông đi theo workspace đang chọn** (như màn Vận hành): thông báo mang `tenantId` của dự án, nên
 >     đứng ở workspace cá nhân sẽ **không thấy gì** cho tới khi chuyển workspace. Live-smoke có một check
 >     ghi lại đúng hành vi này để nó không bị hiểu nhầm là bug.
+
+> **✅ ĐÃ LÀM (2026-08-03) — E3c BỊT NỐT `?roles=` Ở SUBMISSIONS (nửa còn lại của lỗ E3a).** Phase P4
+> của plan `~/.claude/plans/gentle-spinning-adleman.md`. E3a đã bịt phía workflow; phía form thì
+> `GET /submissions/:id?roles=hr` và `SubmitDto.roles` **vẫn để client tự khai vai trò**, mà chính tập
+> vai trò đó nuôi `maskData` (đọc) và `buildZodSchema(…, {access})` (ghi) ⇒ **mọi thành viên dự án đọc
+> và ghi được trường `viewRoles` chỉ bằng cách gọi tên vai trò**.
+>
+> - **Bỏ hẳn:** `roles` khỏi `SubmitOptions`/`SubmitDto`/`?roles=`/`SubmissionsService.load`.
+>   `SubmissionsService` nay inject `ActorRolesService` và gọi `forProject` — **dùng lại đúng service
+>   E3a**, không viết luật thứ hai.
+> - **Client cũ KHÔNG vỡ:** `main.ts` cố ý **không** đặt `forbidNonWhitelisted`, nên `whitelist: true`
+>   chỉ **âm thầm bỏ** `roles` trong body (và `?roles=` thành query không ai đọc) thay vì trả 400. Đã pin
+>   bằng test trong `dto-validation.test.ts` cạnh pin E3a — bật `forbidNonWhitelisted` sau này sẽ là
+>   một **quyết định**, không phải tai nạn.
+> - **`GET /projects/:id/my-roles`** (mới): công bố đúng suy luận đó cho UI để renderer che giống hệt
+>   server. Read-only và **không cấp gì cả** — gửi ngược lại cũng không mở khoá được, vì không endpoint
+>   nào còn nhận vai trò từ client. `requireAccess` chạy TRƯỚC `forProject` (có test pin thứ tự): nếu
+>   ngược lại, người ngoài sẽ học được **bộ từ vựng vai trò** của workspace từ một cái 404.
+> - **Bỏ "Acting as" ở builder** (`ActingAsPicker` + `submissions/form-roles.ts`) — đúng như E3a đã bỏ ô
+>   đó ở run-view. Nếu giữ lại thì sau E3c nó thành **bẫy mất dữ liệu**: UI cho gõ vào ô mà server lặng
+>   lẽ loại. `qk.submission(id, roles)` → `qk.submission(id)`.
+> - **🔴 reviewer bắt 1 required thật ở đúng chỗ tôi làm dối:** run-view tôi cắm nhầm `forProject`,
+>   trong khi server che case bằng `CaseActorRolesService.forCase` (= vai trò dự án **+ cast của case
+>   + `assignee`) ⇒ đúng những người E3a sinh ra để cấp quyền lại **bị giấu mất trường**. Đã đổi sang
+>   `useCaseParticipants().cast.myRoles` — vốn CÙNG query mà panel cast bên dưới đã gọi (miễn phí), và
+>   khác `myProjectRoles` ở chỗ **được invalidate mỗi khi cast đổi**.
+> - **Đính chính một hiểu nhầm** (reviewer bắt, tôi đã kiểm lại tận nơi): run-view **chưa từng rò** —
+>   `FormRenderer` mặc định `access: {roles: []}` nên nó đang **che thừa**, và `onSubmit` parse lại qua
+>   `buildZodSchema` nên trường không xem được cũng không ghi được. Tác dụng thật của thay đổi này là
+>   **MỞ** trường cho người có quyền, không phải bịt rò.
+> - **Verify:** typecheck 22/22 · api **404** test · builder **447** · biome sạch file đã đổi ·
+>   **live-smoke HTTP 27/27** (`node dist` :3011) + **đối chứng trực tiếp trên build CŨ** (container
+>   `:3001`, **cùng DB, cùng người dùng, cùng bản ghi**): `GET /submissions/:id` → `{email}` nhưng
+>   `?roles=hr` → `{email, salary:"999"}` — **lỗ có thật, và nay đã đóng**.
+> - **Đo lại trước khi làm** (plan ghi "0 form dùng `viewRoles`"): nay có **1** — nhưng đó là fixture
+>   smoke `p2form-…` của chính phase E3a (giữ lại theo lệ), không phải nội dung thật ⇒ kết luận "không
+>   màn hình nào của người dùng đổi hành vi" vẫn đúng.
+> - **⚠️ Known-gap E3c (CỐ Ý):**
+>   - **Cửa sổ vai trò cũ:** `staleTime: 30_000` và không invalidate `qk.myProjectRoles`/`qk.submission`
+>     khi admin sửa vai trò của người đó. Có chặn trên và **luôn nghiêng về che thừa**, không phải hở.
+>   - `submissions/list` trả summary không có body nên không phải đường vòng, nhưng **`submittedBy` vẫn
+>     là userId trần** — chưa che, chưa tra ra tên.
+>   - Vai trò vẫn lấy từ **tên `Role` tenant** (kế thừa E3a): người thiết kế form phải đặt `viewRoles`
+>     khớp tên role bên Quản trị.
+>   - Người có `form.manage` **sửa được `viewRoles` của chính form đó** ⇒ tự mở khoá trường. Cùng dạng
+>     với known-gap E3a "tự cử mình vào cast"; muốn chặt hơn phải tách quyền thiết kế gate khỏi quyền
+>     sửa form.
 
 ### Phase F — Form nâng cao (mẫu EVN: trường phụ thuộc, modal-chọn→apply→autofill)
 - Nhiều đã có: **conditions** (JSONLogic ẩn/hiện), **reactions** (trường phụ thuộc giá trị nhau),
