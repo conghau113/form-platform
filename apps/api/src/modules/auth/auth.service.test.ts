@@ -127,6 +127,7 @@ class FakeRefreshTokenRepo extends RefreshTokenRepo {
 
   async create(input: {
     userId: string;
+    sessionId: string;
     tokenHash: string;
     expiresAt: Date;
   }): Promise<RefreshTokenRecord> {
@@ -134,6 +135,7 @@ class FakeRefreshTokenRepo extends RefreshTokenRepo {
     const row: RefreshTokenRecord = {
       id: `rt${++seq}`,
       userId: input.userId,
+      sessionId: input.sessionId,
       tokenHash: input.tokenHash,
       expiresAt: input.expiresAt,
       revokedAt: null,
@@ -145,12 +147,39 @@ class FakeRefreshTokenRepo extends RefreshTokenRepo {
   async findByHash(tokenHash: string): Promise<RefreshTokenRecord | null> {
     return this.rows.find((r) => r.tokenHash === tokenHash) ?? null;
   }
+  /**
+   * Whether the session still had a live row the instant *after* each `revoke`. This is the only
+   * way to observe the P5 issue-before-revoke ordering: once `refresh()` has returned, both
+   * orderings look identical from outside (old row revoked, replacement row live). Measured after
+   * the flag is set — measuring before would read `true` under either ordering, since the row being
+   * revoked is itself live at that point.
+   */
+  readonly liveAfterRevoke: boolean[] = [];
+
   async revoke(id: string): Promise<void> {
     const row = this.rows.find((r) => r.id === id);
-    if (row) row.revokedAt = new Date();
+    if (row) {
+      row.revokedAt = new Date();
+      this.liveAfterRevoke.push(await this.isSessionActive(row.sessionId, row.userId));
+    }
+  }
+  async revokeSession(sessionId: string, userId: string): Promise<void> {
+    for (const r of this.rows) {
+      if (r.sessionId === sessionId && r.userId === userId && !r.revokedAt) r.revokedAt = new Date();
+    }
   }
   async revokeAllForUser(userId: string): Promise<void> {
     for (const r of this.rows) if (r.userId === userId && !r.revokedAt) r.revokedAt = new Date();
+  }
+  /** Mirrors the Prisma predicate exactly: same user, not revoked AND not expired (P5). */
+  async isSessionActive(sessionId: string, userId: string): Promise<boolean> {
+    return this.rows.some(
+      (r) =>
+        r.sessionId === sessionId &&
+        r.userId === userId &&
+        !r.revokedAt &&
+        r.expiresAt.getTime() > Date.now(),
+    );
   }
 }
 
@@ -413,6 +442,186 @@ describe("AuthService", () => {
 
     it("logout is a no-op when no token is presented", async () => {
       await expect(service.logout(undefined)).resolves.toBeUndefined();
+    });
+  });
+
+  /**
+   * P5 (product-roadmap A2): the access token names its session via `sid`, and the guard only
+   * honours a token whose session still has a live refresh row. These tests pin the service half of
+   * that contract — that revocation actually reaches the session, and that ordinary rotation does
+   * not. The guard half lives in `auth/jwt-auth.guard.test.ts`.
+   */
+  describe("session ids (P5)", () => {
+    /** The `sid` stamped into an access token. */
+    const sidOf = async (accessToken: string): Promise<string> =>
+      (await jwt.verifyAsync<{ sid?: string }>(accessToken)).sid ?? "";
+
+    /** Exactly what the guard asks on every request: is this subject's session still usable? */
+    const live = (sid: string, userId: string): Promise<boolean> =>
+      refreshTokens.isSessionActive(sid, userId);
+
+    it("stamps a sid on the access token that resolves to a live session", async () => {
+      const res = await service.register("sam@example.com", "password1");
+      const sid = await sidOf(res.accessToken);
+
+      expect(sid).toBeTruthy();
+      expect(refreshTokens.rows[0].sessionId).toBe(sid);
+      await expect(live(sid, res.user.id)).resolves.toBe(true);
+      // The session belongs to its owner, not to whoever quotes the id.
+      await expect(live(sid, "somebody-else")).resolves.toBe(false);
+    });
+
+    it("gives each sign-in its own session", async () => {
+      const first = await service.register("sara@example.com", "password1");
+      const second = await service.login("sara@example.com", "password1");
+      expect(await sidOf(second.accessToken)).not.toBe(await sidOf(first.accessToken));
+    });
+
+    it("rotation keeps the same sid, and the session never goes dark mid-rotation", async () => {
+      const first = await service.register("sonia@example.com", "password1");
+      const sid = await sidOf(first.accessToken);
+
+      refreshTokens.liveAfterRevoke.length = 0;
+      const second = await service.refresh(first.refreshToken);
+      expect(await sidOf(second.accessToken)).toBe(sid);
+      await expect(live(sid, first.user.id)).resolves.toBe(true);
+      // The point of the ordering: the replacement row already existed when the old one was
+      // revoked, so the session was never momentarily without a live row. Asserting only on the
+      // end state would pass under the old revoke-then-issue order too.
+      expect(refreshTokens.liveAfterRevoke).toEqual([true]);
+    });
+
+    it("logout kills only the device that logged out", async () => {
+      const laptop = await service.register("sven@example.com", "password1");
+      const phone = await service.login("sven@example.com", "password1");
+      const laptopSid = await sidOf(laptop.accessToken);
+      const phoneSid = await sidOf(phone.accessToken);
+
+      await service.logout(laptop.refreshToken);
+
+      await expect(live(laptopSid, laptop.user.id)).resolves.toBe(false);
+      await expect(live(phoneSid, laptop.user.id)).resolves.toBe(true);
+    });
+
+    /**
+     * Logout must end the *session*, not the one row it was handed. A session can legitimately hold
+     * two live rows — two genuinely concurrent refreshes each mint one (the A1 non-atomic-rotation
+     * gap, still open) — and before this was fixed, logging out revoked only one of them, so
+     * `isSessionActive` stayed true and the "logged-out" access token kept working.
+     */
+    it("logout ends the whole session even when it holds more than one live token", async () => {
+      const start = await service.register("sibyl@example.com", "password1");
+      const sid = await sidOf(start.accessToken);
+
+      // Two refreshes racing on the same token: both mint a row for this session.
+      const [a, b] = await Promise.all([
+        service.refresh(start.refreshToken),
+        service.refresh(start.refreshToken),
+      ]);
+      expect(refreshTokens.rows.filter((r) => r.sessionId === sid && !r.revokedAt).length).toBe(2);
+
+      await service.logout(a.refreshToken);
+
+      await expect(live(sid, start.user.id)).resolves.toBe(false);
+      // ...and the sibling token really is dead too, not merely unreferenced.
+      await expect(service.refresh(b.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    /** Sign in twice and return both devices' session ids. */
+    async function twoSessions(email: string): Promise<{ userId: string; sids: string[] }> {
+      const a = await service.register(email, "password1");
+      const b = await service.login(email, "password1");
+      return { userId: a.user.id, sids: [await sidOf(a.accessToken), await sidOf(b.accessToken)] };
+    }
+
+    /** Every listed session must be dead. */
+    async function expectAllDead(sids: string[], userId: string): Promise<void> {
+      for (const sid of sids) {
+        await expect(live(sid, userId)).resolves.toBe(false);
+      }
+    }
+
+    it("logout-all kills every session", async () => {
+      const { userId, sids } = await twoSessions("logout-all@example.com");
+      await service.logoutAll(userId);
+      await expectAllDead(sids, userId);
+    });
+
+    it("a password change kills every pre-existing session", async () => {
+      const { userId, sids } = await twoSessions("changed@example.com");
+      await service.changePassword(userId, "password1", "password2");
+      await expectAllDead(sids, userId);
+    });
+
+    it("a password reset kills every session", async () => {
+      const { userId, sids } = await twoSessions("reset@example.com");
+      await service.forgotPassword("reset@example.com");
+      await service.resetPassword(mail.lastToken(), "password2");
+      await expectAllDead(sids, userId);
+    });
+
+    it("reuse detection kills every session, not just the replayed one", async () => {
+      const first = await service.register("thief@example.com", "password1");
+      const other = await service.login("thief@example.com", "password1");
+      const rotated = await service.refresh(first.refreshToken);
+
+      await expect(service.refresh(first.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      await expectAllDead(
+        [await sidOf(rotated.accessToken), await sidOf(other.accessToken)],
+        first.user.id,
+      );
+    });
+
+    it("re-issues a live session for the caller who changed their password", async () => {
+      await service.register("pippa@example.com", "password1");
+      const userId = users.rows[0].id;
+      const fresh = await service.changePassword(userId, "password1", "a-much-better-one");
+      // The sweep above revoked everything; the pair handed back must still work, or the caller is
+      // signed out by their own password change.
+      await expect(live(await sidOf(fresh.accessToken), userId)).resolves.toBe(true);
+    });
+
+    /**
+     * The cascade P5 would otherwise have made near-certain. Before, the other device's access
+     * token survived ~15 more minutes, so nothing prompted it to refresh straight away; now it 401s
+     * on its very next request and its client refreshes immediately. If that refresh were treated
+     * as theft, the sweep would revoke the brand-new session the password-changer was just handed
+     * and log them out seconds after they changed their password.
+     */
+    it("another device's refresh does not sign the password-changer out", async () => {
+      const { userId } = await twoSessions("cascade@example.com");
+      const deviceB = await service.login("cascade@example.com", "password1");
+      const changer = await service.changePassword(userId, "password1", "password2");
+      const changerSid = await sidOf(changer.accessToken);
+
+      // Device B wakes up, gets a 401, and does what apiFetch does: tries to refresh.
+      await expect(service.refresh(deviceB.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      await expect(live(changerSid, userId)).resolves.toBe(true);
+    });
+
+    /** Same shape, via logout: a stale client replaying its token must not log the user out. */
+    it("replaying a token revoked by logout does not nuke the user's other sessions", async () => {
+      const gone = await service.register("stale-client@example.com", "password1");
+      const kept = await service.login("stale-client@example.com", "password1");
+      await service.logout(gone.refreshToken);
+
+      await expect(service.refresh(gone.refreshToken)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+
+      await expect(live(await sidOf(kept.accessToken), gone.user.id)).resolves.toBe(true);
+    });
+
+    it("treats an expired-but-unrevoked session as dead", async () => {
+      const res = await service.register("stale@example.com", "password1");
+      refreshTokens.rows[0].expiresAt = new Date(Date.now() - 1000);
+      await expect(live(await sidOf(res.accessToken), res.user.id)).resolves.toBe(false);
     });
   });
 

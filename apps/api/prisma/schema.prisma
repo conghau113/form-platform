@@ -261,12 +261,19 @@ model VerificationToken {
 /// A long-lived, rotating refresh token (production-hardening A1). The raw token lives only in the
 /// client's HttpOnly `refresh_token` cookie; we store its SHA-256 `tokenHash` so a DB leak can't
 /// mint sessions. Each `/auth/refresh` revokes the presented row and issues a new one (rotation);
-/// `revokedAt` also covers logout. Presenting an already-revoked (but unexpired) token signals
-/// theft/reuse → the service revokes every token for that user. `revokeAllForUser` powers
-/// "log out of all devices".
+/// `revokedAt` also covers logout. Presenting an already-revoked token whose **session is still
+/// live** signals theft/reuse → the service revokes every token for that user; on a session the
+/// user already ended it is just a stale client and is rejected without retaliation (P5).
+/// `revokeAllForUser` powers "log out of all devices".
+///
+/// `sessionId` (product-roadmap A2/P5) groups every token a single sign-in ever rotates through, and
+/// is what makes the *access* token revocable: it rides in the JWT as `sid`, and `JwtAuthGuard`
+/// refuses a token whose session has no live row left. Rotation keeps the same `sessionId`, so
+/// `/auth/logout` kills exactly one device while other sessions keep working.
 model RefreshToken {
   id        String    @id @default(cuid())
   userId    String
+  sessionId String
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
@@ -274,6 +281,7 @@ model RefreshToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([sessionId])
 }
 
 /// Adjacency-list tree (parentId) → unlimited nesting. CRUD/endpoints arrive in W1.

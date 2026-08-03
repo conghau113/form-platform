@@ -90,6 +90,21 @@ Infrastructure-level only — **real authentication arrives in Phase 2**.
 > `GET /projects/:id/my-roles` publishes the same derivation to the UI so a renderer can hide what
 > the server would mask anyway. It is read-only and grants nothing: passing its answer back would not
 > unlock a field, because no endpoint accepts roles from the caller.
+>
+> **Sessions are revocable (product-roadmap A2/P5).** A valid signature no longer authenticates on
+> its own: the access token carries `sid`, and `JwtAuthGuard` refuses it unless that session still
+> owns a `RefreshToken` row that is neither revoked nor expired. Logout / logout-all / a password
+> change / reuse-detection therefore take effect on the **next request**, not at the end of the
+> access token's 15 minutes. Rotation keeps the same `sid`, so `/auth/logout` ends exactly one
+> device — and it revokes the whole **session**, not the row it was handed, because two concurrent
+> refreshes can still leave a session holding two live rows. Every rejection uses the same generic
+> message, so the check can't be read as an oracle.
+>
+> Reuse detection (a replayed, already-revoked refresh token nukes every session of the account)
+> now fires **only while that session is still active**. A replay of a token the user themselves
+> invalidated — logout, logout-all, a password change — is an ordinary stale client, not theft, and
+> retaliating there would log the user out of the session they were *just* issued: after a password
+> change the other device's automatic refresh would have swept away the changer's brand-new session.
 
 ## Access control (Track W5)
 `ProjectsService.requireAccess(userId, projectId, minRole)` is the single gate. The canonical owner

@@ -175,9 +175,9 @@ env-driven, secret CHỈ ở `.env` phía API.
   >   verify riêng** (`SMTP_HOST=` rỗng → log `[mail:log-mode]`) · **UI smoke MCP** (đăng ký→banner→Cài đặt
   >   "Chưa xác minh"→Gửi lại→mở link→"Đã xác minh"→đổi mật khẩu→quên mật khẩu→đặt lại→đăng nhập lại;
   >   console sạch). KHÔNG changeset (apps private).
-  > - **⚠️ Known-gap (advisory):** (1) **access-token 15m không bị thu hồi** khi reset/change (JWT stateless —
-  >   chỉ refresh token bị revoke) ⇒ phiên cũ trong cùng trình duyệt còn sống tối đa 15 phút; siết sau bằng
-  >   token-version/denylist nếu cần. (2) verify **mềm** — chưa nơi nào chặn theo `emailVerifiedAt` (đúng
+  > - **⚠️ Known-gap (advisory):** (1) ~~**access-token 15m không bị thu hồi** khi reset/change (JWT stateless —
+  >   chỉ refresh token bị revoke) ⇒ phiên cũ trong cùng trình duyệt còn sống tối đa 15 phút~~ → **✅ ĐÃ ĐÓNG
+  >   (2026-08-03, P5 — xem mục "A2/P5" ngay dưới Phase A)**. (2) verify **mềm** — chưa nơi nào chặn theo `emailVerifiedAt` (đúng
   >   chủ đích; muốn siết thì gate ở guard + backfill user cũ). (3) `AUTH_BOOTSTRAP_*` admin không được
   >   verify tự động. (4) Chưa có UI đổi email.
 - **A3 — Google OAuth** 🔒 Google app (tùy chọn): `/auth/oauth/google` + callback, liên kết account
@@ -252,8 +252,95 @@ env-driven, secret CHỈ ở `.env` phía API.
 >   đó** · redirect sau đăng nhập ghép thẳng `APP_PUBLIC_URL + "/projects"`, **bỏ qua
 >   `VITE_BASE_PATH`** (cùng giả định sẵn có của `authLink`) · `GOOGLE_REDIRECT_URI` cho phép override
 >   khi API ở domain khác SPA, nhưng **đó chưa phải đường đi được hỗ trợ**: cookie auth là
->   `SameSite=Strict` nên API khác origin sẽ hỏng phiên của SPA, độc lập với OAuth · vẫn dính
->   known-gap A2: access-token 15m không thu hồi được.
+>   `SameSite=Strict` nên API khác origin sẽ hỏng phiên của SPA, độc lập với OAuth · ~~vẫn dính
+>   known-gap A2: access-token 15m không thu hồi được~~ (đã đóng ở P5).
+
+- **A2/P5 — Thu hồi được access-token (`sid`)** ✅ DONE (2026-08-03). Đóng known-gap lớn nhất còn lại
+  của Phase A: trước đây `logout` / `logout-all` / đổi mật khẩu / đặt lại mật khẩu / reuse-detection
+  chỉ thu hồi **refresh** token; access-token đã phát vẫn được `JwtAuthGuard` chấp nhận cho tới khi
+  hết 15 phút, vì guard chỉ kiểm **chữ ký** (đọc `jwt-auth.guard.ts` trước P5: guard không hề có
+  dependency nào tới tầng lưu trữ ⇒ không tồn tại đường thu hồi).
+  > **✅ ĐÃ LÀM (2026-08-03):**
+  > - **Chọn `sid` (session id) thay vì `tokenVersion`:** cùng chi phí 1 truy vấn có index, nhưng làm
+  >   được **đăng xuất MỘT thiết bị** — thứ `tokenVersion` (đếm theo user) không làm được.
+  > - **Schema:** `RefreshToken.sessionId` + `@@index([sessionId])` (migration
+  >   `20260803000000_add_session_id`: `ADD COLUMN` nullable → `UPDATE … = id` → `SET NOT NULL` →
+  >   `CREATE INDEX`; hàng cũ thành session 1-token, đúng ngữ nghĩa của chúng). Xoay vòng **giữ nguyên**
+  >   `sessionId` ⇒ một lần đăng nhập = một session, dù token có xoay bao nhiêu lần.
+  > - **`RefreshTokenRepo.isSessionActive(sessionId, userId)`** — định nghĩa **chặt**: phải còn hàng
+  >   `revokedAt IS NULL` **VÀ** `expiresAt > now()`. Chỉ "có hàng" thì session hết hạn 30 ngày mà chưa
+  >   revoke vẫn sống; chỉ "chưa revoke" thì session đã lụi vẫn sống. Khớp cả `userId` (phòng thủ theo
+  >   tầng: hôm nay `sid` và `sub` cùng ra từ một token đã ký, nhưng "session này thuộc về chủ thể này"
+  >   nên là thuộc tính của truy vấn, không phải giả định).
+  > - **`logout` thu hồi cả SESSION, không phải một hàng** (`revokeSession`): từ P5 access-token sống
+  >   chết theo `isSessionActive`, nên nếu session còn sót hàng anh em nào đang sống thì "đã đăng xuất"
+  >   mà token vẫn dùng được. **Một session CÓ THỂ có 2 hàng sống** — hai `refresh` thật-song-song mỗi
+  >   cái mint một hàng (đúng known-gap A1 rotation-chưa-atomic, VẪN CÒN MỞ). Live-smoke bắt được đúng
+  >   tình huống này: cuộc đua đã fork thật, và logout giết cả hàng anh em.
+  > - **`JwtAuthGuard`** nhận thêm `RefreshTokenRepo`: verify chữ ký → đòi `sub` **và** `sid` → hỏi
+  >   `isSessionActive`. **Thông điệp lỗi giữ nguyên một chuỗi chung** cho mọi nhánh (không tạo oracle
+  >   "phiên này vừa bị đăng xuất"). Route `@Public` **không** chạm tầng lưu trữ (có test khẳng định).
+  >   ⚠️ Chỉ bọc `try/catch` quanh **verify chữ ký**; lỗi của truy vấn session được để nổi lên thành
+  >   500 — sự cố hạ tầng không được hoá trang thành 401 bảo client vứt phiên đang tốt đi.
+  > - **`AuthService.issue(user, sessionId?)`:** thiếu tham số = đăng nhập mới (sinh session mới),
+  >   `refresh` truyền **sid CŨ**. Trong `issue` đã **đảo thứ tự**: ghi hàng refresh **trước**, ký
+  >   access-token **sau** (guard tra `sid` trong DB ⇒ token không được ra tới caller trước hàng đỡ nó).
+  >   Trong `refresh` cũng đảo: **phát trước, revoke sau** — nếu revoke trước thì có một khoảnh khắc
+  >   session không còn hàng sống, đủ để một request đang bay mang access-token hợp lệ ăn 401.
+  > - **⭐ Reuse-detection nay CÓ ĐIỀU KIỆN: chỉ quét sạch phiên khi session ĐANG CÒN SỐNG.** Đây là
+  >   sửa một **dây chuyền do chính P5 gây ra** (reviewer bắt, đã tái lập được): đổi mật khẩu →
+  >   `revokeAllForUser` giết thiết bị B → **trước P5** token của B còn sống thêm ≤15 phút nên B không
+  >   làm gì; **sau P5** B ăn 401 ngay ở request kế tiếp → `apiFetch` tự `POST /auth/refresh` → refresh
+  >   token của B đã revoked → reuse-detection quét sạch → **giết luôn phiên vừa cấp cho người vừa đổi
+  >   mật khẩu**, họ bị đá ra login sau vài giây. Nguyên lý mới: replay chỉ là bằng chứng trộm khi
+  >   **vẫn còn ai đó đang dùng session đó** (hàng sống thuộc về người xoay vòng sau cùng ⇒ một trong
+  >   hai là kẻ mạo danh). Session đã chết = token bị chính người dùng huỷ (logout / logout-all / đổi
+  >   mật khẩu) ⇒ **từ chối, không trả đũa**. Kịch bản trộm thật vẫn quét sạch như cũ (có test).
+  > - **Trình duyệt KHÔNG bị đăng xuất khi deploy:** token cũ (không có `sid`) → 401 → `apiFetch` tự
+  >   refresh (cookie refresh không đụng tới) → phát cặp mới có `sid`. Client dùng `Bearer` ngoài trình
+  >   duyệt phải đăng nhập lại **một lần**.
+  > - **reviewer bắt 3 finding `required`, đã xử lý 2 + bác 1 có lý do:** (1) `logout` thu hồi một
+  >   hàng thay vì cả session → **sửa** (`revokeSession`); (2) dây chuyền đăng-xuất-lan khi đổi mật
+  >   khẩu → **sửa** (reuse-detection có điều kiện); (3) đề nghị thêm **CAS `revoke` rồi NÉM** cho
+  >   `refresh` song song → **KHÔNG làm**: nó biến một cuộc đua vô hại giữa 2 tab (nay cả hai đều nhận
+  >   token dùng được) thành "tab thua cuộc bị đăng xuất". Tác hại *an ninh* mà finding đó mô tả nằm
+  >   ở chỗ "logout không giết hàng của kẻ trộm" — **đã bị (1) đóng**. Phần còn lại đúng là known-gap
+  >   A1 rotation-chưa-atomic có sẵn, P5 không làm nó tệ thêm.
+  > - **Verify ALL PASS:** typecheck api · **api 420 test** (nền 407; khối `session ids (P5)` mới có
+  >   **13** `it` ở `auth.service.test.ts`, `jwt-auth.guard.test.ts` từ 7→**10**) · biome lint sạch ·
+  >   `migrate deploy` + `\d "RefreshToken"` psql · **4 test hồi quy đã xác minh ĐỎ khi gỡ bản sửa**
+  >   (3 của reviewer + test thứ tự issue-trước-revoke; test thứ tự lúc đầu tôi **đo sai** — đo
+  >   liveness TRƯỚC khi revoke thì luôn `true` ở cả hai thứ tự, phải đo NGAY SAU) ·
+  >   **live-smoke HTTP 27/27** (`PORT=3011 node dist/main.js`): access-token có `sid` · mỗi lần đăng
+  >   nhập một `sid` khác · xoay vòng giữ `sid` và **token trước-xoay vẫn dùng được** · **đăng xuất ⇒
+  >   access-token của đúng thiết bị đó 401 NGAY, thiết bị kia vẫn 200** · logout-all giết nốt · đổi
+  >   mật khẩu giết phiên khác, **người vừa đổi vẫn đăng nhập KỂ CẢ khi thiết bị kia tự refresh** ·
+  >   replay token đã logout không giết phiên khác · **logout giết cả session đã fork thành 2 token
+  >   sống** (cuộc đua fork thật trong lần chạy này) · token ký đúng nhưng **không có `sid` → 401** ·
+  >   `/health` vẫn 200 khi không token.
+  > - **⚠️ Bắt buộc khi deploy (ĐÃ ĐO, không phải suy luận):** migration này **không tương thích ngược
+  >   với bản app trước đó** — `sessionId` là NOT NULL không default, nên code cũ `INSERT` thiếu cột sẽ
+  >   500 (`Null constraint violation on the fields: (sessionId)` — quan sát trực tiếp trên container
+  >   `form-platform-api-1` đang chạy image cũ sau khi migrate). ⇒ **migrate + deploy code mới cùng
+  >   nhau**, không rolling-deploy để hai bản chạy song song. Container dev `:3001` của owner **phải
+  >   build lại** thì `/auth/login` mới hoạt động lại.
+  > - **⚠️ Known-gap P5 (cố ý):** thêm **1 truy vấn có index mỗi request đã xác thực** (không cache —
+  >   cache là đổi bảo đảm chính xác lấy gần đúng khi chưa hề đo thấy nghẽn) · **chưa có UI "thiết bị
+  >   đang đăng nhập"** (dữ liệu đã đủ: nhóm `RefreshToken` theo `sessionId`) · một session vẫn không
+  >   ghi thiết bị/IP/user-agent ⇒ người dùng không phân biệt được phiên nào là phiên nào · hàng
+  >   `RefreshToken` chưa bao giờ được dọn (cùng dạng known-gap retention với `Notification` ở E3b).
+  > - **⚠️ Known-gap A1 rotation-chưa-atomic VẪN MỞ — và nó có một mặt mà tôi ĐÃ MÔ TẢ SAI trong bản
+  >   đầu, reviewer vòng 2 bắt được:** hai `refresh` thật-song-song cùng một token vẫn fork session
+  >   thành 2 hàng sống. Việc `logout` quét theo session (R1) chỉ đóng nhánh "logout bỏ sót hàng anh
+  >   em"; **nhánh HỒI SINH thì chưa**: một `refresh` đang bay có thể tạo hàng sống MỚI *sau khi*
+  >   `revokeSession`/`revokeAllForUser` vừa quét xong ⇒ "đã đăng xuất / đã đổi mật khẩu" mà thiết bị
+  >   đó vẫn giữ cặp token sống và xoay vòng tiếp vô hạn. Cửa sổ = trọn chuỗi `ensurePersonalTenant`
+  >   → `ensureTenantAdmin` → `create` (hàng chục ms). **Không tệ hơn trước P5** (trước P5 cookie
+  >   refresh cũng sống sót y hệt và access-token thì vốn không kiểm gì) nên KHÔNG phải regression,
+  >   nhưng **chưa đóng**. Đóng thật cần `revoke` kiểu compare-and-set **cộng** bù trừ (revoke luôn
+  >   hàng vừa phát), hoặc một bảng `Session` riêng có `revokedAt` để `isSessionActive` không còn
+  >   phụ thuộc vào "còn hàng nào không". · `revoke(id)` cũng vẫn không phải compare-and-set nên
+  >   reuse-detection còn TOCTOU trong đúng khoảnh khắc bùng nổ song song đó.
 
 ### Phase B — Nền tảng Tenant + Org/Department (để client cài & tự cấu hình) ⭐⭐ [B1–B4 ✅ DONE 2026-07-03 — PHASE B XONG] [làm TRƯỚC RBAC]
 Theo framing vendor↔client: **1 tenant = 1 client/installation** (EVN là 1 tenant). RBAC/form/workflow

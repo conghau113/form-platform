@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   type OnModuleInit,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -78,6 +79,8 @@ export interface AuthResult {
  */
 @Injectable()
 export class AuthService implements OnModuleInit {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly users: UserRepo,
     private readonly jwt: JwtService,
@@ -131,14 +134,29 @@ export class AuthService implements OnModuleInit {
   /**
    * Exchange a refresh token for a fresh pair (`POST /auth/refresh`). Rotates: the presented token
    * is revoked and a new one issued, so a captured token is single-use. A token presented *after*
-   * it was already revoked (rotation or logout) is a replay — we revoke every token for that user
-   * (reuse detection) so a thief can't outlast the legitimate client.
+   * it was already revoked is a replay; when its session is **still live** that is reuse detection
+   * and we revoke every token for the user, so a thief can't outlast the legitimate client. When
+   * the session is already dead the replay is a stale client, not a thief — see below.
    */
   async refresh(rawToken: string): Promise<AuthResult> {
     const record = await this.refreshTokens.findByHash(hashToken(rawToken));
     if (!record) throw new UnauthorizedException("Invalid refresh token");
     if (record.revokedAt) {
-      await this.refreshTokens.revokeAllForUser(record.userId);
+      // A replay is only evidence of theft while *someone is still using that session*: then the
+      // live row belongs to whoever rotated last, and one of the two parties is an impostor, so we
+      // burn the account's sessions. If the session is already dead the token was revoked by the
+      // user's own doing — logout, logout-all, a password change — and the replay is just a client
+      // (or a queued retry) presenting a stale cookie. Sweeping there would be actively harmful:
+      // after a password change the *other* device's automatic refresh would nuke the session the
+      // password-changer was just handed, logging them out seconds later. Reject, don't retaliate.
+      const live = await this.refreshTokens.isSessionActive(record.sessionId, record.userId);
+      if (live) await this.refreshTokens.revokeAllForUser(record.userId);
+      // Log either way. Declining to retaliate must not also throw the signal away: a replay on a
+      // dead session is usually a stale client, but it is the only trace an operator would ever get.
+      const outcome = live ? "session live → revoked every session" : "session dead → not swept";
+      this.logger.warn(
+        `Replayed refresh token (user ${record.userId}, session ${record.sessionId}): ${outcome}`,
+      );
       throw new UnauthorizedException("Refresh token already used");
     }
     if (record.expiresAt.getTime() <= Date.now()) {
@@ -146,15 +164,27 @@ export class AuthService implements OnModuleInit {
     }
     const user = await this.users.findById(record.userId);
     if (!user) throw new UnauthorizedException("Account no longer exists");
+    // Reuse the presented token's `sessionId` so rotation does not end the session (P5) — this is
+    // one device staying signed in, not a new sign-in. Issue *before* revoking: for the instant
+    // between the two calls the session must never be without a live row, or a concurrent request
+    // carrying a perfectly good access token would 401. Reuse detection is unaffected — it keys off
+    // the presented row being revoked, which it still is once this returns.
+    const result = await this.issue(user, record.sessionId);
     await this.refreshTokens.revoke(record.id);
-    return this.issue(user);
+    return result;
   }
 
-  /** Revoke the presented refresh token (`POST /auth/logout`). Best-effort: absent/unknown is a no-op. */
+  /**
+   * End the session the presented refresh token belongs to (`POST /auth/logout`). Best-effort:
+   * absent/unknown is a no-op. Revokes the whole **session**, not just this row — since P5 the
+   * access token lives or dies by `isSessionActive`, so leaving any sibling row of that session
+   * live (two truly concurrent refreshes can still mint one — the A1 non-atomic-rotation gap)
+   * would mean "logged out" without the access token actually dying.
+   */
   async logout(rawToken: string | undefined): Promise<void> {
     if (!rawToken) return;
     const record = await this.refreshTokens.findByHash(hashToken(rawToken));
-    if (record && !record.revokedAt) await this.refreshTokens.revoke(record.id);
+    if (record) await this.refreshTokens.revokeSession(record.sessionId, record.userId);
   }
 
   /** Revoke every active session for a user (`POST /auth/logout-all` — "log out everywhere"). */
@@ -291,7 +321,13 @@ export class AuthService implements OnModuleInit {
     return this.issue(existing);
   }
 
-  private async issue(user: UserRecord): Promise<AuthResult> {
+  /**
+   * Mint a fresh token pair. `sessionId` is the identity of one signed-in device (P5): omit it for
+   * a genuine sign-in (a new session is minted), pass the existing one from `refresh` so rotation
+   * keeps the device's session alive. It is stamped into the access token as `sid`, which is how
+   * `JwtAuthGuard` can refuse an access token whose session has since been logged out.
+   */
+  private async issue(user: UserRecord, sessionId?: string): Promise<AuthResult> {
     // Auto-provision the caller's personal tenant (product-roadmap B1). Idempotent, so login/refresh
     // for an existing user is a no-op; a freshly registered user (and the bootstrap admin on first
     // login) gets a Tenant + Membership here, establishing "every logged-in user has a tenant".
@@ -303,17 +339,21 @@ export class AuthService implements OnModuleInit {
     // user the tenant's `*`-holding admin role so existing users keep full access under RBAC (replacing
     // EVN's hardcoded `code==='ADMIN'` with a data-driven role, §6.6).
     await this.rbac.ensureTenantAdmin(user.id, tenantId);
-    const accessToken = await this.jwt.signAsync({ sub: user.id, email: user.email });
-    const refreshToken = await this.issueRefreshToken(user.id);
+    const sid = sessionId ?? randomBytes(16).toString("hex");
+    // Persist the refresh row *first*: the guard resolves `sid` against a live row, so an access
+    // token must never reach the caller before the row backing it exists.
+    const refreshToken = await this.issueRefreshToken(user.id, sid);
+    const accessToken = await this.jwt.signAsync({ sub: user.id, email: user.email, sid });
     return { accessToken, refreshToken, user: toProfile(user) };
   }
 
   /** Mint + persist (hashed) a new opaque refresh token; returns the raw value for the cookie. */
-  private async issueRefreshToken(userId: string): Promise<string> {
+  private async issueRefreshToken(userId: string, sessionId: string): Promise<string> {
     const raw = randomBytes(32).toString("hex");
     const ttlMs = durationToMs(process.env.JWT_REFRESH_EXPIRES_IN ?? DEFAULT_REFRESH_EXPIRES_IN);
     await this.refreshTokens.create({
       userId,
+      sessionId,
       tokenHash: hashToken(raw),
       expiresAt: new Date(Date.now() + ttlMs),
     });

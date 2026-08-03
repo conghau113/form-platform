@@ -104,7 +104,7 @@ function guardWith(required: string[] | undefined, held: string[], tenantId: str
 }
 
 describe("FunctionGuard", () => {
-  const alice = { sub: "alice", email: "a@x.io" };
+  const alice = { sub: "alice", email: "a@x.io", sid: "sid-alice" };
 
   it("allows a route with no @RequireFunction metadata", async () => {
     const guard = guardWith(undefined, [], "tenantA");
@@ -154,7 +154,7 @@ describe("FunctionGuard", () => {
 });
 
 describe("FunctionGuard active tenant (X-Tenant-Id)", () => {
-  const bob = { sub: "bob", email: "b@x.io" };
+  const bob = { sub: "bob", email: "b@x.io", sid: "sid-bob" };
   const PERSONAL = "tnt_bob";
   const TEAM = "tnt_team";
   const required = ["role.admin"];

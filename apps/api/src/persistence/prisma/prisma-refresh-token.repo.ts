@@ -8,6 +8,7 @@ function toRecord(t: RefreshToken): RefreshTokenRecord {
   return {
     id: t.id,
     userId: t.userId,
+    sessionId: t.sessionId,
     tokenHash: t.tokenHash,
     expiresAt: t.expiresAt,
     revokedAt: t.revokedAt,
@@ -23,6 +24,7 @@ export class PrismaRefreshTokenRepo extends RefreshTokenRepo {
 
   async create(input: {
     userId: string;
+    sessionId: string;
     tokenHash: string;
     expiresAt: Date;
   }): Promise<RefreshTokenRecord> {
@@ -42,10 +44,25 @@ export class PrismaRefreshTokenRepo extends RefreshTokenRepo {
     });
   }
 
+  async revokeSession(sessionId: string, userId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  async isSessionActive(sessionId: string, userId: string): Promise<boolean> {
+    const live = await this.prisma.refreshToken.findFirst({
+      where: { sessionId, userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    return live !== null;
   }
 }
