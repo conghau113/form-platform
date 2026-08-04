@@ -24,6 +24,8 @@ model Tenant {
   projects  Project[]
   orgUnits  OrgUnit[]
   roles     Role[]
+  externalApiKeys        ExternalApiKey[]
+  externalTicketTypeMaps ExternalTicketTypeMap[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 }
@@ -567,4 +569,53 @@ model Theme {
   formId    String   @id
   tokens    Json
   updatedAt DateTime @updatedAt
+}
+
+/// Machine-to-machine credential for the `/external/*` integration surface (EVN §12, D0-a). Follows
+/// {@link RefreshToken}: only the SHA-256 digest is stored and lookups go *by* digest through the
+/// unique index — so a DB leak cannot mint a key, and there is no plaintext to compare.
+///
+/// The row carries `tenantId`, and that is the whole tenancy story for this surface: every
+/// `/external` read resolves through {@link ExternalTicketTypeMap} scoped to this tenant and is then
+/// re-checked against the resolved project's own `tenantId` before anything is returned.
+///
+/// Known gap, accepted deliberately: a key is **tenant-wide**. Unlike a human caller it does not go
+/// through `requireAccess`, so the C3 org-unit data-scope never narrows it. Machine integrations are
+/// whole-tenant by design; do not hand one of these to a user-facing client.
+model ExternalApiKey {
+  id        String    @id @default(cuid())
+  tenantId  String
+  /// Operator-facing name ("EVN core-service, staging") — never part of authentication.
+  label     String
+  /// SHA-256 hex of the raw key. Unique so authentication is a single indexed lookup.
+  tokenHash String    @unique
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+/// Binds one caller-side ticket type (EVN's `PCT`, `LCT`, …) to the form — and later the workflow —
+/// that answers for it (D0-a). Seeded by script; this slice has **no write API** on purpose.
+///
+/// `formId` is stored directly rather than derived from the workflow: `workflowNodeSchema.formId` is
+/// optional, so walking a graph to find "the" form can legitimately come back empty.
+model ExternalTicketTypeMap {
+  id             String   @id @default(cuid())
+  tenantId       String
+  /// The caller's vocabulary, e.g. `PCT`. Unique per tenant — without that constraint two seeded
+  /// rows would make resolution non-deterministic.
+  ticketTypeCode String
+  formId         String
+  /// The caller's own form code, echoed back so they can correlate. Not used for lookup.
+  externalFormCode String
+  /// Reserved for endpoint C (D2); unused by the form-template read.
+  workflowId     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, ticketTypeCode])
+  @@index([tenantId])
 }

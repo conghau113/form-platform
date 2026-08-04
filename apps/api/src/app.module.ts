@@ -6,6 +6,7 @@ import { validateEnv } from "./config/env.js";
 import { AdminCatalogModule } from "./modules/admin-catalog/admin-catalog.module.js";
 import { AiModule } from "./modules/ai/ai.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
+import { ExternalModule } from "./modules/external/external.module.js";
 import { FoldersModule } from "./modules/folders/folders.module.js";
 import { FormsModule } from "./modules/forms/forms.module.js";
 import { HealthModule } from "./modules/health/health.module.js";
@@ -71,6 +72,7 @@ import { PersistenceModule } from "./persistence/persistence.module.js";
     AdminCatalogModule,
     WorkOrdersModule,
     NotificationsModule,
+    ExternalModule,
     AiModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -4,6 +4,7 @@ import { PrismaAdminCatalogRepo } from "./prisma/prisma-admin-catalog.repo.js";
 import { PrismaAuditRepo } from "./prisma/prisma-audit.repo.js";
 import { PrismaCaseCommentRepo } from "./prisma/prisma-case-comment.repo.js";
 import { PrismaCaseParticipantRepo } from "./prisma/prisma-case-participant.repo.js";
+import { PrismaExternalIntegrationRepo } from "./prisma/prisma-external-integration.repo.js";
 import { PrismaFolderRepo } from "./prisma/prisma-folder.repo.js";
 import { PrismaFormRepo } from "./prisma/prisma-form.repo.js";
 import { PrismaFormVersionRepo } from "./prisma/prisma-form-version.repo.js";
@@ -26,6 +27,7 @@ import { AdminCatalogRepo } from "./repositories/admin-catalog.repo.js";
 import { AuditRepo } from "./repositories/audit.repo.js";
 import { CaseCommentRepo } from "./repositories/case-comment.repo.js";
 import { CaseParticipantRepo } from "./repositories/case-participant.repo.js";
+import { ExternalIntegrationRepo } from "./repositories/external-integration.repo.js";
 import { FolderRepo } from "./repositories/folder.repo.js";
 import { FormRepo } from "./repositories/form.repo.js";
 import { FormVersionRepo } from "./repositories/form-version.repo.js";
@@ -76,6 +78,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     { provide: CaseCommentRepo, useClass: PrismaCaseCommentRepo },
     { provide: CaseParticipantRepo, useClass: PrismaCaseParticipantRepo },
     { provide: NotificationRepo, useClass: PrismaNotificationRepo },
+    { provide: ExternalIntegrationRepo, useClass: PrismaExternalIntegrationRepo },
   ],
   exports: [
     PrismaService,
@@ -101,6 +104,7 @@ import { WorkflowInstanceRepo } from "./repositories/workflow-instance.repo.js";
     CaseCommentRepo,
     CaseParticipantRepo,
     NotificationRepo,
+    ExternalIntegrationRepo,
   ],
 })
 export class PersistenceModule {}

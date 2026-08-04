@@ -41,8 +41,22 @@ it. `PrismaService` (the `PrismaClient` lifecycle) lives only in `persistence/pr
 | Forms (save/load/list/move/delete; body = the form contract) | `modules/forms/` |
 | Themes (save/load per form id; body = design tokens) | `modules/themes/` |
 | Presets (global ∪ project library; promote to global) | `modules/presets/` |
+| Machine-to-machine surface (EVN §12, D0-a) — API-key auth, tenant-scoped, redacted | `modules/external/` |
 | Request DTOs (non-contract bodies) | `modules/<feature>/dto/` |
 | One-off importer (flat `.data/*.json` → DB) | `scripts/import-files-to-db.ts` |
+| `/external/*` credential provisioning — the **only** write path, deliberately not an endpoint | `scripts/seed-external-key.ts` |
+
+### `modules/external/` — the one place `@Public()` is load-bearing
+`JwtAuthGuard` is global, so these routes need `@Public()` to be reachable by a caller with no
+browser session — which makes `ApiKeyGuard` (SHA-256 digest lookup, the `RefreshToken` pattern) the
+**sole** gate. Both decorators sit on the **controller class**, never per method: split across
+levels, the next route added inherits the opt-out without the check. Three tests pin this.
+
+Every read is scoped to the key's tenant twice over (the binding lookup is tenant-keyed, and the
+resolved form is re-checked against the tenant), every miss returns the **same** 404 message so
+existence cannot be probed, only **published** versions are readable, and `sanitize.ts` strips
+`permissions` / `url` / `submitUrl` before the body leaves. Successful reads write an `AuditLog`
+row; failed ones deliberately write nothing.
 
 ## Validation — two distinct gates
 1. **Contract bodies** (`POST /forms`, `POST /themes/:id`, `POST /presets`) are typed `@Body()
