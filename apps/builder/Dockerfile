@@ -5,7 +5,7 @@
 # (@org/form-renderer-web, …). See docker-compose.yml `build.context: .`.
 
 # ---- build: Vite production bundle ----
-FROM node:20-alpine AS build
+FROM node:25-alpine AS build
 RUN corepack enable
 WORKDIR /repo
 
