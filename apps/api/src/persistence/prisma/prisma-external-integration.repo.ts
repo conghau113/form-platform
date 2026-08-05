@@ -23,12 +23,20 @@ export class PrismaExternalIntegrationRepo extends ExternalIntegrationRepo {
     return row;
   }
 
-  async findTicketTypeMap(
+  async findTicketTypeMaps(
     tenantId: string,
     ticketTypeCode: string,
-  ): Promise<ExternalTicketTypeMapRecord | null> {
-    const row = await this.prisma.externalTicketTypeMap.findUnique({
-      where: { tenantId_ticketTypeCode: { tenantId, ticketTypeCode } },
+    externalFormCode?: string,
+  ): Promise<ExternalTicketTypeMapRecord[]> {
+    return this.prisma.externalTicketTypeMap.findMany({
+      // Spelled out rather than passing `externalFormCode` straight through: Prisma drops an
+      // `undefined` filter, so the "narrow to one template" and "list every template" cases would
+      // read identically at the call site.
+      where: {
+        tenantId,
+        ticketTypeCode,
+        ...(externalFormCode === undefined ? {} : { externalFormCode }),
+      },
       select: {
         id: true,
         tenantId: true,
@@ -38,6 +46,5 @@ export class PrismaExternalIntegrationRepo extends ExternalIntegrationRepo {
         workflowId: true,
       },
     });
-    return row;
   }
 }

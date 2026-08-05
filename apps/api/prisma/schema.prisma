@@ -604,18 +604,27 @@ model ExternalApiKey {
 model ExternalTicketTypeMap {
   id             String   @id @default(cuid())
   tenantId       String
-  /// The caller's vocabulary, e.g. `PCT`. Unique per tenant — without that constraint two seeded
-  /// rows would make resolution non-deterministic.
+  /// The caller's vocabulary, e.g. `PCT`. NOT unique on its own: one ticket type legitimately has
+  /// several templates behind it (EVN's PCT has six: `CPCT`, `CT_PCT`, `CT_PCT_PDF`, …).
   ticketTypeCode String
   formId         String
-  /// The caller's own form code, echoed back so they can correlate. Not used for lookup.
+  /// The caller's own form code, e.g. `CPCT`. Part of the lookup key — it is what picks *which*
+  /// template of that ticket type this row answers for.
   externalFormCode String
   /// Reserved for endpoint C (D2); unused by the form-template read.
+  ///
+  /// ⚠️ P2-0 left this in an awkward place and D2 must resolve it: the row is now per *template*,
+  /// so a ticket type with six templates has six `workflowId` columns to disagree with each other —
+  /// while §12.C's request carries no form code to pick between them. Either the workflow binding
+  /// moves to its own per-`(tenantId, ticketTypeCode)` table, or C resolves it another way. Do not
+  /// let D2 read this column without deciding first.
   workflowId     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, ticketTypeCode])
+  /// Explicitly named: the default Prisma name for three columns this long is 66 characters, past
+  /// Postgres' 63-character identifier limit.
+  @@unique([tenantId, ticketTypeCode, externalFormCode], map: "ExternalTicketTypeMap_binding_key")
   @@index([tenantId])
 }

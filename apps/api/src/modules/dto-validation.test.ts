@@ -1,5 +1,6 @@
 import { type ArgumentMetadata, BadRequestException, ValidationPipe } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import { FormTemplateQueryDto } from "./external/dto/form-template.query.js";
 import { CreateFolderDto } from "./folders/dto/create-folder.dto.js";
 import { UpdateFolderDto } from "./folders/dto/update-folder.dto.js";
 import { CreateProjectDto } from "./projects/dto/create-project.dto.js";
@@ -187,5 +188,30 @@ describe("Phase E work-order DTOs", () => {
     await expect(pipe.transform({ roleCode: "hr" }, as(AddParticipantDto))).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it("normalises ?formCode= to either a trimmed code or nothing at all", async () => {
+    // P2-0. Whichever of the two it becomes decides between "serve this template" and "refuse,
+    // because the ticket type has several" — and both answers are a bare 404 to the caller, so a
+    // slip here is invisible from outside.
+    await expect(
+      pipe.transform({ ticketTypeCode: "PCT", formCode: " CPCT " }, as(FormTemplateQueryDto)),
+    ).resolves.toEqual({ ticketTypeCode: "PCT", formCode: "CPCT" });
+
+    for (const formCode of ["", "   "]) {
+      const out = (await pipe.transform(
+        { ticketTypeCode: "PCT", formCode },
+        as(FormTemplateQueryDto),
+      )) as Record<string, unknown>;
+      expect(out).toEqual({ ticketTypeCode: "PCT" });
+    }
+
+    // A repeated ?formCode=a&formCode=b arrives as an array: 400, never one of them by accident.
+    await expect(
+      pipe.transform(
+        { ticketTypeCode: "PCT", formCode: ["CPCT", "CT_PCT_PDF"] },
+        as(FormTemplateQueryDto),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

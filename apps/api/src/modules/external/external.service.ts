@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { FormSchema } from "@org/form-schema";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
@@ -44,6 +44,8 @@ export interface ExternalFormTemplate {
  */
 @Injectable()
 export class ExternalService {
+  private readonly logger = new Logger(ExternalService.name);
+
   constructor(
     private readonly integrations: ExternalIntegrationRepo,
     private readonly forms: FormRepo,
@@ -56,9 +58,42 @@ export class ExternalService {
     caller: ExternalCaller,
     ticketTypeCode: string,
     version?: number,
+    externalFormCode?: string,
   ): Promise<ExternalFormTemplate> {
     const { tenantId } = caller;
-    const map = await this.integrations.findTicketTypeMap(tenantId, ticketTypeCode);
+    const matches = await this.integrations.findTicketTypeMaps(
+      tenantId,
+      ticketTypeCode,
+      externalFormCode,
+    );
+    // Exactly one, or nothing. Two matches means the caller asked for "PCT" on a tenant that binds
+    // several PCT templates and did not say which — answering with either one would make the reply
+    // depend on row order, and serving the PDF variant where the create-ticket form was meant is a
+    // failure the caller cannot even see. They re-ask with `?formCode=`.
+    //
+    // Why the *same* 404 and not a distinct "ambiguous" reply: not for secrecy. Ambiguity is a
+    // same-tenant condition — the caller is authenticated to this tenant and the query is scoped to
+    // it, so naming it would disclose nothing about anyone else's configuration. It is a uniformity
+    // decision: one failure shape for this whole surface is cheap to keep honest as endpoints C and
+    // D land, and carve-outs are what erode it. Revisit it on evidence, not on principle.
+    //
+    // The cost is real, so it is paid on our side rather than theirs: §12.B as EVN specified it has
+    // no `?formCode=` at all, so their first PCT call will read "Unknown ticket type" while
+    // pointing at a contract disagreement. Hence the warning below — nothing reaches the caller,
+    // but the answer is one grep away instead of a multi-hour dead end between two teams. The
+    // behaviour itself is the answer to B2 in `docs/expansion/evn-integration-questions.md`, and
+    // still awaits their reply.
+    if (matches.length > 1) {
+      // `keyId` identifies *which* integrator is calling it wrong — the same actor the audit trail
+      // records. Expect this to be noisy while §12.B has no `formCode` in it: every EVN PCT call
+      // built to their spec lands here, and that volume is itself the measurement.
+      this.logger.warn(
+        `Ambiguous form-template request from key ${caller.keyId}: tenant ${tenantId} binds ` +
+          `${matches.length} templates for ticket type "${ticketTypeCode}" and the request named ` +
+          "no formCode",
+      );
+    }
+    const map = matches.length === 1 ? matches[0] : undefined;
     if (!map) throw new NotFoundException("Unknown ticket type");
 
     // Second tenancy layer. The binding is already tenant-scoped, but `FormRepo`/`FormVersionRepo`
@@ -85,7 +120,14 @@ export class ExternalService {
       action: "external.form-template.read",
       targetType: "form",
       targetId: map.formId,
-      detail: { ticketTypeCode: map.ticketTypeCode, version: resolved.version },
+      // `externalFormCode` is part of the record because the ticket type alone no longer identifies
+      // what was read (P2-0) — "who read our PCT template" has six possible answers. It is the
+      // caller's own vocabulary, so recording it discloses nothing they did not send.
+      detail: {
+        ticketTypeCode: map.ticketTypeCode,
+        externalFormCode: map.externalFormCode,
+        version: resolved.version,
+      },
     });
 
     return {

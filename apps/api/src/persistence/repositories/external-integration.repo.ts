@@ -32,12 +32,19 @@ export abstract class ExternalIntegrationRepo {
    */
   abstract findActiveKeyByHash(tokenHash: string): Promise<ExternalApiKeyRecord | null>;
   /**
-   * Resolve one binding, scoped to the authenticated tenant. `tenantId` is part of the query rather
-   * than something the caller checks afterwards: a lookup by `ticketTypeCode` alone would return
-   * another tenant's row and leak its existence through the response.
+   * Resolve the bindings for one ticket type, scoped to the authenticated tenant. `tenantId` is
+   * part of the query rather than something the caller checks afterwards: a lookup by
+   * `ticketTypeCode` alone would return another tenant's row and leak its existence through the
+   * response.
+   *
+   * Returns a list, not one row, because a ticket type legitimately has several templates behind it
+   * (P2-0). `externalFormCode` narrows to exactly one; omitting it asks for all of them, and it is
+   * the *service* that decides an ambiguous answer is a refusal — a repo that silently picked the
+   * first row would make the endpoint depend on row order.
    */
-  abstract findTicketTypeMap(
+  abstract findTicketTypeMaps(
     tenantId: string,
     ticketTypeCode: string,
-  ): Promise<ExternalTicketTypeMapRecord | null>;
+    externalFormCode?: string,
+  ): Promise<ExternalTicketTypeMapRecord[]>;
 }

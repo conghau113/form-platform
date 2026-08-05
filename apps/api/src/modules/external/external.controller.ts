@@ -28,6 +28,11 @@ export class ExternalController {
     @CurrentCaller() caller: ExternalCaller,
     @Query() query: FormTemplateQueryDto,
   ): Promise<ExternalFormTemplate> {
-    return this.service.getFormTemplate(caller, query.ticketTypeCode, query.version);
+    return this.service.getFormTemplate(
+      caller,
+      query.ticketTypeCode,
+      query.version,
+      query.formCode,
+    );
   }
 }

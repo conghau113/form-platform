@@ -46,19 +46,24 @@ class FakeAuditRepo extends AuditRepo {
   }
 }
 
-/** Matches the Prisma `findUnique` on `(tenantId, ticketTypeCode)` — tenancy is IN the query. */
+/** Matches the Prisma `findMany` filter — tenancy is IN the query, and an omitted `externalFormCode`
+ *  returns every template of that ticket type rather than picking one. */
 class FakeIntegrationRepo extends ExternalIntegrationRepo {
   readonly maps: ExternalTicketTypeMapRecord[] = [];
 
   async findActiveKeyByHash(): Promise<ExternalApiKeyRecord | null> {
     return null;
   }
-  async findTicketTypeMap(
+  async findTicketTypeMaps(
     tenantId: string,
     ticketTypeCode: string,
-  ): Promise<ExternalTicketTypeMapRecord | null> {
-    return (
-      this.maps.find((m) => m.tenantId === tenantId && m.ticketTypeCode === ticketTypeCode) ?? null
+    externalFormCode?: string,
+  ): Promise<ExternalTicketTypeMapRecord[]> {
+    return this.maps.filter(
+      (m) =>
+        m.tenantId === tenantId &&
+        m.ticketTypeCode === ticketTypeCode &&
+        (externalFormCode === undefined || m.externalFormCode === externalFormCode),
     );
   }
 }
@@ -175,6 +180,22 @@ function seedVersion(formId: string, version: number, title: string): void {
     body: body(title),
     publishedBy: "u1",
     publishedAt: new Date().toISOString(),
+  });
+}
+
+/** A second published template behind the *same* ticket type — EVN's `CT_PCT_PDF` next to `CPCT`. */
+function seedSecondPctTemplate(): void {
+  seedProject("p_a_pdf", "tenant_a");
+  seedForm("form_pct_pdf", "p_a_pdf");
+  seedVersion("form_pct_pdf", 1, "pdf-v1");
+  versions.activeByForm.set("form_pct_pdf", 1);
+  integrations.maps.push({
+    id: "m_pdf",
+    tenantId: "tenant_a",
+    ticketTypeCode: "PCT",
+    formId: "form_pct_pdf",
+    externalFormCode: "CT_PCT_PDF",
+    workflowId: null,
   });
 }
 
@@ -295,16 +316,119 @@ describe("ExternalService.getFormTemplate", () => {
       externalFormCode: "CPCT",
       workflowId: null,
     });
+    // The ambiguous case gets its OWN ticket type on purpose. Making `PCT` ambiguous here would
+    // short-circuit the `version: 99` attempt below at the ambiguity check, so "never published"
+    // would silently stop being one of the messages this test compares.
+    seedProject("p_a_amb", "tenant_a");
+    seedForm("form_amb", "p_a_amb");
+    for (const code of ["A1", "A2"]) {
+      integrations.maps.push({
+        id: `m_amb_${code}`,
+        tenantId: "tenant_a",
+        ticketTypeCode: "AMBIG",
+        formId: "form_amb",
+        externalFormCode: code,
+        workflowId: null,
+      });
+    }
     const messages: string[] = [];
     for (const attempt of [
       () => service.getFormTemplate(callerFor("tenant_a"), "NOPE"),
       () => service.getFormTemplate(callerFor("tenant_b"), "PCT"),
       () => service.getFormTemplate(callerFor("tenant_a"), "PCT", 99),
+      // Ambiguous — two templates, no `?formCode=`. Deliberately in the same set: a helpful
+      // "specify formCode" reply here would be the first crack in the single-message rule.
+      () => service.getFormTemplate(callerFor("tenant_a"), "AMBIG"),
     ]) {
       await attempt().catch((e: Error) => messages.push(e.message));
     }
-    expect(messages).toHaveLength(3);
+    expect(messages).toHaveLength(4);
     expect(new Set(messages).size).toBe(1);
+  });
+});
+
+/**
+ * P2-0. D0-a shipped `@@unique([tenantId, ticketTypeCode])` — one form per ticket type. EVN's own
+ * `templateJSON` files disprove that: `PCT` is backed by six templates. The fix widens the key, and
+ * these tests pin the behaviour that has to come with it.
+ */
+describe("a ticket type with several templates", () => {
+  beforeEach(seedSecondPctTemplate);
+
+  it("serves the template named by formCode", async () => {
+    const create = await service.getFormTemplate(callerFor("tenant_a"), "PCT", undefined, "CPCT");
+    expect(create.formId).toBe("form_pct");
+    expect(create.externalFormCode).toBe("CPCT");
+
+    const pdf = await service.getFormTemplate(
+      callerFor("tenant_a"),
+      "PCT",
+      undefined,
+      "CT_PCT_PDF",
+    );
+    expect(pdf.formId).toBe("form_pct_pdf");
+    expect(pdf.externalFormCode).toBe("CT_PCT_PDF");
+  });
+
+  it("404s rather than guessing when formCode is missing", async () => {
+    // The whole point of P2-0: picking either one makes the answer depend on row order, and serving
+    // the PDF variant where the create-ticket form was meant is invisible to the caller.
+    await expect(service.getFormTemplate(callerFor("tenant_a"), "PCT")).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it("404s a formCode that is not bound", async () => {
+    await expect(
+      service.getFormTemplate(callerFor("tenant_a"), "PCT", undefined, "CT_PCT_M"),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("still resolves a ticket type that has exactly one template without formCode", async () => {
+    // Widening the key must not force `?formCode=` on the common case.
+    seedProject("p_a3", "tenant_a");
+    seedForm("form_lct", "p_a3");
+    seedVersion("form_lct", 1, "lct-v1");
+    versions.activeByForm.set("form_lct", 1);
+    integrations.maps.push({
+      id: "m_lct",
+      tenantId: "tenant_a",
+      ticketTypeCode: "LCT",
+      formId: "form_lct",
+      externalFormCode: "CLCT",
+      workflowId: null,
+    });
+    const result = await service.getFormTemplate(callerFor("tenant_a"), "LCT");
+    expect(result.formId).toBe("form_lct");
+  });
+
+  it("resolves formCode inside the caller's tenant, never across it", async () => {
+    // Tenant B binds the SAME ticket type and the SAME form code onto its own form. Without a real
+    // binding of its own this test would pass on an empty result set and prove nothing about
+    // narrowing — it would only re-prove that tenant B has no rows.
+    seedProject("p_b", "tenant_b");
+    seedForm("form_pct_b", "p_b");
+    seedVersion("form_pct_b", 1, "b-v1");
+    versions.activeByForm.set("form_pct_b", 1);
+    integrations.maps.push({
+      id: "m_b",
+      tenantId: "tenant_b",
+      ticketTypeCode: "PCT",
+      formId: "form_pct_b",
+      externalFormCode: "CPCT",
+      workflowId: null,
+    });
+
+    // Same ticket type, same form code, two tenants: each must receive its own form.
+    const b = await service.getFormTemplate(callerFor("tenant_b"), "PCT", undefined, "CPCT");
+    expect(b.formId).toBe("form_pct_b");
+    const a = await service.getFormTemplate(callerFor("tenant_a"), "PCT", undefined, "CPCT");
+    expect(a.formId).toBe("form_pct");
+
+    // And a code bound only in tenant A stays invisible to B, even named exactly.
+    await expect(
+      service.getFormTemplate(callerFor("tenant_b"), "PCT", undefined, "CT_PCT_PDF"),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -345,7 +469,9 @@ describe("audit", () => {
         action: "external.form-template.read",
         targetType: "form",
         targetId: "form_pct",
-        detail: { ticketTypeCode: "PCT", version: 2 },
+        // `externalFormCode` too: with six templates per ticket type the trail would otherwise not
+        // say which one was read.
+        detail: { ticketTypeCode: "PCT", externalFormCode: "CPCT", version: 2 },
       },
     ]);
   });

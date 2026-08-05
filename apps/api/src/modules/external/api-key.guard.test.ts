@@ -29,8 +29,8 @@ class FakeRepo extends ExternalIntegrationRepo {
     return row && row.revokedAt === null ? row : null;
   }
 
-  async findTicketTypeMap(): Promise<ExternalTicketTypeMapRecord | null> {
-    return null;
+  async findTicketTypeMaps(): Promise<ExternalTicketTypeMapRecord[]> {
+    return [];
   }
 }
 

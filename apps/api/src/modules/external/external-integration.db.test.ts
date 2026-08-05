@@ -57,7 +57,7 @@ describe.skipIf(!hasDocker())("external integration constraints (real Postgres)"
     await container?.stop();
   });
 
-  it("refuses a second binding for the same (tenant, ticketTypeCode)", async () => {
+  it("refuses a second binding for the same (tenant, ticketTypeCode, externalFormCode)", async () => {
     const row = {
       tenantId: tenantA,
       ticketTypeCode: "PCT",
@@ -68,6 +68,28 @@ describe.skipIf(!hasDocker())("external integration constraints (real Postgres)"
     await expect(
       prisma.externalTicketTypeMap.create({ data: { ...row, formId: "form_2" } }),
     ).rejects.toThrow();
+  });
+
+  it("accepts a second template for the same ticket type under a different form code", async () => {
+    // P2-0, and the reason the old two-column key was wrong: EVN's `PCT` is backed by six
+    // templates. Under the shipped constraint this insert was a P2002 and a tenant could bind only
+    // one of them. Its own tenant, so the ambiguity it creates stays out of the other tests.
+    const tenant = await prisma.tenant.create({ data: { name: "Multi", slug: "tenant-multi" } });
+    const base = { tenantId: tenant.id, ticketTypeCode: "PCT" };
+    await prisma.externalTicketTypeMap.create({
+      data: { ...base, formId: "form_create", externalFormCode: "CPCT" },
+    });
+    await expect(
+      prisma.externalTicketTypeMap.create({
+        data: { ...base, formId: "form_pdf", externalFormCode: "CT_PCT_PDF" },
+      }),
+    ).resolves.toBeTruthy();
+
+    const repo = new PrismaExternalIntegrationRepo(prisma);
+    // Both reachable, and the narrowed lookup picks exactly one.
+    expect(await repo.findTicketTypeMaps(tenant.id, "PCT")).toHaveLength(2);
+    const pdf = await repo.findTicketTypeMaps(tenant.id, "PCT", "CT_PCT_PDF");
+    expect(pdf.map((m) => m.formId)).toEqual(["form_pdf"]);
   });
 
   it("lets a different tenant use the same ticketTypeCode", async () => {
@@ -132,11 +154,36 @@ describe.skipIf(!hasDocker())("external integration constraints (real Postgres)"
 
   it("scopes the binding lookup by tenant", async () => {
     const repo = new PrismaExternalIntegrationRepo(prisma);
-    // tenantA's PCT exists (seeded above); tenantB asking for it must not receive tenantA's row.
-    const own = await repo.findTicketTypeMap(tenantA, "PCT");
-    const other = await repo.findTicketTypeMap(tenantB, "PCT");
-    expect(own?.formId).toBe("form_1");
-    expect(other?.formId).toBe("form_3");
-    expect(await repo.findTicketTypeMap(tenantA, "NOPE")).toBeNull();
+    // Its own tenants, so this no longer depends on rows the earlier tests happened to leave
+    // behind — one of them now binds a second PCT template deliberately.
+    const [one, two] = await Promise.all([
+      prisma.tenant.create({ data: { name: "Scope one", slug: "tenant-scope-1" } }),
+      prisma.tenant.create({ data: { name: "Scope two", slug: "tenant-scope-2" } }),
+    ]);
+    await prisma.externalTicketTypeMap.createMany({
+      data: [
+        { tenantId: one.id, ticketTypeCode: "PCT", formId: "form_one", externalFormCode: "CPCT" },
+        // A DIFFERENT form code, so the cross-tenant assertion below names a code that really
+        // exists — just not for the tenant asking.
+        {
+          tenantId: two.id,
+          ticketTypeCode: "PCT",
+          formId: "form_two",
+          externalFormCode: "CT_PCT_PDF",
+        },
+      ],
+    });
+
+    // Every tenant calls their work permit "PCT"; neither may receive the other's row.
+    expect((await repo.findTicketTypeMaps(one.id, "PCT")).map((m) => m.formId)).toEqual([
+      "form_one",
+    ]);
+    expect((await repo.findTicketTypeMaps(two.id, "PCT")).map((m) => m.formId)).toEqual([
+      "form_two",
+    ]);
+    expect(await repo.findTicketTypeMaps(one.id, "NOPE")).toEqual([]);
+    // `CT_PCT_PDF` is a real, bound form code — for the *other* tenant. Naming it exactly still
+    // resolves to nothing, which is the claim `formCode` narrows and never widens.
+    expect(await repo.findTicketTypeMaps(one.id, "PCT", "CT_PCT_PDF")).toEqual([]);
   });
 });

@@ -6,8 +6,9 @@ import { describe, expect, it } from "vitest";
  * Pins the two database invariants no unit test can reach, because they live in Postgres rather
  * than in code. Both are load-bearing:
  *
- * - without the unique index, two seeded bindings for the same `(tenant, ticketTypeCode)` make
- *   resolution depend on row order — the endpoint would answer differently on different days;
+ * - without the unique index, two seeded bindings for the same `(tenant, ticketTypeCode,
+ *   externalFormCode)` make resolution depend on row order — the endpoint would answer differently
+ *   on different days;
  * - without the cascades, deleting a tenant leaves a live credential behind that still
  *   authenticates.
  *
@@ -15,16 +16,38 @@ import { describe, expect, it } from "vitest";
  * database actually ran. A `@@unique` added to `schema.prisma` but never migrated is exactly the
  * failure this is meant to catch.
  */
-const migration = readFileSync(
-  join(process.cwd(), "prisma/migrations/20260804000000_add_external_integration/migration.sql"),
-  "utf8",
-);
+const read = (dir: string): string =>
+  readFileSync(join(process.cwd(), "prisma/migrations", dir, "migration.sql"), "utf8");
+
+const created = read("20260804000000_add_external_integration");
+const widenedKey = read("20260805000000_external_binding_per_form_code");
+/** Both files, in the order the database applies them. */
+const migration = `${created}\n${widenedKey}`;
 
 describe("external integration migration", () => {
-  it("makes one ticket type resolve to exactly one binding per tenant", () => {
+  it("makes one (ticket type, form code) resolve to exactly one binding per tenant", () => {
+    // P2-0 widened this key: the ticket type alone is not unique, because one ticket type has
+    // several templates. Determinism now comes from all three columns together.
     expect(migration).toMatch(
+      /CREATE UNIQUE INDEX "ExternalTicketTypeMap_binding_key" ON "ExternalTicketTypeMap"\("tenantId", "ticketTypeCode", "externalFormCode"\)/,
+    );
+  });
+
+  it("drops the two-column key it replaces, rather than leaving both in force", () => {
+    // Leaving the old index behind would keep rejecting the second template — the exact bug P2-0
+    // exists to fix — while `schema.prisma` claimed otherwise.
+    expect(created).toMatch(
       /CREATE UNIQUE INDEX "ExternalTicketTypeMap_tenantId_ticketTypeCode_key"/,
     );
+    expect(widenedKey).toMatch(/DROP INDEX "ExternalTicketTypeMap_tenantId_ticketTypeCode_key"/);
+  });
+
+  it("names the new index short enough for Postgres to keep it verbatim", () => {
+    // Prisma's default name for these three columns is 66 characters; Postgres truncates at 63, so
+    // the name in the migration would stop matching the name in `schema.prisma`.
+    const name = /CREATE UNIQUE INDEX "([^"]+)" ON "ExternalTicketTypeMap"/.exec(widenedKey)?.[1];
+    expect(name).toBeDefined();
+    expect((name as string).length).toBeLessThanOrEqual(63);
   });
 
   it("makes the key digest the unique lookup key", () => {
