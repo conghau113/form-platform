@@ -1,5 +1,11 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import type { FormSchema } from "@org/form-schema";
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
+import { type FormSchema, migrate } from "@org/form-schema";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { AuditRepo } from "../../persistence/repositories/audit.repo.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
@@ -11,19 +17,19 @@ import { FormVersionRepo } from "../../persistence/repositories/form-version.rep
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectRepo } from "../../persistence/repositories/project.repo.js";
 import type { ExternalCaller } from "./api-key.guard.js";
-import { redactForExternal } from "./sanitize.js";
+import { type EvnFormTemplate, toEvnTemplate } from "./evn-template.js";
 
 /**
  * What `GET /external/form-template` answers with.
  *
- * ⚠️ `body` is still the **platform's own form contract**, not EVN's `items[]` shape, and this
- * envelope is therefore PROVISIONAL. The mapping to §12.B is deliberately not guessed here: it needs
- * the `type` → `typeCode` table and the `code`/`itemCode` decision that are open as Q4, and
- * inventing either would bake a wrong vocabulary into the wire format. Do not issue a production key
- * against this shape — an integrator who builds on it will be broken by D1.
+ * `template` is EVN's own document shape — the same one `CreateFormDto` parses and the shipped
+ * `templateJSON` files carry — not our form contract. It replaced a provisional `body: FormSchema`
+ * in P2b; nothing should still be reading that field.
  *
- * What is NOT provisional: the body is already run through {@link redactForExternal}, so tenant Role
- * codes and internal endpoint URLs never leave regardless of when the mapper lands.
+ * `warnings` is not decoration. The export is lossy in ways the caller cannot see from the payload:
+ * a field's role permissions, its visibility condition and its validation rules do not survive the
+ * crossing, and several controls map to a near neighbour rather than an equivalent. Anything we drop
+ * or bend is named here rather than left to be discovered in production.
  */
 export interface ExternalFormTemplate {
   ticketTypeCode: string;
@@ -32,7 +38,9 @@ export interface ExternalFormTemplate {
   /** Our form id + the resolved publish sequence number, echoed per §12 constraint 5. */
   formId: string;
   version: number;
-  body: FormSchema;
+  template: EvnFormTemplate;
+  /** Human-readable, in the tenant's language. Empty when the form crosses over intact. */
+  warnings: string[];
 }
 
 /**
@@ -110,6 +118,40 @@ export class ExternalService {
     // an unpublished draft has no frozen snapshot, and the integration must never read a draft.
     if (!resolved) throw new NotFoundException("Unknown ticket type");
 
+    // ⚠️ ORDERING IS LOAD-BEARING, twice over — do not move this block.
+    //
+    // It sits AFTER `assertFormBelongsToTenant` and after the version resolves, so a caller can
+    // never reach a 422 for a form that is not theirs. A 422 says "this form exists and is yours but
+    // cannot be exported", which on someone else's form would confirm the form exists — the exact
+    // existence oracle every 404 above is shaped to deny. `external.service.test.ts` asserts the
+    // cross-tenant case still answers 404 even when the body is unexportable.
+    //
+    // It sits BEFORE `audit.record`, so a failed export is not recorded as a read. That matches the
+    // rule the audit call already follows ("only successful reads"). Arguable the other way — a 422
+    // is an authenticated lookup that found the binding — but if that changes, swap the order
+    // deliberately rather than letting a refactor decide it.
+    const exported = toEvnTemplate(
+      this.migrateSnapshot(resolved.body, map.formId, resolved.version),
+      {
+        formTypeCode: map.ticketTypeCode,
+        formCode: map.externalFormCode,
+        // `null` (never stated) becomes `undefined` (omit + warn). The exporter must not have to know
+        // that a database column is how "not stated" is spelled.
+        formTypeName: map.ticketTypeName ?? undefined,
+      },
+    );
+    if (!exported.ok) {
+      // The body names only OUR field names and OUR reasons — no tenant Role codes, and none of the
+      // receiver's vocabulary. It is the one non-404 on this surface, and that is deliberate: an
+      // opaque failure here would leave the tenant unable to tell a misconfigured binding from a
+      // form they simply have to edit.
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        message: "Form cannot be exported",
+        errors: exported.errors,
+      });
+    }
+
     // Awaited, not fire-and-forget — matching `RbacService`. An audit trail that can silently drop
     // entries answers "who read our form templates" with a maybe, which is worse than a failed read.
     // Only successful reads are recorded: a 404 reveals nothing and logging misses would let an
@@ -135,9 +177,49 @@ export class ExternalService {
       externalFormCode: map.externalFormCode,
       formId: map.formId,
       version: resolved.version,
-      // Redaction happens here, once, on the way out — see `sanitize.ts` for what goes and why.
-      body: redactForExternal(resolved.body),
+      template: exported.template,
+      warnings: exported.warnings,
     };
+  }
+
+  /**
+   * Bring a frozen snapshot up to `CURRENT_FORM_VERSION` before we read it as a form.
+   *
+   * Every other consumer of a frozen body already does this (`form-versions.service.ts`,
+   * `submissions.service.ts`, `workflow-instances.service.ts`). This path was the one raw reader,
+   * which was harmless while it handed the body straight back for the caller to migrate — from P2b
+   * *we* are the consumer, so reading raw would mean exporting a pre-migration shape. Concretely:
+   * a v2 snapshot spells "hidden" as `show: false`, and only the 2->3 migration turns that into the
+   * `visibleWhen` that `toEvnTemplate` knows to warn about — so a field the author deliberately hid
+   * would cross over visible, with `warnings` completely silent about it.
+   *
+   * It is also what makes `toEvnTemplate`'s `FormSchema` parameter true rather than aspirational:
+   * `migrate()` ends in `formSchema.parse`, so a container without `children` or a `type` outside
+   * the union is rejected here instead of becoming a `TypeError` deep in the walk.
+   *
+   * Failure is deliberately NOT 422. Publishing already migrates before freezing, so a stored body
+   * that will not parse is not something the tenant can cause or fix by editing their form — it
+   * means this node is older than the document (a rolling deploy) or the row is damaged. Telling
+   * them to fix a form that is fine would send them chasing the wrong thing.
+   */
+  private migrateSnapshot(body: unknown, formId: string, version: number): FormSchema {
+    try {
+      return migrate(body);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Frozen snapshot for form ${formId}@${version} does not migrate to the current form ` +
+          // Truncated on purpose. `fieldNodeSchema` is a 33-member recursive `z.union`, not a
+          // discriminated one, so a ZodError carries every branch's complaint: ~27 KB for the
+          // smallest failing form (measured, and flat in form size — the union blows up, not the
+          // tree). This is a machine-to-machine surface an integrator can poll, and the condition
+          // that reaches here is a persistent one, so the untruncated line would bury the rest of
+          // the log at exactly the moment someone is reading it. The head names the first issue,
+          // which is the part worth having.
+          `version: ${detail.length > 600 ? `${detail.slice(0, 600)}… (${detail.length} chars)` : detail}`,
+      );
+      throw new InternalServerErrorException("Form template is temporarily unavailable");
+    }
   }
 
   /** Throws 404 unless `formId` resolves to a project owned by `tenantId`. */

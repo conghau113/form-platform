@@ -10,6 +10,24 @@ import { bindTicketType, seedExternalKey, unbindTicketType } from "./seed-extern
 describe("seedExternalKey", () => {
   const binding = { ticketTypeCode: "PCT", formId: "form_1", externalFormCode: "CPCT" };
 
+  /** Happy-path fake whose `upsert` hands back the FULL argument object, so a test can pin what the
+   *  script chose to write and not just which row it addressed. */
+  function fakePrisma(opts: {
+    onUpsert: (args: { where: unknown; create: unknown; update: unknown }) => void;
+  }): PrismaService {
+    return {
+      tenant: { findUnique: async () => ({ id: "tnt_a" }) },
+      formRecord: { findUnique: async () => ({ project: { tenantId: "tnt_a" } }) },
+      externalApiKey: { create: async () => ({ id: "key_1" }) },
+      externalTicketTypeMap: {
+        upsert: async (args: { where: unknown; create: unknown; update: unknown }) => {
+          opts.onUpsert(args);
+          return { id: "map_1" };
+        },
+      },
+    } as unknown as PrismaService;
+  }
+
   it("mints a key and its binding when the form belongs to the tenant", async () => {
     const createdKeys: string[] = [];
     let bindings = 0;
@@ -73,17 +91,7 @@ describe("seedExternalKey", () => {
   // choice — the previous fake ignored the argument entirely and would have passed either way.
   it("keys the upsert on all three columns", async () => {
     const wheres: unknown[] = [];
-    const prisma = {
-      tenant: { findUnique: async () => ({ id: "tnt_a" }) },
-      formRecord: { findUnique: async () => ({ project: { tenantId: "tnt_a" } }) },
-      externalApiKey: { create: async () => ({ id: "key_1" }) },
-      externalTicketTypeMap: {
-        upsert: async ({ where }: { where: unknown }) => {
-          wheres.push(where);
-          return { id: "map_1" };
-        },
-      },
-    } as unknown as PrismaService;
+    const prisma = fakePrisma({ onUpsert: (args) => wheres.push(args.where) });
 
     await seedExternalKey(prisma, { tenantId: "tnt_a", label: "ok", binding });
 
@@ -96,6 +104,29 @@ describe("seedExternalKey", () => {
         },
       },
     ]);
+  });
+
+  // P2b. `--type-name` is optional, so re-running the command to repoint `--form` normally omits it.
+  // The script must treat "flag absent" as "leave the stored name alone", not as "set it to null":
+  // blanking it makes the next export drop `formTypeName` and emit a warning nobody can trace back
+  // to this command, and EVN's `FormType.name` is NOT NULL, so loading a new ticket type then fails.
+  // Nothing else pins this — the column is nullable and `ticketTypeName ?? null` typechecks fine.
+  it("writes ticketTypeName on update only when the flag was given", async () => {
+    const withName: unknown[] = [];
+    await seedExternalKey(fakePrisma({ onUpsert: (args) => withName.push(args.update) }), {
+      tenantId: "tnt_a",
+      label: "ok",
+      binding: { ...binding, ticketTypeName: "Công Tác" },
+    });
+    expect(withName).toEqual([{ formId: "form_1", workflowId: null, ticketTypeName: "Công Tác" }]);
+
+    const withoutName: Record<string, unknown>[] = [];
+    await seedExternalKey(
+      fakePrisma({ onUpsert: (args) => withoutName.push(args.update as Record<string, unknown>) }),
+      { tenantId: "tnt_a", label: "ok", binding },
+    );
+    expect(withoutName).toHaveLength(1);
+    expect("ticketTypeName" in withoutName[0]).toBe(false);
   });
 
   it("rejects an unknown tenant before touching anything else", async () => {

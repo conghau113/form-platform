@@ -16,9 +16,15 @@ import { PrismaService } from "../persistence/prisma/prisma.service.js";
  *
  * Usage:
  *   tsx src/scripts/seed-external-key.ts --tenant <tenantId> --label "EVN core-service"
- *     [--ticket-type PCT --form <formId> --external-code CPCT [--workflow <workflowId>]]
+ *     [--ticket-type PCT --form <formId> --external-code CPCT
+ *      [--type-name "Công Tác"] [--workflow <workflowId>]]
  *   tsx src/scripts/seed-external-key.ts --bind-only --tenant <tenantId>
- *     --ticket-type PCT --form <formId> --external-code CT_PCT_PDF [--workflow <workflowId>]
+ *     --ticket-type PCT --form <formId> --external-code CT_PCT_PDF
+ *     [--type-name "Công Tác"] [--workflow <workflowId>]
+ *     ⚠️ `--type-name` is the ticket type's DISPLAY name on the caller's side, and it is worth
+ *     setting: without it the export omits `formTypeName`, and on EVN's side that makes the first
+ *     ingest of a ticket type they do not already have fail on a NOT NULL column. The platform will
+ *     not invent one, because `saveFormType` upserts by code — a guess overwrites their real name.
  *     ⚠️ Binding a SECOND template for a ticket type requires every instance to be running the
  *     P2-0 build. An older one queries by two columns and will silently serve whichever row
  *     Postgres yields first. See the header of the `..._external_binding_per_form_code` migration.
@@ -40,6 +46,14 @@ import { PrismaService } from "../persistence/prisma/prisma.service.js";
 /** One caller-side ticket type + template, pointed at one of our forms. */
 export interface ExternalBinding {
   ticketTypeCode: string;
+  /**
+   * Display name of the ticket type, exported as `formTypeName`.
+   *
+   * `undefined` means "leave whatever is already stored" — omitting the flag on a re-run must not
+   * silently blank a name someone set earlier. Never defaulted to the code: on EVN's side
+   * `saveFormType` upserts by code, so a made-up name overwrites the one on their screens.
+   */
+  ticketTypeName?: string;
   formId: string;
   externalFormCode: string;
   workflowId?: string | null;
@@ -87,7 +101,7 @@ async function upsertBinding(
   tenantId: string,
   binding: ExternalBinding,
 ): Promise<string> {
-  const { ticketTypeCode, formId, externalFormCode, workflowId } = binding;
+  const { ticketTypeCode, ticketTypeName, formId, externalFormCode, workflowId } = binding;
   // Keyed on all three columns since P2-0: re-running with the same `--external-code` updates that
   // binding, while a different one adds a second template for the same ticket type instead of
   // overwriting the first. `externalFormCode` is not in `update:` — it is part of the key, so it
@@ -102,8 +116,15 @@ async function upsertBinding(
       formId,
       externalFormCode,
       workflowId: workflowId ?? null,
+      ...(ticketTypeName === undefined ? {} : { ticketTypeName }),
     },
-    update: { formId, workflowId: workflowId ?? null },
+    // `ticketTypeName` is spread in only when the flag was given. Writing `ticketTypeName ?? null`
+    // would blank a stored name every time someone re-runs the command to repoint `--form`.
+    update: {
+      formId,
+      workflowId: workflowId ?? null,
+      ...(ticketTypeName === undefined ? {} : { ticketTypeName }),
+    },
     select: { id: true },
   });
   return map.id;
@@ -135,11 +156,19 @@ export async function unbindTicketType(
 ): Promise<ExternalBinding> {
   const row = await prisma.externalTicketTypeMap.findUnique({
     where: { id: mapId },
-    select: { ticketTypeCode: true, formId: true, externalFormCode: true, workflowId: true },
+    select: {
+      ticketTypeCode: true,
+      ticketTypeName: true,
+      formId: true,
+      externalFormCode: true,
+      workflowId: true,
+    },
   });
   if (!row) throw new Error(`No such binding: ${mapId}`);
   await prisma.externalTicketTypeMap.delete({ where: { id: mapId } });
-  return row;
+  // `null` becomes `undefined` so the returned value round-trips through `bindTicketType` with the
+  // same meaning it had: "not stated", rather than "explicitly clear it".
+  return { ...row, ticketTypeName: row.ticketTypeName ?? undefined };
 }
 
 export async function seedExternalKey(
@@ -211,7 +240,13 @@ async function printTenant(prisma: PrismaService, tenantId: string): Promise<voi
     }),
     prisma.externalTicketTypeMap.findMany({
       where: { tenantId },
-      select: { id: true, ticketTypeCode: true, externalFormCode: true, formId: true },
+      select: {
+        id: true,
+        ticketTypeCode: true,
+        ticketTypeName: true,
+        externalFormCode: true,
+        formId: true,
+      },
       orderBy: [{ ticketTypeCode: "asc" }, { externalFormCode: "asc" }],
     }),
   ]);
@@ -227,7 +262,11 @@ async function printTenant(prisma: PrismaService, tenantId: string): Promise<voi
     ...(bindings.length === 0
       ? ["  (none)"]
       : bindings.map(
-          (b) => `  ${b.id}  ${b.ticketTypeCode}/${b.externalFormCode}  -> ${b.formId}`,
+          (b) =>
+            `  ${b.id}  ${b.ticketTypeCode}/${b.externalFormCode}  -> ${b.formId}` +
+            // Printed even when unset, because "(no type name)" is the readable form of a warning
+            // the operator will otherwise only meet inside an export response.
+            (b.ticketTypeName ? `  "${b.ticketTypeName}"` : "  (no type name)"),
         )),
   ];
   // eslint-disable-next-line no-console
@@ -255,6 +294,7 @@ async function main(): Promise<void> {
         console.log(
           `unbound: ${unbindId}\n  --ticket-type ${gone.ticketTypeCode} --form ${gone.formId} ` +
             `--external-code ${gone.externalFormCode}` +
+            (gone.ticketTypeName ? ` --type-name "${gone.ticketTypeName}"` : "") +
             (gone.workflowId ? ` --workflow ${gone.workflowId}` : ""),
         );
         return;
@@ -287,6 +327,7 @@ async function main(): Promise<void> {
     try {
       const mapId = await bindTicketType(prisma, tenantId, {
         ticketTypeCode,
+        ticketTypeName: arg("type-name"),
         formId,
         externalFormCode,
         workflowId: arg("workflow") ?? null,
@@ -311,7 +352,13 @@ async function main(): Promise<void> {
       label,
       binding:
         ticketTypeCode && formId && externalFormCode
-          ? { ticketTypeCode, formId, externalFormCode, workflowId: arg("workflow") ?? null }
+          ? {
+              ticketTypeCode,
+              ticketTypeName: arg("type-name"),
+              formId,
+              externalFormCode,
+              workflowId: arg("workflow") ?? null,
+            }
           : undefined,
     });
     // eslint-disable-next-line no-console

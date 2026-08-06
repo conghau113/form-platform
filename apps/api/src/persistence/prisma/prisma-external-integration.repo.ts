@@ -41,6 +41,7 @@ export class PrismaExternalIntegrationRepo extends ExternalIntegrationRepo {
         id: true,
         tenantId: true,
         ticketTypeCode: true,
+        ticketTypeName: true,
         formId: true,
         externalFormCode: true,
         workflowId: true,

@@ -287,9 +287,115 @@ Vì `FormItem.code` phải nằm trong `form_item_codes` (398 mã), một form �
 nền tảng của chúng tôi"*, không phải *"xuất mọi form sang EVN"*. Chúng tôi sẽ báo lỗi **ngay lúc soạn**
 (kèm tên trường + lý do), chứ không để vỡ lúc phía EVN gọi.
 
+> ⚠️ **T2 đã được sửa — xem T6 ở §6.** Đo lại `form-items.service.ts` cho thấy mã lạ **không** bị từ
+> chối: `saveCreateFormItem` **tự thêm** mã mới vào `form_item_codes`. Vấn đề vì thế không phải
+> "không xuất được" mà là "danh mục dùng chung của EVN sẽ nở ra".
+
+---
+
+## 6. Cập nhật sau khi hiện thực bộ xuất (P2b) — 6 điểm phía EVN cần biết
+
+Phần này viết **sau** khi chúng tôi hiện thực xong bộ xuất và đo lại trực tiếp trên
+`core-service` + `web-admin`. Có mấy chỗ khác với những gì chúng tôi nêu ở các mục trên; chỗ nào khác
+đều ghi rõ.
+
+### T3. Chúng tôi cần phía EVN cho biết **tên hiển thị của loại phiếu**
+
+`formTypeName` là trường chúng tôi **không suy ra được**, và không dám tự đặt:
+- `FormType.name` bên EVN là `NOT NULL`, nên **bỏ trống** ⇒ lần nạp **đầu tiên** của một loại phiếu
+  chưa tồn tại sẽ hỏng vì ràng buộc cột.
+- `saveFormType` là **upsert theo `code`**, nên **tự đặt** một tên (kể cả lấy chính mã, ví dụ `"PCT"`)
+  sẽ **ghi đè tên thật đang hiển thị** của loại phiếu ấy — `"Công Tác"` biến thành `"PCT"`.
+
+Cách chúng tôi làm: tên loại phiếu là **một tham số cấu hình của mỗi liên kết** (bên chúng tôi khai
+lúc nối form ↔ ticketType). Khai rồi thì `formTypeName` được gửi kèm; chưa khai thì **bỏ khoá đó và
+kèm một cảnh báo** trong phản hồi. Chúng tôi **không bao giờ đoán**.
+
+👉 **Đề nghị:** khi mở một loại phiếu mới, phía EVN gửi cho chúng tôi cặp `(formTypeCode, formTypeName)`.
+
+### T4. Mã trường tự sinh (`GEN_*`) sẽ làm **nở danh mục `form_item_codes`**
+
+Hợp đồng của chúng tôi có những thành phần bố cục **không mang tên** (thẻ, khung, hàng ngang…), trong
+khi `FormItem.code` bên EVN là `NOT NULL` và là một phần khoá chính. Chúng tôi vì thế **sinh mã tất
+định theo vị trí trong cây**, dạng `GEN_CARD_0_2`.
+
+Hai hệ quả cần phía EVN biết:
+1. Mã `GEN_*` **không nằm trong danh mục 398 mã** của EVN. Vì `saveCreateFormItem` tự thêm mã mới (T6),
+   chúng sẽ **được ghi vào `form_item_codes`** chứ không bị chặn.
+2. Mã sinh theo vị trí **thay đổi khi người soạn CHÈN thêm một thành phần phía trước nó**. Mỗi lần
+   xuất lại sau một lần chèn sẽ gieo thêm vài hàng `GEN_*` nữa.
+
+👉 **Xin ý kiến:** phía EVN muốn (a) chấp nhận, (b) cho chúng tôi một tiền tố riêng đã thoả thuận, hay
+(c) yêu cầu người soạn phải tự đặt mã cho **mọi** thành phần bố cục? Chúng tôi làm được cả ba.
+
+### T5. Trùng mã trong một biểu mẫu ⇒ chúng tôi trả **422**, và đây **không** phải ca hiếm
+
+Khoá chính của `form_items` là `(code, form_id)`. Hai trường cùng mã ⇒ `save()` lần hai là **UPDATE đè**
+lên hàng thứ nhất: trường trước **biến mất, không báo lỗi**. Chúng tôi chặn ở phía mình bằng 422.
+
+Điều đáng lưu ý: trong hợp đồng của chúng tôi, **danh sách lặp đóng phạm vi tên trường con** — một
+trường `qty` ở ngoài và một trường `qty` trong mỗi dòng của danh sách là **hoàn toàn hợp lệ**. Sang
+phía EVN thì hai cái đó là **một hàng**. Template của EVN tránh được là nhờ **quy ước đặt tiền tố**
+(`NHAN_VIEN_LIST__ORDINAL`), không phải nhờ ràng buộc nào.
+
+👉 **Xin xác nhận:** quy ước `<mã danh sách>__<mã trường>` có phải là chuẩn bắt buộc không? Nếu có,
+chúng tôi sẽ **tự thêm tiền tố** thay vì báo 422 — nhưng việc đó đổi khoá dữ liệu gửi lên, nên chúng
+tôi không tự ý làm.
+
+### T6. 🔴 Sửa T2: mã ngoài danh mục **không bị từ chối** — nó được **tự thêm vào danh mục**
+
+`form-items.service.ts` (`saveCreateFormItem`):
+```ts
+const codeExist = await this.formItemCodesRepository.findOne({ where: { code } })
+if (!codeExist) await this.formItemCodesRepository.save({ code, description: label })
+```
+Không có FK nào vỡ; `form_item_codes` chỉ đơn giản là dài thêm. Và vì bảng này dùng chung với
+`ticket_items`, mã rác ở đây là **rác toàn hệ thống**, không phải rác trong một form.
+
+👉 **Xin xác nhận** phía EVN muốn chúng tôi **chặn** mã ngoài danh mục (chúng tôi trả 422, an toàn cho
+danh mục của EVN) hay **để đi qua** (tiện cho người soạn, nhưng danh mục nở). Mặc định hiện tại của
+chúng tôi: **để đi qua** ở lát cắt này, và sẽ chốt ở lát cắt danh mục kế tiếp.
+
+### T7. Hai chỗ chúng tôi **tự nắn cấu trúc**, và một chỗ chúng tôi **từ chối**
+
+Đều xuất phát từ hành vi có thật của renderer, không phải sở thích:
+
+| | Đo được | Chúng tôi làm gì |
+|---|---|---|
+| Trường đặt ở **cấp ngoài cùng** | `WorkOrderRenderFormItem` chỉ có nhánh cho 11 mã; `default:` vẽ **con** chứ không vẽ chính nó ⇒ một trường đơn đặt ở gốc **không hiện ra gì cả**. Đúng như 8/8 template thật: gốc chỉ có container | **Tự gói** các trường đó vào một `CARD`, kèm cảnh báo |
+| **Nhóm/bố cục đặt trong danh sách lặp** | Con của `FORM_LIST` thành **cột bảng**: `COLLAPSE`/`COMPONENT_HORIZONAL` bị `SharedEditTable` gom vào **cột nút xoá**, `CARD` rơi vào `default: return <></>` | **Từ chối (422)** — không có cách nắn nào giữ được ý người soạn |
+| **Container lồng container** | Chạy tốt (`RenderFormItemInForm` định tuyến ngược lại đúng chỗ), kể cả trong `COMPONENT_HORIZONAL` | **Cho phép**, không cảnh báo |
+
+### T8. `validations` — phía EVN **có** hỗ trợ, chúng tôi **chưa** dùng
+
+Chúng tôi từng ghi ở Phụ lục C là "không gửi `validations`; chỉ gửi `required`". Nói vậy chưa đủ đúng:
+`CreateFormItemDto.validations` tồn tại và `RenderFormItemInForm` **có** đánh giá `condition.regex`,
+`condition.lt`/`gt` (so với trường khác, kể cả `KEY_CURRENT_TIME`) và `condition.between`.
+
+Nghĩa là **đây là năng lực của EVN mà chúng tôi đang bỏ không**, chứ không phải thiếu sót của hợp đồng.
+Ở lát cắt này chúng tôi **cảnh báo** thay vì im lặng, và sẽ ánh xạ ở một lát cắt riêng.
+
+👉 **Xin dữ liệu:** vài ví dụ `validations` thật đang chạy (nhất là `between` và `lt`/`gt` trỏ tên
+trường), để chúng tôi ánh xạ cho khớp thay vì đoán từ code renderer.
+
 ---
 
 ## Phụ lục A — bảng tra `type` → `typeCode` đề xuất (liên quan B3)
+
+> 🔴 **BẢNG NÀY LÀ BẢN ĐỀ XUẤT BAN ĐẦU, ĐÃ BỊ THAY THẾ MỘT PHẦN.** Nó được soạn khi chúng tôi còn
+> đang đối chiếu với **hợp của 97 mã trên 4 renderer**. Sau khi hiện thực bộ xuất, chúng tôi đo lại
+> và thấy đích đúng là **38 mã `ETypeForm` của riêng renderer tạo phiếu**, nên vài hàng dưới đây đã
+> **không còn khớp với thứ hệ thống thật sự gửi đi**. Bốn chỗ lệch đã biết:
+>
+> | hàng ở bảng dưới | thực tế hệ thống đang làm |
+> |---|---|
+> | `space` → `BLOCK` | → **`COMPONENT_HORIZONAL`** (xem **T7**) |
+> | `grid` → `GROUP_HORIZONTAL` | **không xuất thành item** — nó tan ra, các con được kéo lên (T7) |
+> | `group` → `GROUP` | → **`COLLAPSE`** nếu có nhãn, **`CARD`** nếu không |
+> | `password` → `TEXT_INPUT` | **từ chối xuất ⇒ 422** — đúng như chúng tôi tự đề nghị ở cảnh báo dưới bảng |
+>
+> Khi hai chỗ mâu thuẫn, **§6 (T3–T8) là bản đúng**. Chúng tôi giữ lại bảng này vì câu hỏi **B3** và
+> **B3b** bên dưới vẫn còn nguyên giá trị và vẫn đang chờ phía EVN trả lời.
 
 Nền tảng của chúng tôi có **đúng 33 loại thành phần**. Bảng dưới đây phủ **cả 33**, chia bốn nhóm.
 Số trong ngoặc sau mỗi `typeCode` là **số lần mã đó xuất hiện trong 32 template thật** — chúng tôi chọn
@@ -429,12 +535,12 @@ Nếu không nhận được trả lời, chúng tôi làm tiếp theo đúng nh
 | B4 | `description` chỉ gồm `styleLabel`/`styleValue`/`width`/`isWeb` + `valueCode`/`valueType` |
 | A (phụ lục) | `password` → `TEXT_INPUT` **nhưng** nếu phía EVN không có mã che ký tự thì chuyển sang **từ chối xuất**, không map thầm |
 | X1–X3, D1–D7 | Lấy **source** làm chuẩn, không lấy tài liệu. Cụ thể: `PCT_A_WORKING` → `PCT_S_WORKING`; mã vai là **`R_NA`**; hàng `PCT_A_CANCEL` từ `PCT_S_WORKING` (đang bị comment) coi như **không tồn tại** |
-| Q1 | Xuất cả `code` và `itemCode`, cùng giá trị |
+| ~~Q1~~ | ~~Xuất cả `code` và `itemCode`, cùng giá trị~~ → **BỎ (P2b)**: `itemCode` không có trong `CreateFormItemDto` và **không có cột** trên `FormItem` — nó do `forms.service.ts` sinh ra lúc ĐỌC. Gửi đi chỉ là khoá thừa bị `save()` bỏ im lặng. Chúng tôi **chỉ gửi `code`** |
 | Q2 | `PCT_A_WORKING` chỉ từ `PCT_S_MODERATION` |
 | Q3 | Chấp nhận cả hai hình dạng `ticketData`, tự dò |
 | Q4 | Guard xuyên phiếu ⇒ liệt kê trong `outOfScopeGuards`, không tự kiểm |
 | Q5 | Container: sinh mã tất định từ đường dẫn cây |
-| Q6 | Không gửi `validations`; chỉ gửi `required` |
+| Q6 | Không gửi `validations`; chỉ gửi `required` — **nhưng xem T8**: phía EVN CÓ hỗ trợ, nên đây là năng lực bỏ không chứ không phải hợp đồng thiếu. Đã chuyển thành cảnh báo, sẽ ánh xạ ở lát cắt riêng |
 | Q7 | Nếu A chạy song song với `generateWorkflowForTicket` ⇒ **không làm A** |
 | Q8 | Chừa slot ký số nếu form đã khai; không tự sinh. Thứ tự PDF: việc phía EVN |
 | Q9 | Hạn mức theo khoá API thay vì theo IP |

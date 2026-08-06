@@ -607,6 +607,14 @@ model ExternalTicketTypeMap {
   /// The caller's vocabulary, e.g. `PCT`. NOT unique on its own: one ticket type legitimately has
   /// several templates behind it (EVN's PCT has six: `CPCT`, `CT_PCT`, `CT_PCT_PDF`, …).
   ticketTypeCode String
+  /// Display name of the ticket type on the caller's side, e.g. `Công Tác` for `PCT`.
+  ///
+  /// Optional here, load-bearing there. It becomes `formTypeName`, and EVN's `FormType.name` is
+  /// NOT NULL while `saveFormType` upserts by code — so omitting it makes the FIRST ingest of a
+  /// ticket type they do not yet have fail, and inventing one would overwrite the display name of a
+  /// ticket type they do have. The platform therefore never guesses: the tenant states it, or the
+  /// export ships without it and says so in `warnings`.
+  ticketTypeName String?
   formId         String
   /// The caller's own form code, e.g. `CPCT`. Part of the lookup key — it is what picks *which*
   /// template of that ticket type this row answers for.

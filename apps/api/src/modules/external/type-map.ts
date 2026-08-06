@@ -189,9 +189,13 @@ export function mapNodeType(node: FieldNode): TypeMapping {
         ? map("COLLAPSE", ["Nhóm có nhãn xuất thành mục thu/mở (mặc định đang mở)."])
         : map("CARD");
     case "space": {
-      const warnings = [
-        "Hàng ngang của EVN chỉ chứa được trường đơn, không chứa được nhóm lồng bên trong.",
-      ];
+      // No "cannot nest" warning here. `COMPONENT_HORIZONAL` renders its children through
+      // `RenderFormItemInForm`, which routes container codes back to `WorkOrderRenderFormItem` — so
+      // a group inside a horizontal row does work. (The blank-render branch that made this look
+      // broken is only reachable when the row sits inside a `FORM_LIST`, and putting a container in
+      // an `array` is already a 422.) Warning here would push tenants to restructure forms around a
+      // limit that does not exist, and would contradict what we told EVN in the handover doc.
+      const warnings: string[] = [];
       // Their horizontal row is the ONLY arrangement container the create renderer has, so a
       // vertical stack comes out laid on its side. Silently flipping a layout the author chose is
       // the same failure the past-date warning exists to prevent.

@@ -19,6 +19,8 @@ export interface ExternalTicketTypeMapRecord {
   id: string;
   tenantId: string;
   ticketTypeCode: string;
+  /** Display name of the ticket type on the caller's side. `null` = never stated; never guessed. */
+  ticketTypeName: string | null;
   formId: string;
   externalFormCode: string;
   workflowId: string | null;

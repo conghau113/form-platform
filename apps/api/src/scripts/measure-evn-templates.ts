@@ -34,6 +34,13 @@ const EXPECTED_ENUM_MEMBERS = 39;
 const EXPECTED_RENDERED_CODES = 38;
 /** Template files shipped in `public/files/templateJSON`. */
 const EXPECTED_TEMPLATE_FILES = 32;
+/**
+ * Codes the ROOT of a create form can carry — see {@link extractRootRenderableCodes}.
+ *
+ * The number is small and load-bearing, so it is pinned: if a refactor upstream moves one of these
+ * branches, the export would start emitting roots that render as nothing at all.
+ */
+const EXPECTED_ROOT_RENDERABLE_CODES = 11;
 
 /** Which renderer a template file is meant for, decided by the `formCode` INSIDE the file. */
 export type FormKind = "create" | "detail" | "pdf" | "workflow";
@@ -48,6 +55,8 @@ export interface TypeCodeUsage {
 export interface EvnMeasurement {
   /** `typeCode` values the create-form renderer has a `case` for. */
   renderedCodes: string[];
+  /** `typeCode` values that survive being placed at the root of `formItems[]`. */
+  rootRenderableCodes: string[];
   /** Every `typeCode` seen in the templates → how often, per renderer. */
   usage: Record<string, TypeCodeUsage>;
   /** Codes seen directly under a create form's `formItems[]`. */
@@ -75,13 +84,7 @@ export function formKindOf(formCode: string): FormKind {
  * names is reachable. Reading only the enum would include `GROUP_BUTTON`, which no branch renders.
  */
 export function extractRenderedCodes(webAdminSrc: string): { codes: string[]; members: number } {
-  const enumFile = join(webAdminSrc, "features/workOrder/workOrderManager/enums/typeFormEnum.ts");
-  const enumSource = readFileSync(enumFile, "utf8");
-  const members = new Map<string, string>();
-  for (const line of enumSource.split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z_0-9]+)\s*=\s*'([A-Z_0-9]+)'/);
-    if (m) members.set(m[1], m[2]);
-  }
+  const members = readEnumMembers(webAdminSrc);
 
   const cased = new Set<string>();
   for (const file of walkSourceFiles(webAdminSrc)) {
@@ -89,15 +92,54 @@ export function extractRenderedCodes(webAdminSrc: string): { codes: string[]; me
     for (const m of source.matchAll(/case\s+ETypeForm\.([A-Za-z_0-9]+)/g)) cased.add(m[1]);
   }
 
+  return { codes: resolveCodes(cased, members), members: members.size };
+}
+
+/**
+ * Pull the `typeCode` values that still render when placed at the ROOT of `formItems[]`.
+ *
+ * A different question from {@link extractRenderedCodes}, and the difference is the whole point.
+ * The root is entered at `WorkOrderContent.tsx` through `WorkOrderRenderFormItem`, whose `default:`
+ * branch renders a node's `childItems` and **not the node itself** — so a root-level leaf produces
+ * no markup at all, silently. Only the codes that switch has a `case` for survive up there, which is
+ * why every shipped create template puts nothing but containers at the root.
+ *
+ * Scoped to that one file on purpose: the same `case ETypeForm.X` text in any other component
+ * answers a different question and would quietly widen the set.
+ */
+export function extractRootRenderableCodes(webAdminSrc: string): string[] {
+  const members = readEnumMembers(webAdminSrc);
+  const rootFile = join(
+    webAdminSrc,
+    "features/workOrder/workOrderManager/components/WorkOrderRenderFormItem.tsx",
+  );
+  const cased = new Set<string>();
+  for (const m of readFileSync(rootFile, "utf8").matchAll(/case\s+ETypeForm\.([A-Za-z_0-9]+)/g)) {
+    cased.add(m[1]);
+  }
+  return resolveCodes(cased, members);
+}
+
+function readEnumMembers(webAdminSrc: string): Map<string, string> {
+  const enumFile = join(webAdminSrc, "features/workOrder/workOrderManager/enums/typeFormEnum.ts");
+  const members = new Map<string, string>();
+  for (const line of readFileSync(enumFile, "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_0-9]+)\s*=\s*'([A-Z_0-9]+)'/);
+    if (m) members.set(m[1], m[2]);
+  }
+  return members;
+}
+
+function resolveCodes(memberNames: Iterable<string>, members: Map<string, string>): string[] {
   const codes: string[] = [];
-  for (const name of cased) {
+  for (const name of memberNames) {
     const code = members.get(name);
     // A `case` on a name the enum does not declare would not compile upstream; if the regex ever
     // reads one, the parse is wrong and the vocabulary would silently gain a bogus code.
     if (!code) throw new Error(`case ETypeForm.${name} has no member in typeFormEnum.ts`);
     codes.push(code);
   }
-  return { codes: [...new Set(codes)].sort(), members: members.size };
+  return [...new Set(codes)].sort();
 }
 
 function walkSourceFiles(dir: string): string[] {
@@ -177,6 +219,7 @@ export function measure(templateDir: string, webAdminSrc: string): EvnMeasuremen
   const templates = measureTemplates(templateDir);
   return {
     renderedCodes: codes,
+    rootRenderableCodes: extractRootRenderableCodes(webAdminSrc),
     usage: templates.usage,
     createRootCodes: templates.createRootCodes,
     createContainerCodes: templates.createContainerCodes,
@@ -204,6 +247,12 @@ function assertYield(m: EvnMeasurement): void {
   }
   if (m.templateFiles !== EXPECTED_TEMPLATE_FILES) {
     problems.push(`read ${m.templateFiles} templates, expected ${EXPECTED_TEMPLATE_FILES}`);
+  }
+  if (m.rootRenderableCodes.length !== EXPECTED_ROOT_RENDERABLE_CODES) {
+    problems.push(
+      `found ${m.rootRenderableCodes.length} root-renderable codes, ` +
+        `expected ${EXPECTED_ROOT_RENDERABLE_CODES}`,
+    );
   }
   if (problems.length > 0) {
     throw new Error(
@@ -275,9 +324,25 @@ ${usageRows}
 ${decl("EVN_CREATE_ROOT_CODES", m.createRootCodes)}
 
 /**
- * Codes seen carrying children in a create form. Note what is NOT here: containers do not nest in
- * one another (\`CARD > CARD\`, \`CARD > COLLAPSE\`, \`COLLAPSE > *\` never occur), and
- * \`COMPONENT_HORIZONAL\` only ever holds leaves. P2b/P2f enforce that; P2a only records it.
+ * Codes that still render when placed at the ROOT of \`formItems[]\`.
+ *
+ * The root is entered through \`WorkOrderRenderFormItem\`, whose \`default:\` branch renders a node's
+ * children and NOT the node itself. So a root-level leaf emits no markup — silently. This is the
+ * measured reason {@link EVN_CREATE_ROOT_CODES} contains only containers: it is load-bearing, not a
+ * house style. P2b wraps stray root leaves in a generated \`CARD\` rather than shipping blanks.
+ */
+${decl("EVN_ROOT_RENDERABLE_CODES", m.rootRenderableCodes)}
+
+/**
+ * Codes seen carrying children in a create form.
+ *
+ * ⚠️ Read this as a census of the SHIPPED templates, not as a limit of the renderer. Nesting one
+ * container in another (\`CARD > CARD\`, \`COLLAPSE > CARD\`, a container inside
+ * \`COMPONENT_HORIZONAL\`) does not occur here but does work: those branches recurse through
+ * \`RenderFormItemInForm\`, which routes container codes straight back to \`WorkOrderRenderFormItem\`.
+ * What genuinely breaks is a container inside \`FORM_LIST\` — there children become table columns
+ * (\`SharedEditTable\`), \`COLLAPSE\`/\`COMPONENT_HORIZONAL\` are hijacked into the pinned action
+ * column, and \`CARD\` falls through to \`default: return <></>\`. P2b rejects that placement.
  */
 ${decl("EVN_CREATE_CONTAINER_CODES", m.createContainerCodes)}
 `;

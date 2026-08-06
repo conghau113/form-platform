@@ -1,4 +1,8 @@
-import { NotFoundException } from "@nestjs/common";
+import {
+  InternalServerErrorException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
 import type { FormSchema, FormVersion } from "@org/form-schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AuditEntry } from "../../persistence/repositories/audit.repo.js";
@@ -13,12 +17,17 @@ import { FormRepo } from "../../persistence/repositories/form.repo.js";
 import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
 import type { ProjectRecord } from "../../persistence/repositories/project.repo.js";
 import { ProjectRepo } from "../../persistence/repositories/project.repo.js";
+import { FORBIDDEN_OUTPUT_KEYS } from "./evn-template.js";
 import { ExternalService } from "./external.service.js";
 
 /** A form carrying every kind of thing that must never leave: tenant Role codes, a remote-fetch
  *  endpoint, and the submit endpoint. Kept in the default fixture so every read path is covered,
  *  not just one test — `settings.submitUrl` shipped unredacted until a review caught it precisely
- *  because it was missing from here. */
+ *  because it was missing from here.
+ *
+ *  It must satisfy `formSchema` for real, not just the cast: the service migrates the frozen
+ *  snapshot before reading it, exactly as a published body always could. `label` and the data
+ *  source's `valueKey` are required, and were missing here while nothing ever parsed this. */
 const body = (title: string): FormSchema =>
   ({
     formVersion: 1,
@@ -29,12 +38,18 @@ const body = (title: string): FormSchema =>
       {
         name: "salary",
         type: "number",
+        label: "Lương",
         permissions: { viewRoles: ["hr-admin"], editRoles: ["hr-admin"] },
       },
       {
         name: "dept",
         type: "select",
-        dataSource: { url: "https://internal.example/api/departments", labelKey: "n" },
+        label: "Phòng ban",
+        dataSource: {
+          url: "https://internal.example/api/departments",
+          labelKey: "n",
+          valueKey: "id",
+        },
       },
     ],
   }) as unknown as FormSchema;
@@ -193,6 +208,7 @@ function seedSecondPctTemplate(): void {
     id: "m_pdf",
     tenantId: "tenant_a",
     ticketTypeCode: "PCT",
+    ticketTypeName: null,
     formId: "form_pct_pdf",
     externalFormCode: "CT_PCT_PDF",
     workflowId: null,
@@ -217,6 +233,7 @@ beforeEach(() => {
     id: "m1",
     tenantId: "tenant_a",
     ticketTypeCode: "PCT",
+    ticketTypeName: null,
     formId: "form_pct",
     externalFormCode: "CPCT",
     workflowId: null,
@@ -227,7 +244,7 @@ describe("ExternalService.getFormTemplate", () => {
   it("resolves the active version when no version is asked for", async () => {
     const result = await service.getFormTemplate(callerFor("tenant_a"), "PCT");
     expect(result.version).toBe(2);
-    expect(result.body.title).toBe("v2");
+    expect(result.template.formName).toBe("v2");
     expect(result.externalFormCode).toBe("CPCT");
     expect(result.formId).toBe("form_pct");
   });
@@ -235,7 +252,7 @@ describe("ExternalService.getFormTemplate", () => {
   it("resolves an explicitly pinned version", async () => {
     const result = await service.getFormTemplate(callerFor("tenant_a"), "PCT", 1);
     expect(result.version).toBe(1);
-    expect(result.body.title).toBe("v1");
+    expect(result.template.formName).toBe("v1");
   });
 
   it("404s an unknown ticket type", async () => {
@@ -257,6 +274,7 @@ describe("ExternalService.getFormTemplate", () => {
       id: "m2",
       tenantId: "tenant_a",
       ticketTypeCode: "DRAFTY",
+      ticketTypeName: null,
       formId: "form_draft",
       externalFormCode: "CDRAFT",
       workflowId: null,
@@ -282,6 +300,7 @@ describe("ExternalService.getFormTemplate", () => {
       id: "m3",
       tenantId: "tenant_b",
       ticketTypeCode: "PCT",
+      ticketTypeName: null,
       formId: "form_pct", // belongs to project p_a, owned by tenant_a
       externalFormCode: "CPCT",
       workflowId: null,
@@ -296,6 +315,7 @@ describe("ExternalService.getFormTemplate", () => {
       id: "m4",
       tenantId: "tenant_a",
       ticketTypeCode: "GONE",
+      ticketTypeName: null,
       formId: "form_deleted",
       externalFormCode: "CGONE",
       workflowId: null,
@@ -312,6 +332,7 @@ describe("ExternalService.getFormTemplate", () => {
       id: "m5",
       tenantId: "tenant_b",
       ticketTypeCode: "PCT",
+      ticketTypeName: null,
       formId: "form_pct",
       externalFormCode: "CPCT",
       workflowId: null,
@@ -326,6 +347,7 @@ describe("ExternalService.getFormTemplate", () => {
         id: `m_amb_${code}`,
         tenantId: "tenant_a",
         ticketTypeCode: "AMBIG",
+        ticketTypeName: null,
         formId: "form_amb",
         externalFormCode: code,
         workflowId: null,
@@ -394,6 +416,7 @@ describe("a ticket type with several templates", () => {
       id: "m_lct",
       tenantId: "tenant_a",
       ticketTypeCode: "LCT",
+      ticketTypeName: null,
       formId: "form_lct",
       externalFormCode: "CLCT",
       workflowId: null,
@@ -414,6 +437,7 @@ describe("a ticket type with several templates", () => {
       id: "m_b",
       tenantId: "tenant_b",
       ticketTypeCode: "PCT",
+      ticketTypeName: null,
       formId: "form_pct_b",
       externalFormCode: "CPCT",
       workflowId: null,
@@ -433,29 +457,265 @@ describe("a ticket type with several templates", () => {
 });
 
 describe("what leaves the platform", () => {
-  it("strips tenant Role codes and internal URLs from the body it returns", async () => {
-    const result = await service.getFormTemplate(callerFor("tenant_a"), "PCT");
-    const serialized = JSON.stringify(result);
+  it("carries no tenant Role code and no internal URL", async () => {
+    // Until P2b this was guaranteed by a redaction pass over the whole form body. It is now
+    // guaranteed by construction — the exporter builds each item from a fixed list of seven keys —
+    // so this test is what keeps that property from being a claim in a docblock.
+    const serialized = JSON.stringify(await service.getFormTemplate(callerFor("tenant_a"), "PCT"));
     expect(serialized).not.toContain("hr-admin");
     expect(serialized).not.toContain("internal.example");
-    expect(serialized).not.toContain("permissions");
+    for (const key of FORBIDDEN_OUTPUT_KEYS) expect(serialized).not.toContain(`"${key}"`);
   });
 
-  it("keeps everything else the caller actually needs", async () => {
-    const result = await service.getFormTemplate(callerFor("tenant_a"), "PCT");
-    const fields = (result.body as unknown as { fields: { name: string; type: string }[] }).fields;
-    expect(fields.map((f) => f.name)).toEqual(["salary", "dept"]);
-    expect(fields.map((f) => f.type)).toEqual(["number", "select"]);
-    // The container survives redaction — only the `url` key inside it goes.
-    expect(fields[1]).toHaveProperty("dataSource.labelKey", "n");
+  it("still carries the fields themselves, in EVN's shape", async () => {
+    const { template } = await service.getFormTemplate(callerFor("tenant_a"), "PCT");
+    // Both fixture fields are bare leaves at the root, so they are wrapped — see `evn-template`.
+    expect(template.formItems).toHaveLength(1);
+    expect(template.formItems[0].typeCode).toBe("CARD");
+    const inner = template.formItems[0].children ?? [];
+    expect(inner.map((i) => i.code)).toEqual(["salary", "dept"]);
+    expect(inner.map((i) => i.typeCode)).toEqual(["NUMBER_INPUT", "SELECT"]);
   });
 
-  it("does not mutate the stored version while redacting", async () => {
-    // The repo hands out an object other callers share. Redacting in place would strip field-level
-    // RBAC from the platform's own runtime — a far worse bug than the leak it was meant to fix.
+  it("names what it dropped instead of dropping it quietly", async () => {
+    const { warnings } = await service.getFormTemplate(callerFor("tenant_a"), "PCT");
+    // The fixture's `salary` carries `permissions`; both fields lose something in the crossing.
+    expect(warnings.some((w) => w.includes("MỌI vai"))).toBe(true);
+    expect(warnings.some((w) => w.includes("gói vào một thẻ"))).toBe(true);
+  });
+
+  it("does not mutate the stored version", async () => {
+    // The repo hands out an object other callers share. An exporter that edited it in place would
+    // strip field-level RBAC from the platform's own runtime.
     await service.getFormTemplate(callerFor("tenant_a"), "PCT");
     const stored = await versions.load("form_pct", 2);
     expect(JSON.stringify(stored)).toContain("hr-admin");
+  });
+
+  it("omits formTypeName and warns when the binding never stated one", async () => {
+    const { template, warnings } = await service.getFormTemplate(callerFor("tenant_a"), "PCT");
+    expect(template).not.toHaveProperty("formTypeName");
+    expect(warnings.some((w) => w.includes("tên hiển thị"))).toBe(true);
+  });
+
+  it("emits formTypeName when the binding states one", async () => {
+    const map = integrations.maps.find((m) => m.id === "m1");
+    if (map) map.ticketTypeName = "Công Tác";
+    const { template, warnings } = await service.getFormTemplate(callerFor("tenant_a"), "PCT");
+    expect(template.formTypeName).toBe("Công Tác");
+    expect(warnings.some((w) => w.includes("tên hiển thị"))).toBe(false);
+  });
+});
+
+/**
+ * Frozen snapshots are stored as `Json` and can predate `CURRENT_FORM_VERSION`. Until P2b this path
+ * handed the body straight back and the caller migrated it; now we read it ourselves, so the
+ * migration has to happen here — every other consumer of a frozen body already does it.
+ */
+describe("the stored snapshot is migrated before it is read", () => {
+  /** Publish `body` verbatim under ticket type `OLD`, bypassing the v3-shaped default fixture. */
+  function seedRawBody(formId: string, raw: unknown): void {
+    seedProject(`p_${formId}`, "tenant_a");
+    seedForm(formId, `p_${formId}`);
+    versions.rows.push({
+      id: `${formId}_v1`,
+      formId,
+      version: 1,
+      formVersion: 1,
+      body: raw as FormSchema,
+      publishedBy: "u1",
+      publishedAt: new Date().toISOString(),
+    });
+    versions.activeByForm.set(formId, 1);
+    integrations.maps.push({
+      id: `m_${formId}`,
+      tenantId: "tenant_a",
+      ticketTypeCode: "OLD",
+      ticketTypeName: null,
+      formId,
+      externalFormCode: "COLD",
+      workflowId: null,
+    });
+  }
+
+  it("warns about a v2 field hidden with `show`, which only the 2->3 migration renames", async () => {
+    // The failure this pins is silent, which is why it needs its own test: read raw, `show: false`
+    // is a key nothing looks at, so a field the author deliberately hid crosses over visible to
+    // every EVN user and `warnings` says nothing at all. Migrated, it is `visibleWhen` and named.
+    seedRawBody("form_v2", {
+      formVersion: 2,
+      id: "form_v2",
+      title: "v2",
+      fields: [
+        { type: "card", children: [{ name: "secret", type: "text", label: "S", show: false }] },
+      ],
+    });
+
+    const { warnings } = await service.getFormTemplate(callerFor("tenant_a"), "OLD");
+    expect(warnings.some((w) => w.includes("ẩn/hiện"))).toBe(true);
+  });
+
+  it("reports a snapshot that will not migrate as a server fault, not as the tenant's 422", async () => {
+    // Publishing migrates before freezing, so an unparseable row means this node is older than the
+    // document or the row is damaged — nothing the tenant can fix by editing their form. A 422 would
+    // send them to rewrite a form that is fine. It must also not escape as a raw `TypeError` from
+    // deep in the walk, which is what a container with no `children` used to produce.
+    seedRawBody("form_broken", {
+      formVersion: 1,
+      id: "form_broken",
+      title: "broken",
+      fields: [{ type: "card" }],
+    });
+
+    const error = await service
+      .getFormTemplate(callerFor("tenant_a"), "OLD")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(InternalServerErrorException);
+    // The status itself, not just the class: 422 is the one status on this surface that tells the
+    // tenant to go edit their form, and that is the wrong instruction here.
+    expect((error as InternalServerErrorException).getStatus()).toBe(500);
+    expect(audit.entries).toEqual([]);
+  });
+
+  it("still answers 404, not 500, when the unmigratable form belongs to another tenant", async () => {
+    // The 500 is a new failure class, so it needs the same ordering proof the 422 has: a binding
+    // scoped to tenant A pointing at a form in tenant B's project. Answering 500 here would confirm
+    // the form exists — the existence oracle every 404 on this surface is shaped to deny.
+    seedProject("p_b_broken", "tenant_b");
+    seedForm("form_b_broken", "p_b_broken");
+    versions.rows.push({
+      id: "form_b_broken_v1",
+      formId: "form_b_broken",
+      version: 1,
+      formVersion: 1,
+      body: {
+        formVersion: 1,
+        id: "form_b_broken",
+        title: "broken",
+        fields: [{ type: "card" }],
+      } as unknown as FormSchema,
+      publishedBy: "u1",
+      publishedAt: new Date().toISOString(),
+    });
+    versions.activeByForm.set("form_b_broken", 1);
+    integrations.maps.push({
+      id: "m_b_broken",
+      tenantId: "tenant_a",
+      ticketTypeCode: "BROKENLEAK",
+      ticketTypeName: null,
+      formId: "form_b_broken",
+      externalFormCode: "CBROKENLEAK",
+      workflowId: null,
+    });
+
+    const error = await service
+      .getFormTemplate(callerFor("tenant_a"), "BROKENLEAK")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NotFoundException);
+  });
+
+  it("reports a `type` outside our union the same way, rather than throwing mid-walk", async () => {
+    seedRawBody("form_future", {
+      formVersion: 1,
+      id: "form_future",
+      title: "future",
+      fields: [{ name: "x", type: "future-widget" }],
+    });
+
+    const error = await service
+      .getFormTemplate(callerFor("tenant_a"), "OLD")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(InternalServerErrorException);
+  });
+});
+
+describe("422 — the form is theirs but cannot be exported", () => {
+  /** Rebind `PCT` onto a freshly published form whose body is `fields`. */
+  function seedUnexportable(tenantId: string, formId: string, fields: unknown[]): void {
+    seedProject(`p_${formId}`, tenantId);
+    seedForm(formId, `p_${formId}`);
+    versions.rows.push({
+      id: `${formId}_v1`,
+      formId,
+      version: 1,
+      formVersion: 1,
+      body: { formVersion: 1, id: formId, title: formId, fields } as unknown as FormSchema,
+      publishedBy: "u1",
+      publishedAt: new Date().toISOString(),
+    });
+    versions.activeByForm.set(formId, 1);
+    integrations.maps.push({
+      id: `m_${formId}`,
+      tenantId,
+      ticketTypeCode: "UNEXPORTABLE",
+      ticketTypeName: null,
+      formId,
+      externalFormCode: "CUNEXP",
+      workflowId: null,
+    });
+  }
+
+  it("422s with our own field names and reasons", async () => {
+    seedUnexportable("tenant_a", "form_bad", [
+      { name: "pin", type: "password", label: "PIN" },
+      { name: "start", type: "time", label: "Giờ" },
+    ]);
+    const error = await service
+      .getFormTemplate(callerFor("tenant_a"), "UNEXPORTABLE")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(UnprocessableEntityException);
+    const response = (error as UnprocessableEntityException).getResponse() as {
+      errors: { field: string; reason: string }[];
+    };
+    expect(response.errors.map((e) => e.field)).toEqual(["pin", "start"]);
+    // Our vocabulary only — the receiver's type codes must not travel back to the caller.
+    for (const { reason } of response.errors) expect(reason).not.toMatch(/[A-Z]{2,}_[A-Z]+/);
+  });
+
+  it("records nothing in the audit trail — a 422 is not a read", async () => {
+    seedUnexportable("tenant_a", "form_bad2", [{ name: "pin", type: "password", label: "PIN" }]);
+    await service.getFormTemplate(callerFor("tenant_a"), "UNEXPORTABLE").catch(() => undefined);
+    expect(audit.entries).toEqual([]);
+  });
+
+  it("cannot be reached before the tenancy check on the form itself", async () => {
+    // The security-relevant ordering, and the reason it needs its own test: a binding row scoped to
+    // tenant A pointing at a form that lives in tenant B's project. That row passes the binding
+    // lookup and only `assertFormBelongsToTenant` stops it. If the export ran first, the caller
+    // would get a 422 listing tenant B's field names — an existence oracle plus a data leak, out of
+    // a mis-seeded row. The answer has to stay the same opaque 404.
+    seedProject("p_b_leak", "tenant_b");
+    seedForm("form_leak", "p_b_leak");
+    versions.rows.push({
+      id: "form_leak_v1",
+      formId: "form_leak",
+      version: 1,
+      formVersion: 1,
+      body: {
+        formVersion: 1,
+        id: "form_leak",
+        title: "leak",
+        fields: [{ name: "secret_pin", type: "password", label: "PIN" }],
+      } as unknown as FormSchema,
+      publishedBy: "u1",
+      publishedAt: new Date().toISOString(),
+    });
+    versions.activeByForm.set("form_leak", 1);
+    integrations.maps.push({
+      id: "m_leak",
+      tenantId: "tenant_a",
+      ticketTypeCode: "LEAK",
+      ticketTypeName: null,
+      formId: "form_leak",
+      externalFormCode: "CLEAK",
+      workflowId: null,
+    });
+
+    const error = await service
+      .getFormTemplate(callerFor("tenant_a"), "LEAK")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(JSON.stringify(error)).not.toContain("secret_pin");
   });
 });
 

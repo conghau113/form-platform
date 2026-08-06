@@ -1,6 +1,10 @@
 import { FIELD_TYPES, type FieldNode, fieldNodeSchema } from "@org/form-schema";
 import { describe, expect, it } from "vitest";
-import { EVN_CREATE_RENDERER_CODES, EVN_TEMPLATE_USAGE } from "./evn-vocabulary.js";
+import {
+  EVN_CREATE_RENDERER_CODES,
+  EVN_ROOT_RENDERABLE_CODES,
+  EVN_TEMPLATE_USAGE,
+} from "./evn-vocabulary.js";
 import { createUsageOf, mapNodeType, TYPES_WITHOUT_NAME, UNEXERCISED_TARGETS } from "./type-map.js";
 
 /**
@@ -91,6 +95,32 @@ describe("EVN vocabulary (generated data)", () => {
     expect(EVN_TEMPLATE_USAGE[code]?.detail ?? 0).toBeGreaterThan(0);
     expect(EVN_TEMPLATE_USAGE[code]?.create ?? 0).toBe(0);
     expect(EVN_CREATE_RENDERER_CODES).not.toContain(code);
+  });
+
+  it("pins the root-renderable set, which is narrower than the vocabulary", () => {
+    // Measured from the `case` branches of `WorkOrderRenderFormItem.tsx` alone. A code outside this
+    // set renders as nothing at all when placed at the root of `formItems[]`, because that switch's
+    // `default:` draws a node's children and not the node — which is why the exporter wraps stray
+    // root leaves. Widening this by accident would turn that safety net off silently.
+    expect(EVN_ROOT_RENDERABLE_CODES).toHaveLength(11);
+    expect([...EVN_ROOT_RENDERABLE_CODES].sort()).toEqual([...EVN_ROOT_RENDERABLE_CODES]);
+  });
+
+  it("keeps every root-renderable code inside the create vocabulary", () => {
+    // They are the same enum read two ways; if one drifts from the other, one of the two parses is
+    // wrong rather than the renderer having changed.
+    for (const code of EVN_ROOT_RENDERABLE_CODES) {
+      expect(EVN_CREATE_RENDERER_CODES).toContain(code);
+    }
+  });
+
+  it("excludes the plain input codes from the root-renderable set", () => {
+    // The point of the distinction: these are perfectly good targets *inside* a container and
+    // vanish at the root. If this ever passes trivially, the measurement collapsed.
+    for (const code of ["TEXT_INPUT", "SELECT", "NUMBER_INPUT", "TEXTAREA", "RADIO"]) {
+      expect(EVN_CREATE_RENDERER_CODES).toContain(code);
+      expect(EVN_ROOT_RENDERABLE_CODES).not.toContain(code);
+    }
   });
 });
 
