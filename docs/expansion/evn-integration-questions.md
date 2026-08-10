@@ -264,7 +264,7 @@ có nghĩa. Đo trên `web-admin/src/features/workOrder/workOrderManager` và `c
 | **Q2** | **`PCT_A_WORKING` chỉ đi từ `PCT_S_MODERATION`** (mục D2). Nghĩa là phiếu **không qua điều phối** thì không cấp được — đây là **chủ đích** hay là thiếu hàng trong bảng? | Theo đúng bảng: chỉ từ `PCT_S_MODERATION` | Nếu là thiếu hàng, chúng tôi sẽ chặn oan mọi phiếu không qua điều phối |
 | **Q3** | **Hình dạng `ticketData` gửi lên endpoint C.** Chúng tôi thấy hai dạng: lồng trong `ticket_items.value.data` (`ticket.service.ts:5398-5406`, dòng gán là `itemTickets[code] = itemTicketDB.value?.data`) và scalar phẳng như ví dụ §12.C (`:1447-1451`). Dạng nào là dạng phía EVN sẽ gửi? | Chấp nhận **cả hai**, tự dò | Điều kiện dạng `{"var":"LIST"}` không resolve được. Với JSONLogic thì "khoá không tồn tại" và "mảng rỗng" cho **cùng một kết quả** ⇒ guard **fail-open** (cho qua nhầm). Chúng tôi đã chặn hai lớp, nhưng biết đúng hình dạng thì an toàn hơn hẳn |
 | **Q4** | **Guard xuyên phiếu.** Có nhóm điều kiện phải tra sang **phiếu khác** — ví dụ `getEmployeeCheckinByUserCode` (`ticket-action.service.ts:1211-1242`) hỏi *"nhân viên này có đang bận ở phiếu khác không"* bằng câu truy vấn có `te.ticket_id <> :ticketId`. Chúng tôi **không có** dữ liệu các phiếu khác, nên hiểu rằng **phía EVN tự giữ** nhóm này, còn endpoint C sẽ liệt kê chúng trong `outOfScopeGuards` để phía EVN biết cái gì **chưa** được kiểm. Đúng chứ? | Trả `outOfScopeGuards` | Phía EVN tưởng C đã kiểm hết ⇒ **bỏ lọt** điều kiện |
-| **Q5** | **Mã cho container.** 10/12 loại container của chúng tôi (tabs, collapse, card, grid, step…) **không có tên định danh**, trong khi `FormItem.code` bên EVN là PK NOT NULL và phải nằm trong `form_item_codes` (ràng buộc #1, `:1466`). Chúng tôi định **sinh mã tất định từ đường dẫn cây** — nhưng mã đó sẽ **không** có trong danh mục. Chấp nhận mã layout ngoài danh mục, hay có cách khác? | Sinh mã tất định, ổn định giữa hai lần xuất | Vỡ FK lúc nạp |
+| **Q5** | **Mã cho container.** 10/12 loại container của chúng tôi (tabs, collapse, card, grid, step…) **không có tên định danh**, trong khi `FormItem.code` bên EVN là PK NOT NULL và phải nằm trong `form_item_codes` (ràng buộc #1, `:1466`). Chúng tôi định **sinh mã tất định từ đường dẫn cây** — nhưng mã đó sẽ **không** có trong danh mục. Chấp nhận mã layout ngoài danh mục, hay có cách khác? | Sinh mã tất định, ổn định giữa hai lần xuất | ~~Vỡ FK lúc nạp~~ — **đo lại 2026-08-10: KHÔNG vỡ** (xem T6), mã được tự thêm vào danh mục. Rủi ro thật là `form_item_codes` dài thêm sau mỗi lần nạp lại |
 | **Q6** | **`validations`.** Ví dụ §12.B (`:1425-1427`) có mảng `validations`, và §14 mục 5 nói bên thứ ba có thể gửi thêm. Nhưng **template thật không có trường này** (0/2709 node) — ràng buộc bắt buộc chỉ thể hiện bằng `required: true` (**191** node đặt `true`; 290 node có khai khoá `required`). Vậy có nên gửi `validations` không? Nếu có, `form_item_validations.form_validate_code` là FK tới `form_validations.code` — xin danh sách mã hợp lệ | **Không** gửi `validations`; chỉ gửi `required` | FK không resolve lúc nạp |
 | **Q7** | **Endpoint A** (`GET /external/workflow-definition`) **thay** `generateWorkflowForTicket` hay chạy **song song**? Chúng tôi thấy `WORKFLOW_PCT.json` hiện là read-model được sinh lại sau mỗi action; nếu endpoint A chạy song song thì sẽ có **hai nguồn sự thật** cho cùng một quy trình | Nếu song song ⇒ **khuyến nghị không làm A**, và nói rõ lý do thay vì làm rồi để lệch | Hai nguồn sự thật cho cùng một quy trình — đúng vấn đề mà việc tích hợp này định gỡ |
 | **Q8** | **§14 mục 2 & 3.** Template có phải **chừa sẵn** slot `*_SIGN` / `*_SIGNTIME` / `*_SIGNDATA` không? Và thứ tự trường cho PDF theo `typeFormItemPDF` (26 mã, `form.enum.ts:540`) là việc của bên nào? | Chừa slot **nếu form đã khai**; **không** tự sinh. Thứ tự PDF: mặc định là việc phía EVN | Ký số không gắn được giá trị; PDF sai thứ tự trường |
@@ -279,7 +279,7 @@ Chúng tôi đã tự trích được phần lớn từ source, nên phần này
 | bảng | vì sao vẫn cần | chúng tôi đã có gì |
 |---|---|---|
 | `ticket.action_role_status` (lọc PCT, **kèm cột `active`**) | biết bảng thật có bị **sửa tay sau khi seed** không, và hàng nào đang `active = false` | 34 hàng trích từ `ROLE_STATUS_ACTION_PCT` |
-| `ticket.form_item_codes` (**kèm `active`**) | biết mã nào còn hiệu lực và có mã nào **mới thêm** sau thời điểm chúng tôi chụp source | 398 mã trích từ `formItemCodeEnum` (`form.enum.ts:48-534`) |
+| `ticket.form_item_codes` (**kèm `active`**) | biết mã nào còn hiệu lực và có mã nào **mới thêm** sau thời điểm chúng tôi chụp source | 2142 mã trích từ source (xem T6); nhưng bảng thật của các anh còn dài hơn, nên chúng tôi vẫn cần bản export |
 | `ticket.ticket_roles` | danh mục vai đầy đủ để validate `roleCode` xuất ra | `codeRoleEnum` trong source |
 
 ---
@@ -303,16 +303,16 @@ danh sách trường có `permissions`/`visibleWhen` trước khi xuất, chứ 
 Nếu phía EVN muốn giữ được lớp che này, cần thống nhất thêm một trường trong §12.B (ví dụ
 `visibleForRoles: string[]` trên mỗi item). Chúng tôi sẵn sàng cấp nếu renderer đọc được.
 
-### T2. Chỉ form **soạn theo danh mục của EVN** mới xuất được
+### T2. Form **soạn theo danh mục của EVN** mới dùng được đầy đủ
 
-Vì `FormItem.code` phải nằm trong `form_item_codes` (398 mã), một form đặt tên trường tự do
-(`salary`, `department`…) sẽ **không** xuất sang được. Nghĩa là tính năng này là *"soạn form EVN trên
-nền tảng của chúng tôi"*, không phải *"xuất mọi form sang EVN"*. Chúng tôi sẽ báo lỗi **ngay lúc soạn**
+*(Cập nhật 2026-08-10: mục này viết khi chúng tôi còn tưởng mã ngoài danh mục sẽ bị từ chối lúc nạp.
+Số đo ở T6 cho thấy **không** — form vẫn xuất và vẫn nạp được. Điều dưới đây vẫn đúng về mặt **giá
+trị sử dụng**, chỉ không còn đúng về mặt **chặn**; tiêu đề mục đã sửa theo.)*
+
+Một form đặt tên trường tự do (`salary`, `department`…) vẫn xuất sang được, nhưng các tính năng của
+EVN gắn với mã cụ thể sẽ không chạy cho những trường đó. Nghĩa là tính năng này thực chất là *"soạn
+form EVN trên nền tảng của chúng tôi"*, không phải *"xuất mọi form sang EVN"*. Chúng tôi cảnh báo **ngay lúc soạn**
 (kèm tên trường + lý do), chứ không để vỡ lúc phía EVN gọi.
-
-> ⚠️ **T2 đã được sửa — xem T6 ở §6.** Đo lại `form-items.service.ts` cho thấy mã lạ **không** bị từ
-> chối: `saveCreateFormItem` **tự thêm** mã mới vào `form_item_codes`. Vấn đề vì thế không phải
-> "không xuất được" mà là "danh mục dùng chung của EVN sẽ nở ra".
 
 ---
 
@@ -343,7 +343,7 @@ khi `FormItem.code` bên EVN là `NOT NULL` và là một phần khoá chính. C
 định theo vị trí trong cây**, dạng `GEN_CARD_0_2`.
 
 Hai hệ quả cần phía EVN biết:
-1. Mã `GEN_*` **không nằm trong danh mục 398 mã** của EVN. Vì `saveCreateFormItem` tự thêm mã mới (T6),
+1. Mã `GEN_*` **không nằm trong danh mục mã chúng tôi đọc được** của EVN (xem T6). Vì `saveCreateFormItem` tự thêm mã mới (T6),
    chúng sẽ **được ghi vào `form_item_codes`** chứ không bị chặn.
 2. Mã sinh theo vị trí **thay đổi khi người soạn CHÈN thêm một thành phần phía trước nó**. Mỗi lần
    xuất lại sau một lần chèn sẽ gieo thêm vài hàng `GEN_*` nữa.
@@ -375,9 +375,41 @@ if (!codeExist) await this.formItemCodesRepository.save({ code, description: lab
 Không có FK nào vỡ; `form_item_codes` chỉ đơn giản là dài thêm. Và vì bảng này dùng chung với
 `ticket_items`, mã rác ở đây là **rác toàn hệ thống**, không phải rác trong một form.
 
-👉 **Xin xác nhận** phía EVN muốn chúng tôi **chặn** mã ngoài danh mục (chúng tôi trả 422, an toàn cho
-danh mục của EVN) hay **để đi qua** (tiện cho người soạn, nhưng danh mục nở). Mặc định hiện tại của
-chúng tôi: **để đi qua** ở lát cắt này, và sẽ chốt ở lát cắt danh mục kế tiếp.
+**✅ CHÚNG TÔI ĐÃ CHỐT (2026-08-10): để đi qua, kèm cảnh báo cho người soạn — xin phản đối nếu phía
+EVN muốn khác.** Trước đó chúng tôi định trả 422 để giữ sạch danh mục của các anh, nhưng đã **bác bỏ
+phương án đó bằng số đo**; xin nêu rõ căn cứ để các anh kiểm lại giúp:
+
+- `saveCreateFormItem` là **đường ghi `form_items` duy nhất** trong toàn bộ `src/`
+  (`formItemsRepository.save` đúng 1 chỗ, `form-items.service.ts:38`), và nó **tự thêm hàng
+  `form_item_codes`** ngay trước đó, trong cùng transaction của `FormsService.create`. Không có FK
+  nào vỡ.
+- Không có lớp chặn nào khác trên đường đi: `CreateFormItemDto.code` chỉ là `@IsOptional() @IsString()`.
+- Chính phía EVN đang dựa vào cơ chế này: `initTemplateForm()` nạp bộ template trong
+  `public/files/templateJSON` qua đúng `create()` đó.
+- ⇒ Nếu chúng tôi trả 422, chúng tôi sẽ **chặn oan** những biểu mẫu mà hệ thống của EVN nạp bình thường.
+
+Thứ **thật sự** mất khi mã nằm ngoài danh mục không phải tính toàn vẹn dữ liệu mà là **hành vi**: các
+tính năng gắn với mã cụ thể (tự động điền, ô ký) không chạy cho trường đó. Vì vậy chúng tôi cảnh báo
+cho người soạn **lúc thiết kế biểu mẫu**, chứ không chặn lúc xuất.
+
+Danh mục chúng tôi đối chiếu gồm **2142 mã**, trích tự động từ **ba** nguồn trong source của phía EVN:
+
+1. `formItemCodeEnum` (`form.enum.ts`) — **398** mã khai báo.
+2. Các họ mã `initFormItemCode()` tự sinh — `${action}_SIGN`/`_SIGNDATA`/`_SIGNTIME`, `DATE_TIME_*`,
+   `DATE_*`. Phải gộp vì ô ký của các anh nhận diện bằng **hậu tố chuỗi** chứ không theo thành viên
+   enum; chỉ đọc enum thì một trường ký **đặt tên đúng** vẫn bị chúng tôi báo là lạ.
+3. **1813 mã trong 32 template ở `public/files/templateJSON`** — `initTemplateForm()` nạp chúng qua
+   đúng đường tự-thêm-mã ở trên, nên chúng có mặt trong `form_item_codes` của mọi bản triển khai
+   thật. Khoảng **1600 mã trong số này không có ở nguồn 1 và 2**; thiếu nguồn này thì một đơn vị dựng
+   lại đúng phiếu PCT của các anh sẽ bị chúng tôi báo sai trên hơn nửa số trường.
+
+⚠️ Chúng tôi hiểu rõ **2142 chỉ là cận dưới**, không phải nội dung bảng `form_item_codes` của các anh:
+bảng đó còn dài thêm sau mỗi biểu mẫu bất kỳ ai nạp. Vì vậy chúng tôi chỉ **cảnh báo**, không kết luận
+mã là sai. 👉 **Xin cho biết cách lấy bản đầy đủ** (mục xin export ở trên), và nơi lấy bản mới khi danh
+mục thay đổi.
+
+⚠️ Một hệ quả xin nêu trước: mã layout chúng tôi tự sinh (`GEN_*`, xem Q5) **sẽ** làm dài thêm
+`form_item_codes` sau mỗi lần nạp lại, vì bảng này dùng chung toàn hệ thống.
 
 ### T7. Hai chỗ chúng tôi **tự nắn cấu trúc**, và một chỗ chúng tôi **từ chối**
 

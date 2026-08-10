@@ -1,5 +1,6 @@
 import { childrenKeyOf, childrenOf, type FieldNode, type FormSchema } from "@org/form-schema";
 import { defaultValueExported, descriptionOf, lockedStateExported } from "./evn-description.js";
+import { isGeneratedCode, isKnownItemCode } from "./evn-item-codes.check.js";
 import { EVN_ROOT_RENDERABLE_CODES } from "./evn-vocabulary.js";
 import { mapNodeType } from "./type-map.js";
 
@@ -140,6 +141,7 @@ export function toEvnTemplate(form: FormSchema, meta: EvnTemplateMeta): EvnExpor
   for (const warning of DROPPED_FEATURE_WARNINGS) {
     if (ctx.dropped.has(warning.key)) ctx.warnings.push(warning.message);
   }
+  warnAboutUnknownItemCodes(items, ctx);
 
   return {
     ok: true,
@@ -153,6 +155,53 @@ export function toEvnTemplate(form: FormSchema, meta: EvnTemplateMeta): EvnExpor
     },
     warnings: ctx.warnings,
   };
+}
+
+/** How many unknown codes the aggregate warning names before falling back to a count. */
+const UNKNOWN_CODE_SAMPLE = 3;
+
+/**
+ * Report field codes EVN's vocabulary does not know — as ONE warning, and never as an error.
+ *
+ * ⚠️ Not a validation. `form_item_codes` is a catalog EVN auto-populates on ingest: their
+ * `saveCreateFormItem` inserts the missing code row immediately before the item that needs it
+ * (`core-service/src/modules/form/service/form-items.service.ts:31-38`), inside the same
+ * transaction, with no allowlist anywhere on the path — their own `CreateFormItemDto.code` is only
+ * `@IsOptional() @IsString()`. An unknown code loads. Rejecting one would block forms they accept.
+ *
+ * What is actually lost is BEHAVIOUR: their autofill and signature handling are keyed to specific
+ * codes, so a field outside the catalog renders but does nothing. (PDF placement is NOT in that
+ * list — it keys off `description.valueCode` and coordinate rows, which we do not emit for known and
+ * unknown codes alike, so blaming the catalog for it would be wrong.) That is worth saying
+ * once, not once per field — a form authored without EVN's vocabulary in mind misses on nearly every
+ * field (12/12, 4/4 and 5/5 on the three PCT demo forms), and one warning per field would bury the
+ * type- and description-level warnings raised above.
+ */
+function warnAboutUnknownItemCodes(items: Draft[], ctx: Ctx): void {
+  const unknown: string[] = [];
+  let total = 0;
+
+  const walk = (list: Draft[]): void => {
+    for (const item of list) {
+      if (!isGeneratedCode(item.code)) {
+        total += 1;
+        if (!isKnownItemCode(item.code)) unknown.push(item.code);
+      }
+      if (item.children) walk(item.children);
+    }
+  };
+  walk(items);
+
+  if (unknown.length === 0) return;
+
+  const sample = unknown.slice(0, UNKNOWN_CODE_SAMPLE).join(", ");
+  const rest = unknown.length - UNKNOWN_CODE_SAMPLE;
+  const named = rest > 0 ? `${sample}, … +${rest}` : sample;
+  ctx.warnings.push(
+    `${unknown.length}/${total} mã trường không có trong danh mục mã đọc được từ bên nhận (${named}). ` +
+      "Bên nhận vẫn nạp được — họ tự thêm mã lạ vào danh mục. Nhưng các tính năng gắn với mã cụ thể " +
+      "(tự động điền, ô ký) chỉ chạy với mã họ đã dùng, nên hãy kiểm lại nếu trường này cần chúng.",
+  );
 }
 
 /** What a node carries that the export cannot express. Order here is the order warnings appear. */

@@ -26,6 +26,11 @@ import { pathToFileURL } from "node:url";
  *     [--templates <dir>]   default $EVN_TEMPLATE_DIR
  *     [--web-admin <dir>]   default $EVN_WEB_ADMIN_SRC
  *     [--out <file>]        default src/modules/external/evn-vocabulary.ts
+ *
+ *   tsx src/scripts/measure-evn-templates.ts --only item-codes
+ *     [--core-service <dir>] default $EVN_CORE_SERVICE_SRC
+ *     [--templates <dir>]    default $EVN_TEMPLATE_DIR
+ *     [--out <file>]         default src/modules/external/evn-item-codes.ts
  */
 
 /** Members declared in `ETypeForm`. One (`GROUP_BUTTON`) has no `case`, hence 39 vs 38. */
@@ -41,6 +46,17 @@ const EXPECTED_TEMPLATE_FILES = 32;
  * branches, the export would start emitting roots that render as nothing at all.
  */
 const EXPECTED_ROOT_RENDERABLE_CODES = 11;
+/** The enum in `core-service` that declares EVN's item-code vocabulary — see {@link extractItemCodes}. */
+const ITEM_CODE_ENUM = "formItemCodeEnum";
+/** Members of `formItemCodeEnum`, all of which carry a distinct value. */
+const EXPECTED_ITEM_CODE_MEMBERS = 398;
+/**
+ * Union of the three sources — enum, seed routine, shipped templates.
+ *
+ * ⚠️ NOT the size of their `form_item_codes` table. That table also grows from every form anyone
+ * loads, so this is a lower bound on what EVN knows, pinned only against the generator drifting.
+ */
+const EXPECTED_ITEM_CODES_TOTAL = 2142;
 
 /** Which renderer a template file is meant for, decided by the `formCode` INSIDE the file. */
 export type FormKind = "create" | "detail" | "pdf" | "workflow";
@@ -118,6 +134,247 @@ export function extractRootRenderableCodes(webAdminSrc: string): string[] {
     cased.add(m[1]);
   }
   return resolveCodes(cased, members);
+}
+
+/**
+ * The item codes EVN's own vocabulary declares, read from `formItemCodeEnum`.
+ *
+ * ⚠️ Takes the VALUE, never the member name. Five members disagree with their own key —
+ * `WORK_PERMIT_ALLOWER = 'WORK_PERMIT_PROVIDER'`, `FINISH_WORK_COMMAND_ROLE = 'FINISH_WORK_ROLE'`,
+ * `LCT_NHAN_VIEN_ATD = 'LCT__NHAN_VIEN_LIST__ATD'` and two siblings of the first — and the value is
+ * what reaches `form_items.code`. Keying off the name would ship five codes that do not exist.
+ *
+ * ⚠️ Scoped to the enum BLOCK, not the file. `form.enum.ts` declares five enums (`layoutForm`,
+ * `typeFormItem`, `formItemCodeEnum`, `keyForm`, `typeFormItemPDF`); a whole-file scan reads 460
+ * members and silently mixes vocabularies that answer different questions.
+ */
+export function extractItemCodes(formEnumFile: string): { codes: string[]; members: number } {
+  const src = readFileSync(formEnumFile, "utf8");
+  const start = src.indexOf(`export enum ${ITEM_CODE_ENUM} {`);
+  if (start === -1) throw new Error(`${ITEM_CODE_ENUM} not found in ${formEnumFile}`);
+  const end = src.indexOf("\n}", start);
+  if (end === -1) throw new Error(`${ITEM_CODE_ENUM} is unterminated in ${formEnumFile}`);
+
+  const values: string[] = [];
+  // The `^\s*` anchor already skips the commented-out members; kept explicit so the reason survives.
+  for (const line of src.slice(start, end).split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_0-9]+)\s*=\s*'([A-Z_0-9]+)'/);
+    if (m) values.push(m[2]);
+  }
+  return { codes: [...new Set(values)].sort(), members: values.length };
+}
+
+/**
+ * The code families `initFormItemCode()` SEEDS but `formItemCodeEnum` never declares.
+ *
+ * Missing these was a real defect, caught in review: their seed routine
+ * (`modules/form/service/form-items.service.ts:92-162`) also writes `${action}_SIGN`, `_SIGNDATA`
+ * and `_SIGNTIME` for three action lists, plus two date families. Over a hundred of those codes are
+ * absent from the enum — so reading the enum alone reports a correctly-named signature field as
+ * unknown and behaviourless, which is the opposite of true: EVN's signature slots are resolved by
+ * that very SUFFIX (`modules/ticket/service/ticket.service.ts:6289-6371`), not by enum membership.
+ *
+ * Mirrors the seed routine's own loops rather than restating their output, so a change upstream
+ * shows up as a count drift instead of a silently stale list.
+ */
+function extractSeededItemCodes(coreServiceSrc: string): string[] {
+  const ticketEnum = readFileSync(
+    join(coreServiceSrc, "shared/common/enum/ticket.enum.ts"),
+    "utf8",
+  );
+  const actionValues = enumValuesByName(ticketEnum, "codeActionEnum");
+
+  const ticketConst = readFileSync(
+    join(coreServiceSrc, "modules/ticket/ticket.constant.ts"),
+    "utf8",
+  );
+  const signActions = [
+    ...arrayMembers(ticketConst, "ACTION_TOGETHER_TO_DONE"),
+    ...arrayMembers(ticketConst, "ACTION_SIGN"),
+    ...arrayMembers(ticketConst, "BBKHST_SIGN"),
+  ].map((name) => resolveMember(actionValues, name, "codeActionEnum"));
+
+  const codes: string[] = [];
+  for (const action of signActions) {
+    codes.push(`${action}_SIGN`, `${action}_SIGNDATA`, `${action}_SIGNTIME`);
+  }
+  // The two date families, listed inline in the seed routine (`form-items.service.ts:111-120`).
+  for (const name of [
+    "PCT_A_ALLOW",
+    "PCT_A_HANDOVER",
+    "PCT_A_END",
+    "PCT_A_LOCK",
+    "PCT_A_FINISHED",
+    "LCT_A_END",
+  ]) {
+    const action = resolveMember(actionValues, name, "codeActionEnum");
+    for (const part of ["HOUR", "MINUTE", "DAY", "MONTH", "YEAR"]) {
+      codes.push(`DATE_TIME_${action}_${part}`);
+    }
+  }
+  for (const name of ["LCT_A_FINISHED", "PTT_A_APPROVE"]) {
+    const action = resolveMember(actionValues, name, "codeActionEnum");
+    for (const part of ["DAY", "MONTH", "YEAR"]) codes.push(`DATE_${action}_${part}`);
+  }
+
+  // The seed list itself, whose two literal entries the enum does not declare either.
+  const formConst = readFileSync(join(coreServiceSrc, "modules/form/form.constant.ts"), "utf8");
+  const itemValues = enumValuesByName(
+    readFileSync(join(coreServiceSrc, "modules/form/form.enum.ts"), "utf8"),
+    ITEM_CODE_ENUM,
+  );
+  const seedBlock = constBlock(formConst, "FORM_ITEM_CODES");
+  // Resolved to VALUES, exactly like the action names above. Every member referenced here agrees
+  // with its own key today — but five members of this enum do not, which is why the file exists.
+  for (const m of seedBlock.matchAll(/code:\s*formItemCodeEnum\.([A-Za-z_0-9]+)/g)) {
+    codes.push(resolveMember(itemValues, m[1], ITEM_CODE_ENUM));
+  }
+  for (const m of seedBlock.matchAll(/code:\s*'([A-Z_0-9]+)'/g)) codes.push(m[1]);
+
+  // Gate on the resolution above, which nothing else covers: today every member the seed list
+  // references agrees with its own key, so reverting to `codes.push(m[1])` would turn no test red —
+  // until EVN adds a mismatched member to the list and we ship a code that does not exist.
+  for (const [name, value] of itemValues) {
+    if (name !== value && codes.includes(name)) {
+      throw new Error(
+        `Seed list produced '${name}', which is a member NAME whose value is '${value}'.`,
+      );
+    }
+  }
+
+  return codes;
+}
+
+/**
+ * Item codes used by the templates EVN ships.
+ *
+ * The third source, and the one that matters most in practice. `initTemplateForm()`
+ * (`modules/form/service/forms.service.ts:426-444`) loads them through the same auto-inserting path,
+ * so their codes enter `form_item_codes` by that route — and 1600 of the 1813 are declared by
+ * neither the enum nor the seed routine. Without this source, a tenant rebuilding EVN's own PCT form
+ * is told most of its fields are unknown, which is exactly backwards.
+ *
+ * ⚠️ Not "and therefore every deployment has them": that loader does `readdirSync` with **no
+ * extension filter and no try/catch**, and the directory holds their own `COMPONENT_TYPES.md`, so
+ * `JSON.parse` throws and aborts the loop partway. We filter to `.json`; they do not.
+ */
+function extractTemplateItemCodes(templateDir: string): string[] {
+  const codes: string[] = [];
+  let untyped = 0;
+
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const node = value as Record<string, unknown>;
+    if (typeof node.code === "string") {
+      // Their ingest keys on `code` alone (`form-items.service.ts:30`). Requiring `typeCode` too
+      // could only ever DROP a code they would have catalogued — the direction that produces false
+      // warnings — so the mismatch is counted and made loud rather than silently tolerated.
+      if (typeof node.typeCode === "string") codes.push(node.code);
+      else untyped += 1;
+    }
+    walk(node.children);
+    walk(node.formItems);
+  };
+
+  for (const file of readdirSync(templateDir)
+    .filter((f) => f.endsWith(".json"))
+    .sort()) {
+    walk(JSON.parse(readFileSync(join(templateDir, file), "utf8")));
+  }
+  if (untyped > 0) {
+    throw new Error(
+      `${untyped} template node(s) carry a code but no typeCode. Their ingest would catalogue ` +
+        "those codes; decide whether to collect them before regenerating.",
+    );
+  }
+  return codes;
+}
+
+/** Members of `export enum NAME { ... }`, keyed by member name — the block, not the file. */
+function enumValuesByName(source: string, enumName: string): Map<string, string> {
+  const start = source.indexOf(`export enum ${enumName} {`);
+  if (start === -1) throw new Error(`enum ${enumName} not found`);
+  const end = source.indexOf("\n}", start);
+  if (end === -1) throw new Error(`enum ${enumName} is unterminated`);
+
+  const members = new Map<string, string>();
+  for (const line of source.slice(start, end).split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_0-9]+)\s*=\s*'([A-Z_0-9]+)'/);
+    if (m) members.set(m[1], m[2]);
+  }
+  return members;
+}
+
+/**
+ * Text of `export const NAME` up to the next top-level `export const`.
+ *
+ * Anchored so the name must END there: `ACTION_SIGN` prefix-matches four longer siblings
+ * (`ACTION_SIGN_IN_ITEM_LIST`, `ACTION_SIGN_NHANVIEN`, …) and a plain `indexOf` only picks the right
+ * one because of declaration order — a reorder upstream would silently read the wrong list.
+ */
+function constBlock(source: string, name: string): string {
+  const declaration = new RegExp(`^export const ${name}(?![A-Za-z0-9_$])`, "m");
+  const found = declaration.exec(source);
+  if (!found) throw new Error(`const ${name} not found`);
+  const start = found.index;
+  const rest = source.slice(start + 1);
+  const next = rest.indexOf("\nexport const ");
+  return next === -1 ? source.slice(start) : rest.slice(0, next);
+}
+
+/** Member names referenced inside `export const NAME = [ ... ]`, comment lines excluded. */
+function arrayMembers(source: string, name: string): string[] {
+  const out: string[] = [];
+  for (const line of constBlock(source, name).split(/\r?\n/)) {
+    const m = line.match(/^\s*codeActionEnum\.([A-Za-z_0-9]+)/);
+    if (m) out.push(m[1]);
+  }
+  return out;
+}
+
+function resolveMember(members: Map<string, string>, name: string, enumName: string): string {
+  const value = members.get(name);
+  // A reference the enum does not declare would not compile upstream; if the regex reads one, the
+  // parse is wrong and the catalog would silently gain a bogus code.
+  if (!value) throw new Error(`${enumName}.${name} has no member`);
+  return value;
+}
+
+/** Own gate, deliberately not folded into {@link assertYield} — that one is all-or-nothing for the
+ * template census, and a drift in one measurement must not block refreshing the other. */
+function assertItemCodeYield(result: { codes: string[]; members: number }): void {
+  if (result.members !== EXPECTED_ITEM_CODE_MEMBERS) {
+    throw new Error(
+      `${ITEM_CODE_ENUM}: read ${result.members} members, expected ${EXPECTED_ITEM_CODE_MEMBERS}. ` +
+        "If EVN really changed the enum, update the constant in the same commit as the data.",
+    );
+  }
+  if (result.codes.length !== EXPECTED_ITEM_CODE_MEMBERS) {
+    throw new Error(
+      `${ITEM_CODE_ENUM}: ${result.members} members collapsed to ${result.codes.length} distinct ` +
+        "values — two members now share a code, which the parse must not hide.",
+    );
+  }
+  // The count gate above cannot see a key/value mix-up: reading member NAMES also yields 398. These
+  // three disagree with their own key, so they fail at generation time rather than only in a test
+  // that happens to run after someone regenerates the file.
+  for (const value of [
+    "WORK_PERMIT_PROVIDER",
+    "WORK_PERMIT_PROVIDER_ROLE",
+    "WORK_PERMIT_PROVIDER_SIGN",
+    "FINISH_WORK_ROLE",
+    "LCT__NHAN_VIEN_LIST__ATD",
+  ]) {
+    if (!result.codes.includes(value)) {
+      throw new Error(
+        `${ITEM_CODE_ENUM}: '${value}' missing — the parse is reading member names, not values.`,
+      );
+    }
+  }
 }
 
 function readEnumMembers(webAdminSrc: string): Map<string, string> {
@@ -348,6 +605,43 @@ ${decl("EVN_CREATE_CONTAINER_CODES", m.createContainerCodes)}
 `;
 }
 
+/** Same Biome-clean shape as {@link renderVocabularyModule}, one list and no interface. */
+export function renderItemCodesModule(codes: readonly string[], measuredOn: string): string {
+  return `// GENERATED by src/scripts/measure-evn-templates.ts --only item-codes — do not edit by hand.
+// Measured on ${measuredOn} from E:\\web\\evn\\core-service:
+//   src/modules/form/form.enum.ts          (${ITEM_CODE_ENUM}, ${EXPECTED_ITEM_CODE_MEMBERS} members)
+//   src/modules/form/form.constant.ts      (FORM_ITEM_CODES, the seed list)
+//   src/modules/ticket/ticket.constant.ts  (the action lists the seed derives _SIGN* families from)
+//   public/files/templateJSON              (the ${EXPECTED_TEMPLATE_FILES} shipped templates)
+// ${codes.length} codes in total. Re-run the script to refresh; \`evn-item-codes.test.ts\` anchors what matters.
+
+/**
+ * Item codes we could READ from EVN's source. A lower bound, not their catalog.
+ *
+ * ⚠️ This is NOT the contents of \`form_item_codes\` and must never be enforced as a constraint.
+ * That table is auto-populated on ingest — \`saveCreateFormItem\` inserts the parent code row
+ * immediately before the item that needs it
+ * (\`core-service/src/modules/form/service/form-items.service.ts:31-38\`) — so it grows with every
+ * form anyone loads, and an unknown code loads fine. A code outside this list is one we have no
+ * evidence for; it may still be a code they use.
+ *
+ * ⚠️ All three sources are load-bearing, each caught by a review round after the previous list
+ * produced false warnings:
+ *  1. \`formItemCodeEnum\` — their declared vocabulary.
+ *  2. \`initFormItemCode()\` (\`form-items.service.ts:92-162\`) — seeds \`_SIGN\`/\`_SIGNDATA\`/
+ *     \`_SIGNTIME\` families the enum never declares, and signature slots resolve by that SUFFIX
+ *     rather than by enum membership, so the enum alone calls a correctly-named signature field unknown.
+ *  3. \`public/files/templateJSON\` — \`initTemplateForm()\` loads all of it through the same
+ *     auto-inserting path, and ~1600 of those codes appear in neither 1 nor 2. Without it a tenant
+ *     rebuilding EVN's own PCT form is told half its fields are unknown.
+ * Do not "simplify" this back to one source.
+ */
+export const EVN_ITEM_CODES: readonly string[] = [
+${codes.map((c) => `  "${c}",`).join("\n")}
+];
+`;
+}
+
 function arg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
   if (i === -1) return undefined;
@@ -356,7 +650,50 @@ function arg(flag: string): string | undefined {
   return value && !value.startsWith("--") ? value : undefined;
 }
 
+/**
+ * Its own target, not a step of the template census.
+ *
+ * Folding it into the main path would demand `--templates` and `--web-admin` just to refresh a list
+ * read from neither, and would restamp `evn-vocabulary.ts`'s measured-on date with today's — turning
+ * an unrelated file into churn in `git status`.
+ */
+function writeItemCodes(): void {
+  const coreServiceSrc = arg("--core-service") ?? process.env.EVN_CORE_SERVICE_SRC;
+  const templateDir = arg("--templates") ?? process.env.EVN_TEMPLATE_DIR;
+  if (!coreServiceSrc || !templateDir) {
+    throw new Error(
+      "Need --core-service <core-service/src dir> and --templates <templateJSON dir> " +
+        "(or EVN_CORE_SERVICE_SRC / EVN_TEMPLATE_DIR).",
+    );
+  }
+  const out = arg("--out") ?? resolve(import.meta.dirname, "../modules/external/evn-item-codes.ts");
+
+  const src = resolve(coreServiceSrc);
+  const result = extractItemCodes(join(src, "modules/form/form.enum.ts"));
+  assertItemCodeYield(result);
+
+  const seeded = extractSeededItemCodes(src);
+  const fromTemplates = extractTemplateItemCodes(resolve(templateDir));
+  const codes = [...new Set([...result.codes, ...seeded, ...fromTemplates])].sort();
+  if (codes.length !== EXPECTED_ITEM_CODES_TOTAL) {
+    throw new Error(
+      `Item codes: ${codes.length} total, expected ${EXPECTED_ITEM_CODES_TOTAL}. One of the three ` +
+        "sources moved; update the constant in the same commit as the data.",
+    );
+  }
+  writeFileSync(out, renderItemCodesModule(codes, new Date().toISOString().slice(0, 10)));
+
+  console.log(
+    `Measured ${result.members} ${ITEM_CODE_ENUM} members + ${seeded.length} seeded + ` +
+      `${new Set(fromTemplates).size} from templates -> ${codes.length} codes -> ${out}`,
+  );
+}
+
 async function main(): Promise<void> {
+  if (arg("--only") === "item-codes") {
+    writeItemCodes();
+    return;
+  }
   const templateDir = arg("--templates") ?? process.env.EVN_TEMPLATE_DIR;
   const webAdminSrc = arg("--web-admin") ?? process.env.EVN_WEB_ADMIN_SRC;
   if (!templateDir || !webAdminSrc) {
