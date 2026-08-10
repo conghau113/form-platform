@@ -12,6 +12,14 @@ import { EVN_ROOT_RENDERABLE_CODES } from "./evn-vocabulary.js";
  *  tests that are about something else. `top level` covers the omitted case on purpose. */
 const META = { formTypeCode: "PCT", formCode: "CPCT", formTypeName: "Công Tác" };
 
+/**
+ * ⚠️ The cast is deliberate — do NOT replace it with `formSchema.parse()`.
+ *
+ * Zod would strip unknown keys, and several tests here plant a forbidden key (`url`,
+ * `permissions`) in a place the schema does not declare, precisely to prove the exporter's
+ * whitelist keeps it out. Parsing first would remove the thing under test and leave the
+ * assertions passing for the wrong reason.
+ */
 function formOf(fields: unknown[], extra: Record<string, unknown> = {}): FormSchema {
   return { formVersion: 1, id: "f1", title: "Tạo phiếu công tác", fields, ...extra } as FormSchema;
 }
@@ -101,8 +109,23 @@ describe("item shape", () => {
     expect(serialized).not.toContain("itemCode");
   });
 
-  it("never emits an empty description — P2c fills it, and {} has no precedent in 522 nodes", () => {
+  it("omits description entirely when there is nothing to put in it", () => {
+    // `{}` has no precedent in their 522 shipped nodes, and worse, an empty object fails the same
+    // `_.size(description)` test an absent one does — see the upload carve-out in
+    // `evn-description.ts`. A plain text field with no settings gets no key at all.
     expect(JSON.stringify(ok(exportOf([text("a")])).items)).not.toContain("description");
+  });
+
+  it("never emits a file field without a description — that combination crashes their screen", () => {
+    // Asserted on the exported DOCUMENT, not just on `descriptionOf`, because this is the defect
+    // the slice exists to repair: `CheckTyprCodeRenderItem.tsx:557` destructures a helper that
+    // returns `undefined` for an empty description, taking down the whole create form.
+    const { items } = ok(
+      exportOf([{ type: "card", children: [{ type: "upload", name: "tep", label: "Tệp" }] }]),
+    );
+    const upload = (items[0].children ?? [])[0];
+    expect(upload.typeCode).toBe("FILE_MULTIPLE");
+    expect(Object.keys(upload.description ?? {}).length).toBeGreaterThan(0);
   });
 
   it("routes display-text prose into label, and never marks it required", () => {
@@ -156,10 +179,11 @@ describe("priority", () => {
 
 describe("the four mapping outcomes", () => {
   it("maps a leaf and attributes its warning to that field", () => {
-    // Named honestly: `radio` is not warning-free — its options are not exported yet. What this
-    // pins is that the warning is ATTRIBUTED, since an unattributed list of caveats is unactionable
-    // on a form with fifty fields. (An earlier draft of this test asserted `every(w => w.length >
-    // 0)`, which is true of any array of non-empty strings and measured nothing.)
+    // Named honestly: this `radio` is not warning-free — it is authored with no options at all, so
+    // there is nothing to put in `description.data`. What this pins is that the warning is
+    // ATTRIBUTED, since an unattributed list of caveats is unactionable on a form with fifty
+    // fields. (An earlier draft of this test asserted `every(w => w.length > 0)`, which is true of
+    // any array of non-empty strings and measured nothing.)
     const { items, warnings } = ok(exportOf([{ type: "radio", name: "r", label: "R" }]));
     expect((items[0].children ?? [])[0].typeCode).toBe("RADIO");
     const mine = warnings.filter((w) => w.startsWith("r: "));
@@ -428,9 +452,7 @@ describe("what is dropped is named", () => {
     ["permissions", { permissions: { viewRoles: ["hr"] } }, "MỌI vai"],
     ["visibleWhen", { visibleWhen: { "==": [1, 1] } }, "ẩn/hiện"],
     ["validations", { validations: [{ kind: "min", value: 1 }] }, "kiểm tra dữ liệu"],
-    ["readOnly", { readOnly: true }, "khoá/chỉ-đọc"],
     ["asyncValidator", { asyncValidator: { url: "https://x/y" } }, "Kiểm tra từ xa"],
-    ["defaultValue", { defaultValue: 0 }, "Giá trị mặc định"],
     ["i18n", { i18n: { label: { en: "Name" } } }, "Bản dịch"],
   ];
 
@@ -443,12 +465,62 @@ describe("what is dropped is named", () => {
     });
   }
 
+  // `readOnly` and `defaultValue` moved out of the table above when P2c started exporting them:
+  // whether they are lost now depends on the TARGET CODE, so a single sample node cannot express
+  // the rule. Both directions are asserted, because a warning that fires for a feature which did
+  // travel is as wrong as one that stays silent for a feature that did not.
+  it("warns about a locked state only where the target ignores it", () => {
+    const dropped = ok(
+      exportOf([
+        {
+          type: "radio",
+          name: "r",
+          label: "R",
+          options: [{ label: "A", value: "a" }],
+          readOnly: true,
+        },
+      ]),
+    );
+    expect(dropped.warnings.some((w) => w.includes("khoá/chỉ-đọc"))).toBe(true);
+
+    const carried = ok(exportOf([{ type: "text", name: "a", label: "A", readOnly: true }]));
+    expect(carried.warnings.some((w) => w.includes("khoá/chỉ-đọc"))).toBe(false);
+    expect(carried.items[0]?.children?.[0]?.description).toMatchObject({
+      disable: true,
+    });
+  });
+
+  it("warns about a default value only where it could not be carried", () => {
+    const dropped = ok(
+      exportOf([
+        {
+          type: "select",
+          name: "s",
+          label: "S",
+          options: [{ label: "A", value: "a" }],
+          defaultValue: "a",
+        },
+      ]),
+    );
+    expect(dropped.warnings.some((w) => w.includes("Giá trị mặc định"))).toBe(true);
+
+    const carried = ok(exportOf([{ type: "text", name: "a", label: "A", defaultValue: 0 }]));
+    expect(carried.warnings.some((w) => w.includes("Giá trị mặc định"))).toBe(false);
+    expect(carried.items[0]?.children?.[0]?.description).toMatchObject({ value: 0 });
+  });
+
   it("stays quiet about features the form does not use", () => {
     const { warnings } = ok(exportOf([{ type: "card", children: [text("a")] }]));
     // Every message in `cases` above is a dropped-feature warning; none of them may appear for a
     // form that carries none of those features. (The text leaf still warns about their character
     // cap — that is a mapping caveat, not something we dropped.)
     for (const [, , expected] of cases) {
+      expect(warnings.some((w) => w.includes(expected))).toBe(false);
+    }
+    // Named explicitly because these two left `cases` when P2c narrowed them: without this they
+    // would have no silence coverage at all, and a warning that fires unconditionally would pass
+    // every remaining assertion in this file.
+    for (const expected of ["khoá/chỉ-đọc", "Giá trị mặc định"]) {
       expect(warnings.some((w) => w.includes(expected))).toBe(false);
     }
   });
@@ -479,12 +551,61 @@ describe("nothing internal escapes", () => {
       },
     ]);
     if (!result.ok) throw new Error("expected success");
-    // The WHOLE template, not just `formItems` — `settings.submitUrl` lives at the top level of our
+    // The WHOLE response, not just `formItems` — `settings.submitUrl` lives at the top level of our
     // schema, so scanning only the items would miss precisely the leak that a review once caught.
-    const serialized = JSON.stringify(result.template);
+    // `warnings` is in scope for the same reason: `external.service.ts` returns it to the external
+    // caller, and since P2c some warnings are built FROM the node that carries the URL.
+    const serialized = JSON.stringify({
+      template: result.template,
+      warnings: result.warnings,
+    });
     for (const key of FORBIDDEN_OUTPUT_KEYS) expect(serialized).not.toContain(`"${key}"`);
     expect(serialized).not.toContain("hr-admin");
     expect(serialized).not.toContain("internal.example");
+  });
+
+  it("keeps author-supplied option values inside the whitelisted shape", () => {
+    // Options are the first authored data `description` carries, so the deep scan has to reach
+    // into `description.data.data`. The forbidden key is planted INSIDE an option rather than on
+    // the node: on the node it would be stripped by the item builder anyway, and the assertion
+    // would pass with `optionsOf` spreading `...entry` — measuring nothing. Here it goes red.
+    const result = toEvnTemplate(
+      formOf([
+        {
+          type: "card",
+          children: [
+            {
+              type: "select",
+              name: "dept",
+              label: "Phòng",
+              options: [
+                { label: "Kỹ thuật", value: "KT", url: "https://internal.example/x" },
+                { label: "Vận hành", value: "VH", permissions: { viewRoles: ["hr-admin"] } },
+              ],
+              permissions: { viewRoles: ["hr-admin"], editRoles: ["hr-admin"] },
+            },
+          ],
+        },
+      ]),
+      META,
+    );
+    if (!result.ok) throw new Error("expected success");
+    const item = result.template.formItems[0]?.children?.[0];
+    // `toEqual`, not `toMatchObject`: the latter tolerates EXTRA keys, so an `optionsOf` that
+    // spread `...entry` would sail past it — the assertion would describe the whitelist without
+    // measuring it. This form pins each option to exactly `{label, value}`.
+    expect(item?.description).toEqual({
+      isApi: false,
+      data: {
+        data: [
+          { label: "Kỹ thuật", value: "KT" },
+          { label: "Vận hành", value: "VH" },
+        ],
+      },
+    });
+    const serialized = JSON.stringify({ template: result.template, warnings: result.warnings });
+    for (const key of FORBIDDEN_OUTPUT_KEYS) expect(serialized).not.toContain(`"${key}"`);
+    expect(serialized).not.toContain("hr-admin");
   });
 
   it("drops settings.submitUrl with the rest of the form's own envelope", () => {

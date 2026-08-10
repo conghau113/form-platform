@@ -55,20 +55,6 @@ export const TYPES_WITHOUT_NAME: readonly FieldNode["type"][] = [
 ];
 
 /**
- * Choice controls get their options from `description` — either `isApi` + a data endpoint, or a
- * static list under `description.data`. BOTH work in their renderer; what does not work is what we
- * currently emit, which is neither.
- *
- * The wording matters: an earlier draft of this warning claimed EVN only accepts options through an
- * API of theirs. That is false (`SelectItemHandle.tsx:467` falls back to `data?.data ?? data`, and
- * `RadioItemHandle.tsx:82` reads the static list exclusively) and would have sent P2c asking them to
- * build an endpoint it does not need.
- */
-const OPTIONS_NOT_EXPORTED_YET =
-  "Danh sách lựa chọn chưa được xuất — nó nằm trong phần cấu hình hiển thị mà lát cắt này chưa " +
-  "cấp, nên trường này sẽ hiển thị rỗng cho tới khi phần đó được bổ sung.";
-
-/**
  * Every date control in the create renderer unconditionally disables days before today. Our
  * contract has no such rule, so an exported date field silently becomes stricter than it was
  * authored — the author has to know before EVN's users hit it.
@@ -104,31 +90,32 @@ export function mapNodeType(node: FieldNode): TypeMapping {
       return map("TEXTAREA", [TEXT_LENGTH_CAP]);
     case "number":
       return map("NUMBER_INPUT", [NUMBER_ZERO_REJECTED]);
-    // `TYPOGRAPHY` is the static-text node, not `TEXT`: `TEXT` wants `width`/`styleValue` and is
-    // used as a cell inside `FORM_LIST`, whereas our display-text is authored prose in a section.
+    // `TYPOGRAPHY` is the static-text node, not `TEXT`: `TEXT` is used as a cell inside
+    // `FORM_LIST` (its `width` is an antd table-column width, and `styleValue` turns out to have no
+    // reader at all), whereas our display-text is authored prose sitting in a section.
     case "display-text":
       return map("TYPOGRAPHY");
 
-    // ── Choice controls — all inherit the empty-options warning ──────────────────────────────
+    // ── Choice controls ──────────────────────────────────────────────────────────────────────
+    // Options themselves are `description.data`, so whether a list travelled is a property of the
+    // NODE, not of its type: `evn-description.ts` warns per field, and only when that field really
+    // has nothing to send. A blanket warning here (which is what P2b shipped) told every author
+    // with a perfectly exportable option list that their choices had been dropped.
     case "select":
       // `tags` beats `multiple`, matching our own renderer's precedence.
-      if (node.tags) return map("SELECT_TAGS", [OPTIONS_NOT_EXPORTED_YET]);
-      return map(node.multiple ? "SELECT_MULTIPLE" : "SELECT", [OPTIONS_NOT_EXPORTED_YET]);
+      if (node.tags) return map("SELECT_TAGS");
+      return map(node.multiple ? "SELECT_MULTIPLE" : "SELECT");
     case "tree-select":
-      return map(node.multiple ? "SELECT_TREE_MULTIPLE" : "SELECT_TREE_ONE", [
-        OPTIONS_NOT_EXPORTED_YET,
-      ]);
+      return map(node.multiple ? "SELECT_TREE_MULTIPLE" : "SELECT_TREE_ONE");
     case "radio":
-      return map("RADIO", [OPTIONS_NOT_EXPORTED_YET]);
+      return map("RADIO");
     case "checkbox-group":
       return map("SELECT_MULTIPLE", [
         "Nhóm ô tích xuất thành ô chọn nhiều (dropdown) — người dùng không còn thấy các ô tích.",
-        OPTIONS_NOT_EXPORTED_YET,
       ]);
     case "cascader":
       return map("SELECT_TREE_ONE", [
         "Chọn theo từng cấp xuất thành cây chọn một nút — người dùng chọn thẳng nút lá.",
-        OPTIONS_NOT_EXPORTED_YET,
       ]);
 
     // ── Dates ───────────────────────────────────────────────────────────────────────────────
@@ -154,12 +141,12 @@ export function mapNodeType(node: FieldNode): TypeMapping {
 
     // ── Files ───────────────────────────────────────────────────────────────────────────────
     // Always the multi-file control, even for `maxCount: 1`: the single-file code exists in the
-    // renderer but no shipped form uses it, and the limit is expressible on the multi one anyway
-    // (as a `description` key, which P2c carries).
+    // renderer but no shipped form uses it, and the limit is expressible on the multi one anyway —
+    // `evn-description.ts` now emits `acceptFile`/`max`. That module also has to emit a
+    // `description` for this code even when there is nothing to say: their `FILE`/`FILE_MULTIPLE`
+    // branches destructure an unguarded helper that returns `undefined` for an empty one.
     case "upload":
-      return map("FILE_MULTIPLE", [
-        "Giới hạn số lượng/định dạng tệp chưa được xuất ở lát cắt này.",
-      ]);
+      return map("FILE_MULTIPLE");
 
     // ── Numeric-ish widgets with no counterpart ─────────────────────────────────────────────
     case "slider":

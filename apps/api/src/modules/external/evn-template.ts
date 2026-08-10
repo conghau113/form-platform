@@ -1,4 +1,5 @@
 import { childrenKeyOf, childrenOf, type FieldNode, type FormSchema } from "@org/form-schema";
+import { defaultValueExported, descriptionOf, lockedStateExported } from "./evn-description.js";
 import { EVN_ROOT_RENDERABLE_CODES } from "./evn-vocabulary.js";
 import { mapNodeType } from "./type-map.js";
 
@@ -70,6 +71,8 @@ export interface EvnFormItem {
   label?: string;
   placeholder?: string;
   required?: boolean;
+  /** Per-control settings; built key by key in `evn-description.ts`, never a passthrough of ours. */
+  description?: Record<string, unknown>;
   children?: EvnFormItem[];
 }
 
@@ -172,7 +175,10 @@ const DROPPED_FEATURE_WARNINGS: readonly { key: DroppedFeature; message: string 
   },
   {
     key: "locked",
-    message: "Trạng thái khoá/chỉ-đọc không xuất đi; người dùng bên nhận vẫn sửa được trường.",
+    // Narrowed since P2c: `disable` now travels for the codes in `DISABLE_AWARE_CODES`, so this
+    // only fires for the ones left over (radio, the date controls, containers, `readPretty`).
+    message:
+      "Trạng thái khoá/chỉ-đọc của MỘT SỐ trường không xuất đi (ô chọn một trong nhiều, ô ngày, và chế độ chỉ xem); người dùng bên nhận vẫn sửa được các trường đó.",
   },
   {
     key: "asyncValidator",
@@ -180,7 +186,10 @@ const DROPPED_FEATURE_WARNINGS: readonly { key: DroppedFeature; message: string 
   },
   {
     key: "defaultValue",
-    message: "Giá trị mặc định không xuất đi; trường sẽ trống khi mở phiếu.",
+    // Narrowed since P2c: a scalar default on a text field travels as `description.value`. Only
+    // the rest — other controls, and non-scalar defaults — are still lost.
+    message:
+      "Giá trị mặc định của MỘT SỐ trường không xuất đi (ngoài ô chữ, và mọi giá trị không phải chữ/số); những trường đó sẽ trống khi mở phiếu.",
   },
   {
     key: "i18n",
@@ -210,6 +219,7 @@ interface Draft {
   label?: string;
   placeholder?: string;
   required?: true;
+  description?: Record<string, unknown>;
   children?: Draft[];
 }
 
@@ -242,7 +252,7 @@ function convert(
       continue;
     }
 
-    noteDroppedFeatures(node, ctx);
+    noteDroppedFeatures(node, mapping.kind === "map" ? mapping.typeCode : undefined, ctx);
     const kids = childrenOf(node);
     const kidLabel = `${childLabel}.${childrenKeyOf(node.type) ?? "children"}`;
 
@@ -263,6 +273,10 @@ function convert(
     }
 
     pushWarnings(ctx, node, childLabel, mapping.warnings);
+    // Per-control settings and their own losses (empty option lists, the hidden numeric floor).
+    // Routed through the same `pushWarnings` prefix so one array does not carry two styles.
+    const settings = descriptionOf(node, mapping.typeCode);
+    pushWarnings(ctx, node, childLabel, settings.warnings);
     const children =
       kids === null
         ? undefined
@@ -276,6 +290,7 @@ function convert(
     const placeholder = placeholderOf(node);
     if (placeholder !== undefined) item.placeholder = placeholder;
     if (requiredOf(node)) item.required = true;
+    if (settings.description !== undefined) item.description = settings.description;
     // Never `children: []` — no shipped template has one (0/522).
     if (children && children.length > 0) item.children = children;
     out.push(item);
@@ -430,7 +445,16 @@ function requiredOf(node: FieldNode): true | undefined {
   return "required" in node && node.required === true ? true : undefined;
 }
 
-function noteDroppedFeatures(node: FieldNode, ctx: Ctx): void {
+/**
+ * Record what this node carries that the export cannot express.
+ *
+ * `typeCode` is `undefined` for a node that dissolves (`unwrap`), which has no target to carry
+ * anything. Two of these warnings are conditional on it: since P2c, a locked state and a default
+ * value DO travel for some codes, so firing the warning for every node that has one would report a
+ * loss that did not happen. `evn-description.ts` owns both answers — the rule lives next to the
+ * emission it describes rather than being restated here.
+ */
+function noteDroppedFeatures(node: FieldNode, typeCode: string | undefined, ctx: Ctx): void {
   const has = (key: string): boolean => key in node;
   const value = (key: string): unknown => (node as unknown as Record<string, unknown>)[key];
 
@@ -440,13 +464,17 @@ function noteDroppedFeatures(node: FieldNode, ctx: Ctx): void {
     ctx.dropped.add("validations");
   }
   if (value("disabled") === true || value("readOnly") === true || value("readPretty") === true) {
-    ctx.dropped.add("locked");
+    if (typeCode === undefined || !lockedStateExported(node, typeCode)) ctx.dropped.add("locked");
   }
   if (has("asyncValidator") && value("asyncValidator") !== undefined) {
     ctx.dropped.add("asyncValidator");
   }
   // `false` and `0` are real default values, so presence is what counts, not truthiness.
-  if (has("defaultValue") && value("defaultValue") !== undefined) ctx.dropped.add("defaultValue");
+  if (has("defaultValue") && value("defaultValue") !== undefined) {
+    if (typeCode === undefined || !defaultValueExported(node, typeCode)) {
+      ctx.dropped.add("defaultValue");
+    }
+  }
   if (has("i18n") && value("i18n") !== undefined) ctx.dropped.add("i18n");
 }
 

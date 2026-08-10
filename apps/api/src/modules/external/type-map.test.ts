@@ -262,10 +262,14 @@ describe("mapNodeType — variants", () => {
     expect(plain.kind === "map" && plain.warnings).toHaveLength(0);
   });
 
-  it("warns that every choice control will render empty for now", () => {
+  it("leaves the empty-options verdict to the node, not the type", () => {
+    // This used to assert the opposite: every choice control carried a blanket "options are not
+    // exported" warning. Since P2c they are, so the warning belongs to the field that actually has
+    // nothing to send — `evn-description.test.ts` owns that case. Keeping the assertion here as an
+    // inversion stops the blanket version from creeping back in.
     for (const type of ["select", "tree-select", "radio", "checkbox-group", "cascader"] as const) {
       const mapping = mapNodeType(SAMPLES[type]);
-      expect(mapping.kind === "map" && mapping.warnings.join(" ")).toContain("lựa chọn");
+      expect(mapping.kind === "map" && mapping.warnings.join(" ")).not.toContain("lựa chọn");
     }
   });
 

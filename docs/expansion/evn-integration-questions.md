@@ -210,26 +210,49 @@ các mã còn lại là di sản đang được dọn)? Và xin xác nhận bả
 
 ### B4. `description` — khoá nào là **tối thiểu bắt buộc**?
 
-Trên template thật, `description` có **150 khoá riêng biệt** (2077 node có `description`). Dùng nhiều
-nhất: `valueCode` 896 · `styleLabel` 409 · `valueType` 385 · `width` 375 · `isWeb` 333 · `data` 321 ·
-`isApi` 280 · `length` 268 · `styleValue` 232 · `pdf` 171.
+> 🔴 **Bản này đã VIẾT LẠI (2026-08-10) sau khi chúng tôi đo trực tiếp trên renderer tạo phiếu.**
+> Bản trước dựa trên **tần suất khoá trong template**, và tần suất đó là **tổng của bốn renderer khác
+> nhau** (tạo phiếu / xem chi tiết / PDF / workflow) — cùng loại nhầm lẫn với "97 mã `typeCode`" ở B3.
+> Ví dụ `valueCode` 896 lần là: tạo phiếu **1**, xem chi tiết 577, mobile 54, PDF 264.
 
-Lát cắt đầu tiên chúng tôi định cấp:
+Chúng tôi chỉ xuất được cho **renderer tạo phiếu**, nên chỉ những khoá renderer đó **thật sự đọc** mới
+có nghĩa. Đo trên `web-admin/src/features/workOrder/workOrderManager` và `core-service/src`:
 
-- **Có cấp:** `styleLabel`, `styleValue`, `width`, `isWeb` (trình bày) + **`valueCode`, `valueType`**
-  (cơ chế gắn giá trị).
-- **Chưa cấp:** `isApi` + `data{path,method,query,body}` (gọi API), `OnChangeValue.fieldsRelevantReset`,
-  `hiddenWith`, `disableWith`, `fillDataInForm`, `prioritizeCode`, `changeCode`. Lý do: đây là **hành vi
-  động**, chưa có đối ứng một-một trong contract của chúng tôi. Chúng tôi sẽ **liệt kê ra** những khoá
-  không cấp được chứ không im lặng bỏ.
+**Chúng tôi CÓ cấp** (đều đã kiểm là có nơi đọc):
 
-**Câu hỏi:** với tập "có cấp" ở trên, renderer của phía EVN **hiển thị và lấy được dữ liệu** chưa? Hay
-còn khoá nào nữa là bắt buộc, thiếu là hỏng?
+| khoá | áp cho | nơi đọc |
+|---|---|---|
+| `isApi:false` + `data:{data:[…]}` | `SELECT*`, `SELECT_TREE_*`, `SELECT_TAGS`, `RADIO` | `SelectItemHandle.tsx:467`, `TreeSelectItemHandle.tsx:237`, `SelectedTagsItemRender.tsx:234`, `RadioItemHandle.tsx:82` |
+| `disable` | `TEXT_INPUT`, `TEXTAREA`, `NUMBER_INPUT`, `SELECT*`, `SELECT_TREE_*`, `SELECT_TAGS`, `FILE_MULTIPLE` | `InputItemhandle.tsx:32`, `TextareaHandle.tsx:20`, `CheckTyprCodeRenderItem.tsx:309`, `SelectItemHandle.tsx:238`, `TreeSelectItemHandle.tsx:189`, `SelectedTagsItemRender.tsx:101`, `SharedUploadFile.tsx:224` |
+| `min`, `max`, `controls` | `NUMBER_INPUT` | `CheckTyprCodeRenderItem.tsx:305,333` |
+| `autoSize` | `TEXTAREA` | `TextareaHandle.tsx:18` |
+| `acceptFile`, `max` | `FILE_MULTIPLE` | `CheckTyprCodeRenderItem.tsx:557` → `SharedUploadFile.tsx:225` |
+| `value` | `TEXT_INPUT` | `InputItemhandle.tsx:140` (`initialValue`) |
+
+**Chúng tôi KHÔNG cấp, và lý do khác nhau ở ba nhóm:**
+
+1. **Không có nguồn tương ứng bên chúng tôi** — `styleLabel` (chuỗi class Tailwind; phía EVN dùng 5
+   giá trị cố định, phổ biến nhất là chữ **trắng**, chỉ đúng trên nền màu của EVN) · `width` (bề rộng
+   **cột bảng** trong `FORM_LIST`; bên chúng tôi là lưới form 24 cột — khác trục, quy đổi là đoán) ·
+   `size` giới hạn dung lượng tệp · `fixed`, `isAdd`, `checkInfo`, `freeText`, `retchBy`.
+2. **Hành vi động — ngoài phạm vi lát cắt này** — `isApi:true` + `data{path,method,query,body}` ·
+   `OnChangeValue.fieldsRelevantReset` · `fillDataInForm` / `onChangeFillFields` · `hiddenWith` /
+   `disableWith`. (Xem thêm T1: điều kiện ẩn/hiện của chúng tôi cũng không đi qua.)
+3. **Khoá mà renderer tạo phiếu KHÔNG đọc** — `maxLength` (chỗ đọc duy nhất là
+   `TextareaHandle.tsx:19` và nó **gán cứng `10000`**) · `styleValue` · `isWeb` · `valueCode` ·
+   `valueType`. ⚠️ **Đây là chỗ chúng tôi cần phía EVN xác nhận**: chúng tôi chỉ đọc được hai cây
+   `web-admin/src` và `core-service/src`; **app mobile và renderer PDF nằm ngoài tầm đo**. `isWeb`
+   nghĩa đen là "tạo từ web" nên rất có thể **mobile** mới là nơi đọc nó.
+
+**Câu hỏi:**
+1. Với tập "có cấp" ở trên, renderer tạo phiếu **hiển thị và lấy được dữ liệu** chưa?
+2. Nhóm 3 — có nơi nào ngoài hai cây trên đọc `isWeb` / `styleValue` / `valueCode` / `valueType`
+   trên form **tạo phiếu** không? Nếu có, xin chỉ chỗ, chúng tôi bổ sung ngay.
 
 | | |
 |---|---|
-| **Mặc định** | Cấp nhóm trình bày + `valueCode`/`valueType`; khoá khác để trống và liệt kê ra |
-| **Sai thì hỏng gì** | Form render ra nhưng **không lấy được dữ liệu**, hoặc không ẩn/hiện đúng — hỏng âm thầm, khó lần |
+| **Mặc định** | Cấp đúng 6 nhóm khoá trên; mọi khoá khác để trống và **liệt kê ra** (không im lặng bỏ) |
+| **Sai thì hỏng gì** | Form render ra nhưng **không lấy được dữ liệu** — hỏng âm thầm, khó lần |
 
 ---
 
@@ -377,6 +400,115 @@ Nghĩa là **đây là năng lực của EVN mà chúng tôi đang bỏ không**
 
 👉 **Xin dữ liệu:** vài ví dụ `validations` thật đang chạy (nhất là `between` và `lt`/`gt` trỏ tên
 trường), để chúng tôi ánh xạ cho khớp thay vì đoán từ code renderer.
+
+---
+
+## 7. Cập nhật sau khi hiện thực `description` (P2c) — 4 điểm, trong đó **1 lỗi của phía EVN**
+
+### T9. 🔴 Trường tệp không có `description` làm **VỠ màn tạo phiếu** — xin phía EVN vá
+
+Đây là điểm quan trọng nhất trong tài liệu này.
+
+`CheckTyprCodeRenderItem.tsx` có hàm `handleCheckDataInDescription` (dòng 66–110). Toàn thân hàm nằm
+trong `if (_.size(description))` và **không có `return` nào ở ngoài** ⇒ khi `description` vắng (hoặc
+là `{}`) hàm trả về `undefined`.
+
+Mọi nhánh gọi hàm này đều tự vệ bằng `?? {}` — **trừ hai nhánh tệp**:
+
+```ts
+// dòng 538 — case ETypeForm.File
+const { acceptFile, size: sizeFile } = handleCheckDataInDescription(description)
+// dòng 557 — case ETypeForm.FileMutiple
+const { acceptFile, size: sizeFile, max } = handleCheckDataInDescription(description)
+```
+
+⇒ `TypeError: Cannot destructure property 'acceptFile' of 'undefined'` — **hỏng cả màn hình**, không
+chỉ một trường.
+
+**Ảnh hưởng vượt ra ngoài tích hợp của chúng tôi:** bất kỳ ai nạp một `FILE`/`FILE_MULTIPLE` không kèm
+`description` (qua API, qua import, hay soạn tay) đều làm sập màn tạo phiếu.
+
+**Chúng tôi đã tự phòng vệ:** mọi trường tệp chúng tôi xuất ra **luôn** kèm `description` khác rỗng —
+tối thiểu `{"acceptFile": ""}` (chuỗi rỗng vào `accept` = nhận mọi định dạng, `SharedUploadFile.tsx:225`,
+nên không đổi ngữ nghĩa). Nhưng đây là **vá ở phía gửi**, không phải ở phía nhận.
+
+👉 **Đề nghị:** thêm `?? {}` vào hai dòng trên, hoặc cho `handleCheckDataInDescription` một
+`return {}` ở cuối.
+
+### T10. Danh sách lựa chọn tĩnh: **tài liệu của EVN mâu thuẫn với code của EVN**
+
+Chúng tôi gửi lựa chọn tĩnh theo dạng **lồng**:
+
+```jsonc
+"description": { "isApi": false, "data": { "data": [ {"label":"Nam","value":"M"} ] } }
+```
+
+Không phải vì thích, mà vì đó là **dạng duy nhất chạy được ở cả bốn control**:
+
+| control | biểu thức đọc | mảng trần `data:[…]` | dạng lồng `data:{data:[…]}` |
+|---|---|---|---|
+| `SELECT`, `SELECT_MULTIPLE` | `data?.data ?? data` | ✅ | ✅ |
+| `SELECT_TREE_ONE/_MULTIPLE` | `data?.data ?? data` | ✅ | ✅ |
+| `SELECT_TAGS` | `data?.data ?? data` | ✅ | ✅ |
+| **`RADIO`** | `handleCheckDataInDescription(description)?.data?.data` | ❌ **rỗng, im lặng** | ✅ |
+
+Với mảng trần, `RadioItemHandle` lấy `mảng.data` = `undefined` ⇒ radio hiện **không lựa chọn nào**, và
+không báo lỗi ở đâu cả.
+
+⚠️ Trong khi đó **tài liệu và hằng số của phía EVN lại ghi dạng mảng trần**:
+`core-service/src/modules/form/form.constant.ts:60-62` và `templateJSON/COMPONENT_TYPES.md:43`.
+
+👉 **Xin xác nhận dạng nào là chuẩn.** Nếu phía EVN muốn mảng trần, xin sửa `RadioItemHandle.tsx:82`
+trước; chúng tôi đổi theo trong một dòng.
+
+⚠️ Thêm một điểm cần biết: **không template nào trong 32 template đang chạy dùng lựa chọn tĩnh**.
+Cụ thể, riêng trong **8 template tạo phiếu** (thứ chúng tôi xuất ra), cả **136** chỗ có `data` đều là
+`isApi: true`. Nghĩa là nhánh tĩnh **có code nhưng chưa từng chạy thật**. Xin phía EVN thử một biểu mẫu
+có lựa chọn tĩnh trước khi nạp dữ liệu thật.
+
+*(Con số 136 là đếm trên nhóm tạo phiếu, không phải trên cả 32 file — chúng tôi tách phạm vi vì đây
+đúng là chỗ B4 từng nhầm.)*
+
+### T11. Ô số: `min` vắng ⇒ phía EVN **tự chặn dưới ở 1**
+
+`CheckTyprCodeRenderItem.tsx:305` khai `const { controls, max, min = 1, disable } = …`. Do đó một ô số
+không khai `min` **không** là "không giới hạn" mà là "**nhỏ nhất bằng 1**" — người dùng không nhập được
+`0` hay số âm. Cộng với việc bộ kiểm tra của EVN vốn đã từ chối giá trị `0` (xem Phụ lục C), một ô số
+hợp lệ bên chúng tôi có thể trở thành ô **không gửi được** bên EVN.
+
+Thêm nữa, khi có **cả** `min` và `max`, `onChange` (dòng 310–326) đặt giá trị ngoài khoảng về đúng số
+`1` — **không phải về `min`** — nên với `min:5,max:10` thì gõ `12` sẽ ra `1`, thấp hơn cả `min`.
+
+Chúng tôi **không tự bịa** `min` khi tác giả không khai; thay vào đó mỗi trường như vậy sinh một dòng
+cảnh báo trong `warnings` của phản hồi.
+
+👉 **Câu hỏi:** `min = 1` là chủ đích hay là giá trị mặc định sót lại? Nếu là sót, xin đổi thành
+`min = undefined`.
+
+### T12. Hai chỗ chúng tôi **nắn dữ liệu** khi xuất, xin phía EVN biết để khỏi bất ngờ
+
+**a) `readOnly` của chúng tôi gộp vào `disable` của phía EVN — đây là siết chặt hơn.**
+Hợp đồng của chúng tôi có ba mức: `readPretty` (hiện như văn bản thuần) > `readOnly` (không tương tác
+nhưng **không** làm mờ) > `disabled` (làm mờ). Phía EVN chỉ có `disable`, ánh xạ thẳng sang `disabled`
+của antd. Chúng tôi gộp `readOnly` **và** `disabled` thành `disable: true` — trường sẽ **mờ đi** dù tác
+giả chỉ muốn khoá tương tác. `readPretty` thì không có chỗ nào để đặt, nên nó nằm trong danh sách cảnh
+báo "không xuất đi".
+
+**b) `accept` của trường tệp được viết lại thành danh sách phần mở rộng.**
+Bên chúng tôi `accept` là thuộc tính HTML (nhận cả kiểu MIME: `image/*`, `application/pdf`). Bên phía
+EVN, `SharedUploadFile.tsx:73-79` tách theo dấu phẩy, gọi `ext.replace('.','')` (**chỉ dấu chấm đầu
+tiên, không cắt khoảng trắng**) rồi so khớp **tuyệt đối** với phần mở rộng đã hạ chữ thường
+(`fileUtil.ts:6-9,30-34`).
+
+Hệ quả nếu gửi nguyên văn: `image/*` không khớp gì cả · `.PDF` thành `PDF` nên **trượt chính định dạng
+nó khai** · `.pdf, .docx` cho ra `" docx"` (còn dấu cách). Tức là trường tệp **không nhận được tệp nào**.
+
+Vì vậy chúng tôi chỉ gửi các mục dạng `.ext`, hạ chữ thường, và **liệt kê trong `warnings`** những mục
+bị bỏ. Nếu không còn mục nào hợp lệ, chúng tôi gửi `acceptFile: ""` (nhận mọi định dạng) chứ không gửi
+một bộ lọc không khớp gì.
+
+👉 **Câu hỏi:** phía EVN có định hỗ trợ kiểu MIME trong `acceptFile` không? Nếu có, chúng tôi bỏ bước
+nắn này.
 
 ---
 
@@ -532,7 +664,7 @@ Nếu không nhận được trả lời, chúng tôi làm tiếp theo đúng nh
 | B2 | Endpoint B nhận thêm `?formCode=`; thiếu mà có >1 template ⇒ 404 |
 | B3 | Bám 97 `typeCode` đo từ template thật; loại không có đích ⇒ 422 kèm tên trường |
 | B3b | Cặp mã gần trùng ⇒ chọn mã **dùng nhiều nhất**; giữ nguyên `COMPONENT_HORIZONAL` dù sai chính tả |
-| B4 | `description` chỉ gồm `styleLabel`/`styleValue`/`width`/`isWeb` + `valueCode`/`valueType` |
+| ~~B4~~ | ~~`description` chỉ gồm `styleLabel`/`styleValue`/`width`/`isWeb` + `valueCode`/`valueType`~~ → **VIẾT LẠI (P2c)**: bảng cũ dựng trên tần suất **cộng gộp bốn renderer**; 4/6 khoá đó renderer tạo phiếu **không đọc**. Nay cấp: lựa chọn tĩnh (`isApi:false`+`data{data}`), `disable`, `min`/`max`/`controls`, `autoSize`, `acceptFile`/`max`, `value` — xem B4 |
 | A (phụ lục) | `password` → `TEXT_INPUT` **nhưng** nếu phía EVN không có mã che ký tự thì chuyển sang **từ chối xuất**, không map thầm |
 | X1–X3, D1–D7 | Lấy **source** làm chuẩn, không lấy tài liệu. Cụ thể: `PCT_A_WORKING` → `PCT_S_WORKING`; mã vai là **`R_NA`**; hàng `PCT_A_CANCEL` từ `PCT_S_WORKING` (đang bị comment) coi như **không tồn tại** |
 | ~~Q1~~ | ~~Xuất cả `code` và `itemCode`, cùng giá trị~~ → **BỎ (P2b)**: `itemCode` không có trong `CreateFormItemDto` và **không có cột** trên `FormItem` — nó do `forms.service.ts` sinh ra lúc ĐỌC. Gửi đi chỉ là khoá thừa bị `save()` bỏ im lặng. Chúng tôi **chỉ gửi `code`** |
