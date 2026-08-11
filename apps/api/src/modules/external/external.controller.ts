@@ -1,7 +1,10 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from "@nestjs/common";
 import { Public } from "../../auth/public.decorator.js";
 import { ApiKeyGuard, type ExternalCaller } from "./api-key.guard.js";
+import type { CheckTransitionResult } from "./check-transition.js";
 import { CurrentCaller } from "./current-caller.decorator.js";
+// biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
+import { CheckTransitionDto } from "./dto/check-transition.dto.js";
 // biome-ignore lint/style/useImportType: DTO class refs are read at runtime (ValidationPipe + emitDecoratorMetadata).
 import { FormTemplateQueryDto } from "./dto/form-template.query.js";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
@@ -34,5 +37,21 @@ export class ExternalController {
       query.version,
       query.formCode,
     );
+  }
+
+  /**
+   * §12.C — may this action move this ticket, and where to?
+   *
+   * `@HttpCode(200)`: `@Post` answers 201 by default, and this creates nothing — it is a question.
+   *
+   * No `@CurrentCaller()`, unlike the route above, and that is deliberate rather than an omission:
+   * the answer is derived from EVN's own transition table, which is the same for every tenant, so
+   * taking the caller would imply a scoping that does not exist. `ApiKeyGuard` still authenticates
+   * at the class level.
+   */
+  @Post("check-transition")
+  @HttpCode(200)
+  checkTransition(@Body() body: CheckTransitionDto): CheckTransitionResult {
+    return this.service.checkTransition(body);
   }
 }

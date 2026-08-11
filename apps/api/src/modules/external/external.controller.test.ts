@@ -48,6 +48,15 @@ describe("ExternalController wiring", () => {
       expect(classGuards(handler)).toEqual([]);
     }
   });
+
+  it("answers check-transition with 200, not @Post's default 201", () => {
+    // C creates nothing — it answers a question — and the partner's spec shows a judgment body.
+    // Only the live smoke would otherwise notice, and that step needs a database and a running
+    // instance, so it does not run in CI.
+    expect(Reflect.getMetadata("__httpCode__", ExternalController.prototype.checkTransition)).toBe(
+      200,
+    );
+  });
 });
 
 describe("the key does not reach the rest of the API", () => {

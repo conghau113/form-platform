@@ -1,5 +1,6 @@
 import { type ArgumentMetadata, BadRequestException, ValidationPipe } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
+import { CheckTransitionDto } from "./external/dto/check-transition.dto.js";
 import { FormTemplateQueryDto } from "./external/dto/form-template.query.js";
 import { CreateFolderDto } from "./folders/dto/create-folder.dto.js";
 import { UpdateFolderDto } from "./folders/dto/update-folder.dto.js";
@@ -211,6 +212,75 @@ describe("Phase E work-order DTOs", () => {
       pipe.transform(
         { ticketTypeCode: "PCT", formCode: ["CPCT", "CT_PCT_PDF"] },
         as(FormTemplateQueryDto),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("lets check-transition's free-form payloads through the whitelist intact", async () => {
+    // P4b/R12. `whitelist: true` drops any property without a decorator, and EVN's `ticketData`
+    // arrives in a shape we do not model (their reader takes `ticket_items.value.data`). If it were
+    // silently emptied here, every guard reading it would pass vacuously — a fail-open that looks
+    // exactly like a clean run. Nested contents survive because nothing declares `@ValidateNested`
+    // on these two, so the pipe does not recurse into them.
+    const out = (await pipe.transform(
+      {
+        ticketId: 123,
+        ticketTypeCode: "PCT",
+        currentStatusCode: "PCT_S_HANDOVERED",
+        actionCode: "PCT_A_END",
+        executorUserCode: "emp001",
+        ticketData: { PARTICIPANTS_WORKSITE: { data: [{ userCode: "emp002", MARKED: true }] } },
+        information: { listEmployee: [{ userCode: "emp003" }] },
+        // Fields the design sketch carries but P4b decides nothing with: dropped, on purpose.
+        definitionVersion: "sha256:deadbeef",
+        participants: [{ userCode: "emp003", statusCode: "TICKET_EMPLOYEE_CHECKIN" }],
+      },
+      as(CheckTransitionDto),
+    )) as Record<string, unknown>;
+
+    expect(out.ticketData).toEqual({
+      PARTICIPANTS_WORKSITE: { data: [{ userCode: "emp002", MARKED: true }] },
+    });
+    expect(out.information).toEqual({ listEmployee: [{ userCode: "emp003" }] });
+    expect("definitionVersion" in out).toBe(false);
+    expect("participants" in out).toBe(false);
+  });
+
+  it("rejects a check-transition body whose scalars are the wrong shape", async () => {
+    // The four code fields are what the endpoint looks its answer up by, and `ticketId` is what
+    // EVN's own spec sends as a number. Each is one decorator away from accepting anything.
+    const valid = {
+      ticketId: 1,
+      ticketTypeCode: "PCT",
+      currentStatusCode: "PCT_S_WORKING",
+      actionCode: "PCT_A_ALLOW",
+      executorUserCode: "emp001",
+    };
+    const bad: Array<Record<string, unknown>> = [
+      { ticketId: "123" },
+      { ticketTypeCode: 42 },
+      { actionCode: "x".repeat(101) },
+      { executorUserCode: null },
+    ];
+    for (const override of bad) {
+      await expect(
+        pipe.transform({ ...valid, ...override }, as(CheckTransitionDto)),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
+
+  it("validates ticketRoles element by element rather than waving the array through", async () => {
+    await expect(
+      pipe.transform(
+        {
+          ticketId: 1,
+          ticketTypeCode: "PCT",
+          currentStatusCode: "PCT_S_WORKING",
+          actionCode: "PCT_A_ALLOW",
+          executorUserCode: "emp001",
+          ticketRoles: [{ roleCode: "PCT_R_CHO_PHEP", userCode: 42 }],
+        },
+        as(CheckTransitionDto),
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });

@@ -17,6 +17,8 @@ import { FormVersionRepo } from "../../persistence/repositories/form-version.rep
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class reference.
 import { ProjectRepo } from "../../persistence/repositories/project.repo.js";
 import type { ExternalCaller } from "./api-key.guard.js";
+import { type CheckTransitionResult, decideTransition } from "./check-transition.js";
+import type { CheckTransitionDto } from "./dto/check-transition.dto.js";
 import { type EvnFormTemplate, toEvnTemplate } from "./evn-template.js";
 
 /**
@@ -180,6 +182,35 @@ export class ExternalService {
       template: exported.template,
       warnings: exported.warnings,
     };
+  }
+
+  /**
+   * §12.C — the transition verdict (P4b).
+   *
+   * Takes no `caller` and touches no repository, unlike every other method here. The transition
+   * table is EVN's own data, identical for every tenant, so there is nothing to scope and nothing to
+   * read; `ApiKeyGuard` has already established the caller may ask. It is also why nothing is
+   * written to the audit trail: this is called on every action a user considers, and recording each
+   * one would turn an audit of "who read our form templates" into an access log.
+   *
+   * ⚠️ "Touches no repository" is true of this METHOD, not of the request. `ApiKeyGuard` still costs
+   * a database round-trip per call (`api-key.guard.ts`), and the global throttler still counts the
+   * call against 120/60s per IP. Neither belongs in the sentence we send outward about C being
+   * cheap — see the operating note in `docs/expansion/evn-integration-questions.md` §8.
+   *
+   * ⚠️ `undefined`, not `[]`, when the request omits `ticketRoles`. The two mean different things
+   * downstream — `[]` is "we asked, the ticket carries no roles" and resolves a tie-break, while
+   * `undefined` is "we were not told" and refuses to — so collapsing them here would turn a
+   * deliberate non-answer into a silent guess.
+   */
+  checkTransition(dto: CheckTransitionDto): CheckTransitionResult {
+    return decideTransition({
+      ticketTypeCode: dto.ticketTypeCode,
+      currentStatusCode: dto.currentStatusCode,
+      actionCode: dto.actionCode,
+      executorUserCode: dto.executorUserCode,
+      ticketRoles: dto.ticketRoles,
+    });
   }
 
   /**

@@ -17,6 +17,7 @@ import { FormRepo } from "../../persistence/repositories/form.repo.js";
 import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
 import type { ProjectRecord } from "../../persistence/repositories/project.repo.js";
 import { ProjectRepo } from "../../persistence/repositories/project.repo.js";
+import type { CheckTransitionDto } from "./dto/check-transition.dto.js";
 import { FORBIDDEN_OUTPUT_KEYS } from "./evn-template.js";
 import { ExternalService } from "./external.service.js";
 
@@ -741,6 +742,66 @@ describe("audit", () => {
     // flood another tenant's trail with noise.
     await service.getFormTemplate(callerFor("tenant_a"), "NOPE").catch(() => undefined);
     await service.getFormTemplate(callerFor("tenant_b"), "PCT").catch(() => undefined);
+    expect(audit.entries).toEqual([]);
+  });
+});
+
+describe("checkTransition — the seam between the DTO and the decision (P4b)", () => {
+  const dto = (over: Partial<CheckTransitionDto> = {}): CheckTransitionDto =>
+    ({
+      ticketId: 123,
+      ticketTypeCode: "PCT",
+      currentStatusCode: "PCT_S_WORKING",
+      actionCode: "PCT_A_ALLOW",
+      executorUserCode: "emp001",
+      ...over,
+    }) as CheckTransitionDto;
+
+  it("carries every field the decision needs across", () => {
+    // The mapping is five assignments and nothing type-checks that they are the RIGHT five: swap
+    // `currentStatusCode` for `actionCode` and the compiler is happy. This is the only test that
+    // would notice.
+    expect(service.checkTransition(dto())).toMatchObject({
+      coverage: "TABLE",
+      ambiguousNext: ["PCT_S_ALLOWED_WAITING", "PCT_S_ALLOWED"],
+    });
+    expect(service.checkTransition(dto({ actionCode: "PCT_A_WORKING" })).coverage).toBe(
+      "TABLE_INCOMPLETE",
+    );
+  });
+
+  it("passes an ABSENT ticketRoles through as absent, never as an empty list", () => {
+    // The two are different answers, and the difference is a refusal. `[]` says "we asked: nobody
+    // holds a role on this ticket", so the executor holds none either and C reports what EVN's gate
+    // would — `allowed: false`. Absent says "we were not told", which must never harden into a
+    // refusal. A `dto.ticketRoles ?? []` in the mapping would turn every request EVN sends today —
+    // their §12.C body carries no roles at all — into a wrongful rejection, with every test on the
+    // pure function still green.
+    const untold = service.checkTransition(dto());
+    expect(untold.allowed).toBe(true);
+    expect(untold.ambiguousNext).toHaveLength(2);
+
+    const noRolesOnTicket = service.checkTransition(dto({ ticketRoles: [] }));
+    expect(noRolesOnTicket.allowed).toBe(false);
+  });
+
+  it("derives the executor's own roles, not every role on the ticket", () => {
+    const refused = service.checkTransition(
+      dto({
+        ticketRoles: [
+          { roleCode: "PCT_R_CHO_PHEP", userCode: "someone-else" },
+          { roleCode: "PCT_R_NHAN_VIEN", userCode: "emp001" },
+        ],
+      }),
+    );
+    expect(refused.allowed).toBe(false);
+  });
+
+  it("touches no repository and writes no audit entry", () => {
+    // Called on every action a user considers, so an entry per call would turn "who read our form
+    // templates" into an access log. Asserted rather than assumed, because adding an `audit.record`
+    // here would look like consistency with the method above it.
+    service.checkTransition(dto());
     expect(audit.entries).toEqual([]);
   });
 });

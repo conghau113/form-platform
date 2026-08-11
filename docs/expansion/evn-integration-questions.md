@@ -9,9 +9,12 @@ và source `core-service/src` + `core-service/public/files/templateJSON` (dướ
 > 1. Repo có **hai** file cùng tên `ticket.constant.ts`. Chúng tôi luôn ghi đường dẫn đầy đủ:
 >    `src/shared/common/constant/ticket.constant.ts` (chứa các bảng `ROLE_STATUS_ACTION_*`) và
 >    `src/modules/ticket/ticket.constant.ts` (chứa `ACTION_CHECK_ROLE_PCT`).
-> 2. Trong tài liệu, các mục `### 11.1`–`### 11.7` **nằm bên dưới** tiêu đề `## 12` (dòng 1368), và có
->    **hai** tiêu đề `## 12`. Chúng tôi gọi theo nội dung (*"§12.B"* = phần *"Lấy form template động"*,
->    *"§12.C"* = *"Kiểm tra điều kiện chuyển bước"*), và **mọi dẫn chứng đều kèm số dòng** để tra cho chắc.
+> 2. Trong tài liệu, phần đánh số **lặp lại** *(sửa 2026-08-12 — mô tả trước đây của chúng tôi ở mục
+>    này không chính xác)*: có **hai** tiêu đề `## 12` (dòng **1368** và **1480**), và bên dưới
+>    `## 12` (1368) lại xuất hiện `### 11.1` (dòng **1370**) và `### 11.2` (dòng **1464**) — **trùng
+>    số** với `### 11.1`–`### 11.7` thật của §11 (dòng 764–1345). Vì không có mục nào đánh `### 12.x`,
+>    chúng tôi gọi theo **nội dung**: *"§12.B"* = phần *"Lấy form template động"*, *"§12.C"* =
+>    *"Kiểm tra điều kiện chuyển bước"* (dòng 1433). **Mọi dẫn chứng đều kèm số dòng** để tra cho chắc.
 
 ---
 
@@ -23,7 +26,7 @@ Chúng tôi đang hiện thực ba endpoint mà §12 mô tả:
 |---|---|---|
 | A | `GET /external/workflow-definition` | chưa làm — xin ý kiến, xem **Q7** |
 | B | `GET /external/form-template` | đã chạy được bản đầu, **hợp đồng còn tạm** vì các câu B1–B4 dưới đây |
-| C | `POST /external/check-transition` | chưa làm — bị chặn bởi **B1** |
+| C | `POST /external/check-transition` | **đã chạy được** (P4b) — nhưng **B1 vẫn chặn** phần `nextStatus` của 3 action then chốt; xem **§8** |
 
 **Trước khi hỏi, chúng tôi đã đọc source để tự trả lời.** Nhiều chỗ trong tài liệu mâu thuẫn với code
 thật; chúng tôi đã tự phân giải theo source và liệt kê ở **§1** — phần đó chỉ cần phía EVN xác nhận
@@ -541,6 +544,110 @@ một bộ lọc không khớp gì.
 
 👉 **Câu hỏi:** phía EVN có định hỗ trợ kiểu MIME trong `acceptFile` không? Nếu có, chúng tôi bỏ bước
 nắn này.
+
+---
+
+## 8. Cập nhật sau khi hiện thực endpoint C (P4a/P4b) — 6 điểm, trong đó **2 lỗi của phía EVN**
+
+Endpoint C `POST /external/check-transition` **đã chạy**. Nó trả `allowed`, `nextStatus`,
+`ambiguousNext`, `coverage`, `message` — và `outOfScopeGuards` **trừ khi `coverage` là `NO_TABLE`**
+(xem T17). Dưới đây là những gì chúng tôi phát hiện khi dựng nó, và những gì vẫn còn chặn.
+
+### T13. 🔴 Chúng tôi **dựng lại** bảng `action_role_status` từ source của phía EVN — xin xác nhận
+
+Chúng tôi đã **không** chờ export nữa (câu Q8 cũ). `initActionRoleStatus()`
+(`ticket-action.service.ts:230`) `clear()` rồi dựng lại toàn bộ bảng từ hằng số **cùng repo**, nên
+bảng dựng lại được. Kết quả: **307 hàng PCT** từ **hai** nguồn —
+`ROLE_STATUS_ACTION_PCT` (**34 hàng khai báo**) và vòng lặp `ticket-action.service.ts:245-471`
+(**273 hàng nữa**, tức **89%**). Hai chuyển trạng thái thật `PCT_A_HALT`→`PCT_S_HALT` và
+`PCT_A_POSTPONE`→`PCT_S_POSTPONE` **chỉ có ở phần vòng lặp**.
+
+👉 **Xin xác nhận con số 307 khớp bảng đang chạy ở môi trường của phía EVN.** Nếu lệch, gần như chắc
+chắn là do một trong hai điểm T14/T15 bên dưới.
+
+### T14. 🔴 `initActionRoleStatus` **nuốt lỗi giữa chừng** ⇒ bảng thật có thể dở dang mà không ai biết
+
+Hàm bọc toàn bộ vòng seed trong `try { … } catch (error) { return error }`
+(`ticket-action.service.ts:231, 758-760`) **dưới `@Transactional()`**. Một lời gọi `save()` hỏng
+giữa chừng sẽ commit một bảng **dựng dở** và **trả lỗi ra như một giá trị trả về bình thường** —
+không log, không ném. Đây là lý do nhiều khả năng nhất khiến số hàng thật lệch khỏi 307.
+
+👉 **Đề nghị:** log và ném lại trong `catch`.
+
+### T15. 🔴 80 hàng `LCT_R_*` đang nằm trong nhánh **PCT** của vòng lặp
+
+Hai nhánh LCT nằm bên trong vòng lặp trạng thái PCT (`ticket-action.service.ts:377-406` và
+`:452-470`), sinh ra **80 hàng** gắn vai `LCT_R_*` vào **trạng thái PCT**. Nhìn giống lỗi copy-paste.
+Chúng tôi **loại chúng ra** khỏi bảng PCT của mình.
+
+👉 **Xin xác nhận đây là lỗi**, để chúng tôi khỏi phải mô phỏng theo.
+
+### T16. Danh sách guard mà endpoint C **không** phán — và **hai** bề mặt guard, không phải một
+
+`allowed: true` của chúng tôi nghĩa là *"không guard nào TRONG PHẠM VI C bị vi phạm"*, **không** phải
+*"được phép tuyệt đối"*. Vì vậy mỗi phản hồi **có `coverage` khác `NO_TABLE`** đều kèm
+`outOfScopeGuards`.
+
+Khi dựng danh sách đó chúng tôi thấy phía EVN có **hai** bề mặt guard, và ban đầu chúng tôi chỉ thấy
+một:
+
+| Bề mặt | Ở đâu | Bản chất |
+|---|---|---|
+| **Tiền-kiểm** | `getActionForUserByTicketId` (`ticket-action.service.ts:781-1069`) — **31** chỗ `addAction = false` | quyết định user được **mời** làm gì |
+| **Đường ghi** | `updateStatus` (`ticket.service.ts:4731+`) | ném `BadRequestException` và từ chối |
+
+Endpoint C là **tiền-kiểm**, nên bề mặt thứ nhất mới là thứ nó thay thế. Một vài guard trong đó
+**không request per-phiếu nào chở nổi dữ liệu** — ví dụ `getEmployeeCheckinByUserCode` truy vấn
+`ticket_employees` **xuyên các phiếu khác** (vị từ `te.ticket_id <> :ticketId`,
+`ticket-action.service.ts:1242`). Những guard đó **vĩnh viễn** thuộc phía EVN.
+
+👉 **Không cần trả lời**, nhưng xin biết: `outOfScopeGuards` sẽ **dài** (21 action PCT có guard).
+Đó là số đo, không phải chúng tôi thận trọng quá mức.
+
+### T17. ⚠️ Vẫn chặn: **B1**, và một hệ quả mới của nó
+
+Ba action `PCT_A_ALLOW` / `PCT_A_HANDOVER` / `PCT_A_END` vẫn có **2 hàng cùng khoá 3 cột**. Thiếu
+`ticketRoles[]`, C trả `nextStatus: null` + `ambiguousNext: [...]` và **tuyệt đối không đoán**.
+
+**Hệ quả mới, quan trọng hơn câu hỏi gốc:** tập vai gửi lên **phải là tập CHƯA lọc `active`**. Cổng
+thật khi thực hiện action là `checkPermisstionToAction`
+(`ticket.service.ts:8059-8089`, gọi từ `updateStatus:4737`) — nó left-join `ticket_role_values`
+**không có** vị từ `active` (`:8064`). Chỉ bản **liệt kê** `getActionStatusNext` mới lọc
+(`ticket-action.service.ts:2587`). Gửi nhầm tập con `active` thì C sẽ trả `allowed: false` cho
+action mà phía EVN **cho qua**.
+
+👉 **Xin bổ sung `ticketRoles: [{roleCode, userCode}]` vào request §12.C, KHÔNG lọc `active`.**
+
+**Endpoint C có đúng MỘT trường hợp trả `allowed: false`:** khi request **có** `ticketRoles` và bảng
+**có** hàng cho `(trạng thái, action)` nhưng **không hàng nào** thuộc vai mà người thực hiện đang
+giữ trên phiếu — đúng chỗ `checkPermisstionToAction` trả `isPermission = false`. Mọi trường hợp
+"chúng tôi không tra được" đều trả **`allowed: true`** kèm `coverage`, **không bao giờ** `false`.
+⇒ Chừng nào `ticketRoles` chưa được bổ sung, **C không thể từ chối bất cứ điều gì** — nó chỉ tư vấn.
+
+**Một điểm về `ticketTypeCode`:** ở endpoint **B**, `ticketTypeCode` là **từ vựng của phía EVN** và
+được phân giải theo *binding* của từng tenant. Ở endpoint **C** thì không: C trả lời từ **bảng PCT
+của chính phía EVN**, **bất kể** tenant có binding hay không. Gửi một `ticketTypeCode` khác `PCT` sẽ
+nhận `coverage: "NO_TABLE"` — không phải lỗi, mà là "chúng tôi không giữ bảng cho loại phiếu này".
+Trong đúng trường hợp đó, phản hồi **không có** trường `outOfScopeGuards` — cùng một luật với
+`requiredFields` ở T18: một danh sách rỗng sẽ đọc thành *"đã soát, không còn gì phải kiểm"*, trong
+khi với loại phiếu đó chúng tôi **chưa đo gì cả**.
+
+### T18. Hai điểm hợp đồng chúng tôi **cố ý** làm khác tài liệu
+
+1. **`requiredFields` chưa có trong phản hồi.** Tài liệu (`:1459`) có trường này; chúng tôi **bỏ
+   trống hẳn trường** thay vì trả `[]`, vì `[]` đọc thành *"đã kiểm, không thiếu gì"* trong khi
+   chúng tôi **chưa kiểm** — và phía EVN thì thật sự có chạy `checkContentFinished`
+   (`ticket.service.ts:4750`). Trong lúc chờ, `CONTENT_FINISHED` nằm trong `outOfScopeGuards`.
+   Lát cắt kế tiếp sẽ bổ sung trường này.
+2. **Ví dụ §12.C trong tài liệu sai so với bảng thật** (`PCT_S_CREATED` + `PCT_A_WORKING`). Bảng chỉ
+   có **một** hàng cho `PCT_A_WORKING`, và nó bắt đầu từ `PCT_S_MODERATION`. C trả
+   `coverage: "TABLE_INCOMPLETE"` cho ví dụ đó — **không từ chối**, nhưng cũng không đoán.
+
+⚠️ **Một điều kiện vận hành xin lưu ý trước:** hạn mức của chúng tôi (**mặc định**, chỉnh được bằng
+biến môi trường `THROTTLE_LIMIT`/`THROTTLE_TTL`) là **120 request /
+60 giây / IP**. Nếu phía EVN gọi C **mỗi lần người dùng bấm một action** từ một IP egress chung thì
+sẽ chạm trần. Chúng tôi đang xử lý (đổi sang hạn mức theo khoá API, câu **Q9**) — xin đừng bật C ở
+tần suất đó trước khi việc này xong.
 
 ---
 
