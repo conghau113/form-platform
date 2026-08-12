@@ -804,4 +804,46 @@ describe("checkTransition — the seam between the DTO and the decision (P4b)", 
     service.checkTransition(dto());
     expect(audit.entries).toEqual([]);
   });
+
+  it("carries ticketData across, so the content guard is actually evaluated (P4c)", () => {
+    // The same "five assignments, none of them type-checked" problem as above: dropping this one
+    // line leaves every test on the pure function green while the endpoint silently stops
+    // evaluating content and reports every pair as unverified.
+    const complete = service.checkTransition(
+      dto({
+        actionCode: "PCT_A_END",
+        currentStatusCode: "PCT_S_ALLOWED",
+        ticketData: { PARTICIPANTS_WORKSITE: [{ MARKED: true }] },
+      }),
+    );
+    expect(complete.unverifiedFields).toEqual([]);
+    expect(complete.outOfScopeGuards).not.toContain("CONTENT_FINISHED");
+  });
+
+  it("turns an unreadable ticketData into a 422, not a verdict (P4c)", () => {
+    // The one error this endpoint answers with. It must be an exception rather than a body: a
+    // caller must never be able to read `allowed` off a reply we did not compute.
+    let thrown: unknown;
+    try {
+      service.checkTransition(
+        dto({
+          actionCode: "PCT_A_END",
+          currentStatusCode: "PCT_S_ALLOWED",
+          ticketData: { PARTICIPANTS_WORKSITE: "Trạm 110kV Thủ Đức" },
+        }),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(UnprocessableEntityException);
+    expect((thrown as UnprocessableEntityException).getResponse()).toEqual({
+      statusCode: 422,
+      message: "ticketData cannot be evaluated",
+      errors: [
+        "PARTICIPANTS_WORKSITE: expected an array of rows, or an object with a `data` array",
+      ],
+    });
+    // A failed evaluation is not a read, and this path writes nothing either way.
+    expect(audit.entries).toEqual([]);
+  });
 });

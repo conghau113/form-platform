@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   type CheckTransitionInput,
-  decideTransition,
+  type CheckTransitionResult,
+  decideTransition as decideRaw,
   resolveNextStatus,
 } from "./check-transition.js";
 import { EVN_NO_STATUS_CHANGE_ACTIONS, EVN_PCT_GUARDS } from "./evn-guards.js";
+import { EVN_PCT_REQUIRED_CONTENT } from "./evn-required-fields.js";
 import { EVN_PCT_TRANSITIONS, EVN_STATUS_NA } from "./evn-transitions.js";
 import { lookupTransition } from "./transition-table.js";
 
@@ -19,6 +21,31 @@ function request(over: Partial<CheckTransitionInput>): CheckTransitionInput {
   };
 }
 
+/**
+ * The verdict, insisting there was one.
+ *
+ * P4c gave `decideTransition` a second outcome — "this `ticketData` is unreadable", which the
+ * service turns into a 422 — so it now returns a union. Tests that are about the verdict say so by
+ * going through here; the ones about the refusal use `decideRaw` directly. Throwing rather than
+ * asserting keeps the failure at the line that made the request.
+ */
+function decideTransition(input: CheckTransitionInput): CheckTransitionResult {
+  const decision = decideRaw(input);
+  if (!decision.ok) {
+    throw new Error(`expected a verdict, got unusable: ${JSON.stringify(decision.unusable)}`);
+  }
+  return decision.result;
+}
+
+/** Rows that satisfy every pair of an action, so a test can vary one thing and keep the rest valid. */
+function completeContent(actionCode: string): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const pair of EVN_PCT_REQUIRED_CONTENT[actionCode] ?? []) {
+    data[pair.itemCode] = [{ [pair.mark]: true }];
+  }
+  return data;
+}
+
 describe("decideTransition — the verdict", () => {
   it("answers the table, not EVN's own documented example", () => {
     // Their §12.C sample sends PCT_S_CREATED + PCT_A_WORKING and shows `PCT_S_ALLOWED_WAITING`.
@@ -29,6 +56,10 @@ describe("decideTransition — the verdict", () => {
       ambiguousNext: [],
       coverage: "TABLE",
       outOfScopeGuards: EVN_PCT_GUARDS.PCT_A_WORKING,
+      // `PCT_A_WORKING` carries no content guard, so both lists are empty WITHOUT any `ticketData`
+      // having been sent. That is a real answer, not a default — see the shape test below.
+      requiredFields: [],
+      unverifiedFields: [],
       message: "",
     });
 
@@ -153,13 +184,15 @@ describe("decideTransition — the verdict", () => {
     }
   });
 
-  it("omits requiredFields on EVERY reply shape, not just the one that was measured", () => {
-    // `[]` would read as "checked, nothing missing" — but P4b checks nothing, and EVN really does
-    // run `checkContentFinished` on the way in. Absent forces the question; the guard list answers it.
+  it("carries the content fields on EVERY reply shape except NO_TABLE, and nowhere else", () => {
+    // The rule is one line and deliberately does not mention `ticketData`: the two content fields
+    // are present exactly when `coverage !== "NO_TABLE"`. A field that appears and disappears with
+    // an input unrelated to it is a contract nobody can code against — and the first draft of P4c
+    // had three rules that disagreed about precisely this.
     //
-    // Every branch, because the claim in the docstring and in the handover doc is about the ENDPOINT:
-    // one branch quietly gaining the field would make both of them false while a single-case
-    // assertion stayed green. The key SET is pinned, so an extra member anywhere is red.
+    // Every branch, because the claim in the docstring and in the handover doc is about the
+    // ENDPOINT: one branch quietly losing or gaining a field would make both of them false while a
+    // single-case assertion stayed green. The key SET is pinned, so any drift anywhere is red.
     const shapes: Array<[string, ReturnType<typeof decideTransition>]> = [
       ["resolved", decideTransition(request({}))],
       [
@@ -180,17 +213,61 @@ describe("decideTransition — the verdict", () => {
       ],
       ["incomplete", decideTransition(request({ currentStatusCode: "PCT_S_DRAFT" }))],
       ["no-table", decideTransition(request({ ticketTypeCode: "LCT" }))],
+      // The four P4c branches, which is where the rule is easiest to break.
+      [
+        "content-absent",
+        decideTransition(request({ actionCode: "PCT_A_END", currentStatusCode: "PCT_S_ALLOWED" })),
+      ],
+      [
+        "content-complete",
+        decideTransition(
+          request({
+            actionCode: "PCT_A_END",
+            currentStatusCode: "PCT_S_ALLOWED",
+            ticketData: completeContent("PCT_A_END"),
+          }),
+        ),
+      ],
+      [
+        "content-missing",
+        decideTransition(
+          request({
+            actionCode: "PCT_A_END",
+            currentStatusCode: "PCT_S_ALLOWED",
+            ticketData: { PARTICIPANTS_WORKSITE: [{ MARKED: false }] },
+          }),
+        ),
+      ],
+      // An action with no content guard AND a `ticketData` it has no use for: still `[]`/`[]`.
+      ["no-content-guard", decideTransition(request({ ticketData: { ANYTHING: [] } }))],
     ];
 
     for (const [shape, body] of shapes) {
       const expected =
         shape === "no-table"
           ? ["allowed", "nextStatus", "ambiguousNext", "coverage", "message"]
-          : ["allowed", "nextStatus", "ambiguousNext", "coverage", "outOfScopeGuards", "message"];
+          : [
+              "allowed",
+              "nextStatus",
+              "ambiguousNext",
+              "coverage",
+              "outOfScopeGuards",
+              "requiredFields",
+              "unverifiedFields",
+              "message",
+            ];
       expect({ shape, keys: Object.keys(body).sort() }).toEqual({
         shape,
         keys: [...expected].sort(),
       });
+    }
+
+    // And the same for the serialised body: `undefined` members vanish through JSON, so a field set
+    // to `undefined` rather than omitted would satisfy the check above and still reach the caller
+    // missing. That is the exact failure the P4b review found with `outOfScopeGuards`.
+    for (const [shape, body] of shapes) {
+      const wire = Object.keys(JSON.parse(JSON.stringify(body))).sort();
+      expect({ shape, wire }).toEqual({ shape, wire: Object.keys(body).sort() });
     }
 
     const end = decideTransition(
@@ -229,10 +306,15 @@ describe("decideTransition — the verdict", () => {
     ).toBe("No transition for this action is open to the roles this user holds on the ticket.");
   });
 
-  it("gives the one action that legitimately has no guards an empty list, not a missing one", () => {
+  it("gives an action that legitimately has no guards an empty list, not a missing one", () => {
     // `PCT_A_NHANVIEN_NOT_READY` is measured — it has ten rows in the table — and EVN runs no guard
-    // on it. So `[]` here is a true statement rather than the empty claim `NO_TABLE` would be
-    // making, and it is the only production reply where the distinction shows.
+    // on it. So `[]` here is a true statement, rather than the empty claim `NO_TABLE` would be
+    // making by omitting the field.
+    //
+    // ⚠️ It is no longer the ONLY reply where the distinction shows, which is what this comment said
+    // before P4c. `PCT_A_HALT` and `PCT_A_POSTPONE` joined it when the CRLF stripper fix withdrew
+    // their spurious guard, and the three CONTENT_FINISHED-only actions reach `[]` whenever their
+    // content evaluates clean.
     const body = decideTransition(
       request({ currentStatusCode: "PCT_S_HANDOVERED", actionCode: "PCT_A_NHANVIEN_NOT_READY" }),
     );
@@ -293,7 +375,7 @@ describe("resolveNextStatus — the net for the table drifting", () => {
 describe("the guard table endpoint C reports", () => {
   it("names the cross-ticket check on BOTH actions that run it", () => {
     // The second site sits three levels down inside a `Promise.all(_.map(...))`
-    // (`ticket.service.ts:4956`), which is exactly how it gets missed.
+    // (`ticket.service.ts:5002`), which is exactly how it gets missed.
     expect(EVN_PCT_GUARDS.PCT_A_NHANVIEN_CHECKIN).toContain("EMPLOYEE_CHECKIN_ACROSS_TICKETS");
     expect(EVN_PCT_GUARDS.PCT_A_CHTT_NHANVIEN_CHECKIN).toContain("EMPLOYEE_CHECKIN_ACROSS_TICKETS");
   });
@@ -321,9 +403,18 @@ describe("the guard table endpoint C reports", () => {
 
   it("pins the whole table, so the promise that it only ever shrinks is checkable", () => {
     // Spot checks cannot enforce "this list only shrinks as later slices implement guards" — they
-    // say nothing about the actions they do not name. The whole map is the enforcement: P4c removing
-    // CONTENT_FINISHED must show up here as a deletion, and a guard appearing out of nowhere (a
-    // generator drift, a hand edit) has to be acknowledged rather than absorbed.
+    // say nothing about the actions they do not name. The whole map is the enforcement: a guard
+    // appearing out of nowhere (a generator drift, a hand edit) has to be acknowledged rather than
+    // absorbed. It earned its keep in P4c, which is the only reason the deletion below was noticed.
+    //
+    // ⚠️ `PCT_A_HALT` and `PCT_A_POSTPONE` LOST `CHTT_IS_WORKING` in P4c, and that is a fix, not a
+    // regression. `stripLineComments` in both generators split on `"\n"` and matched `/.*$/`, but
+    // EVN's sources are CRLF — `.` does not match the trailing `\r`, so the pattern matched nothing
+    // and the stripper was a silent no-op. Both actions are COMMENTED OUT of `CHTT_ACTION`
+    // (`ticket.constant.ts:1656-1657`) and were being read as live members. The error was in the
+    // safe direction (a guard we wrongly list costs the caller a redundant check) and it now agrees
+    // with the P4a measurement that these two carry no extra guard: they never enter `updateStatus`
+    // at all, going through `updateStatusHaltTicket`/`updateStatusPostponeTicket` instead.
     expect(EVN_PCT_GUARDS).toEqual({
       PCT_A_ALLOW: ["CONTENT_FINISHED"],
       PCT_A_ALLOW_HANDOVER: ["CONTENT_FINISHED"],
@@ -344,7 +435,6 @@ describe("the guard table endpoint C reports", () => {
         "EMPLOYEE_CHECKOUT_ALL",
       ],
       PCT_A_END_INPUT: ["CHTT_IS_WORKING"],
-      PCT_A_HALT: ["CHTT_IS_WORKING"],
       PCT_A_HANDOVER: ["CHTT_IS_WORKING", "CONTENT_FINISHED"],
       PCT_A_HANDOVER_APPROVED: ["GSATD_IS_WORKING"],
       PCT_A_HANDOVER_INPUT: ["CHTT_IS_WORKING"],
@@ -352,7 +442,6 @@ describe("the guard table endpoint C reports", () => {
       PCT_A_NHANVIEN_CHECKIN: ["EMPLOYEE_CAN_CHECKIN_BY_SELF", "EMPLOYEE_CHECKIN_ACROSS_TICKETS"],
       PCT_A_NHANVIEN_CHECKOUT: ["EMPLOYEE_CAN_CHECKOUT_BY_SELF"],
       PCT_A_NHANVIEN_CONFIRM: ["EMPLOYEE_CAN_CONFIRM"],
-      PCT_A_POSTPONE: ["CHTT_IS_WORKING"],
       PCT_A_UPLOAD: ["TICKET_IS_UPLOAD"],
       PCT_A_WORKING: ["CHTT_IS_WORKING", "CONDITION_TO_WORK"],
     });
@@ -372,7 +461,7 @@ describe("the guard table endpoint C reports", () => {
 describe("drift sensor: the table against EVN's second mechanism", () => {
   it("still agrees that the six no-status-change actions move nothing", () => {
     // Two INDEPENDENT mechanisms: `changeStatus = false` in the action's own branch
-    // (`ticket.service.ts:5191` gates the write) and whatever `status_code_next` the table carries.
+    // (`ticket.service.ts:5237` gates the write) and whatever `status_code_next` the table carries.
     // They agree today by coincidence, not by construction. This reads the committed table directly
     // — not through `decideTransition`, which forces `null` for these actions and would therefore
     // hide the drift this test exists to catch.
@@ -401,5 +490,395 @@ describe("drift sensor: the table against EVN's second mechanism", () => {
       PCT_A_NHANVIEN_CONFIRM: 10,
       PCT_A_NHANVIEN_NOT_READY: 10,
     });
+  });
+});
+
+describe("requiredFields — running EVN's content guard (P4c)", () => {
+  /** `PCT_A_ALLOW` from a status the table resolves, so content is not the only thing under test. */
+  const allow = (over: Partial<CheckTransitionInput> = {}) =>
+    request({ actionCode: "PCT_A_ALLOW", currentStatusCode: "PCT_S_WORKING", ...over });
+
+  it("evaluates nothing, and says so, when the request carried no ticketData", () => {
+    // The heart of the slice. EVN reads these items from `ticket_items` in their own database; we
+    // read them from a request field. "The caller did not tell us" must never be rendered as "we
+    // checked and it is fine", so every pair is named as unverified AND the guard stays listed.
+    const body = decideTransition(allow());
+    expect(body.requiredFields).toEqual([]);
+    expect(body.unverifiedFields).toEqual(
+      EVN_PCT_REQUIRED_CONTENT.PCT_A_ALLOW?.map((pair) => ({
+        ...pair,
+        reason: "TICKET_DATA_ABSENT",
+      })),
+    );
+    expect(body.outOfScopeGuards).toContain("CONTENT_FINISHED");
+    expect(body.allowed).toBe(true);
+  });
+
+  it("treats an explicit null ticketData exactly like an absent one", () => {
+    // Reachable, not hypothetical: `@IsOptional()` skips validation for `null` as well as
+    // `undefined`, and `typeof null === "object"` would let a plain truthiness check through into
+    // the evaluation path. Whoever writes `!ticketData` and whoever writes `=== undefined` get
+    // different endpoints, so the choice is pinned rather than left to taste.
+    expect(decideTransition(allow({ ticketData: null }))).toEqual(decideTransition(allow()));
+  });
+
+  it("evaluates the items it was given and flags only the ones it was not", () => {
+    // The case that made 422-on-missing-key the wrong rule: a PCT ticket that never filled in item
+    // 2.5 is a VALID ticket and EVN passes it (no row -> zero iterations). Refusing here would turn
+    // their fail-open into our hard error on the happy path.
+    const body = decideTransition(
+      allow({
+        ticketData: {
+          POWER_RUN_OUT_DEVICE: [{ MARKED: true }],
+          LOCATION_TO_EARTHING: [{ MARKED: true }],
+          BARRIER_SIGNAGE: [{ MARKED: true }],
+          // WARNING_INSTRUCTIONS deliberately absent.
+        },
+      }),
+    );
+    expect(body.allowed).toBe(true);
+    expect(body.requiredFields).toEqual([]);
+    expect(body.unverifiedFields).toEqual([
+      { itemCode: "WARNING_INSTRUCTIONS", mark: "MARKED", type: "OBJ", reason: "ITEM_ABSENT" },
+    ]);
+    // Still outstanding, because one pair went unevaluated.
+    expect(body.outOfScopeGuards).toContain("CONTENT_FINISHED");
+  });
+
+  it("drops CONTENT_FINISHED only once every pair was actually evaluated", () => {
+    const body = decideTransition(allow({ ticketData: completeContent("PCT_A_ALLOW") }));
+    expect(body.allowed).toBe(true);
+    expect(body.requiredFields).toEqual([]);
+    expect(body.unverifiedFields).toEqual([]);
+    expect(body.outOfScopeGuards).not.toContain("CONTENT_FINISHED");
+  });
+
+  it("keeps the OTHER guards when it drops CONTENT_FINISHED", () => {
+    // A weaker version of this test would use an action whose only guard is CONTENT_FINISHED, and
+    // would then pass just as well if the filter removed everything. `PCT_A_END` carries four.
+    const body = decideTransition(
+      request({
+        actionCode: "PCT_A_END",
+        currentStatusCode: "PCT_S_ALLOWED",
+        ticketData: completeContent("PCT_A_END"),
+      }),
+    );
+    expect(body.outOfScopeGuards).toEqual([
+      "CHTT_IS_WORKING",
+      "EMPLOYEE_ATTENDANCE_NOT_OUT",
+      "EMPLOYEE_CHECKOUT_ALL",
+    ]);
+  });
+
+  it("refuses when a row is missing its mark, and names the pair", () => {
+    const body = decideTransition(
+      allow({
+        ticketData: {
+          ...completeContent("PCT_A_ALLOW"),
+          BARRIER_SIGNAGE: [{ MARKED: true }, { MARKED: false }],
+        },
+      }),
+    );
+    expect(body.allowed).toBe(false);
+    expect(body.requiredFields).toEqual([{ itemCode: "BARRIER_SIGNAGE", mark: "MARKED" }]);
+    expect(body.message).toContain("requiredFields");
+    // The transition itself is still reported: "this is where it would go once the content is
+    // complete" is useful, and blanking it would make an incomplete ticket look like an unknown one.
+    expect(body.coverage).toBe("TABLE");
+  });
+
+  it("lets content decide `allowed` in BOTH directions, holding everything else fixed", () => {
+    // Scoped to the content dimension on purpose. `allowed: false` and "requiredFields is non-empty"
+    // are NOT equivalent endpoint-wide — the role-mismatch branch refuses with `requiredFields: []`
+    // — so a test named for a biconditional would claim more than it measures. What it does measure
+    // is that content alone flips the verdict: either half on its own is weak, since a rule that
+    // always refused would satisfy "missing content refuses" and one that never did would satisfy
+    // "complete content allows".
+    for (const [label, ticketData, expectedAllowed] of [
+      ["complete", completeContent("PCT_A_ALLOW"), true],
+      [
+        "incomplete",
+        { ...completeContent("PCT_A_ALLOW"), BARRIER_SIGNAGE: [{ MARKED: false }] },
+        false,
+      ],
+    ] as const) {
+      const body = decideTransition(allow({ ticketData }));
+      expect({ label, allowed: body.allowed, blocked: body.requiredFields?.length !== 0 }).toEqual({
+        label,
+        allowed: expectedAllowed,
+        blocked: !expectedAllowed,
+      });
+    }
+  });
+
+  it("passes an item with no rows, because EVN does", () => {
+    // Their fail-open, reproduced ON PURPOSE. `_.forEach` over `[]` runs zero times, measured
+    // against the lodash in their own repo. Tightening this would make C refuse tickets EVN accepts,
+    // and a false refusal blocks real work. Do not "fix" it without changing their side first.
+    const body = decideTransition(
+      allow({ ticketData: { ...completeContent("PCT_A_ALLOW"), BARRIER_SIGNAGE: [] } }),
+    );
+    expect(body.allowed).toBe(true);
+    expect(body.requiredFields).toEqual([]);
+    expect(body.unverifiedFields).toEqual([]);
+  });
+
+  it("accepts the wrapped `{ data: [...] }` shape identically to the bare array", () => {
+    // EVN assigns `itemTickets[code] = value.data`, so a caller may send either the rows or the
+    // `ticket_items.value` they came out of. Detected by shape; neither is privileged.
+    const wrapped = Object.fromEntries(
+      Object.entries(completeContent("PCT_A_ALLOW")).map(([code, rows]) => [code, { data: rows }]),
+    );
+    expect(decideTransition(allow({ ticketData: wrapped }))).toEqual(
+      decideTransition(allow({ ticketData: completeContent("PCT_A_ALLOW") })),
+    );
+  });
+
+  it("declines to judge a mark spelled as an empty array, instead of refusing the ticket", () => {
+    // The ONE place our evaluator is stricter than EVN's, and it is measured: `jsonLogic.truthy([])`
+    // is false while lodash's `![]` is also false — so EVN PASSES the row and `none` FAILS it. That
+    // direction produces a false refusal, which is worse than an unanswered question, and it is not
+    // fixed by special-casing a verdict (that would be two ways of evaluating one guard).
+    const body = decideTransition(
+      allow({
+        ticketData: { ...completeContent("PCT_A_ALLOW"), BARRIER_SIGNAGE: [{ MARKED: [] }] },
+      }),
+    );
+    expect(body.allowed).toBe(true);
+    expect(body.requiredFields).toEqual([]);
+    expect(body.unverifiedFields).toEqual([
+      {
+        itemCode: "BARRIER_SIGNAGE",
+        mark: "MARKED",
+        type: "OBJ",
+        reason: "TRUTHINESS_DISAGREEMENT",
+      },
+    ]);
+    expect(body.outOfScopeGuards).toContain("CONTENT_FINISHED");
+  });
+
+  it("does not let one undecidable row swallow a refusal the other rows settle", () => {
+    // The bug the first draft had: bailing out on the FIRST disagreeing row threw away the verdict
+    // on every other row. Here the second row is falsy under BOTH rules — EVN definitively refuses —
+    // so answering `allowed: true` because a sibling row was ambiguous would be a fail-open on a
+    // ticket we can prove is incomplete. A disagreement may cost us a PASS we are unsure of, never
+    // a refusal we are sure of.
+    const body = decideTransition(
+      allow({
+        ticketData: {
+          ...completeContent("PCT_A_ALLOW"),
+          BARRIER_SIGNAGE: [{ MARKED: [] }, { MARKED: false }],
+        },
+      }),
+    );
+    expect(body.allowed).toBe(false);
+    expect(body.requiredFields).toEqual([{ itemCode: "BARRIER_SIGNAGE", mark: "MARKED" }]);
+    expect(body.unverifiedFields).toEqual([]);
+  });
+
+  it("keeps `type` off requiredFields and on unverifiedFields", () => {
+    // `type` answers "which branch of EVN's checker is this", which is our business, not the
+    // caller's — they need to know WHICH mark to fill in. It stays on `unverifiedFields`, where
+    // `PAIR_NOT_MODELLED` is unreadable without it. The handover doc documents exactly these keys,
+    // so a stray extra one is a doc that under-describes the payload.
+    const refused = decideTransition(
+      allow({ ticketData: { ...completeContent("PCT_A_ALLOW"), BARRIER_SIGNAGE: [{}] } }),
+    );
+    expect(Object.keys(refused.requiredFields?.[0] ?? {}).sort()).toEqual(["itemCode", "mark"]);
+
+    const unverified = decideTransition(allow());
+    expect(Object.keys(unverified.unverifiedFields?.[0] ?? {}).sort()).toEqual([
+      "itemCode",
+      "mark",
+      "reason",
+      "type",
+    ]);
+  });
+
+  it("never calls a refusal advisory in the same breath", () => {
+    // `TABLE_INCOMPLETE` normally says "the reply is advisory only". Printed next to `allowed:
+    // false` that tells the caller to ignore the refusal they were just handed. The content guard
+    // does not depend on the table, so when it blocks, the advisory half is replaced rather than
+    // appended.
+    const body = decideTransition(
+      request({
+        actionCode: "PCT_A_ALLOW",
+        currentStatusCode: "PCT_S_DRAFT",
+        ticketData: { ...completeContent("PCT_A_ALLOW"), BARRIER_SIGNAGE: [{ MARKED: false }] },
+      }),
+    );
+    expect(body.coverage).toBe("TABLE_INCOMPLETE");
+    expect(body.allowed).toBe(false);
+    expect(body.message).toBe(
+      "1 content requirement(s) are not met; see `requiredFields`. The transition itself could " +
+        "not be looked up, so no next status is offered.",
+    );
+    expect(body.message).not.toContain("advisory");
+  });
+
+  it("reports requiredFields in EVN's declaration order, not sorted", () => {
+    // `PCT_A_HANDOVER` declares C, I, P, L, B. Alphabetical would put BARRIER_SIGNAGE first, so a
+    // stray `.sort()` — the easiest accidental change to make to a list like this — is caught.
+    const body = decideTransition(
+      request({
+        actionCode: "PCT_A_HANDOVER",
+        currentStatusCode: "PCT_S_ALLOWED",
+        ticketData: {
+          ...completeContent("PCT_A_HANDOVER"),
+          CHECKED_INTERGRATED_AND_EARTHING: [{ MARKED: false }],
+          BARRIER_SIGNAGE: [{ MARKED_IMAGE: false }],
+        },
+      }),
+    );
+    expect(body.requiredFields?.map((pair) => pair.itemCode)).toEqual([
+      "CHECKED_INTERGRATED_AND_EARTHING",
+      "BARRIER_SIGNAGE",
+    ]);
+  });
+
+  it("answers [] for an action with no content guard, whatever ticketData says", () => {
+    // Knowable without any data at all: the action references no pairs, so nothing can be missing.
+    for (const ticketData of [undefined, {}, { POWER_RUN_OUT_DEVICE: [{ MARKED: false }] }]) {
+      const body = decideTransition(request({ ticketData }));
+      expect(body.requiredFields).toEqual([]);
+      expect(body.unverifiedFields).toEqual([]);
+      expect(body.outOfScopeGuards).toEqual(EVN_PCT_GUARDS.PCT_A_WORKING);
+    }
+  });
+});
+
+describe("ticketData shapes endpoint C cannot read (P4c)", () => {
+  const allow = (ticketData: Record<string, unknown>) =>
+    decideRaw(
+      request({ actionCode: "PCT_A_ALLOW", currentStatusCode: "PCT_S_WORKING", ticketData }),
+    );
+
+  it("refuses to render a verdict from a shape neither side reads as rows", () => {
+    // Including the flat scalar shape from EVN's OWN §12.C example. It is not accepted and cannot
+    // be: `_.forEach` over a string iterates its CHARACTERS, so `valueItem[mark]` is undefined and
+    // their own guard fails it. There is no reading of it that matches their behaviour, so this is
+    // a 422 with an explanation rather than a guess. The handover doc retracts the promise to
+    // "accept both shapes" on exactly this evidence.
+    for (const value of ["Trạm 110kV Thủ Đức", 42, true, { MARKED: true }, { data: "not-rows" }]) {
+      const decision = allow({ BARRIER_SIGNAGE: value });
+      expect({ value, ok: decision.ok }).toEqual({ value, ok: false });
+    }
+  });
+
+  it("names the item and the expected shape, and leaks nothing the caller sent", () => {
+    const secret = "Trạm 110kV Thủ Đức";
+    const decision = allow({ BARRIER_SIGNAGE: secret });
+    if (decision.ok) throw new Error("expected an unusable payload");
+    expect(decision.unusable).toEqual([
+      {
+        itemCode: "BARRIER_SIGNAGE",
+        reason: "expected an array of rows, or an object with a `data` array",
+      },
+    ]);
+    // A 422 body is the one place an integrator's ticket content could escape into our logs and
+    // their client. It names shapes, never values.
+    expect(JSON.stringify(decision)).not.toContain(secret);
+  });
+
+  it("still answers normally when the unreadable key belongs to a different action", () => {
+    // `PCT_A_ALLOW` does not reference PARTICIPANTS_WORKSITE, so its shape is none of our business.
+    // Scanning all of `ticketData` rather than only the referenced pairs would 422 the happy path.
+    const decision = allow({
+      ...completeContent("PCT_A_ALLOW"),
+      PARTICIPANTS_WORKSITE: "nonsense",
+    });
+    expect(decision.ok).toBe(true);
+  });
+});
+
+describe("evn-required-fields.ts — gates on the COMMITTED data", () => {
+  // ⚠️ Twins of the gates in `measure-evn-required-fields.ts`. That script needs EVN's source, which
+  // CI does not have, so a gate living only there fires only when someone chooses to regenerate.
+  // These run on every push, against the bytes we actually ship.
+
+  it("covers exactly the five actions ACTION_FINISH_CONTENT lists for PCT", () => {
+    expect(Object.keys(EVN_PCT_REQUIRED_CONTENT).sort()).toEqual([
+      "PCT_A_ALLOW",
+      "PCT_A_ALLOW_HANDOVER",
+      "PCT_A_CONFIRM_LOCK",
+      "PCT_A_END",
+      "PCT_A_HANDOVER",
+    ]);
+  });
+
+  it("holds 13 pairs, and the right number per action", () => {
+    // Per-action, not just the total: `PCT_A_HANDOVER` reading 6 is the specific failure to catch —
+    // a sixth pair is COMMENTED OUT at `ticket.constant.ts:965-970` with a business note dropping
+    // the photo requirement for item 2.5, and a comment-blind parser demands a photo EVN does not.
+    // This gate caught exactly that during P4c: the shared `stripLineComments` helper was a no-op
+    // on their CRLF sources.
+    const counts = Object.fromEntries(
+      Object.entries(EVN_PCT_REQUIRED_CONTENT).map(([action, pairs]) => [action, pairs.length]),
+    );
+    expect(counts).toEqual({
+      PCT_A_ALLOW: 4,
+      PCT_A_ALLOW_HANDOVER: 2,
+      PCT_A_CONFIRM_LOCK: 1,
+      PCT_A_END: 1,
+      PCT_A_HANDOVER: 5,
+    });
+    expect(Object.values(EVN_PCT_REQUIRED_CONTENT).flat()).toHaveLength(13);
+  });
+
+  it("is OBJ with a non-empty mark throughout — the only branch the primitive models", () => {
+    // A LIST pair fails in EVN when the list is empty (`ticket.service.ts:5472-5477`) exactly where
+    // `none` passes, and a pair without a mark takes a third branch entirely (`:5487-5493`).
+    for (const pair of Object.values(EVN_PCT_REQUIRED_CONTENT).flat()) {
+      expect({ itemCode: pair.itemCode, type: pair.type, hasMark: pair.mark !== "" }).toEqual({
+        itemCode: pair.itemCode,
+        type: "OBJ",
+        hasMark: true,
+      });
+    }
+  });
+
+  it("holds no item that takes EVN's two-level branch", () => {
+    // `PROCEDURE_OPERATIONAL_TASKS` is checked at `value[].children[][mark]`
+    // (`ticket.service.ts:5462-5470`); the flat primitive would silently check the wrong level.
+    const codes = Object.values(EVN_PCT_REQUIRED_CONTENT)
+      .flat()
+      .map((pair) => pair.itemCode);
+    expect(codes).not.toContain("PROCEDURE_OPERATIONAL_TASKS");
+  });
+
+  it("pins the item and mark codes as literals", () => {
+    // Written out by hand rather than derived from the module: a list built from the file it is
+    // checking is a tautology. These are enum VALUES — `formItemCodeEnum` spells them the same as
+    // its member names today, but `TypeActionFinishContentEnum` does not (`obj = "OBJ"`), so member
+    // and value genuinely do diverge in this table and cannot be assumed equal.
+    const codes = [
+      ...new Set(
+        Object.values(EVN_PCT_REQUIRED_CONTENT)
+          .flat()
+          .flatMap((pair) => [pair.itemCode, pair.mark]),
+      ),
+    ].sort();
+    expect(codes).toEqual([
+      "BARRIER_SIGNAGE",
+      "CHECKED_INTERGRATED_AND_EARTHING",
+      "HANDOVER_POWER_RUN_OUT_DEVICE",
+      "INTERGRATED_AND_EARTHING",
+      "LOCATION_TO_EARTHING",
+      "MARKED",
+      "MARKED_IMAGE",
+      "PARTICIPANTS_WORKSITE",
+      "POWER_RUN_OUT_DEVICE",
+      "WARNING_INSTRUCTIONS",
+    ]);
+  });
+
+  it("stays in step with the actions evn-guards.ts marks CONTENT_FINISHED", () => {
+    // Two generated files, two scripts, one EVN table. Regenerating only one would leave us either
+    // dropping the guard for an action we no longer evaluate, or evaluating one we never listed.
+    const guarded = Object.entries(EVN_PCT_GUARDS)
+      .filter(([, guards]) => guards.includes("CONTENT_FINISHED"))
+      .map(([action]) => action)
+      .sort();
+    expect(guarded).toEqual(Object.keys(EVN_PCT_REQUIRED_CONTENT).sort());
   });
 });

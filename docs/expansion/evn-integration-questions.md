@@ -26,7 +26,7 @@ Chúng tôi đang hiện thực ba endpoint mà §12 mô tả:
 |---|---|---|
 | A | `GET /external/workflow-definition` | chưa làm — xin ý kiến, xem **Q7** |
 | B | `GET /external/form-template` | đã chạy được bản đầu, **hợp đồng còn tạm** vì các câu B1–B4 dưới đây |
-| C | `POST /external/check-transition` | **đã chạy được** (P4b) — nhưng **B1 vẫn chặn** phần `nextStatus` của 3 action then chốt; xem **§8** |
+| C | `POST /external/check-transition` | **đã chạy được** (P4b) và **đã chấm được `requiredFields`** (P4c, xem **T19**) — nhưng **B1 vẫn chặn** phần `nextStatus` của 3 action then chốt; xem **§8** |
 
 **Trước khi hỏi, chúng tôi đã đọc source để tự trả lời.** Nhiều chỗ trong tài liệu mâu thuẫn với code
 thật; chúng tôi đã tự phân giải theo source và liệt kê ở **§1** — phần đó chỉ cần phía EVN xác nhận
@@ -91,12 +91,14 @@ bảng PCT thẳng từ `ticket.constant.ts` thay vì chờ export DB.
 ### 1.3. `PCT_S_MODERATION` không đến từ bảng chuyển trạng thái
 
 Chúng tôi thấy trạng thái này được **ghi thẳng** bằng `tickets.update` trong luồng điều phối
-(`ticket.service.ts:14363-14366`, `:14740-14743`, `:14790-14793`), **không** qua `action_role_status`.
+(`ticket.service.ts:14409-14412`, `:14740-14743`, `:14790-14793`), **không** qua `action_role_status`.
 
 > **Xin xác nhận (X3):** đúng chứ? Và **còn trạng thái nào khác** cũng được ghi thẳng kiểu này không?
 > Chúng tôi cần biết để endpoint C **không** trả `allowed: false` oan cho những phiếu đi đường đó.
-> **Mặc định:** trạng thái/action nào tra không ra trong bảng ⇒ trả `allowed: true` + liệt kê vào
-> `outOfScopeGuards`, **tuyệt đối không** trả `false`.
+> **Mặc định:** trạng thái/action nào tra không ra **trong bảng** ⇒ trả `allowed: true` + liệt kê
+> vào `outOfScopeGuards`, **không** trả `false`. ⚠️ **Sửa ở P4c:** câu này chỉ nói về việc *tra
+> bảng*. Guard nội dung (`requiredFields`, **T19**) là câu hỏi độc lập với bảng và **có** trả
+> `allowed: false` — kể cả khi `coverage` là `TABLE_INCOMPLETE`.
 
 ---
 
@@ -123,9 +125,9 @@ bảng có **hai hàng cùng khoá, khác trạng thái sau**:
 Chọn hàng nào được quyết bởi `ACTION_CHECK_ROLE_PCT`
 (`src/modules/ticket/ticket.constant.ts:1060-1086`), và phép kiểm là
 `checkRoleCodeExistInTicket(roleCode, ticketId)`
-(`src/modules/ticket/service/ticket-action.service.ts:1659`) — tra `ticket.ticket_role_values` xem
+(`src/modules/ticket/service/ticket-action.service.ts:1669`) — tra `ticket.ticket_role_values` xem
 **trên phiếu đó có ai được phân vai** `PCT_R_LANH_DAO` / `PCT_R_GSATD` hay không. Đường chạy thật nằm ở
-`ticket.service.ts:5198-5225` (nhánh `if (check)` lấy `YES`, `else` lấy `NO`):
+`ticket.service.ts:5244-5271` (nhánh `if (check)` lấy `YES`, `else` lấy `NO`):
 
 ```
 PCT_A_ALLOW    : phiếu CÓ PCT_R_LANH_DAO → PCT_S_ALLOWED_WAITING ; KHÔNG → PCT_S_ALLOWED
@@ -265,7 +267,7 @@ có nghĩa. Đo trên `web-admin/src/features/workOrder/workOrderManager` và `c
 |---|---|---|---|
 | **Q1** | **Khoá của item.** Ví dụ §12.B (`:1418`) dùng `code`; serializer của phía EVN lại phát ra `itemCode` (`src/modules/form/service/forms.service.ts:107,218`); còn template JSON thật thì dùng `code` (2705/2709 node, `itemCode` 0/2709). Chúng tôi định **xuất cả hai khoá cùng một giá trị** — được không? | Xuất cả `code` và `itemCode` | Ingest bỏ rơi toàn bộ mã item ⇒ vỡ PK/FK lúc nạp |
 | **Q2** | **`PCT_A_WORKING` chỉ đi từ `PCT_S_MODERATION`** (mục D2). Nghĩa là phiếu **không qua điều phối** thì không cấp được — đây là **chủ đích** hay là thiếu hàng trong bảng? | Theo đúng bảng: chỉ từ `PCT_S_MODERATION` | Nếu là thiếu hàng, chúng tôi sẽ chặn oan mọi phiếu không qua điều phối |
-| **Q3** | **Hình dạng `ticketData` gửi lên endpoint C.** Chúng tôi thấy hai dạng: lồng trong `ticket_items.value.data` (`ticket.service.ts:5398-5406`, dòng gán là `itemTickets[code] = itemTicketDB.value?.data`) và scalar phẳng như ví dụ §12.C (`:1447-1451`). Dạng nào là dạng phía EVN sẽ gửi? | Chấp nhận **cả hai**, tự dò | Điều kiện dạng `{"var":"LIST"}` không resolve được. Với JSONLogic thì "khoá không tồn tại" và "mảng rỗng" cho **cùng một kết quả** ⇒ guard **fail-open** (cho qua nhầm). Chúng tôi đã chặn hai lớp, nhưng biết đúng hình dạng thì an toàn hơn hẳn |
+| **Q3** | **Hình dạng `ticketData` gửi lên endpoint C.** 🔴 **CHÚNG TÔI RÚT LẠI mặc định cũ ("chấp nhận cả hai dạng, tự dò") — xem T19.** Dạng scalar phẳng trong ví dụ §12.C (`:1447-1451`) **không chấm được**, và lý do nằm trong code của chính phía EVN. Câu hỏi rút gọn lại thành: phía EVN gửi **mảng hàng** hay gửi nguyên object `ticket_items.value`? | Nhận **mảng** hoặc `{ "data": [...] }`; dạng khác ⇒ **422** kèm giải thích | Xem **T19b** |
 | **Q4** | **Guard xuyên phiếu.** Có nhóm điều kiện phải tra sang **phiếu khác** — ví dụ `getEmployeeCheckinByUserCode` (`ticket-action.service.ts:1211-1242`) hỏi *"nhân viên này có đang bận ở phiếu khác không"* bằng câu truy vấn có `te.ticket_id <> :ticketId`. Chúng tôi **không có** dữ liệu các phiếu khác, nên hiểu rằng **phía EVN tự giữ** nhóm này, còn endpoint C sẽ liệt kê chúng trong `outOfScopeGuards` để phía EVN biết cái gì **chưa** được kiểm. Đúng chứ? | Trả `outOfScopeGuards` | Phía EVN tưởng C đã kiểm hết ⇒ **bỏ lọt** điều kiện |
 | **Q5** | **Mã cho container.** 10/12 loại container của chúng tôi (tabs, collapse, card, grid, step…) **không có tên định danh**, trong khi `FormItem.code` bên EVN là PK NOT NULL và phải nằm trong `form_item_codes` (ràng buộc #1, `:1466`). Chúng tôi định **sinh mã tất định từ đường dẫn cây** — nhưng mã đó sẽ **không** có trong danh mục. Chấp nhận mã layout ngoài danh mục, hay có cách khác? | Sinh mã tất định, ổn định giữa hai lần xuất | ~~Vỡ FK lúc nạp~~ — **đo lại 2026-08-10: KHÔNG vỡ** (xem T6), mã được tự thêm vào danh mục. Rủi ro thật là `form_item_codes` dài thêm sau mỗi lần nạp lại |
 | **Q6** | **`validations`.** Ví dụ §12.B (`:1425-1427`) có mảng `validations`, và §14 mục 5 nói bên thứ ba có thể gửi thêm. Nhưng **template thật không có trường này** (0/2709 node) — ràng buộc bắt buộc chỉ thể hiện bằng `required: true` (**191** node đặt `true`; 290 node có khai khoá `required`). Vậy có nên gửi `validations` không? Nếu có, `form_item_validations.form_validate_code` là FK tới `form_validations.code` — xin danh sách mã hợp lệ | **Không** gửi `validations`; chỉ gửi `required` | FK không resolve lúc nạp |
@@ -547,11 +549,11 @@ nắn này.
 
 ---
 
-## 8. Cập nhật sau khi hiện thực endpoint C (P4a/P4b) — 6 điểm, trong đó **2 lỗi của phía EVN**
+## 8. Cập nhật sau khi hiện thực endpoint C (P4a/P4b/P4c) — 9 điểm, trong đó **5 lỗi của phía EVN**
 
 Endpoint C `POST /external/check-transition` **đã chạy**. Nó trả `allowed`, `nextStatus`,
-`ambiguousNext`, `coverage`, `message` — và `outOfScopeGuards` **trừ khi `coverage` là `NO_TABLE`**
-(xem T17). Dưới đây là những gì chúng tôi phát hiện khi dựng nó, và những gì vẫn còn chặn.
+`ambiguousNext`, `coverage`, `message` — và `outOfScopeGuards`, `requiredFields`,
+`unverifiedFields` **trừ khi `coverage` là `NO_TABLE`** (xem T17, T19). Dưới đây là những gì chúng tôi phát hiện khi dựng nó, và những gì vẫn còn chặn.
 
 ### T13. 🔴 Chúng tôi **dựng lại** bảng `action_role_status` từ source của phía EVN — xin xác nhận
 
@@ -594,15 +596,21 @@ một:
 | Bề mặt | Ở đâu | Bản chất |
 |---|---|---|
 | **Tiền-kiểm** | `getActionForUserByTicketId` (`ticket-action.service.ts:781-1069`) — **31** chỗ `addAction = false` | quyết định user được **mời** làm gì |
-| **Đường ghi** | `updateStatus` (`ticket.service.ts:4731+`) | ném `BadRequestException` và từ chối |
+| **Đường ghi** | `updateStatus` (`ticket.service.ts:4779+`) | ném `BadRequestException` và từ chối |
 
 Endpoint C là **tiền-kiểm**, nên bề mặt thứ nhất mới là thứ nó thay thế. Một vài guard trong đó
 **không request per-phiếu nào chở nổi dữ liệu** — ví dụ `getEmployeeCheckinByUserCode` truy vấn
 `ticket_employees` **xuyên các phiếu khác** (vị từ `te.ticket_id <> :ticketId`,
 `ticket-action.service.ts:1242`). Những guard đó **vĩnh viễn** thuộc phía EVN.
 
-👉 **Không cần trả lời**, nhưng xin biết: `outOfScopeGuards` sẽ **dài** (21 action PCT có guard).
-Đó là số đo, không phải chúng tôi thận trọng quá mức.
+👉 **Không cần trả lời**, nhưng xin biết: `outOfScopeGuards` sẽ **dài** (**19** action PCT có
+guard). Đó là số đo, không phải chúng tôi thận trọng quá mức.
+
+⚠️ **Con số này là 19 chứ không phải 21 như bản trước của tài liệu.** Chúng tôi đã rút
+`CHTT_IS_WORKING` khỏi `PCT_A_HALT` và `PCT_A_POSTPONE`: hai action đó **bị comment** trong
+`CHTT_ACTION` (`ticket.constant.ts:1656-1657`), còn bộ trích của chúng tôi thì đọc nhầm chúng thành
+thành viên sống. Sai theo **chiều an toàn** (thừa một lượt kiểm), và bản sửa khớp lại số đo P4a rằng
+hai action này **không** đi qua `updateStatus`.
 
 ### T17. ⚠️ Vẫn chặn: **B1**, và một hệ quả mới của nó
 
@@ -611,37 +619,135 @@ Ba action `PCT_A_ALLOW` / `PCT_A_HANDOVER` / `PCT_A_END` vẫn có **2 hàng cù
 
 **Hệ quả mới, quan trọng hơn câu hỏi gốc:** tập vai gửi lên **phải là tập CHƯA lọc `active`**. Cổng
 thật khi thực hiện action là `checkPermisstionToAction`
-(`ticket.service.ts:8059-8089`, gọi từ `updateStatus:4737`) — nó left-join `ticket_role_values`
-**không có** vị từ `active` (`:8064`). Chỉ bản **liệt kê** `getActionStatusNext` mới lọc
+(`ticket.service.ts:8105-8135`, gọi từ `updateStatus:4737`) — nó left-join `ticket_role_values`
+**không có** vị từ `active` (`:8110`). Chỉ bản **liệt kê** `getActionStatusNext` mới lọc
 (`ticket-action.service.ts:2587`). Gửi nhầm tập con `active` thì C sẽ trả `allowed: false` cho
 action mà phía EVN **cho qua**.
 
 👉 **Xin bổ sung `ticketRoles: [{roleCode, userCode}]` vào request §12.C, KHÔNG lọc `active`.**
 
-**Endpoint C có đúng MỘT trường hợp trả `allowed: false`:** khi request **có** `ticketRoles` và bảng
-**có** hàng cho `(trạng thái, action)` nhưng **không hàng nào** thuộc vai mà người thực hiện đang
-giữ trên phiếu — đúng chỗ `checkPermisstionToAction` trả `isPermission = false`. Mọi trường hợp
-"chúng tôi không tra được" đều trả **`allowed: true`** kèm `coverage`, **không bao giờ** `false`.
-⇒ Chừng nào `ticketRoles` chưa được bổ sung, **C không thể từ chối bất cứ điều gì** — nó chỉ tư vấn.
+**Endpoint C có đúng HAI trường hợp trả `allowed: false`** *(mục này đã được **viết lại** ở lát cắt
+P4c — bản trước nói "đúng MỘT trường hợp" và nói thêm rằng chừng nào chưa có `ticketRoles` thì C
+không thể từ chối bất cứ điều gì. **Câu thứ hai nay không còn đúng**, nên chúng tôi sửa thẳng vào
+đây thay vì để nó nằm lại như một ghi chú cũ)*:
+
+1. **Sai vai** — request **có** `ticketRoles` và bảng **có** hàng cho `(trạng thái, action)` nhưng
+   **không hàng nào** thuộc vai mà người thực hiện đang giữ trên phiếu; đúng chỗ
+   `checkPermisstionToAction` trả `isPermission = false`.
+2. **Thiếu nội dung bắt buộc** (mới ở P4c) — request **có** `ticketData`, action nằm trong **5**
+   action mà `ACTION_FINISH_CONTENT` phủ, và có ít nhất một hàng thiếu cờ đánh dấu. Trường hợp này
+   **không cần `ticketRoles`**. Chi tiết ở **T19**.
+
+Mọi trường hợp "chúng tôi không **tra** được" vẫn trả **`allowed: true`** kèm `coverage` — quy tắc
+đó không đổi. Điều đổi là: **"không tra được bảng"** và **"chấm được nội dung và thấy thiếu"** là hai
+câu khác nhau, và cái thứ hai bây giờ C trả lời được.
 
 **Một điểm về `ticketTypeCode`:** ở endpoint **B**, `ticketTypeCode` là **từ vựng của phía EVN** và
 được phân giải theo *binding* của từng tenant. Ở endpoint **C** thì không: C trả lời từ **bảng PCT
 của chính phía EVN**, **bất kể** tenant có binding hay không. Gửi một `ticketTypeCode` khác `PCT` sẽ
 nhận `coverage: "NO_TABLE"` — không phải lỗi, mà là "chúng tôi không giữ bảng cho loại phiếu này".
 Trong đúng trường hợp đó, phản hồi **không có** trường `outOfScopeGuards` — cùng một luật với
-`requiredFields` ở T18: một danh sách rỗng sẽ đọc thành *"đã soát, không còn gì phải kiểm"*, trong
+`requiredFields`/`unverifiedFields` ở T19: một danh sách rỗng sẽ đọc thành *"đã soát, không còn gì
+phải kiểm"*, trong
 khi với loại phiếu đó chúng tôi **chưa đo gì cả**.
 
-### T18. Hai điểm hợp đồng chúng tôi **cố ý** làm khác tài liệu
+### T18. Điểm hợp đồng chúng tôi **cố ý** làm khác tài liệu *(trước là hai; điểm 1 đã đóng ở P4c)*
 
-1. **`requiredFields` chưa có trong phản hồi.** Tài liệu (`:1459`) có trường này; chúng tôi **bỏ
-   trống hẳn trường** thay vì trả `[]`, vì `[]` đọc thành *"đã kiểm, không thiếu gì"* trong khi
-   chúng tôi **chưa kiểm** — và phía EVN thì thật sự có chạy `checkContentFinished`
-   (`ticket.service.ts:4750`). Trong lúc chờ, `CONTENT_FINISHED` nằm trong `outOfScopeGuards`.
-   Lát cắt kế tiếp sẽ bổ sung trường này.
+1. ~~**`requiredFields` chưa có trong phản hồi.**~~ — **ĐÃ CÓ từ lát cắt P4c, xem T19.** Ghi chú cũ:
+   chúng tôi bỏ trống hẳn trường thay vì trả `[]`, vì `[]` đọc thành *"đã kiểm, không thiếu gì"*
+   trong khi chúng tôi chưa kiểm.
 2. **Ví dụ §12.C trong tài liệu sai so với bảng thật** (`PCT_S_CREATED` + `PCT_A_WORKING`). Bảng chỉ
    có **một** hàng cho `PCT_A_WORKING`, và nó bắt đầu từ `PCT_S_MODERATION`. C trả
    `coverage: "TABLE_INCOMPLETE"` cho ví dụ đó — **không từ chối**, nhưng cũng không đoán.
+
+### T19. `requiredFields` — endpoint C **đã chấm được** `checkContentFinished` (P4c)
+
+Chúng tôi trích `ACTION_FINISH_CONTENT` (`ticket.constant.ts:911`) thành dữ liệu — **13 cặp
+`item × mark` trên 5 action PCT** (`PCT_A_ALLOW` 4 · `PCT_A_HANDOVER` 5 · `PCT_A_ALLOW_HANDOVER` 2 ·
+`PCT_A_END` 1 · `PCT_A_CONFIRM_LOCK` 1) — và chấm chúng bằng đúng một điều kiện JSONLogic mô phỏng
+nhánh `type: OBJ` của `checkContentFinished` (`ticket.service.ts:5478-5486`).
+
+**Phản hồi có thêm hai trường** (cả hai **vắng mặt** khi `coverage: "NO_TABLE"`, cùng luật với
+`outOfScopeGuards`):
+
+| Trường | Nghĩa |
+|---|---|
+| `requiredFields: [{itemCode, mark}]` | Cặp **đã chấm** và **thiếu**. Khác rỗng ⇒ `allowed: false` |
+| `unverifiedFields: [{itemCode, mark, type, reason}]` | Cặp **chưa chấm được**, kèm lý do |
+
+`reason` có đúng **bốn** giá trị:
+
+| `reason` | Nghĩa |
+|---|---|
+| `TICKET_DATA_ABSENT` | Request không gửi `ticketData` (hoặc gửi `null`) ⇒ chúng tôi không chấm gì |
+| `ITEM_ABSENT` | Có `ticketData` nhưng không có khoá cho item này |
+| `TRUTHINESS_DISAGREEMENT` | Cờ đánh dấu mang **mảng rỗng** — xem gạch đầu dòng thứ ba bên dưới |
+| `PAIR_NOT_MODELLED` | Cặp không phải `type: OBJ` có `mark` — điều kiện của chúng tôi không mô phỏng nhánh đó, nên chúng tôi không chấm. **Hôm nay không xảy ra** (13/13 cặp đều `OBJ`); nó tồn tại để nếu phía EVN thêm cặp `LIST` thì chúng tôi **im lặng không phán** thay vì phán sai |
+
+🔴 **`CONTENT_FINISHED` chỉ được gỡ khỏi `outOfScopeGuards` khi `unverifiedFields` rỗng.** Còn một
+cặp chưa chấm thì guard vẫn nằm đó — nghĩa là phía EVN vẫn phải tự kiểm.
+
+**Ba điều xin nói thẳng, vì chúng giới hạn giá trị của trường này:**
+
+- **Chúng tôi chấm trên `ticketData` của request, phía EVN chấm trên `ticket_items` trong DB của
+  các anh** (`ticket.service.ts:5437`, `:5452`). Không có gì ràng buộc hai nguồn đó bằng nhau. Nếu
+  payload không phản ánh đúng dữ liệu phiếu thì `requiredFields: []` **không có giá trị gì**.
+- **Thiếu khoá thì chúng tôi KHÔNG từ chối.** Đo được: phía EVN lấy item với `active: true`, không
+  có hàng thì `_.forEach` chạy **0 vòng** ⇒ **cho qua**. Một phiếu PCT không khai mục 2.5 là phiếu
+  hợp lệ. Nên khoá vắng ⇒ vào `unverifiedFields` (`reason: "ITEM_ABSENT"`), **không** 422.
+- **Một chỗ chúng tôi khắt khe hơn các anh, và chúng tôi từ chối đoán:** nếu cờ đánh dấu mang **mảng
+  rỗng**, `_.forEach` của các anh **cho qua** còn JSONLogic của chúng tôi **đánh trượt**. Gặp hàng
+  như thế chúng tôi **giữ nó lại khỏi phép chấm** và chấm những hàng còn lại; nếu phần còn lại vẫn
+  **trượt** thì đó là từ chối chắc chắn (`requiredFields`), chỉ khi phần còn lại **đạt** thì cặp mới
+  vào `unverifiedFields` (`reason: "TRUTHINESS_DISAGREEMENT"`). Nói cách khác: điều không chắc chỉ
+  làm mất một câu "đạt", **không bao giờ** nuốt mất một câu "trượt".
+
+**Hai khác biệt nhỏ nữa, ghi cho đủ:**
+
+- Cờ đánh dấu là **scalar** (`0`, `""`, `false`) nằm thẳng ở giá trị item — tức `ticketData[CODE]`
+  không phải mảng — thì chúng tôi trả **422** (xem T19b) trong khi `_.forEach` của các anh không lặp
+  và **cho qua**. Chiều an toàn, nhưng khác.
+- Một hàng là `null` (`[null]`): `valueItem[mark]` bên các anh **ném `TypeError`**
+  (`ticket.service.ts:5481`) ⇒ HTTP 500; chúng tôi trả `allowed: false`. Chúng tôi **không** mô
+  phỏng lỗi đó.
+
+### T19b. 🔴 Hình dạng `ticketData`: chúng tôi **rút lại** mặc định cũ ở Q3
+
+Trước đây chúng tôi ghi *"chấp nhận cả hai hình dạng, tự dò"*, hiểu là dạng `.data` **và** dạng scalar
+phẳng trong ví dụ §12.C (`:1447-1451`). **Dạng phẳng không nhận được**, và lý do nằm trong code của
+chính phía EVN: `_.forEach("Trạm 110kV Thủ Đức", …)` duyệt **từng ký tự**, nên `valueItem[mark]` là
+`undefined` và `checkContentFinished` của các anh **cũng đánh trượt** nó. Không có cách đọc nào của
+dạng đó khớp với hành vi thật, nên chúng tôi không bịa ra một cách.
+
+Endpoint C nhận: **mảng hàng** `[{...}]`, hoặc object `{ "data": [...] }`. Hình khác ⇒ **422** với
+`errors` nêu **tên item và hình dạng mong đợi** (không bao giờ nêu giá trị các anh gửi).
+
+Đây là lỗi duy nhất phát sinh từ **nội dung** của một request đã hợp lệ và đã xác thực. Endpoint C
+vẫn trả các lỗi thông thường khác của bề mặt: **401** (thiếu/sai khoá API), **400** (thiếu trường bắt
+buộc hoặc sai kiểu, do `ValidationPipe`), **429** (chạm hạn mức — xem ghi chú vận hành ở cuối §8).
+
+⚠️ **Chúng tôi chỉ soi những khoá mà action đang hỏi tham chiếu tới.** `ticketData` có thể chứa item
+khác sai hình dạng mà vẫn được trả lời bình thường — chúng tôi không đọc chúng, nên không phán về
+chúng. Nghĩa là 422 nói *"khoá tôi CẦN đọc thì không đọc được"*, chứ không phải *"payload của các anh
+sạch"*.
+
+👉 **Xin xác nhận phía EVN gửi hình nào**, để chúng tôi bỏ bớt một nhánh dò.
+
+### T20. Ba điểm trong `checkContentFinished` phía EVN nên xem lại
+
+Không chặn việc tích hợp; chúng tôi gặp khi đọc kỹ để mô phỏng.
+
+1. **`changeStatus = false` trong `checkContentFinished` không có tác dụng** (`:5474`, `:5482`,
+   `:5490`). `changeStatus` là **tham số truyền theo giá trị** (`:5421`), chỗ gọi (`:4793`, `:4796`)
+   chỉ dùng `isError`. Hôm nay vô hại vì `isError` đủ dùng, nhưng đoạn code đọc như thể nó có tác dụng.
+2. **`return` bên trong `_.forEach` không thoát vòng lặp** (`:5460`, `:5467`, `:5476`, `:5484`,
+   `:5492` — **năm** chỗ).
+   lodash chỉ dừng khi callback trả về đúng `false`. Kết quả cuối vẫn đúng vì `messErr` được gán
+   **trước** `return`, nhưng hệ quả là **`messErr` chỉ là một chuỗi chung** — phía EVN **không nói
+   được item nào thiếu**. Đó chính là khoảng trống mà `requiredFields` của T19 lấp.
+3. **`checkContentFinished` có hai chỗ gọi** (`:4796` trong `updateStatus`, `:19625` trong
+   `updateDataSync`) và **hai bản sao logic inline** (`:8490+`, `:8723+`) tính cờ `checkDone` cho
+   thông báo. Bốn chỗ đọc cùng một bảng bằng bốn đoạn code — sửa bảng thì phải nhớ cả bốn.
 
 ⚠️ **Một điều kiện vận hành xin lưu ý trước:** hạn mức của chúng tôi (**mặc định**, chỉnh được bằng
 biến môi trường `THROTTLE_LIMIT`/`THROTTLE_TTL`) là **120 request /
@@ -808,11 +914,11 @@ Nếu không nhận được trả lời, chúng tôi làm tiếp theo đúng nh
 | X1–X3, D1–D7 | Lấy **source** làm chuẩn, không lấy tài liệu. Cụ thể: `PCT_A_WORKING` → `PCT_S_WORKING`; mã vai là **`R_NA`**; hàng `PCT_A_CANCEL` từ `PCT_S_WORKING` (đang bị comment) coi như **không tồn tại** |
 | ~~Q1~~ | ~~Xuất cả `code` và `itemCode`, cùng giá trị~~ → **BỎ (P2b)**: `itemCode` không có trong `CreateFormItemDto` và **không có cột** trên `FormItem` — nó do `forms.service.ts` sinh ra lúc ĐỌC. Gửi đi chỉ là khoá thừa bị `save()` bỏ im lặng. Chúng tôi **chỉ gửi `code`** |
 | Q2 | `PCT_A_WORKING` chỉ từ `PCT_S_MODERATION` |
-| Q3 | Chấp nhận cả hai hình dạng `ticketData`, tự dò |
+| Q3 | **(sửa ở P4c)** Nhận `ticketData` dạng **mảng hàng** hoặc `{ "data": [...] }`; dạng scalar phẳng của ví dụ §12.C **không nhận** ⇒ 422 — xem **T19b** |
 | Q4 | Guard xuyên phiếu ⇒ liệt kê trong `outOfScopeGuards`, không tự kiểm |
 | Q5 | Container: sinh mã tất định từ đường dẫn cây |
 | Q6 | Không gửi `validations`; chỉ gửi `required` — **nhưng xem T8**: phía EVN CÓ hỗ trợ, nên đây là năng lực bỏ không chứ không phải hợp đồng thiếu. Đã chuyển thành cảnh báo, sẽ ánh xạ ở lát cắt riêng |
 | Q7 | Nếu A chạy song song với `generateWorkflowForTicket` ⇒ **không làm A** |
 | Q8 | Chừa slot ký số nếu form đã khai; không tự sinh. Thứ tự PDF: việc phía EVN |
 | Q9 | Hạn mức theo khoá API thay vì theo IP |
-| — | Mọi trạng thái/action tra không ra trong bảng ⇒ `allowed: true` + `outOfScopeGuards`, **không bao giờ** `allowed: false` |
+| — | Tra không ra **trong bảng** ⇒ `allowed: true` + `outOfScopeGuards`. **(sửa ở P4c)** Guard **nội dung** là việc khác: thiếu nội dung bắt buộc ⇒ `allowed: false`, xem **T19** |

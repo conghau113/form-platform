@@ -31,8 +31,8 @@ export class TicketRoleDto {
  *    the fail-open this whole surface is shaped to avoid. Their nested contents survive because
  *    nothing here declares `@ValidateNested` on them, so the pipe does not recurse.
  *  - `definitionVersion`, `actionHistory` and `participants` from the design sketch are NOT declared
- *    and therefore never reach the service. That is correct for P4b, which decides none of them —
- *    but P4c/P4d must add them here first rather than assuming they arrived.
+ *    and therefore never reach the service. That is still correct through P4c, which decides none of
+ *    them — but P4d must add them here first rather than assuming they arrived.
  */
 export class CheckTransitionDto {
   /** EVN's ticket id. Echoed nowhere and used for nothing yet; required because their spec sends it
@@ -71,18 +71,27 @@ export class CheckTransitionDto {
   ticketRoles?: TicketRoleDto[];
 
   /**
-   * Ticket item values. Free-form; accepted and preserved whole.
+   * Ticket item values, keyed by item code. Free-form; accepted and preserved whole.
    *
-   * ⚠️ P4b decides nothing from it — `requiredFields` is P4c's. It is accepted now so the request
-   * shape is settled before the guard that reads it exists, and because a field silently stripped
-   * by the pipe is far harder to notice later than one that arrives unused.
+   * Read from P4c onwards: `requiredFields` is decided from it (`required-content.ts`). Each value
+   * must be an array of rows, or the `{ data: [...] }` object those rows came out of — anything else
+   * is a 422, because EVN's own checker cannot read it either.
+   *
+   * ⚠️ Absent and `null` both mean "we were not told" and evaluate nothing. `@IsOptional()` skips
+   * validation for `null` as well as `undefined`, so `null` genuinely arrives here.
    */
   @IsOptional()
   @IsObject()
   @Allow()
-  ticketData?: Record<string, unknown>;
+  ticketData?: Record<string, unknown> | null;
 
-  /** Action payload (attendance lists, videos…). Same story as `ticketData`: P4c reads it. */
+  /**
+   * Action payload (attendance lists, videos…).
+   *
+   * ⚠️ Accepted but STILL UNREAD as of P4c — `checkContentFinished` reads ticket items, not the
+   * action payload, so nothing in this slice consults it. Declared so the pipe does not strip it
+   * silently once a guard needs it (P5/P6 primitives P5/7a/7e).
+   */
   @IsOptional()
   @IsObject()
   @Allow()

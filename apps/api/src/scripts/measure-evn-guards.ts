@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
  * name the ones out of scope.
  *
  * ⚠️ There are TWO guard surfaces and P4b's first draft only found one:
- *  1. The WRITE path, `updateStatus` (`modules/ticket/service/ticket.service.ts:4731+`) — throws
+ *  1. The WRITE path, `updateStatus` (`modules/ticket/service/ticket.service.ts:4779+`) — throws
  *     `BadRequestException` and refuses.
  *  2. The PRE-CHECK path, `getActionForUserByTicketId`
  *     (`modules/ticket/service/ticket-action.service.ts:781-1069`) — 31 `addAction = false` sites
@@ -23,9 +23,9 @@ import { pathToFileURL } from "node:url";
  * ⚠️ Blocks are found by matching braces from a condition that mentions `actionCode`, and each
  * `changeStatus = false` / `addAction = false` line is attributed to the INNERMOST block containing
  * it. Attribution by "which action lists are nearby" is what produced the first draft's wrong
- * citation: `ticket.service.ts:4881` sits in the `PTT_A_GSTT_CONFIRM` branch, not the
+ * citation: `ticket.service.ts:4927` sits in the `PTT_A_GSTT_CONFIRM` branch, not the
  * `PCT_A_NHANVIEN_CONFIRM` one three blocks above it. Two conditions in that chain are written
- * `X == actionCode` rather than `_.includes([…], actionCode)` (`:4834`, `:4929`), so a scanner that
+ * `X == actionCode` rather than `_.includes([…], actionCode)` (`:4880`, `:4975`), so a scanner that
  * only understands the second form silently attributes those lines to the wrong neighbour — and
  * because the neighbours already qualify, the resulting action set still looks right. Two gates
  * follow from that: {@link measure} throws when a site attributes to NO block, and
@@ -33,7 +33,7 @@ import { pathToFileURL } from "node:url";
  * yields a set of the right size with one member swapped.
  *
  * ⚠️ Guard names come from the checker EVN calls, not from prose. Where a name cannot be read off a
- * call — `checkContentFinished` throws `messErr`, a variable (`ticket.service.ts:4752`) — the guard
+ * call — `checkContentFinished` throws `messErr`, a variable (`ticket.service.ts:4798`) — the guard
  * is derived from its action list instead and the i18n key inside the checker is pinned, so a
  * rename over there fails here rather than silently emptying the guard.
  *
@@ -61,7 +61,7 @@ const EXPECTED_CHECKOUT_ALL = 1;
 /**
  * PCT actions whose block throws `ticket.emplIsCheckoutWork`.
  *
- * Two, and the second is easy to miss: `ticket.service.ts:4956` sits three levels down inside a
+ * Two, and the second is easy to miss: `ticket.service.ts:5002` sits three levels down inside a
  * `Promise.all(_.map(...))` in the `PCT_A_CHTT_NHANVIEN_CHECKIN` branch, not at the top of it.
  */
 const EXPECTED_CHECKIN_ACROSS_TICKETS = 2;
@@ -113,9 +113,27 @@ export interface GuardMeasurement {
 
 // ---------------------------------------------------------------------------- parsing primitives
 
+/**
+ * Blank out whole-line `//` comments.
+ *
+ * ⚠️ Splitting on `/\r?\n/` is load-bearing, and matches `measure-evn-transitions.ts:89-94`. EVN's
+ * sources are CRLF; splitting on `"\n"` alone leaves a trailing `\r` on every line, `.` does not
+ * match `\r`, so `/^\s*\/\/.*$/` matched NOTHING in their files and the stripper was a silent no-op.
+ * Found in P4c. Three copies of this helper now exist and all three split the same way — the whole
+ * point of the bug is that a copy which looks right can be inert.
+ *
+ * 🔴 It DID corrupt this script's output. `PCT_A_HALT` and `PCT_A_POSTPONE` are commented out of
+ * `CHTT_ACTION` (`ticket.constant.ts:1656-1657`) and were read as live members, so P4b shipped both
+ * carrying a `CHTT_IS_WORKING` they do not have. Regenerating now removes them. It survived P4b for
+ * the dullest possible reason: nobody regenerated between writing the stripper and committing.
+ *
+ * The error was in the safe direction — a guard we wrongly list costs the caller a redundant check,
+ * one we wrongly drop costs them a missed refusal — and the corrected output agrees with the P4a
+ * measurement that these two actions never enter `updateStatus` at all.
+ */
 function stripLineComments(src: string): string {
   return src
-    .split("\n")
+    .split(/\r?\n/)
     .map((line) => line.replace(/^\s*\/\/.*$/, ""))
     .join("\n");
 }
@@ -328,7 +346,7 @@ export function measure(coreServiceSrc: string): GuardMeasurement {
     }
   }
   // `ticket.dataRequired` needs the narrower check: `checkContentFinished` throws a VARIABLE
-  // (`ticket.service.ts:4752`), so the key is the only thing naming that guard — and it also occurs
+  // (`ticket.service.ts:4798`), so the key is the only thing naming that guard — and it also occurs
   // elsewhere in the file (`:17462`), where a file-wide check would keep passing after the guard
   // itself had been rewritten.
   const contentFinishedFn = sliceMethod(ticketService, "async checkContentFinished(");
@@ -534,6 +552,17 @@ export function renderGuardsModule(m: GuardMeasurement, measuredOn: string): str
  * blocks: \`CHTT_IS_WORKING\` blocks when the answer is yes, \`EMPLOYEE_CAN_CHECKIN_BY_SELF\` blocks
  * when it is no. Read a code as "EVN evaluates this", never as "this must be true". The per-code
  * provenance below says which function it came from.
+ *
+ * ⚠️ AN ACTION MISSING FROM THIS MAP MEANS "we scanned two surfaces and found nothing", NOT "there
+ * is nothing". \`PCT_A_HALT\`, \`PCT_A_POSTPONE\` and \`PCT_A_CANCEL\` bypass \`updateStatus\`
+ * entirely — they go through \`updateStatusHaltTicket\` (\`ticket.service.ts:7605\`) and
+ * \`updateStatusPostponeTicket\` (\`:7695\`, which also serves cancel, \`ticket.controller.ts:242\`),
+ * neither of which this generator reads. P4a read them by hand and found no extra guard, so their
+ * absence here is BELIEVED rather than measured.
+ *
+ * \`PCT_A_CONTINUE_WORK\` also bypasses \`updateStatus\` (\`updateStatusContinueTicket\`, \`:7814\`)
+ * but is NOT in that group: it is a live member of \`CHTT_ACTION\` (\`ticket.constant.ts:1648\`), so
+ * its \`CHTT_IS_WORKING\` comes from the pre-check surface and IS measured.
  */
 export const EVN_PCT_GUARDS: Readonly<Record<string, readonly string[]>> = {
 ${Object.entries(m.guards)
@@ -545,7 +574,7 @@ ${Object.entries(m.guards)
  * PCT actions \`updateStatus\` refuses to change the status for, WHATEVER the transition table says.
  *
  * A second mechanism, independent of the table: \`changeStatus = false\` is set in the action's own
- * branch and gates the only write (\`ticket.service.ts:5191\`). Today the two agree — every row these
+ * branch and gates the only write (\`ticket.service.ts:5237\`). Today the two agree — every row these
  * actions have either omits \`status_code_next\` or restates the status already held — but they agree
  * by coincidence, not by construction, and only one of them is under EVN's data.
  *

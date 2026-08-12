@@ -201,16 +201,30 @@ export class ExternalService {
    * ⚠️ `undefined`, not `[]`, when the request omits `ticketRoles`. The two mean different things
    * downstream — `[]` is "we asked, the ticket carries no roles" and resolves a tie-break, while
    * `undefined` is "we were not told" and refuses to — so collapsing them here would turn a
-   * deliberate non-answer into a silent guess.
+   * deliberate non-answer into a silent guess. The same distinction applies to `ticketData` (P4c),
+   * which is why it is forwarded as-is instead of being defaulted to `{}`.
    */
   checkTransition(dto: CheckTransitionDto): CheckTransitionResult {
-    return decideTransition({
+    const decision = decideTransition({
       ticketTypeCode: dto.ticketTypeCode,
       currentStatusCode: dto.currentStatusCode,
       actionCode: dto.actionCode,
       executorUserCode: dto.executorUserCode,
       ticketRoles: dto.ticketRoles,
+      ticketData: dto.ticketData,
     });
+    if (!decision.ok) {
+      // The one failure on this endpoint, and the only place C answers with an error rather than a
+      // verdict: an item was sent in a shape neither we nor EVN can read as rows. 422 rather than
+      // 400 matches the form-template path above — the request parsed, its contents cannot be acted
+      // on. `errors` names the items and the expected shape, never the value that was sent.
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        message: "ticketData cannot be evaluated",
+        errors: decision.unusable.map((key) => `${key.itemCode}: ${key.reason}`),
+      });
+    }
+    return decision.result;
   }
 
   /**

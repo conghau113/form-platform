@@ -1,12 +1,15 @@
 import "reflect-metadata";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { UnprocessableEntityException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { describe, expect, it } from "vitest";
 import { IS_PUBLIC_KEY } from "../../auth/public.decorator.js";
 import { ProjectsController } from "../projects/projects.controller.js";
 import { ApiKeyGuard } from "./api-key.guard.js";
+import type { CheckTransitionDto } from "./dto/check-transition.dto.js";
 import { ExternalController } from "./external.controller.js";
+import type { ExternalService } from "./external.service.js";
 
 /**
  * These assert *metadata*, not HTTP, and that is deliberate. `apps/api` has no e2e harness, so a
@@ -56,6 +59,23 @@ describe("ExternalController wiring", () => {
     expect(Reflect.getMetadata("__httpCode__", ExternalController.prototype.checkTransition)).toBe(
       200,
     );
+  });
+
+  it("lets the 422 out instead of turning it into a 200 body (P4c)", () => {
+    // ⚠️ `@HttpCode(200)` above applies to the RETURN path only — an exception thrown inside the
+    // handler still carries its own status. Worth pinning precisely because the two sit together:
+    // catching the error here and returning a body would produce `200 { statusCode: 422 }`, which
+    // an integrator's client would read as success. The service test asserts the exception's
+    // payload; this asserts the handler does not swallow it.
+    const controller = new ExternalController({
+      checkTransition: () => {
+        throw new UnprocessableEntityException({ statusCode: 422 });
+      },
+    } as unknown as ExternalService);
+
+    expect(() =>
+      controller.checkTransition({ ticketData: {} } as unknown as CheckTransitionDto),
+    ).toThrow(UnprocessableEntityException);
   });
 });
 
