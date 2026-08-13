@@ -1,3 +1,4 @@
+import { EVN_PCT_DEFINITION_VERSION } from "./definition-version.js";
 import {
   EVN_GUARD_CONTENT_FINISHED,
   EVN_NO_STATUS_CHANGE_ACTIONS,
@@ -20,7 +21,8 @@ import { lookupTransition } from "./transition-table.js";
  * ⚠️ Deliberately imports no clock, no random and no id generator. Two identical requests must
  * produce byte-identical bodies — a caller may cache, diff or replay these — and "the module has
  * nothing non-deterministic in it" is a property worth keeping true by construction rather than by
- * a test that would pass regardless.
+ * a test that would pass regardless. (`definition-version.js` pulls in `node:crypto`, which is a
+ * hash over committed data frozen at module load — deterministic, and no exception to the rule.)
  *
  * ⚠️ What `allowed: true` means: "no guard WITHIN C'S SCOPE is violated" (QĐ-1). It is not
  * permission. `outOfScopeGuards` is the other half of that sentence and is never decoration — for
@@ -68,6 +70,13 @@ export interface CheckTransitionInput {
    * present with no rows is a real answer that PASSES. See `required-content.ts`.
    */
   ticketData?: Record<string, unknown> | null;
+  /**
+   * A {@link EVN_PCT_DEFINITION_VERSION} the caller is pinning, if they are pinning one (QĐ-6).
+   *
+   * Never validated against a format of ours — whatever they pinned is what they pinned, and the
+   * only thing we do with it is compare and say so.
+   */
+  pinnedDefinitionVersion?: string;
 }
 
 export interface CheckTransitionResult {
@@ -109,6 +118,17 @@ export interface CheckTransitionResult {
    * places, that this guard is still theirs to run.
    */
   unverifiedFields?: readonly UnverifiedContentPair[];
+  /**
+   * Which snapshot of EVN's tables produced this reply. See {@link EVN_PCT_DEFINITION_VERSION}.
+   *
+   * ⚠️ PRESENT ON EVERY SHAPE, including `NO_TABLE` — a deliberate exception to the rule that drops
+   * `outOfScopeGuards`, `requiredFields` and `unverifiedFields` there. Those three are claims about
+   * the CALLER'S TICKET, and an empty list would be the strongest possible claim from the least
+   * knowledge. This is a claim about US, and it is equally true whatever was asked. Dropping it on
+   * `NO_TABLE` would also blank it on the reply where "which build am I talking to" is the only
+   * thing we managed to say.
+   */
+  definitionVersion: string;
   /** Human-readable and English. Two identical requests produce an identical string. */
   message: string;
 }
@@ -174,6 +194,33 @@ function scopedGuards(
 }
 
 /**
+ * Append the pin-mismatch notice, if the caller pinned a version and it is not the one we hold.
+ *
+ * ⚠️ Applied at ALL FIVE result literals below, `NO_TABLE` included. That branch returns early and
+ * cannot use `say()`, which is defined after it — so folding this into `say()` would silently drop
+ * the notice on exactly the reply that carries the least other information, and the argument for
+ * reporting `definitionVersion` there at all is that "which build is this" is then the whole of what
+ * we can offer.
+ *
+ * ⚠️ Does not touch `allowed`. C is an advisory pre-check, and a caller pinning a stale version is
+ * evidence about their deployment, never about their ticket.
+ *
+ * The notice is prose for a human reading a log. A caller wanting to branch on this already holds
+ * both halves — the pin they sent and the `definitionVersion` we returned — so a structured flag
+ * would be a second thing to keep true in exchange for no information.
+ */
+function withPinNote(message: string, pinned: string | undefined): string {
+  // `!pinned` rather than `pinned === undefined`: an empty string is unreachable through the DTO
+  // (the pattern demands at least one character) but reachable from any direct caller of
+  // `decideTransition`, and "You pinned definition version ``" helps nobody.
+  if (!pinned || pinned === EVN_PCT_DEFINITION_VERSION) return message;
+  const notice =
+    `You pinned definition version \`${pinned}\`, but this build decides from ` +
+    `\`${EVN_PCT_DEFINITION_VERSION}\`; the tables behind this answer may have moved.`;
+  return message ? `${message} ${notice}` : notice;
+}
+
+/**
  * ⚠️ `requiredFields` can make `allowed` false, which is the SECOND way this endpoint refuses and
  * the first that does not need `ticketRoles`. P4b's handover note said C could not refuse anything
  * until `ticketRoles` arrived; that sentence was rewritten for P4c rather than quietly outgrown.
@@ -198,7 +245,11 @@ export function decideTransition(input: CheckTransitionInput): TransitionDecisio
         nextStatus: null,
         ambiguousNext: [],
         coverage: "NO_TABLE",
-        message: `No transition table for ticket type "${ticketTypeCode}"; this reply decides nothing.`,
+        definitionVersion: EVN_PCT_DEFINITION_VERSION,
+        message: withPinNote(
+          `No transition table for ticket type "${ticketTypeCode}"; this reply decides nothing.`,
+          input.pinnedDefinitionVersion,
+        ),
       },
     };
   }
@@ -228,9 +279,12 @@ export function decideTransition(input: CheckTransitionInput): TransitionDecisio
    * next status is unknown.
    */
   const say = (branch: string, advisory = false): string =>
-    blocked && advisory
-      ? `${contentMessage} The transition itself could not be looked up, so no next status is offered.`
-      : [contentMessage, branch].filter(Boolean).join(" ");
+    withPinNote(
+      blocked && advisory
+        ? `${contentMessage} The transition itself could not be looked up, so no next status is offered.`
+        : [contentMessage, branch].filter(Boolean).join(" "),
+      input.pinnedDefinitionVersion,
+    );
 
   const lookup = lookupTransition({
     statusCode: currentStatusCode,
@@ -258,6 +312,7 @@ export function decideTransition(input: CheckTransitionInput): TransitionDecisio
         nextStatus: null,
         ambiguousNext: lookup.candidates,
         coverage: "TABLE",
+        definitionVersion: EVN_PCT_DEFINITION_VERSION,
         outOfScopeGuards,
         ...contentFields,
         message: say(
@@ -284,6 +339,7 @@ export function decideTransition(input: CheckTransitionInput): TransitionDecisio
           nextStatus: null,
           ambiguousNext: [],
           coverage: "TABLE",
+          definitionVersion: EVN_PCT_DEFINITION_VERSION,
           outOfScopeGuards,
           ...contentFields,
           message: say(
@@ -302,6 +358,7 @@ export function decideTransition(input: CheckTransitionInput): TransitionDecisio
         nextStatus: null,
         ambiguousNext: [],
         coverage: "TABLE_INCOMPLETE",
+        definitionVersion: EVN_PCT_DEFINITION_VERSION,
         outOfScopeGuards,
         ...contentFields,
         message: say("No row for this status and action; the reply is advisory only.", true),
@@ -323,6 +380,7 @@ export function decideTransition(input: CheckTransitionInput): TransitionDecisio
       nextStatus: resolveNextStatus(actionCode, lookup.nextStatus),
       ambiguousNext: [],
       coverage: "TABLE",
+      definitionVersion: EVN_PCT_DEFINITION_VERSION,
       outOfScopeGuards,
       ...contentFields,
       message: say(""),

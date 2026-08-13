@@ -212,12 +212,26 @@ export class ExternalService {
       executorUserCode: dto.executorUserCode,
       ticketRoles: dto.ticketRoles,
       ticketData: dto.ticketData,
+      // ⚠️ Optional on both sides, so omitting this line compiles clean and every `decideTransition`
+      // test stays green — the failure already recorded for the five assignments above. The gate is
+      // a test that goes through THIS method with a stale pin, not through `decideTransition`.
+      pinnedDefinitionVersion: dto.definitionVersion,
     });
     if (!decision.ok) {
       // The one failure on this endpoint, and the only place C answers with an error rather than a
       // verdict: an item was sent in a shape neither we nor EVN can read as rows. 422 rather than
       // 400 matches the form-template path above — the request parsed, its contents cannot be acted
       // on. `errors` names the items and the expected shape, never the value that was sent.
+      //
+      // ⚠️ Deliberately carries NO `definitionVersion`, and that is a decision rather than an
+      // oversight — do not "fix" it for consistency. The six always-present fields belong to a
+      // VERDICT, and an error body is not one: nothing here was decided, so nothing here should
+      // carry the marks of a decision.
+      //
+      // (An earlier draft of this comment justified it as "this is decided by code, not data".
+      // That was wrong and is recorded here so it is not reinvented: which keys get inspected comes
+      // from `EVN_PCT_REQUIRED_CONTENT` — hashed data — so regenerating the table genuinely can
+      // turn a 200 into a 422. Only the SHAPE rule is code.)
       throw new UnprocessableEntityException({
         statusCode: 422,
         message: "ticketData cannot be evaluated",

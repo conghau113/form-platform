@@ -6,6 +6,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   ValidateNested,
 } from "class-validator";
@@ -96,4 +97,27 @@ export class CheckTransitionDto {
   @IsObject()
   @Allow()
   information?: Record<string, unknown>;
+
+  /**
+   * The definition version the caller is pinning (QĐ-6, P4d-1). Optional.
+   *
+   * Read from P4d-1 onwards: mismatching ours adds a sentence to `message` and changes nothing else.
+   * We do NOT validate it against our own format — a caller may legitimately pin a version this
+   * build has never heard of, and telling them "that is not a version" instead of "that is not MY
+   * version" would be answering a question they did not ask.
+   *
+   * ⚠️ `@Matches` is about what lands in `message`, not about what counts as a version: the value is
+   * echoed back verbatim into contract text an integrator will read in a log, and `@MaxLength(100)`
+   * alone admits newlines, backticks and control characters. It admits every version string we can
+   * plausibly hand them — not every version string in existence: semver build metadata
+   * (`1.0.0+build.1`), padded base64 and anything non-ASCII are rejected, and would need widening
+   * here first.
+   *
+   * `@MaxLength(100)` is redundant with the anchored `{1,100}` and kept for its clearer 400 message.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(/^[\w.:-]{1,100}$/)
+  definitionVersion?: string;
 }

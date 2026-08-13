@@ -26,7 +26,7 @@ Chúng tôi đang hiện thực ba endpoint mà §12 mô tả:
 |---|---|---|
 | A | `GET /external/workflow-definition` | chưa làm — xin ý kiến, xem **Q7** |
 | B | `GET /external/form-template` | đã chạy được bản đầu, **hợp đồng còn tạm** vì các câu B1–B4 dưới đây |
-| C | `POST /external/check-transition` | **đã chạy được** (P4b) và **đã chấm được `requiredFields`** (P4c, xem **T19**) — nhưng **B1 vẫn chặn** phần `nextStatus` của 3 action then chốt; xem **§8** |
+| C | `POST /external/check-transition` | **đã chạy được** (P4b), **đã chấm được `requiredFields`** (P4c, xem **T19**) và **đã có `definitionVersion`** để phát hiện trôi bảng (P4d, xem **T21**) — nhưng **B1 vẫn chặn** phần `nextStatus` của 3 action then chốt; xem **§8** |
 
 **Trước khi hỏi, chúng tôi đã đọc source để tự trả lời.** Nhiều chỗ trong tài liệu mâu thuẫn với code
 thật; chúng tôi đã tự phân giải theo source và liệt kê ở **§1** — phần đó chỉ cần phía EVN xác nhận
@@ -549,11 +549,13 @@ nắn này.
 
 ---
 
-## 8. Cập nhật sau khi hiện thực endpoint C (P4a/P4b/P4c) — 9 điểm, trong đó **5 lỗi của phía EVN**
+## 8. Cập nhật sau khi hiện thực endpoint C (P4a/P4b/P4c/P4d) — 10 điểm, trong đó **5 lỗi của phía EVN**
 
 Endpoint C `POST /external/check-transition` **đã chạy**. Nó trả `allowed`, `nextStatus`,
-`ambiguousNext`, `coverage`, `message` — và `outOfScopeGuards`, `requiredFields`,
-`unverifiedFields` **trừ khi `coverage` là `NO_TABLE`** (xem T17, T19). Dưới đây là những gì chúng tôi phát hiện khi dựng nó, và những gì vẫn còn chặn.
+`ambiguousNext`, `coverage`, **`definitionVersion`** và `message` — **sáu trường này LUÔN có mặt** —
+cùng với `outOfScopeGuards`, `requiredFields`, `unverifiedFields` **trừ khi `coverage` là `NO_TABLE`**
+(xem T17, T19, và **T21** cho `definitionVersion`). Dưới đây là những gì chúng tôi phát hiện khi dựng
+nó, và những gì vẫn còn chặn.
 
 ### T13. 🔴 Chúng tôi **dựng lại** bảng `action_role_status` từ source của phía EVN — xin xác nhận
 
@@ -651,6 +653,12 @@ Trong đúng trường hợp đó, phản hồi **không có** trường `outOfS
 phải kiểm"*, trong
 khi với loại phiếu đó chúng tôi **chưa đo gì cả**.
 
+⚠️ **`definitionVersion` là ngoại lệ CÓ CHỦ ĐÍCH của luật vừa nói** — nó **vẫn có** trong phản hồi
+`NO_TABLE`. Ba trường kia là **khẳng định về phiếu của các anh**; `definitionVersion` là khẳng định
+về **chính chúng tôi** (đang chạy bản chụp bảng nào), và nó đúng như nhau bất kể các anh hỏi gì. Bỏ
+nó ở đây còn xoá mất tín hiệu ngay trên phản hồi mà "các anh đang nói chuyện với bản nào" gần như là
+toàn bộ nội dung có thật. Xem **T21**.
+
 ### T18. Điểm hợp đồng chúng tôi **cố ý** làm khác tài liệu *(trước là hai; điểm 1 đã đóng ở P4c)*
 
 1. ~~**`requiredFields` chưa có trong phản hồi.**~~ — **ĐÃ CÓ từ lát cắt P4c, xem T19.** Ghi chú cũ:
@@ -724,7 +732,17 @@ Endpoint C nhận: **mảng hàng** `[{...}]`, hoặc object `{ "data": [...] }`
 
 Đây là lỗi duy nhất phát sinh từ **nội dung** của một request đã hợp lệ và đã xác thực. Endpoint C
 vẫn trả các lỗi thông thường khác của bề mặt: **401** (thiếu/sai khoá API), **400** (thiếu trường bắt
-buộc hoặc sai kiểu, do `ValidationPipe`), **429** (chạm hạn mức — xem ghi chú vận hành ở cuối §8).
+buộc, sai kiểu, **hoặc sai dạng** — ví dụ `definitionVersion` chứa ký tự ngoài tập cho phép ở T21 —
+do `ValidationPipe`), **429** (chạm hạn mức — xem ghi chú vận hành ở cuối §8).
+
+⚠️ **Thân lỗi KHÔNG phải một phán quyết.** Sáu trường luôn-có-mặt nêu ở đầu §8 (gồm cả
+`definitionVersion`) chỉ thuộc về phản hồi **200**; thân của 400/401/422/429 **không** mang chúng —
+vì ở đó chúng tôi **chưa kết luận gì**, nên không nên gắn dấu vết của một kết luận.
+
+⚠️ Nói rõ để khỏi hiểu nhầm theo chiều ngược lại: **422 CÓ phụ thuộc bảng.** Việc khoá nào bị soi
+đến từ `ACTION_FINISH_CONTENT` (T19) — tức là dữ liệu mà `definitionVersion` có phủ — nên khi chúng
+tôi sinh lại bảng thì **một request hôm nay trả 200 có thể ngày mai trả 422**. Chỉ *luật hình dạng*
+(`[{...}]` hay `{ "data": [...] }`) mới là phần không nằm trong version.
 
 ⚠️ **Chúng tôi chỉ soi những khoá mà action đang hỏi tham chiếu tới.** `ticketData` có thể chứa item
 khác sai hình dạng mà vẫn được trả lời bình thường — chúng tôi không đọc chúng, nên không phán về
@@ -748,6 +766,35 @@ Không chặn việc tích hợp; chúng tôi gặp khi đọc kỹ để mô ph
 3. **`checkContentFinished` có hai chỗ gọi** (`:4796` trong `updateStatus`, `:19625` trong
    `updateDataSync`) và **hai bản sao logic inline** (`:8490+`, `:8723+`) tính cờ `checkDone` cho
    thông báo. Bốn chỗ đọc cùng một bảng bằng bốn đoạn code — sửa bảng thì phải nhớ cả bốn.
+
+### T21. `definitionVersion` — cách phát hiện bảng của chúng tôi đã trôi so với lúc các anh kiểm thử
+
+Endpoint C trả lời bằng **bản chụp bảng của chính phía EVN** mà chúng tôi dựng lại từ source (T13).
+Khi phía EVN sửa source và chúng tôi sinh lại, **mọi câu trả lời của C có thể đổi mà không một dòng
+code nào của chúng tôi đổi**. `definitionVersion` đặt tên cho bản chụp đó.
+
+- **Hình dạng:** chuỗi dạng `pct-<16 ký tự hex>`. Tiền tố `pct-` gọi tên **bộ bảng PCT mà bản
+  triển khai này đang giữ**. Giá trị **giống nhau trên mọi phản hồi của cùng một bản triển khai** —
+  kể cả phản hồi `NO_TABLE` về một loại phiếu khác; ở đó nó vẫn trả lời *"các anh đang nói chuyện
+  với bản nào"*, chứ **không** tự nhận là version định nghĩa của loại phiếu đó.
+- **Ghim (tuỳ chọn):** gửi kèm `definitionVersion` trong request — **chuỗi 1–100 ký tự, chỉ gồm
+  chữ cái ASCII `a–z`/`A–Z`, chữ số, `_`, `.`, `:`, `-`**; ngoài tập đó ⇒ **400** (giá trị này được
+  chép **nguyên văn** vào `message`, nên chúng tôi chặn xuống dòng, dấu backtick, khoảng trắng và ký
+  tự điều khiển; chữ có dấu cũng bị chặn). ⚠️ **Không ghim thì BỎ HẲN trường**, đừng gửi chuỗi rỗng
+  — chuỗi rỗng là **400**. Lưu ý phân biệt: chúng tôi
+  ràng buộc **dạng**, chứ **không** ràng buộc **giá trị** — ghim một bản mà bản triển khai này chưa
+  từng giữ là hợp lệ và vẫn được trả lời. Nếu khác bản chúng tôi đang chạy,
+  chúng tôi **thêm một câu vào `message`** và **không đổi gì khác** — `allowed`/`nextStatus` giữ
+  nguyên. Ghim sai **không phải là lỗi**, và tuyệt đối không phải lý do để từ chối: C là **tiền-kiểm
+  tư vấn**, còn việc các anh ghim bản cũ là chuyện triển khai phía các anh, không phải chuyện cái phiếu.
+- **Câu đó dành cho NGƯỜI đọc log, không phải cho máy parse.** Nếu phía các anh muốn rẽ nhánh theo
+  nó thì đã có sẵn cả hai vế — bản các anh ghim, và `definitionVersion` chúng tôi trả — nên một cờ
+  boolean nữa chỉ là thêm một thứ phải giữ cho đúng mà không thêm thông tin nào.
+- 🔴 **Giới hạn, nói thẳng: nó phủ DỮ LIỆU, KHÔNG phủ CODE.** Nó trả lời *"tôi đang soi bản chụp nào
+  của bảng"*, **không** trả lời *"cách chấm của tôi có đổi không"*. Đã có tiền lệ thật: ở lát cắt
+  trước, một lỗi thuần logic phía chúng tôi (mảng rỗng bị JSONLogic coi là sai) làm đổi kết luận mà
+  **không đụng một byte dữ liệu nào** — `definitionVersion` sẽ **không** nhúc nhích ở lần đó. Chúng
+  tôi công bố giới hạn này thay vì thêm một con số phải nhớ tay tăng, vì loại cổng đó sẽ mục.
 
 ⚠️ **Một điều kiện vận hành xin lưu ý trước:** hạn mức của chúng tôi (**mặc định**, chỉnh được bằng
 biến môi trường `THROTTLE_LIMIT`/`THROTTLE_TTL`) là **120 request /

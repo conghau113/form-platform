@@ -17,6 +17,7 @@ import { FormRepo } from "../../persistence/repositories/form.repo.js";
 import { FormVersionRepo } from "../../persistence/repositories/form-version.repo.js";
 import type { ProjectRecord } from "../../persistence/repositories/project.repo.js";
 import { ProjectRepo } from "../../persistence/repositories/project.repo.js";
+import { EVN_PCT_DEFINITION_VERSION } from "./definition-version.js";
 import type { CheckTransitionDto } from "./dto/check-transition.dto.js";
 import { FORBIDDEN_OUTPUT_KEYS } from "./evn-template.js";
 import { ExternalService } from "./external.service.js";
@@ -818,6 +819,53 @@ describe("checkTransition — the seam between the DTO and the decision (P4b)", 
     );
     expect(complete.unverifiedFields).toEqual([]);
     expect(complete.outOfScopeGuards).not.toContain("CONTENT_FINISHED");
+  });
+
+  it("carries the pinned definitionVersion across, and says so when it is stale (P4d-1)", () => {
+    // Same "five assignments, none of them type-checked" trap once more: `pinnedDefinitionVersion`
+    // is optional on both sides, so deleting the assignment in `external.service.ts` compiles
+    // clean and leaves every `decideTransition` test green while the pin silently stops arriving.
+    // That is why this assertion lives here and not on the pure function.
+    // A request that resolves cleanly, so the mismatch notice is the ONLY thing in `message` and
+    // cannot hide behind a branch sentence.
+    const resolves = { currentStatusCode: "PCT_S_MODERATION", actionCode: "PCT_A_WORKING" };
+
+    const stale = service.checkTransition(
+      dto({ ...resolves, definitionVersion: "pct-0000000000000000" }),
+    );
+    // Verbatim, not two `toContain`s: those cannot tell "both versions appear" from "both appear in
+    // the WRONG ROLES". Measured — swapping the two inside the notice, so it tells the integrator
+    // they pinned OUR version and we run THEIRS, left the whole suite green.
+    expect(stale.message).toBe(
+      "You pinned definition version `pct-0000000000000000`, but this build decides from " +
+        `\`${EVN_PCT_DEFINITION_VERSION}\`; the tables behind this answer may have moved.`,
+    );
+    // Advisory only: a stale pin is evidence about their deployment, never about their ticket.
+    expect(stale.allowed).toBe(true);
+    expect(stale.nextStatus).toBe("PCT_S_WORKING");
+
+    const current = service.checkTransition(
+      dto({ ...resolves, definitionVersion: EVN_PCT_DEFINITION_VERSION }),
+    );
+    expect(current.message).toBe("");
+    expect(service.checkTransition(dto(resolves)).message).toBe("");
+  });
+
+  it("still reports the version, and the mismatch, on a ticket type it holds nothing about", () => {
+    // The `NO_TABLE` branch returns before `say()` exists, so the notice is composed separately
+    // there. Dropping it would blank the drift signal on precisely the reply whose only real
+    // content is "which build are you talking to".
+    const reply = service.checkTransition(
+      dto({ ticketTypeCode: "LCT", definitionVersion: "pct-0000000000000000" }),
+    );
+    expect(reply.coverage).toBe("NO_TABLE");
+    expect(reply.definitionVersion).toBe(EVN_PCT_DEFINITION_VERSION);
+    // Verbatim here too, and in order: the branch sentence first, the drift notice appended.
+    expect(reply.message).toBe(
+      'No transition table for ticket type "LCT"; this reply decides nothing. ' +
+        "You pinned definition version `pct-0000000000000000`, but this build decides from " +
+        `\`${EVN_PCT_DEFINITION_VERSION}\`; the tables behind this answer may have moved.`,
+    );
   });
 
   it("turns an unreadable ticketData into a 422, not a verdict (P4c)", () => {

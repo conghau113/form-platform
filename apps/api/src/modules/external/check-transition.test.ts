@@ -5,6 +5,7 @@ import {
   decideTransition as decideRaw,
   resolveNextStatus,
 } from "./check-transition.js";
+import { EVN_PCT_DEFINITION_VERSION } from "./definition-version.js";
 import { EVN_NO_STATUS_CHANGE_ACTIONS, EVN_PCT_GUARDS } from "./evn-guards.js";
 import { EVN_PCT_REQUIRED_CONTENT } from "./evn-required-fields.js";
 import { EVN_PCT_TRANSITIONS, EVN_STATUS_NA } from "./evn-transitions.js";
@@ -60,6 +61,7 @@ describe("decideTransition — the verdict", () => {
       // having been sent. That is a real answer, not a default — see the shape test below.
       requiredFields: [],
       unverifiedFields: [],
+      definitionVersion: EVN_PCT_DEFINITION_VERSION,
       message: "",
     });
 
@@ -243,9 +245,12 @@ describe("decideTransition — the verdict", () => {
     ];
 
     for (const [shape, body] of shapes) {
+      // `definitionVersion` is in BOTH arms on purpose: it is a claim about which snapshot of EVN's
+      // tables this build holds, not a claim about the caller's ticket, so the rule that drops the
+      // three ticket-shaped lists on `NO_TABLE` does not reach it. See its docstring.
       const expected =
         shape === "no-table"
-          ? ["allowed", "nextStatus", "ambiguousNext", "coverage", "message"]
+          ? ["allowed", "nextStatus", "ambiguousNext", "coverage", "definitionVersion", "message"]
           : [
               "allowed",
               "nextStatus",
@@ -254,11 +259,20 @@ describe("decideTransition — the verdict", () => {
               "outOfScopeGuards",
               "requiredFields",
               "unverifiedFields",
+              "definitionVersion",
               "message",
             ];
       expect({ shape, keys: Object.keys(body).sort() }).toEqual({
         shape,
         keys: [...expected].sort(),
+      });
+      // Presence is not the claim. The contract says the VALUE is one constant across every reply
+      // this build gives, so three of the five result literals would otherwise be free to carry any
+      // string at all — measured: hardcoding a different version at the ambiguous, roleMismatch and
+      // TABLE_INCOMPLETE literals left the whole suite green without this line.
+      expect({ shape, version: body.definitionVersion }).toEqual({
+        shape,
+        version: EVN_PCT_DEFINITION_VERSION,
       });
     }
 
@@ -274,6 +288,13 @@ describe("decideTransition — the verdict", () => {
       request({ actionCode: "PCT_A_END", currentStatusCode: "PCT_S_HANDOVERED" }),
     );
     expect(end.outOfScopeGuards).toContain("CONTENT_FINISHED");
+  });
+
+  it("says nothing about an empty pin, which the DTO cannot send but a direct caller can", () => {
+    // "You pinned definition version ``" helps nobody. Unreachable through HTTP — the DTO pattern
+    // demands at least one character — but `decideTransition` is exported and called directly by
+    // every test in this file, so the guard belongs where the function is, not only at the edge.
+    expect(decideTransition(request({ pinnedDefinitionVersion: "" })).message).toBe("");
   });
 
   it("pins what each reply shape SAYS, because the message is contract text too", () => {

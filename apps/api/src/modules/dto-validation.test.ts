@@ -231,8 +231,11 @@ describe("Phase E work-order DTOs", () => {
         executorUserCode: "emp001",
         ticketData: { PARTICIPANTS_WORKSITE: { data: [{ userCode: "emp002", MARKED: true }] } },
         information: { listEmployee: [{ userCode: "emp003" }] },
-        // Fields the design sketch carries but P4b decides nothing with: dropped, on purpose.
+        // `definitionVersion` reaches the service from P4d-1 — it is what the caller pins (QĐ-6).
         definitionVersion: "sha256:deadbeef",
+        // `participants` is still a field the design sketch carries and nothing decides with:
+        // dropped, on purpose. It is also the probe proving the whitelist has not simply been
+        // switched off — without it, "the pin arrives" and "nothing is filtered" look identical.
         participants: [{ userCode: "emp003", statusCode: "TICKET_EMPLOYEE_CHECKIN" }],
       },
       as(CheckTransitionDto),
@@ -242,8 +245,54 @@ describe("Phase E work-order DTOs", () => {
       PARTICIPANTS_WORKSITE: { data: [{ userCode: "emp002", MARKED: true }] },
     });
     expect(out.information).toEqual({ listEmployee: [{ userCode: "emp003" }] });
-    expect("definitionVersion" in out).toBe(false);
+    expect(out.definitionVersion).toBe("sha256:deadbeef");
     expect("participants" in out).toBe(false);
+  });
+
+  it.each([
+    ["a newline, which would forge a second line in a log", "pct-1234\nSomething they did not say"],
+    // The backtick is the character that actually matters: the value is interpolated INSIDE
+    // backticks in the contract sentence, so it is the one that can end the quoting.
+    ["a backtick, which closes the quoting in `message`", "pct-1234`"],
+    ["a space", "pct-1234 and then some"],
+    ["semver build metadata, which we do not emit", "1.0.0+build.1"],
+    ["a non-ASCII letter", "pct-đá"],
+    // `@IsOptional()` skips `null`/`undefined` only, so the empty string really is validated. The
+    // partner doc says so: not pinning means omitting the field, not sending "".
+    ["the empty string — omit the field instead", ""],
+  ])("rejects a pinned definition version carrying %s", async (_why, definitionVersion) => {
+    // The pin is echoed verbatim into contract text an integrator reads in a log. `@MaxLength(100)`
+    // alone admits every one of these, so the shape is constrained even though the VALUE is
+    // deliberately not checked against our own format — a caller may pin a version this build has
+    // never heard of, and that must still be answerable.
+    await expect(
+      pipe.transform(
+        {
+          ticketId: 1,
+          ticketTypeCode: "PCT",
+          currentStatusCode: "PCT_S_MODERATION",
+          actionCode: "PCT_A_WORKING",
+          executorUserCode: "emp001",
+          definitionVersion,
+        },
+        as(CheckTransitionDto),
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it("accepts a pin naming a version this build has never held", async () => {
+    const out = (await pipe.transform(
+      {
+        ticketId: 1,
+        ticketTypeCode: "PCT",
+        currentStatusCode: "PCT_S_MODERATION",
+        actionCode: "PCT_A_WORKING",
+        executorUserCode: "emp001",
+        definitionVersion: "pct-0000000000000000",
+      },
+      as(CheckTransitionDto),
+    )) as Record<string, unknown>;
+    expect(out.definitionVersion).toBe("pct-0000000000000000");
   });
 
   it("rejects a check-transition body whose scalars are the wrong shape", async () => {
