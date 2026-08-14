@@ -24,7 +24,7 @@ Chúng tôi đang hiện thực ba endpoint mà §12 mô tả:
 
 | | Endpoint | Trạng thái phía chúng tôi |
 |---|---|---|
-| A | `GET /external/workflow-definition` | chưa làm — xin ý kiến, xem **Q7** |
+| A | `GET /external/workflow-definition` | 🔴 **QUYẾT ĐỊNH KHÔNG LÀM** — trả lời cho **Q7**, lý do + số đo ở **T23**. Đảo ngược được nếu các anh gỡ `generateWorkflowForTicket` |
 | B | `GET /external/form-template` | đã chạy được bản đầu, **hợp đồng còn tạm** vì các câu B1–B4 dưới đây |
 | C | `POST /external/check-transition` | **đã chạy được** (P4b), **đã chấm được `requiredFields`** (P4c, xem **T19**) và **đã có `definitionVersion`** để phát hiện trôi bảng (P4d, xem **T21**) — nhưng **B1 vẫn chặn** phần `nextStatus` của 3 action then chốt; xem **§8** |
 
@@ -271,7 +271,7 @@ có nghĩa. Đo trên `web-admin/src/features/workOrder/workOrderManager` và `c
 | **Q4** | **Guard xuyên phiếu.** Có nhóm điều kiện phải tra sang **phiếu khác** — ví dụ `getEmployeeCheckinByUserCode` (`ticket-action.service.ts:1211-1242`) hỏi *"nhân viên này có đang bận ở phiếu khác không"* bằng câu truy vấn có `te.ticket_id <> :ticketId`. Chúng tôi **không có** dữ liệu các phiếu khác, nên hiểu rằng **phía EVN tự giữ** nhóm này, còn endpoint C sẽ liệt kê chúng trong `outOfScopeGuards` để phía EVN biết cái gì **chưa** được kiểm. Đúng chứ? | Trả `outOfScopeGuards` | Phía EVN tưởng C đã kiểm hết ⇒ **bỏ lọt** điều kiện |
 | **Q5** | **Mã cho container.** 10/12 loại container của chúng tôi (tabs, collapse, card, grid, step…) **không có tên định danh**, trong khi `FormItem.code` bên EVN là PK NOT NULL và phải nằm trong `form_item_codes` (ràng buộc #1, `:1466`). Chúng tôi định **sinh mã tất định từ đường dẫn cây** — nhưng mã đó sẽ **không** có trong danh mục. Chấp nhận mã layout ngoài danh mục, hay có cách khác? | Sinh mã tất định, ổn định giữa hai lần xuất | ~~Vỡ FK lúc nạp~~ — **đo lại 2026-08-10: KHÔNG vỡ** (xem T6), mã được tự thêm vào danh mục. Rủi ro thật là `form_item_codes` dài thêm sau mỗi lần nạp lại |
 | **Q6** | **`validations`.** Ví dụ §12.B (`:1425-1427`) có mảng `validations`, và §14 mục 5 nói bên thứ ba có thể gửi thêm. Nhưng **template thật không có trường này** (0/2709 node) — ràng buộc bắt buộc chỉ thể hiện bằng `required: true` (**191** node đặt `true`; 290 node có khai khoá `required`). Vậy có nên gửi `validations` không? Nếu có, `form_item_validations.form_validate_code` là FK tới `form_validations.code` — xin danh sách mã hợp lệ | **Không** gửi `validations`; chỉ gửi `required` | FK không resolve lúc nạp |
-| **Q7** | **Endpoint A** (`GET /external/workflow-definition`) **thay** `generateWorkflowForTicket` hay chạy **song song**? Chúng tôi thấy `WORKFLOW_PCT.json` hiện là read-model được sinh lại sau mỗi action; nếu endpoint A chạy song song thì sẽ có **hai nguồn sự thật** cho cùng một quy trình | Nếu song song ⇒ **khuyến nghị không làm A**, và nói rõ lý do thay vì làm rồi để lệch | Hai nguồn sự thật cho cùng một quy trình — đúng vấn đề mà việc tích hợp này định gỡ |
+| **Q7** | **Endpoint A** (`GET /external/workflow-definition`) **thay** `generateWorkflowForTicket` hay chạy **song song**? Chúng tôi thấy `WORKFLOW_PCT.json` hiện là read-model được sinh lại sau mỗi action; nếu endpoint A chạy song song thì sẽ có **hai nguồn sự thật** cho cùng một quy trình | ✅ **ĐÃ TỰ TRẢ LỜI — xem T23.** Chúng tôi quyết định **không làm A** và nêu đủ số đo. Câu hỏi còn để ngỏ chỉ còn: các anh có ý định **gỡ** `generateWorkflowForTicket` không? Nếu có thì chúng tôi mở lại | Hai nguồn sự thật cho cùng một quy trình — đúng vấn đề mà việc tích hợp này định gỡ |
 | **Q8** | **§14 mục 2 & 3.** Template có phải **chừa sẵn** slot `*_SIGN` / `*_SIGNTIME` / `*_SIGNDATA` không? Và thứ tự trường cho PDF theo `typeFormItemPDF` (26 mã, `form.enum.ts:540`) là việc của bên nào? | Chừa slot **nếu form đã khai**; **không** tự sinh. Thứ tự PDF: mặc định là việc phía EVN | Ký số không gắn được giá trị; PDF sai thứ tự trường |
 | **Q9** | **Tải thật của `/external/*`** khoảng bao nhiêu request/phút? Hiện chúng tôi giới hạn 120 req/60s **theo IP**, mà traffic từ phía EVN sẽ dùng chung một IP | Đổi sang hạn mức **theo khoá API**, không theo IP | Chặn nhầm traffic thật vào giờ cao điểm |
 
@@ -864,6 +864,51 @@ Endpoint C nay trả thêm `progress`: vị trí của phiếu trên **15 node**
   **mọi** phiếu cùng lúc, và `definitionVersion` **sẽ không** nhúc nhích — chúng tôi băm **bảng** của
   các anh, không băm **enum** của các anh. Xin báo trước cho chúng tôi khi thêm.
 
+### T23. 🔴 Endpoint A — chúng tôi **quyết định KHÔNG làm**, và đây là số đo dẫn tới quyết định đó
+
+Đây là câu trả lời của chúng tôi cho **Q7**. Chúng tôi **không** xây `GET /external/workflow-definition`.
+Nói ra kèm bằng chứng, thay vì làm rồi để hai bên lệch nhau.
+
+**Lý do 1 — hai bên đang mô hình hoá HAI THỨ KHÁC NHAU, không phải hai cú pháp của một thứ.**
+
+| | Mô hình của chúng tôi | Mô hình của các anh (`WORKFLOW_PCT.json`) |
+|---|---|---|
+| Node là gì | một **trạng thái** của phiếu | một **bước** trong luồng |
+| Cạnh là gì | `action` đưa phiếu **từ X sang Y** | quan hệ hiển thị giữa các bước |
+| Tiến triển đo bằng | trạng thái hiện tại | ba pha `add` / `process` / `complete` mỗi bước |
+
+Transition của chúng tôi **không có** khái niệm ba pha; node của các anh **không có** khái niệm
+`from → to`. Đây chính là lý do endpoint C phải giữ **hai bảng riêng**: bảng chuyển trạng thái (trả
+`nextStatus`) và bảng 15 node (trả `progress`, T22). Chúng trả lời hai câu hỏi khác nhau, và không
+bảng nào suy ra được bảng kia.
+
+**Lý do 2 — ngôn ngữ điều kiện: của chúng tôi MỞ, của các anh ĐÓNG.**
+Guard trong hợp đồng của chúng tôi là **JSONLogic tự do** (ví dụ có thật:
+`{"==": [{"var": "co_gsatd"}, true]}`). Điều kiện của các anh là **danh mục đóng 21 mã**
+(`EWorkflowConditionCode`; luồng PCT dùng 8 trong số đó). Không tồn tại phép ánh xạ tổng quát từ một
+biểu thức tự do sang một tên gọi cố định — chỉ một tập con nhỏ dịch được.
+
+Số đo trên chính luồng PCT mà chúng tôi đã dựng: **11 node / 17 transition, trong đó 6 transition
+mang guard JSONLogic**. Nếu làm endpoint A, phần lớn số đó sẽ rơi vào nhánh *"không map được ⇒ 422"*.
+Một endpoint từ chối phần lớn đầu vào hợp lệ của chính nó thì không dùng được vào việc gì.
+
+**Lý do 3 — chạy song song là tạo ra đúng căn bệnh việc tích hợp này định gỡ.**
+`generateWorkflowForTicket` của các anh vẫn đang sinh lại read-model sau mỗi action. Nếu endpoint A
+phục vụ một bản định nghĩa **thứ hai**, hai bản đó sẽ trôi khỏi nhau, và không có cách nào để bên thứ
+ba biết bản nào đúng. Chúng tôi đã áp đúng nguyên tắc này cho chính mình ở T22: `progress` được
+**chiếu** từ dữ liệu các anh đã lưu, chứ **không** mô phỏng lại `checkConditionMethod` — dù về mặt kỹ
+thuật chúng tôi mô phỏng được. Làm endpoint A song song sẽ là tự phản bội quyết định đó.
+
+**Chúng tôi khuyến nghị:** giữ `generateWorkflowForTicket` làm **nguồn sự thật duy nhất** cho định
+nghĩa luồng. B (form template) + C (chuyển trạng thái, guard ngoài phạm vi, `requiredFields`,
+`progress`) đã phủ trọn phần chúng tôi có thể đảm bảo đúng.
+
+⚠️ **Quyết định này ĐẢO NGƯỢC ĐƯỢC, và đây là điều kiện đảo:** nếu các anh muốn **giao hẳn** việc
+định nghĩa luồng cho chúng tôi và **gỡ bỏ** `generateWorkflowForTicket`, thì lý do 3 biến mất và lý do
+2 trở thành bài toán thu hẹp từ vựng có chủ đích (thoả thuận trước một tập điều kiện chung) thay vì
+ánh xạ mò. Khi đó xin báo, chúng tôi sẽ mở lại. Còn chừng nào hai bên cùng định nghĩa luồng thì làm
+endpoint A là làm sớm.
+
 ---
 
 ## Phụ lục A — bảng tra `type` → `typeCode` đề xuất (liên quan B3)
@@ -1027,7 +1072,7 @@ Nếu không nhận được trả lời, chúng tôi làm tiếp theo đúng nh
 | Q4 | Guard xuyên phiếu ⇒ liệt kê trong `outOfScopeGuards`, không tự kiểm |
 | Q5 | Container: sinh mã tất định từ đường dẫn cây |
 | Q6 | Không gửi `validations`; chỉ gửi `required` — **nhưng xem T8**: phía EVN CÓ hỗ trợ, nên đây là năng lực bỏ không chứ không phải hợp đồng thiếu. Đã chuyển thành cảnh báo, sẽ ánh xạ ở lát cắt riêng |
-| Q7 | Nếu A chạy song song với `generateWorkflowForTicket` ⇒ **không làm A** |
+| Q7 | ✅ **ĐÃ CHỐT: KHÔNG làm endpoint A** — không còn là "mặc định nếu không ai trả lời", mà là quyết định có số đo, xem **T23**. Đảo ngược nếu EVN gỡ `generateWorkflowForTicket` |
 | Q8 | Chừa slot ký số nếu form đã khai; không tự sinh. Thứ tự PDF: việc phía EVN |
 | Q9 | Hạn mức theo khoá API thay vì theo IP |
 | — | Tra không ra **trong bảng** ⇒ `allowed: true` + `outOfScopeGuards`. **(sửa ở P4c)** Guard **nội dung** là việc khác: thiếu nội dung bắt buộc ⇒ `allowed: false`, xem **T19** |
