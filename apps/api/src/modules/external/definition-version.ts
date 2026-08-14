@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { EVN_NO_STATUS_CHANGE_ACTIONS, EVN_PCT_GUARDS } from "./evn-guards.js";
 import { EVN_PCT_REQUIRED_CONTENT } from "./evn-required-fields.js";
 import { EVN_PCT_TIE_BREAKS, EVN_PCT_TRANSITIONS } from "./evn-transitions.js";
+import { EVN_PCT_WORKFLOW_NODES } from "./evn-workflow-nodes.js";
 
 /**
  * Which snapshot of EVN's tables this build decides from (QĐ-6, P4d-1).
@@ -82,7 +83,12 @@ export function hashDefinition(value: unknown): string {
 }
 
 /**
- * The five tables endpoint C reads to reach a verdict — and nothing else.
+ * The six tables endpoint C reads to build a reply — and nothing else.
+ *
+ * ⚠️ "to build a reply", not "to reach a verdict": `workflowNodes` takes no part in `allowed` or
+ * `nextStatus`. It is here because C READS it — EVN editing `WORKFLOW_PCT.json` moves the `progress`
+ * we report, and a version that sat still through that would be the exact drift this feature exists
+ * to catch. What the version covers is what we read, not what we conclude from it.
  *
  * The key names are part of the hash, so renaming, splitting or merging a table moves the version
  * too. The `EVN_GUARD_*` string constants are deliberately absent: they are names for values already
@@ -94,6 +100,7 @@ export const PCT_DEFINITION = {
   guards: EVN_PCT_GUARDS,
   noStatusChangeActions: EVN_NO_STATUS_CHANGE_ACTIONS,
   requiredContent: EVN_PCT_REQUIRED_CONTENT,
+  workflowNodes: EVN_PCT_WORKFLOW_NODES,
 } as const;
 
 /**

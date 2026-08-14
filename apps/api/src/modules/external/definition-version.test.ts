@@ -18,7 +18,9 @@ import {
  */
 describe("EVN_PCT_DEFINITION_VERSION", () => {
   it("is this exact value for the tables committed today", () => {
-    expect(EVN_PCT_DEFINITION_VERSION).toBe("pct-708f1e878dc4f403");
+    // Moved once, deliberately: P4d-2 added `workflowNodes` as a sixth table, so every reply now
+    // also depends on `WORKFLOW_PCT.json`. Was `pct-708f1e878dc4f403` through P4d-1.
+    expect(EVN_PCT_DEFINITION_VERSION).toBe("pct-9b0938e686556167");
   });
 
   it("looks like a digest, so an empty or broken hash cannot be pinned above by accident", () => {
@@ -26,17 +28,21 @@ describe("EVN_PCT_DEFINITION_VERSION", () => {
     expect(EVN_PCT_DEFINITION_VERSION).toMatch(/^pct-[0-9a-f]{16}$/);
   });
 
-  it("covers exactly the tables endpoint C decides from", () => {
-    // The pin catches a change to any of these five. It cannot notice a SIXTH generated table that
+  it("covers exactly the tables endpoint C reads", () => {
+    // The pin catches a change to any of these six. It cannot notice a SEVENTH generated table that
     // `check-transition.ts` starts reading and nobody adds here — the version would then sit still
     // while the answers moved, which is the one failure this whole feature exists to prevent.
     // Adding or removing a member is therefore a deliberate act with a red test attached.
+    //
+    // ⚠️ "reads", not "decides from": `workflowNodes` shapes `progress` and takes no part in
+    // `allowed`/`nextStatus`. The membership rule is what C consults, not what it concludes.
     expect(Object.keys(PCT_DEFINITION).sort()).toEqual([
       "guards",
       "noStatusChangeActions",
       "requiredContent",
       "tieBreaks",
       "transitions",
+      "workflowNodes",
     ]);
   });
 });

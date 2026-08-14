@@ -553,8 +553,9 @@ nắn này.
 
 Endpoint C `POST /external/check-transition` **đã chạy**. Nó trả `allowed`, `nextStatus`,
 `ambiguousNext`, `coverage`, **`definitionVersion`** và `message` — **sáu trường này LUÔN có mặt** —
-cùng với `outOfScopeGuards`, `requiredFields`, `unverifiedFields` **trừ khi `coverage` là `NO_TABLE`**
-(xem T17, T19, và **T21** cho `definitionVersion`). Dưới đây là những gì chúng tôi phát hiện khi dựng
+cùng với `outOfScopeGuards`, `requiredFields`, `unverifiedFields`, **`progress`** và
+**`unverifiedWorkflow`** **trừ khi `coverage` là `NO_TABLE`** (xem T17, T19, **T21** cho
+`definitionVersion`, và **T22** cho `progress`). Dưới đây là những gì chúng tôi phát hiện khi dựng
 nó, và những gì vẫn còn chặn.
 
 ### T13. 🔴 Chúng tôi **dựng lại** bảng `action_role_status` từ source của phía EVN — xin xác nhận
@@ -801,6 +802,67 @@ biến môi trường `THROTTLE_LIMIT`/`THROTTLE_TTL`) là **120 request /
 60 giây / IP**. Nếu phía EVN gọi C **mỗi lần người dùng bấm một action** từ một IP egress chung thì
 sẽ chạm trần. Chúng tôi đang xử lý (đổi sang hạn mức theo khoá API, câu **Q9**) — xin đừng bật C ở
 tần suất đó trước khi việc này xong.
+
+### T22. `progress` — phiếu đang ở đâu trong luồng, **chiếu lại chứ không tính lại**
+
+Endpoint C nay trả thêm `progress`: vị trí của phiếu trên **15 node** của `WORKFLOW_PCT.json`.
+
+- **Nguồn là dữ liệu phía EVN đã lưu, không phải mô phỏng.** Chúng tôi đọc `WORKFLOW_NODES` trong
+  `ticketData` — đúng thứ `saveWorkflowNodes` ghi ra — rồi đối chiếu với định nghĩa 15 node. Chúng
+  tôi **không** chạy lại `checkConditionMethod`, và **không** dựng lại `generateWorkflowForTicket`.
+  Nếu chạy lại, chúng tôi sẽ thành **nguồn sự thật thứ hai** cho cùng một luồng — đúng thứ mà câu
+  **Q7** khuyến nghị tránh, và là lý do chúng tôi khuyên **không làm** endpoint A.
+- **Vì thế `progress` mô tả trạng thái TRƯỚC action đang hỏi**, không phải sau. C là **tiền-kiểm**;
+  lệch một nhịp ở đây là hiểu nhầm dễ xảy ra nhất nên chúng tôi nói thẳng ra.
+- **Hình dạng:** `{ nodes: [...], completed, total, unknownNodes }`. Mỗi node có `nodeCode`,
+  `order` (1–15, đúng `priority` của các anh), `state`, và `completedBy` — **danh sách mã action
+  đóng node đó, đọc từ `condition.complete`**, chứ không suy từ tên node. Node `FINISHED` đóng theo
+  **node khác** (`NODE_COMPLETED`) nên nó mang **thêm** `completedByNode`, còn `completedBy` của nó
+  là `[]`. Hai trường này loại trừ nhau: `completedBy: []` **chỉ** xuất hiện cùng `completedByNode`,
+  nên `[]` không bao giờ có nghĩa *"chúng tôi trích không ra"*.
+- **`state`** là một trong `ADDED` / `PROCESSING` / `COMPLETED` — **nguyên văn ba giá trị
+  `EWorkflowNodeEdgeStatus` của các anh** — hoặc **`NOT_REACHED`**, là **tên của chúng tôi** cho node
+  chưa có mặt trong bản đã lưu. Các anh không có trạng thái này, nên chúng tôi không mượn tên nào của
+  các anh cho nó.
+- 🔴 **Đọc không ra ⇒ `progress: null`, KHÔNG BAO GIỜ là `completed: 0`.** Khoá `progress` **luôn có
+  mặt** (trừ `NO_TABLE`), và `null` nghĩa là *"chúng tôi không đọc được"*, kèm lý do trong
+  `unverifiedWorkflow`. Một con số 0 ở chỗ này sẽ đọc thành *"đã soi, phiếu chưa đi bước nào"* —
+  khẳng định mạnh nhất từ hiểu biết ít nhất. Đây đúng là lý do `unverifiedFields` ra đời (T19).
+- **Đủ bộ `reason` để các anh rẽ nhánh** — chỉ có **năm** giá trị, không hơn:
+
+  | `reason` | Nghĩa |
+  |---|---|
+  | `TICKET_DATA_ABSENT` | không gửi `ticketData` (hoặc gửi `null`) |
+  | `ITEM_ABSENT` | có `ticketData` nhưng không có khoá `WORKFLOW_NODES` (hoặc khoá đó `null`) |
+  | `ITEM_UNREADABLE` | giá trị không phải map node — xem gạch đầu dòng dưới |
+  | `NODE_UNREADABLE` | một node **thuộc 15 node chúng tôi biết** không phải object (node lạ thì vào `unknownNodes`, không phải lý do này) |
+  | `STATUS_NOT_MODELLED` | một node **thiếu** `status`, hoặc mang `status` ngoài ba giá trị của các anh |
+
+  Cả năm đều **không** phải lỗi và **không** làm hỏng phản hồi: `allowed`/`nextStatus` không đổi vì
+  chúng, và endpoint **không** trả 422 cho bất kỳ ca nào ở đây.
+- **Nhận cả hai hình dạng** như T19b: `{"WORKFLOW_NODES": {"data": {...}}}` hoặc map node trần.
+  🔴 **Nhưng phải là map NODE.** Nếu các anh gửi nguyên hàng `ticket_items`
+  (`{id, code, ticketId, value:{data:{...}}}`) thì chúng tôi trả `ITEM_UNREADABLE` chứ **không** đọc
+  thành phiếu chưa đi bước nào. Quy tắc: map **có khoá nhưng không khoá nào là mã node** ⇒ đọc không
+  ra. Map **rỗng** thì khác: chính các anh đọc item này bằng `?.value?.data || {}`, nên một bên gọi
+  dựng `ticketData` theo đúng cách đó sẽ gửi `{}` cho phiếu chưa có hàng nào — với họ, `completed: 0`
+  là câu trả lời thành thật. (Chúng tôi **không** nói rằng các anh *lưu* `{}`: `saveWorkflowNodes`
+  thoát sớm khi map rỗng, nên hàng đã lưu luôn khác rỗng.)
+- **Node lạ ⇒ không từ chối**: mã node có trong dữ liệu mà định nghĩa của chúng tôi không biết được
+  liệt kê ở `unknownNodes`. Đó là **trôi định nghĩa** — thứ `definitionVersion` sinh ra để lộ diện —
+  chứ không phải lỗi của phiếu.
+- ⚠️ **Bảng 15 node NẰM TRONG `definitionVersion`.** Các anh sửa `WORKFLOW_PCT.json`, chúng tôi sinh
+  lại, thì `definitionVersion` **đổi**. (Vì việc này, giá trị của nó đã đổi một lần so với lúc T21
+  được viết.)
+- ⚠️ **Giá phải trả, nói trước:** khối `nodes` làm phản hồi dài thêm khoảng **1,8 KB**. Phần **định
+  nghĩa** trong đó (`nodeCode` / `order` / `completedBy` / `completedByNode`) là **giống hệt nhau ở
+  mọi phản hồi** của cùng một bản triển khai, nên nếu các anh gọi C ở tần suất cao thì nó **cache
+  được theo `definitionVersion`** — khoá đó đổi đúng khi và chỉ khi bảng đổi. Chỉ `state`,
+  `completed` và `unknownNodes` là thay đổi theo từng phiếu.
+- 🔴 **Giới hạn, nói thẳng:** `state` do **code phía EVN** ghi ra, không phải do người gọi gõ. Nếu
+  các anh thêm một thành viên mới vào `EWorkflowNodeEdgeStatus`, `progress` sẽ thành `null` cho
+  **mọi** phiếu cùng lúc, và `definitionVersion` **sẽ không** nhúc nhích — chúng tôi băm **bảng** của
+  các anh, không băm **enum** của các anh. Xin báo trước cho chúng tôi khi thêm.
 
 ---
 

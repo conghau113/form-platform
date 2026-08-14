@@ -47,6 +47,22 @@ function completeContent(actionCode: string): Record<string, unknown> {
   return data;
 }
 
+/**
+ * A `ticketData` carrying stored workflow state, in the shape EVN writes it
+ * (`workflow.service.ts:1114-1118`): the first two nodes complete, the rest not yet reached.
+ */
+function storedNodes(): Record<string, unknown> {
+  return {
+    WORKFLOW_NODES: {
+      data: {
+        PCT_WORKFLOW_NODE__STARTED: { id: "1", status: "COMPLETED" },
+        PCT_WORKFLOW_NODE__PCT_A_CREATED: { id: "2", status: "COMPLETED" },
+        PCT_WORKFLOW_NODE__PCT_A_WORKING: { id: "3", status: "ADDED" },
+      },
+    },
+  };
+}
+
 describe("decideTransition — the verdict", () => {
   it("answers the table, not EVN's own documented example", () => {
     // Their §12.C sample sends PCT_S_CREATED + PCT_A_WORKING and shows `PCT_S_ALLOWED_WAITING`.
@@ -61,6 +77,10 @@ describe("decideTransition — the verdict", () => {
       // having been sent. That is a real answer, not a default — see the shape test below.
       requiredFields: [],
       unverifiedFields: [],
+      // No `ticketData` at all, so the workflow was not projected — and says so, rather than
+      // reporting a ticket that has completed none of its 15 nodes.
+      progress: null,
+      unverifiedWorkflow: [{ itemCode: "WORKFLOW_NODES", reason: "TICKET_DATA_ABSENT" }],
       definitionVersion: EVN_PCT_DEFINITION_VERSION,
       message: "",
     });
@@ -242,6 +262,38 @@ describe("decideTransition — the verdict", () => {
       ],
       // An action with no content guard AND a `ticketData` it has no use for: still `[]`/`[]`.
       ["no-content-guard", decideTransition(request({ ticketData: { ANYTHING: [] } }))],
+      // ⚠️ The nine shapes above ALL leave `progress` null, because not one of them sends
+      // `WORKFLOW_NODES` — so they cannot tell a real projection from a hardcoded null.
+      // Measured, with the four twins below removed: hardcoding `progress: null` at the ambiguous
+      // literal left this whole file GREEN, and goes red once they are back. (Omitting the key or
+      // setting it to `undefined` is caught either way, by the key-set gate and the wire gate
+      // respectively — it is the plausible-looking `null` that needed a shape carrying real state.)
+      ["resolved+wf", decideTransition(request({ ticketData: storedNodes() }))],
+      [
+        "ambiguous+wf",
+        decideTransition(
+          request({
+            currentStatusCode: "PCT_S_WORKING",
+            actionCode: "PCT_A_ALLOW",
+            ticketData: storedNodes(),
+          }),
+        ),
+      ],
+      [
+        "refused+wf",
+        decideTransition(
+          request({
+            currentStatusCode: "PCT_S_WORKING",
+            actionCode: "PCT_A_ALLOW",
+            ticketRoles: [{ roleCode: "PCT_R_NHAN_VIEN", userCode: "emp001" }],
+            ticketData: storedNodes(),
+          }),
+        ),
+      ],
+      [
+        "incomplete+wf",
+        decideTransition(request({ currentStatusCode: "PCT_S_DRAFT", ticketData: storedNodes() })),
+      ],
     ];
 
     for (const [shape, body] of shapes) {
@@ -259,6 +311,8 @@ describe("decideTransition — the verdict", () => {
               "outOfScopeGuards",
               "requiredFields",
               "unverifiedFields",
+              "progress",
+              "unverifiedWorkflow",
               "definitionVersion",
               "message",
             ];
@@ -273,6 +327,14 @@ describe("decideTransition — the verdict", () => {
       expect({ shape, version: body.definitionVersion }).toEqual({
         shape,
         version: EVN_PCT_DEFINITION_VERSION,
+      });
+
+      // Same argument one field along: the key-set gate cannot tell a real projection from a null,
+      // so the `+wf` shapes assert the VALUE. `storedNodes()` completes the first two nodes.
+      if (shape === "no-table") continue;
+      expect({ shape, completed: body.progress?.completed ?? null }).toEqual({
+        shape,
+        completed: shape.endsWith("+wf") ? 2 : null,
       });
     }
 

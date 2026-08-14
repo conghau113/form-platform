@@ -11,6 +11,11 @@ import {
   type UnverifiedContentPair,
 } from "./required-content.js";
 import { lookupTransition } from "./transition-table.js";
+import {
+  projectWorkflow,
+  type UnverifiedWorkflow,
+  type WorkflowProgress,
+} from "./workflow-progress.js";
 
 /**
  * Deciding one `POST /external/check-transition` (P4b, extended in P4c).
@@ -118,6 +123,27 @@ export interface CheckTransitionResult {
    * places, that this guard is still theirs to run.
    */
   unverifiedFields?: readonly UnverifiedContentPair[];
+  /**
+   * Where the ticket stands in EVN's workflow BEFORE this action (QĐ-2/QĐ-5, P4d-2), projected from
+   * the state EVN already stored in `ticketData.WORKFLOW_NODES`. Never simulated — see
+   * {@link projectWorkflow}.
+   *
+   * ⚠️ `null` when we could not read that state, and the key is present either way. A zeroed
+   * projection would claim the ticket has not moved when the truth is that we were not told, and a
+   * disappearing key would break the presence rule the pair above keeps.
+   *
+   * ⚠️ Present exactly when `coverage` is not `NO_TABLE`, with the other ticket-shaped fields: the
+   * node definition we project onto is PCT's, so for another type an answer of any kind would be
+   * invented.
+   */
+  progress?: WorkflowProgress | null;
+  /**
+   * Why {@link progress} is `null`. Empty exactly when it is not.
+   *
+   * The same device as {@link unverifiedFields}, for the same reason: silence about what we could
+   * not evaluate is indistinguishable from a clean bill of health.
+   */
+  unverifiedWorkflow?: readonly UnverifiedWorkflow[];
   /**
    * Which snapshot of EVN's tables produced this reply. See {@link EVN_PCT_DEFINITION_VERSION}.
    *
@@ -260,9 +286,14 @@ export function decideTransition(input: CheckTransitionInput): TransitionDecisio
   if (content.kind === "unusable") return { ok: false, unusable: content.keys };
 
   const outOfScopeGuards = scopedGuards(actionCode, content);
+  const workflow = projectWorkflow(input.ticketData);
   const contentFields = {
     requiredFields: content.requiredFields,
     unverifiedFields: content.unverifiedFields,
+    // Spread alongside the content pair rather than written out per branch, because there are FIVE
+    // `ok: true` literals and forgetting one would make the field vanish from a single shape.
+    progress: workflow.progress,
+    unverifiedWorkflow: workflow.unverified,
   };
   const blocked = content.requiredFields.length > 0;
   const contentMessage = blocked
