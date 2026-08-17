@@ -27,6 +27,11 @@ describe("validateEnv", () => {
     expect(env.CORS_ORIGINS).toBe("http://localhost:5173");
     expect(env.THROTTLE_TTL).toBe(60_000);
     expect(env.THROTTLE_LIMIT).toBe(120);
+    // P6: the `/external/*` limits, per API key and per IP respectively. These are the numbers the
+    // integrator was given in writing (`docs/expansion/evn-integration-questions.md`, T24), so they
+    // are a published contract rather than a tuning knob nobody would notice moving.
+    expect(env.EXTERNAL_THROTTLE_LIMIT).toBe(300);
+    expect(env.EXTERNAL_IP_THROTTLE_LIMIT).toBe(600);
     expect(env.JWT_ACCESS_EXPIRES_IN).toBe("15m");
     expect(env.JWT_REFRESH_EXPIRES_IN).toBe("30d");
     expect(env.NODE_ENV).toBe("development");
@@ -55,13 +60,32 @@ describe("validateEnv", () => {
   });
 
   it("coerces numeric strings to numbers", () => {
-    const env = validateEnv({ ...base, PORT: "4000", THROTTLE_LIMIT: "50" });
+    const env = validateEnv({
+      ...base,
+      PORT: "4000",
+      THROTTLE_LIMIT: "50",
+      EXTERNAL_THROTTLE_LIMIT: "900",
+      EXTERNAL_IP_THROTTLE_LIMIT: "1800",
+    });
     expect(env.PORT).toBe(4000);
     expect(env.THROTTLE_LIMIT).toBe(50);
+    expect(env.EXTERNAL_THROTTLE_LIMIT).toBe(900);
+    expect(env.EXTERNAL_IP_THROTTLE_LIMIT).toBe(1800);
   });
 
   it("rejects a non-numeric PORT", () => {
     expect(() => validateEnv({ ...base, PORT: "not-a-port" })).toThrow(/PORT/);
+  });
+
+  it("rejects a throttle limit of zero or less (P6)", () => {
+    // Zero would not read as "off" anywhere — it would block every request; a negative one is a
+    // typo. Both must fail at boot rather than at the first call from the integrator.
+    expect(() => validateEnv({ ...base, EXTERNAL_THROTTLE_LIMIT: "0" })).toThrow(
+      /EXTERNAL_THROTTLE_LIMIT/,
+    );
+    expect(() => validateEnv({ ...base, EXTERNAL_IP_THROTTLE_LIMIT: "-1" })).toThrow(
+      /EXTERNAL_IP_THROTTLE_LIMIT/,
+    );
   });
 
   it("passes unknown vars (e.g. AI_*) through untouched", () => {

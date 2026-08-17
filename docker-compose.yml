@@ -47,6 +47,13 @@ services:
       PORT: 3001
       # Browser origins allowed by CORS (the builder below). Empty => no cross-origin requests.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      # Rate limiting (1D + P6). Listed explicitly because this service has no `env_file`: without
+      # these lines the limits are not tunable in a compose deployment at all. The `/external/*`
+      # budget is per API key — an integrating system calls from one egress IP.
+      THROTTLE_TTL: ${THROTTLE_TTL:-60000}
+      THROTTLE_LIMIT: ${THROTTLE_LIMIT:-120}
+      EXTERNAL_THROTTLE_LIMIT: ${EXTERNAL_THROTTLE_LIMIT:-300}
+      EXTERNAL_IP_THROTTLE_LIMIT: ${EXTERNAL_IP_THROTTLE_LIMIT:-600}
       # JWT signing secret (2A). The default is a dev-only placeholder — set a real
       # JWT_SECRET in a root .env for any deployment (boot fails fast if < 16 chars).
       JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}

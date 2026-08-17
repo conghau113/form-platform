@@ -83,7 +83,10 @@ Infrastructure-level only — **real authentication arrives in Phase 2**.
   disables cross-origin requests. No allow-all fallback.
 - **helmet** — `app.use(helmet())` sets standard security headers.
 - **Rate limiting** — `ThrottlerModule` + a global `ThrottlerGuard` cap requests/IP
-  (`THROTTLE_TTL`/`THROTTLE_LIMIT`); `/health` opts out via `@SkipThrottle()`.
+  (`THROTTLE_TTL`/`THROTTLE_LIMIT`); `/health` opts out via `@SkipThrottle()`. **`/external/*` calls
+  presenting an API key are budgeted per credential instead** (`EXTERNAL_THROTTLE_LIMIT`), with
+  `EXTERNAL_IP_THROTTLE_LIMIT` as the per-IP ceiling on that traffic — an integrating system calls
+  from one egress IP. Policy in `modules/external/external-throttle.ts` (P6).
 
 > **Trust boundary:** `x-owner-id` (the `@CurrentOwner()` seam) is **operator-declared, NOT a
 > security boundary** in the legacy header mode — it identifies *who the caller claims to be* for

@@ -273,7 +273,7 @@ có nghĩa. Đo trên `web-admin/src/features/workOrder/workOrderManager` và `c
 | **Q6** | **`validations`.** Ví dụ §12.B (`:1425-1427`) có mảng `validations`, và §14 mục 5 nói bên thứ ba có thể gửi thêm. Nhưng **template thật không có trường này** (0/2709 node) — ràng buộc bắt buộc chỉ thể hiện bằng `required: true` (**191** node đặt `true`; 290 node có khai khoá `required`). Vậy có nên gửi `validations` không? Nếu có, `form_item_validations.form_validate_code` là FK tới `form_validations.code` — xin danh sách mã hợp lệ | **Không** gửi `validations`; chỉ gửi `required` | FK không resolve lúc nạp |
 | **Q7** | **Endpoint A** (`GET /external/workflow-definition`) **thay** `generateWorkflowForTicket` hay chạy **song song**? Chúng tôi thấy `WORKFLOW_PCT.json` hiện là read-model được sinh lại sau mỗi action; nếu endpoint A chạy song song thì sẽ có **hai nguồn sự thật** cho cùng một quy trình | ✅ **ĐÃ TỰ TRẢ LỜI — xem T23.** Chúng tôi quyết định **không làm A** và nêu đủ số đo. Câu hỏi còn để ngỏ chỉ còn: các anh có ý định **gỡ** `generateWorkflowForTicket` không? Nếu có thì chúng tôi mở lại | Hai nguồn sự thật cho cùng một quy trình — đúng vấn đề mà việc tích hợp này định gỡ |
 | **Q8** | **§14 mục 2 & 3.** Template có phải **chừa sẵn** slot `*_SIGN` / `*_SIGNTIME` / `*_SIGNDATA` không? Và thứ tự trường cho PDF theo `typeFormItemPDF` (26 mã, `form.enum.ts:540`) là việc của bên nào? | Chừa slot **nếu form đã khai**; **không** tự sinh. Thứ tự PDF: mặc định là việc phía EVN | Ký số không gắn được giá trị; PDF sai thứ tự trường |
-| **Q9** | **Tải thật của `/external/*`** khoảng bao nhiêu request/phút? Hiện chúng tôi giới hạn 120 req/60s **theo IP**, mà traffic từ phía EVN sẽ dùng chung một IP | Đổi sang hạn mức **theo khoá API**, không theo IP | Chặn nhầm traffic thật vào giờ cao điểm |
+| **Q9** | **Tải thật của `/external/*`** khoảng bao nhiêu request/phút? | ✅ **ĐÃ LÀM XONG, không còn là câu chặn — xem T24.** Hạn mức **chính** nay là **300 request/60 giây cho mỗi KHOÁ API**; theo IP chỉ còn một trần chống lạm dụng 600/60 giây. Câu hỏi hạ xuống mức tham khảo: cho biết tần suất thật lúc cao điểm để chúng tôi chỉnh con số cho khớp | ~~Chặn nhầm traffic thật vào giờ cao điểm~~ — đã gỡ. Còn lại: nếu tải thật vượt 300/phút/khoá mà không ai báo thì vẫn chạm trần |
 
 ---
 
@@ -549,7 +549,10 @@ nắn này.
 
 ---
 
-## 8. Cập nhật sau khi hiện thực endpoint C (P4a/P4b/P4c/P4d) — 10 điểm, trong đó **5 lỗi của phía EVN**
+## 8. Cập nhật sau khi hiện thực endpoint C — 12 điểm, trong đó **5 lỗi của phía EVN**
+
+*(T13–T22 là endpoint C — T19b là phần bổ sung của T19, không đếm riêng; **T23** là quyết định không
+làm endpoint A; **T24** là hạn mức gọi API.)*
 
 Endpoint C `POST /external/check-transition` **đã chạy**. Nó trả `allowed`, `nextStatus`,
 `ambiguousNext`, `coverage`, **`definitionVersion`** và `message` — **sáu trường này LUÔN có mặt** —
@@ -734,7 +737,7 @@ Endpoint C nhận: **mảng hàng** `[{...}]`, hoặc object `{ "data": [...] }`
 Đây là lỗi duy nhất phát sinh từ **nội dung** của một request đã hợp lệ và đã xác thực. Endpoint C
 vẫn trả các lỗi thông thường khác của bề mặt: **401** (thiếu/sai khoá API), **400** (thiếu trường bắt
 buộc, sai kiểu, **hoặc sai dạng** — ví dụ `definitionVersion` chứa ký tự ngoài tập cho phép ở T21 —
-do `ValidationPipe`), **429** (chạm hạn mức — xem ghi chú vận hành ở cuối §8).
+do `ValidationPipe`), **429** (chạm hạn mức — xem **T24**, kể cả tên header trả kèm).
 
 ⚠️ **Thân lỗi KHÔNG phải một phán quyết.** Sáu trường luôn-có-mặt nêu ở đầu §8 (gồm cả
 `definitionVersion`) chỉ thuộc về phản hồi **200**; thân của 400/401/422/429 **không** mang chúng —
@@ -797,11 +800,11 @@ code nào của chúng tôi đổi**. `definitionVersion` đặt tên cho bản 
   **không đụng một byte dữ liệu nào** — `definitionVersion` sẽ **không** nhúc nhích ở lần đó. Chúng
   tôi công bố giới hạn này thay vì thêm một con số phải nhớ tay tăng, vì loại cổng đó sẽ mục.
 
-⚠️ **Một điều kiện vận hành xin lưu ý trước:** hạn mức của chúng tôi (**mặc định**, chỉnh được bằng
-biến môi trường `THROTTLE_LIMIT`/`THROTTLE_TTL`) là **120 request /
-60 giây / IP**. Nếu phía EVN gọi C **mỗi lần người dùng bấm một action** từ một IP egress chung thì
-sẽ chạm trần. Chúng tôi đang xử lý (đổi sang hạn mức theo khoá API, câu **Q9**) — xin đừng bật C ở
-tần suất đó trước khi việc này xong.
+✅ **Điều kiện vận hành nói ở các bản trước đã được xử lý xong** — hạn mức **chính** nay tính theo
+**khoá API** (300 request/60 giây cho mỗi khoá) chứ không theo IP, nên việc gọi C ở tần suất cao từ
+một IP egress chung không còn bị trần 120/phút cũ chặn. (Vẫn còn một **trần theo IP là 600
+request/60 giây** cho traffic có khoá — lưới chống lạm dụng, không phải hạn mức chính; chỉnh được
+bằng biến môi trường.) Chi tiết, tên header và giới hạn ở **T24**.
 
 ### T22. `progress` — phiếu đang ở đâu trong luồng, **chiếu lại chứ không tính lại**
 
@@ -908,6 +911,79 @@ nghĩa luồng. B (form template) + C (chuyển trạng thái, guard ngoài ph�
 2 trở thành bài toán thu hẹp từ vựng có chủ đích (thoả thuận trước một tập điều kiện chung) thay vì
 ánh xạ mò. Khi đó xin báo, chúng tôi sẽ mở lại. Còn chừng nào hai bên cùng định nghĩa luồng thì làm
 endpoint A là làm sớm.
+
+### T24. ✅ Hạn mức gọi API — hạn mức **chính** nay theo **khoá**, IP chỉ còn là lưới chặn (trả lời **Q9**)
+
+Đây là câu trả lời của chúng tôi cho **Q9**, và nó **gỡ bỏ điều kiện vận hành** mà các bản trước của
+tài liệu này đã xin các anh chờ. Các anh **không cần trả lời gì** để dùng được; con số thật của phía
+các anh (nếu có) chỉ giúp chúng tôi chỉnh cho khớp.
+
+**Hạn mức hiện tại (mặc định, cùng một cửa sổ 60 giây):**
+
+| Áp cho | Mặc định | Biến môi trường |
+|---|---|---|
+| **Mỗi khoá API** gọi `/external/*` | **300 request / 60 giây** | `EXTERNAL_THROTTLE_LIMIT` |
+| Trần theo IP cho traffic `/external/*` **có khoá** | 600 request / 60 giây | `EXTERNAL_IP_THROTTLE_LIMIT` |
+| Mọi thứ còn lại (không đổi) | 120 request / 60 giây / IP | `THROTTLE_LIMIT` |
+| Cửa sổ dùng chung | 60 000 ms | `THROTTLE_TTL` |
+
+- **Ngân sách theo khoá là ngân sách CHUNG cho cả bề mặt**, không phải mỗi endpoint một suất: 300
+  request đó tính gộp cả `form-template` lẫn `check-transition`. Chúng tôi chọn như vậy để con số
+  chúng tôi nói với các anh không tự nhân lên mỗi lần chúng tôi thêm một endpoint.
+- **Nhiều tiến trình dùng chung một khoá thì dùng chung ngân sách.** Nếu phía các anh có nhiều
+  service gọi song song và muốn tách hạn mức, xin **cấp thêm khoá** (mỗi khoá một ngân sách riêng)
+  — chúng tôi phát khoá theo yêu cầu, không giới hạn số lượng.
+- **Vẫn còn trần theo IP** cho traffic có khoá, vì hạn mức được tính **trước khi** khoá được xác
+  thực: nếu không có trần đó, một bên bất kỳ chỉ cần đổi giá trị header mỗi lần gọi là thoát hết mọi
+  giới hạn. Nghĩa là: hai khoá của các anh đi chung một IP **không tranh nhau** ở mức bình thường,
+  nhưng tổng của cả IP vẫn có trần. Nếu các anh cần vượt 600/phút từ một IP, chỉ cần báo — đó là một
+  biến môi trường.
+
+**Khi chạm trần**, chúng tôi trả **429**. ⚠️ **Tên header có hậu tố**, xin lưu ý khi viết client
+(đo thật trên bản đã chạy, không phải suy đoán):
+
+| Tình huống | Header các anh nhận được (đo thật, không phải suy đoán) |
+|---|---|
+| Request **không** bị chặn | đủ hai bộ: `X-RateLimit-{Limit,Remaining,Reset}-external-key` **và** `…-external-ip` |
+| **429** vì hạn mức **khoá** | `Retry-After-external-key: <số giây còn lại>` — 🔴 **kèm theo bộ `X-RateLimit-*-external-ip`, XIN ĐỪNG TIN nó** (xem ghi chú dưới) |
+| **429** vì trần **IP** | chỉ `Retry-After-external-ip: <số giây còn lại>` |
+
+🔴 **Một cái bẫy chúng tôi phải nói trước, vì client rất dễ đọc nhầm:** trên phản hồi 429 do **hạn
+mức khoá**, các anh vẫn nhận được `X-RateLimit-Remaining-external-ip` với một số **dương** (ví dụ đo
+thật: `429` kèm `X-RateLimit-Remaining-external-ip: 2`). Đó là ngân sách **của IP**, không phải của
+khoá — hạn mức khoá lúc đó đã cạn. Bộ `X-RateLimit-*-external-key` **không bao giờ** xuất hiện trên
+429. Quy tắc an toàn cho client: **thấy 429 thì đọc `Retry-After-*`, đừng đọc `X-RateLimit-*`**.
+Giá trị `Retry-After-*` là số giây còn lại của cửa sổ đang chặn (giảm dần), không phải hằng số.
+
+Không có header `Retry-After` trần — đó là hệ quả của việc đặt tên cho từng hạn mức, và chúng tôi nói
+ra thay vì để các anh phát hiện lúc chạy thật. Đọc `X-RateLimit-Remaining-external-key` là cách rẻ
+nhất để client tự giãn nhịp trước khi chạm trần.
+
+🔴 **Năm điều nói thẳng (ba giới hạn + hai lựa chọn thiết kế):**
+1. **Hạn mức đếm theo tiến trình, không dùng bộ nhớ chung.** Hôm nay chúng tôi chạy một instance nên
+   con số trên là con số thật. Nếu sau này chạy nhiều instance sau bộ cân bằng tải, hạn mức hiệu
+   dụng sẽ **nhân lên** theo số instance cho tới khi chúng tôi chuyển sang bộ đếm dùng chung. Chúng
+   tôi sẽ báo trước nếu điều đó xảy ra.
+2. **Sau reverse-proxy, "IP" là IP của proxy.** Trần theo IP vì thế có thể gộp nhiều client lại làm
+   một trong một số cách triển khai. Ngân sách **theo khoá** không bị ảnh hưởng — đó là lý do nó là
+   hạn mức chính, còn trần IP chỉ là lưới chống lạm dụng.
+3. **Mặc định 300/600 là con số chúng tôi tự chọn**, vì Q9 chưa có câu trả lời. Xin cho biết tần
+   suất thật lúc cao điểm, chúng tôi chỉnh lại — việc chỉnh là đổi một biến môi trường, không phải
+   đổi code, và không ảnh hưởng gì tới hợp đồng dữ liệu.
+4. **Cửa sổ là cửa sổ CỐ ĐỊNH, không phải cửa sổ trượt.** Bộ đếm của một khoá về 0 khi cửa sổ của
+   nó hết, nên về lý thuyết một client có thể tiêu trọn hạn mức ở cuối cửa sổ này và tiêu trọn lần
+   nữa ở đầu cửa sổ sau (tức gấp đôi trong một khoảng ngắn). Chúng tôi chọn như vậy vì nó đơn giản
+   và **đo được** — `X-RateLimit-Reset-external-key` cho biết chính xác lúc nào cửa sổ của các anh
+   lật.
+5. **Bộ đếm giữ tối đa 10.000 khoá cùng lúc trên mỗi tiến trình.** Con số đó thừa cho mọi khoá thật
+   + mọi địa chỉ nguồn thật; nó tồn tại để một bên gọi bịa khoá liên tục không làm phình bộ nhớ vô
+   hạn. Nếu bị flood tới mức đó, bộ đếm cũ nhất bị loại trước, và **trần theo IP** là thứ vẫn giữ.
+   Traffic thật của các anh (vài khoá, gọi đều) không bao giờ chạm giới hạn này.
+
+*(Ghi chú kỹ thuật, để các anh khỏi phải hỏi: chúng tôi **không** dùng bộ đếm mặc định của thư viện
+`@nestjs/throttler` mà tự viết một bộ đếm riêng, chính vì hai điểm 4–5 ở trên: bộ mặc định không bao
+giờ quên một khoá nào, và nó cho một khoá bị chặn làm đông cứng bộ đếm của khoá khác. Chúng tôi đo
+được cả hai và sửa chứ không công bố như hạn chế.)*
 
 ---
 
@@ -1074,5 +1150,5 @@ Nếu không nhận được trả lời, chúng tôi làm tiếp theo đúng nh
 | Q6 | Không gửi `validations`; chỉ gửi `required` — **nhưng xem T8**: phía EVN CÓ hỗ trợ, nên đây là năng lực bỏ không chứ không phải hợp đồng thiếu. Đã chuyển thành cảnh báo, sẽ ánh xạ ở lát cắt riêng |
 | Q7 | ✅ **ĐÃ CHỐT: KHÔNG làm endpoint A** — không còn là "mặc định nếu không ai trả lời", mà là quyết định có số đo, xem **T23**. Đảo ngược nếu EVN gỡ `generateWorkflowForTicket` |
 | Q8 | Chừa slot ký số nếu form đã khai; không tự sinh. Thứ tự PDF: việc phía EVN |
-| Q9 | Hạn mức theo khoá API thay vì theo IP |
+| Q9 | ✅ **ĐÃ SHIP (T24)**: hạn mức chính 300 req/60s cho mỗi **khoá API** (biến `EXTERNAL_THROTTLE_LIMIT`); theo IP còn trần 600 req/60s cho traffic có khoá; 429 kèm header `Retry-After-external-key` |
 | — | Tra không ra **trong bảng** ⇒ `allowed: true` + `outOfScopeGuards`. **(sửa ở P4c)** Guard **nội dung** là việc khác: thiếu nội dung bắt buộc ⇒ `allowed: false`, xem **T19** |

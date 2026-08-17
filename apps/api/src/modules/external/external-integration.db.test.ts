@@ -3,6 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaService } from "../../persistence/prisma/prisma.service.js";
 import { PrismaExternalIntegrationRepo } from "../../persistence/prisma/prisma-external-integration.repo.js";
+import { seedExternalKey } from "../../scripts/seed-external-key.js";
 import { hashApiKey } from "./api-key.guard.js";
 
 /** Same Docker probe as `import-files-to-db.test.ts`: skip cleanly where no daemon is reachable
@@ -152,7 +153,67 @@ describe.skipIf(!hasDocker())("external integration constraints (real Postgres)"
     expect(await repo.findActiveKeyByHash(tokenHash)).toBeNull();
   });
 
+  it("leaves no orphan credential when the binding write fails", async () => {
+    // P6, closing the advisory D0-a left open. `seed-external-key.test.ts` proves both writes go
+    // through the transaction client; only a real database proves the rollback, so this is the half
+    // that cannot be faked. The binding write is forced to fail by handing the script a client
+    // whose `$transaction` passes on a proxied tx — the surrounding transaction is real, and so is
+    // the rollback it performs.
+    //
+    // The fixture is not optional: `seedExternalKey` validates the form *before* minting, so with a
+    // formId that does not exist it would throw early and the assertion below would hold for the
+    // wrong reason.
+    const tenant = await prisma.tenant.create({ data: { name: "Rollback", slug: "tenant-rb" } });
+    const project = await prisma.project.create({
+      data: { ownerId: "owner_rb", tenantId: tenant.id, name: "P", slug: "p" },
+    });
+    const form = await prisma.formRecord.create({
+      data: { id: "form_rb", projectId: project.id, title: "F", body: {} },
+    });
+
+    const failing = new Proxy(prisma, {
+      get(target, prop, receiver) {
+        if (prop !== "$transaction") return Reflect.get(target, prop, receiver);
+        return (fn: (tx: unknown) => Promise<unknown>) =>
+          prisma.$transaction((tx) =>
+            fn(
+              new Proxy(tx, {
+                get(txTarget, txProp, txReceiver) {
+                  if (txProp !== "externalTicketTypeMap") {
+                    return Reflect.get(txTarget, txProp, txReceiver);
+                  }
+                  return {
+                    upsert: () => {
+                      throw new Error("forced binding failure");
+                    },
+                  };
+                },
+              }),
+            ),
+          );
+      },
+    }) as PrismaService;
+
+    await expect(
+      seedExternalKey(failing, {
+        tenantId: tenant.id,
+        label: "rollback probe",
+        binding: {
+          ticketTypeCode: "PCT",
+          formId: form.id,
+          externalFormCode: "CPCT",
+        },
+        // The message pins WHICH failure this was: an early validation throw would say "No such
+        // form" and the count below would be 0 without the transaction doing anything.
+      }),
+    ).rejects.toThrow("forced binding failure");
+
+    expect(await prisma.externalApiKey.count({ where: { label: "rollback probe" } })).toBe(0);
+  });
+
   it("scopes the binding lookup by tenant", async () => {
+    // (P6 note: the advisory asking this test to build its own rows was already closed at P2-0 —
+    // the two tenants below are created here rather than inherited from earlier tests.)
     const repo = new PrismaExternalIntegrationRepo(prisma);
     // Its own tenants, so this no longer depends on rows the earlier tests happened to leave
     // behind — one of them now binds a second PCT template deliberately.

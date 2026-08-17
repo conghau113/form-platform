@@ -30,6 +30,20 @@ export const envSchema = z
     THROTTLE_TTL: z.coerce.number().int().positive().default(60_000),
     THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
     /**
+     * Rate limits for the `/external/*` integration surface (P6 / EVN Q9). Both use the
+     * `THROTTLE_TTL` window above — one window is easier to state to an integrator than three.
+     *
+     * `EXTERNAL_THROTTLE_LIMIT` is per **API key**, because an integrating system calls us from a
+     * single egress IP: under a per-IP limit their whole organisation shares a budget sized for one
+     * browser. `EXTERNAL_IP_THROTTLE_LIMIT` is the per-IP ceiling that still applies to those
+     * calls, so a caller cycling through made-up keys cannot mint an unlimited number of buckets.
+     * Keep it modest: rate limiting runs before authentication, so it is also the ceiling on an
+     * unauthenticated flood of this surface. Defaults are deliberate placeholders — replace them
+     * with the integrator's real peak rate once they state it.
+     */
+    EXTERNAL_THROTTLE_LIMIT: z.coerce.number().int().positive().default(300),
+    EXTERNAL_IP_THROTTLE_LIMIT: z.coerce.number().int().positive().default(600),
+    /**
      * JWT signing secret (production-hardening 2A). Required — a missing/short secret is a real
      * auth vulnerability, so we fail fast rather than fall back to a guessable default.
      */

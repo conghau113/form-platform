@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import type { Prisma } from "@prisma/client";
 import { hashApiKey } from "../modules/external/api-key.guard.js";
 import { PrismaService } from "../persistence/prisma/prisma.service.js";
 
@@ -96,8 +97,13 @@ async function assertBindableForm(
   }
 }
 
+/**
+ * `Prisma.TransactionClient` rather than `PrismaService`, so the same function serves the standalone
+ * `--bind-only` path and the transactional one below. A `PrismaService` satisfies it — the type is
+ * the client minus the methods that cannot be called inside a transaction.
+ */
 async function upsertBinding(
-  prisma: PrismaService,
+  prisma: Prisma.TransactionClient,
   tenantId: string,
   binding: ExternalBinding,
 ): Promise<string> {
@@ -185,20 +191,28 @@ export async function seedExternalKey(
   }
 
   const rawKey = randomBytes(32).toString("base64url");
-  const key = await prisma.externalApiKey.create({
-    data: {
-      tenantId: options.tenantId,
-      label: options.label,
-      tokenHash: hashApiKey(rawKey),
-    },
-    select: { id: true },
+  // One transaction, because the validation above cannot rule the binding write out entirely — a
+  // constraint the checks do not model, or a connection lost mid-run, would otherwise leave an
+  // active credential whose raw value was never printed. Nobody could use that row, but `--list`
+  // shows it as live, and an operator cleaning up has no way to tell it from a real key.
+  const { keyId, mapId } = await prisma.$transaction(async (tx) => {
+    const key = await tx.externalApiKey.create({
+      data: {
+        tenantId: options.tenantId,
+        label: options.label,
+        tokenHash: hashApiKey(rawKey),
+      },
+      select: { id: true },
+    });
+    return {
+      keyId: key.id,
+      mapId: options.binding
+        ? await upsertBinding(tx, options.tenantId, options.binding)
+        : undefined,
+    };
   });
 
-  const mapId = options.binding
-    ? await upsertBinding(prisma, options.tenantId, options.binding)
-    : undefined;
-
-  return { rawKey, keyId: key.id, mapId };
+  return { rawKey, keyId, mapId };
 }
 
 /** Revoke one key. Idempotent, and it keeps the row so the audit trail still resolves the actor. */

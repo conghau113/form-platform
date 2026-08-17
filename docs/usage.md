@@ -149,8 +149,10 @@ Khi khởi động, API validate env bằng Zod — thiếu/sai biến bắt bu�
 | `DATABASE_URL` | ✅ | — | chuỗi kết nối Postgres |
 | `PORT` | | `3001` | cổng HTTP |
 | `CORS_ORIGINS` | | `http://localhost:5173` | allowlist origin (phẩy ngăn cách); rỗng = chặn cross-origin |
-| `THROTTLE_TTL` | | `60000` | cửa sổ rate-limit (ms) |
-| `THROTTLE_LIMIT` | | `120` | số request/IP trong cửa sổ |
+| `THROTTLE_TTL` | | `60000` | cửa sổ rate-limit (ms), dùng chung cho cả 3 hạn mức |
+| `THROTTLE_LIMIT` | | `120` | số request/IP trong cửa sổ (mọi route trừ `/external/*` có khoá) |
+| `EXTERNAL_THROTTLE_LIMIT` | | `300` | `/external/*`: số request trong cửa sổ cho **mỗi khoá API** |
+| `EXTERNAL_IP_THROTTLE_LIMIT` | | `600` | `/external/*`: trần theo IP cho traffic có khoá (chặn kẻ xoay vòng khoá giả) |
 | `AI_*` | | — | cấu hình AI (BYOK, tùy chọn) — xem `apps/api/env.example` |
 
 > Lưu ý bảo mật: `x-owner-id` là seam cũ **operator-declared**, KHÔNG phải ranh giới bảo mật

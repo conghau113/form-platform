@@ -66,8 +66,14 @@ export function hashApiKey(raw: string): string {
  * Express folds a repeated `X-Api-Key` into one comma-joined string, so that arrives as a value the
  * digest simply will not match — a rejection, not a bypass. The array branch is for the handful of
  * headers Node exposes as arrays, and for tests that construct the request shape directly.
+ *
+ * Exported because rate limiting has to read the header too (`external-throttle.ts`), and it runs
+ * *before* this guard (P6). Two readers that disagree — say, one taking the first element of a
+ * repeated header and one the whole join — would give a single request one identity while it is
+ * counted and a different one while it is authenticated, which is precisely what a per-key limit
+ * exists to prevent.
  */
-function readApiKey(req: ExternalRequest): string | null {
+export function readApiKey(req: ExternalRequest): string | null {
   const header = req.headers[API_KEY_HEADER];
   const value = Array.isArray(header) ? header[0] : header;
   return value?.trim() || null;

@@ -194,9 +194,10 @@ export class ExternalService {
    * one would turn an audit of "who read our form templates" into an access log.
    *
    * ⚠️ "Touches no repository" is true of this METHOD, not of the request. `ApiKeyGuard` still costs
-   * a database round-trip per call (`api-key.guard.ts`), and the global throttler still counts the
-   * call against 120/60s per IP. Neither belongs in the sentence we send outward about C being
-   * cheap — see the operating note in `docs/expansion/evn-integration-questions.md` §8.
+   * a database round-trip per call (`api-key.guard.ts`), and the throttler still counts the call —
+   * since P6 against the caller's own key (`EXTERNAL_THROTTLE_LIMIT`) rather than against a per-IP
+   * budget their whole organisation shares. Neither belongs in the sentence we send outward about C
+   * being cheap — see T24 in `docs/expansion/evn-integration-questions.md`.
    *
    * ⚠️ `undefined`, not `[]`, when the request omits `ticketRoles`. The two mean different things
    * downstream — `[]` is "we asked, the ticket carries no roles" and resolves a tie-break, while
