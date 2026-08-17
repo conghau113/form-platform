@@ -33,6 +33,7 @@ import {
 } from "../operate/priority";
 import { useCaseParticipants } from "../operate/useCaseParticipants";
 import { useAssignCase, useAssignees, useUpdateWorkOrder } from "../operate/useWorkOrders";
+import { CaseProgressCard } from "./CaseProgressCard";
 import { actionLabel, isTerminalState, runActions } from "./run-actions";
 import { workflowRoles } from "./run-roles";
 import { indexStatusCatalog, resolveStatusStyle, useStatusCatalog } from "./status-catalog";
@@ -539,6 +540,15 @@ function CaseRunner({
             ))
           )}
         </Space>
+
+        <CaseProgressCard
+          def={def}
+          view={view}
+          instance={instance}
+          byCode={byCode}
+          nameOf={nameOf}
+          locale={locale}
+        />
 
         <Card title="Lịch sử" size="small">
           {instance.history.length === 0 ? (

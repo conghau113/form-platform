@@ -38,15 +38,22 @@ export function isTerminalState(def: WorkflowDefinition, stateId: string): boole
  * display only (the Run view still fires the raw id). Returns the first matching transition's
  * localized label, falling back to `fallback`, then the raw `action` id. No `locale` ⇒ the id, so
  * this is a no-op for non-localized workflows.
+ *
+ * `from` narrows the search to transitions LEAVING that node. Two edges may share one `action` id
+ * with different labels, so a caller anchored to a specific node (the progress card, which reports
+ * per node) would otherwise show the other edge's wording. Callers that only know the action — the
+ * action buttons, which fire from the current state — omit it and keep the original behaviour.
  */
 export function actionLabel(
   def: WorkflowDefinition,
   action: string,
   locale?: string,
   fallback?: string,
+  from?: string,
 ): string {
   if (locale) {
     for (const t of def.transitions) {
+      if (from !== undefined && t.from !== from) continue;
       const byLocale = t.action === action ? t.i18n?.action : undefined;
       if (byLocale) {
         const translated = byLocale[locale] ?? (fallback ? byLocale[fallback] : undefined);

@@ -93,6 +93,45 @@ describe("workflowDefinitionSchema", () => {
     expect(out.nodes[0].i18n?.status.vi).toBe("Đã tạo");
     expect(out.transitions[0].i18n?.action.vi).toBe("Tiếp");
   });
+
+  // E1 `defaultAssignee` is additive: nodes gained an optional {kind, value}. Old definitions
+  // without it must keep parsing, so CURRENT_WORKFLOW_VERSION does NOT move.
+  it("parses an old definition without E1 defaultAssignee (parse-compat)", () => {
+    const out = workflowDefinitionSchema.parse(validDef);
+    expect(out.nodes[0].defaultAssignee).toBeUndefined();
+    expect(CURRENT_WORKFLOW_VERSION).toBe(1);
+  });
+
+  it("parses a node carrying defaultAssignee for a role and for a user", () => {
+    const assigned = {
+      ...validDef,
+      nodes: [
+        { id: "a", status: "created", defaultAssignee: { kind: "role", value: "manager" } },
+        { id: "b", status: "done", defaultAssignee: { kind: "user", value: "u1" } },
+      ],
+    };
+    const out = workflowDefinitionSchema.parse(assigned);
+    expect(out.nodes[0].defaultAssignee).toEqual({ kind: "role", value: "manager" });
+    expect(out.nodes[1].defaultAssignee).toEqual({ kind: "user", value: "u1" });
+  });
+
+  it("rejects a defaultAssignee whose kind is outside role|user", () => {
+    const bad = {
+      ...validDef,
+      nodes: [{ id: "a", status: "x", defaultAssignee: { kind: "team", value: "ops" } }],
+    };
+    expect(workflowDefinitionSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a defaultAssignee with an empty value", () => {
+    // Separate from the `kind` case on purpose: folded into one test, dropping `.min(1)` from
+    // `value` would still leave the assertion green.
+    const bad = {
+      ...validDef,
+      nodes: [{ id: "a", status: "x", defaultAssignee: { kind: "role", value: "" } }],
+    };
+    expect(workflowDefinitionSchema.safeParse(bad).success).toBe(false);
+  });
 });
 
 describe("workflowInstanceSchema history actor (Phase E)", () => {

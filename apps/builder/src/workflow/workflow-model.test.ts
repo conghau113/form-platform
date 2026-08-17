@@ -71,10 +71,43 @@ describe("workflow-model boundary", () => {
     expect(fromFlow(meta, nodes, edges)).toEqual(localized);
   });
 
+  // E1: same reason as i18n above — there is no defaultAssignee authoring UI yet, so opening a
+  // workflow that has one and pressing Save must not delete it.
+  it("carries a node's defaultAssignee through the round-trip", () => {
+    const assigned: WorkflowDefinition = {
+      ...def,
+      nodes: [
+        { ...def.nodes[0], defaultAssignee: { kind: "role", value: "manager" } },
+        { ...def.nodes[1], defaultAssignee: { kind: "user", value: "u1" } },
+      ],
+    };
+    const { meta, nodes, edges } = toFlow(assigned);
+    expect(fromFlow(meta, nodes, edges)).toEqual(assigned);
+  });
+
+  // A node carrying BOTH i18n and defaultAssignee — the only shape that can catch the two keys
+  // being emitted in the wrong ORDER. Neither of the first two inputs has any node-level optional
+  // key after `statusCode`, so on those a swapped order still serializes identically.
+  const nodeWithBothOptionals: WorkflowDefinition = {
+    ...def,
+    nodes: [
+      {
+        ...def.nodes[0],
+        i18n: { status: { vi: "Đã tạo" } },
+        defaultAssignee: { kind: "role", value: "manager" },
+      },
+      def.nodes[1],
+    ],
+  };
+
   // The dirty check compares JSON.stringify(fromFlow(...)) against the Zod-parsed baseline, so the
   // round-trip must be BYTE-identical (key order included) — for defs with and without i18n.
   it("byte-matches the Zod-parsed baseline (no false-dirty)", () => {
-    for (const input of [def, { ...def, defaultLocale: "en", i18n: { title: { vi: "QT" } } }]) {
+    for (const input of [
+      def,
+      { ...def, defaultLocale: "en", i18n: { title: { vi: "QT" } } },
+      nodeWithBothOptionals,
+    ]) {
       const parsed = workflowDefinitionSchema.parse(input);
       const { meta, nodes, edges } = toFlow(parsed);
       expect(JSON.stringify(fromFlow(meta, nodes, edges))).toBe(JSON.stringify(parsed));

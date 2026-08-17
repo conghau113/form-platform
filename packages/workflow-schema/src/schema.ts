@@ -54,6 +54,29 @@ export const workflowNodeSchema = z.object({
   /** Localized overrides of this node's display text (`status`). See {@link i18nMapSchema}.
    *  Additive: old JSON without this key keeps parsing, so no workflowVersion bump. */
   i18n: i18nMapSchema.optional(),
+  /** E1 — who this state is EXPECTED to land on, as authored on the template.
+   *
+   *  A SUGGESTION, NEVER A PERMISSION. `transition.role` is the only thing the engine checks the
+   *  ACTOR against (`advance` in workflow-core; a guard gates on case DATA, not on identity), and
+   *  this field is not consulted at all — so it stops nobody, and reading it as access control
+   *  would be a security hole in the reader, not in the graph. It is named `defaultAssignee` rather
+   *  `assignee` precisely because the RUNNING case already has an `assigneeId` (whoever actually
+   *  claimed it) — this is the default that feeds it, not a mirror of it.
+   *
+   *  `kind: "role"` names a domain role (the same vocabulary `transition.role` uses); `kind: "user"`
+   *  names a user id — never a display name, so a renamed user isn't frozen into the definition.
+   *
+   *  Additive/optional ⇒ NO workflowVersion bump (same character as `i18n`/`statusCode`/`kind`).
+   *
+   *  ⚠️ Do NOT use `defaultAssignee` as a key inside this node's `i18n` map: `localizeWorkflow`
+   *  overwrites any attribute named there with the translated STRING, which would replace this
+   *  object. Only text attributes (`status`) belong in `i18n`. */
+  defaultAssignee: z
+    .object({
+      kind: z.enum(["role", "user"]),
+      value: z.string().min(1),
+    })
+    .optional(),
 });
 
 /** A directed edge between states. `action` is the event that triggers it; an

@@ -29,6 +29,10 @@ export interface FlowNodeData {
   /** WF4b: localized overrides of this node's `status` label. Carried through unchanged (no editor
    *  authoring UI yet) so an AI/JSON-authored map survives a Save round-trip. */
   i18n?: I18nMap;
+  /** E1: who this state is expected to land on. Carried through for exactly the same reason as
+   *  `i18n` above — the authoring UI lands later, and until it does, opening a workflow that has
+   *  one and pressing Save would otherwise DELETE it silently. A suggestion, never a permission. */
+  defaultAssignee?: WorkflowNode["defaultAssignee"];
   [key: string]: unknown;
 }
 
@@ -108,6 +112,7 @@ export function toFlow(def: WorkflowDefinition): {
       statusCode: n.statusCode,
       kind: n.kind,
       i18n: n.i18n,
+      defaultAssignee: n.defaultAssignee,
     },
   }));
   const edges: FlowEdge[] = def.transitions.map((t) => ({
@@ -139,9 +144,10 @@ export function fromFlow(
   edges: FlowEdge[],
 ): WorkflowDefinition {
   // Emit keys in the SAME order as workflowNodeSchema (id, status, formId, position, kind,
-  // statusCode, i18n) so a round-trip through the server's `migrateWorkflow` (Zod parse → schema key
-  // order) byte-matches `JSON.stringify`, keeping the dirty check clean on load. Each optional key
-  // is conditionally spread so an absent value emits no key (matching the Zod-parsed baseline).
+  // statusCode, i18n, defaultAssignee) so a round-trip through the server's `migrateWorkflow` (Zod
+  // parse → schema key order) byte-matches `JSON.stringify`, keeping the dirty check clean on load.
+  // Each optional key is conditionally spread so an absent value emits no key (matching the
+  // Zod-parsed baseline).
   const wfNodes: WorkflowNode[] = nodes.map((n) => ({
     id: n.id,
     status: n.data.status,
@@ -150,6 +156,7 @@ export function fromFlow(
     ...(n.data.kind ? { kind: n.data.kind } : {}),
     ...(n.data.statusCode ? { statusCode: n.data.statusCode } : {}),
     ...(n.data.i18n ? { i18n: n.data.i18n } : {}),
+    ...(n.data.defaultAssignee ? { defaultAssignee: n.data.defaultAssignee } : {}),
   }));
   // Emit keys in workflowTransitionSchema order (id, from, to, action, guard, role, i18n) for the
   // same byte-match reason as nodes — `guard` precedes `role`.
