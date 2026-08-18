@@ -37,7 +37,6 @@ export function CaseProgressCard({
   locale: string | undefined;
 }) {
   const progress = useMemo(() => nodeProgress(def, instance), [def, instance]);
-  const terminal = isTerminalState(def, instance.current);
 
   return (
     <Card title="Tiến trình" size="small">
@@ -51,7 +50,14 @@ export function CaseProgressCard({
           // would state, as fact, that the case has not reached a node it may well be standing on
           // — the same contradiction-on-one-screen that the terminal label exists to avoid.
           const entry = progress[node.id];
-          const tag = entry ? progressTag(entry.status, terminal) : { label: "—" };
+          // Asked about THIS node, not about the case. Since E3a a forked case is `active` on
+          // several rows at once, and one flag derived from the representative token would label
+          // every one of them by whether that ONE branch had run out of actions — announcing
+          // "Kết thúc" over a branch someone still has work in, or the reverse, depending on nothing
+          // more than the order the definition happens to list its edges in.
+          const tag = entry
+            ? progressTag(entry.status, isTerminalState(def, node.id))
+            : { label: "—" };
           return (
             <Space key={node.id} size="small" wrap>
               <Tag color={tag.color} style={{ margin: 0 }}>

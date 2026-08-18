@@ -11,10 +11,14 @@ export interface ProgressTag {
  * Name a node's progress for the Run view. Pure — the display half of `nodeProgress`, kept out of
  * the contract because it is wording, not semantics.
  *
- * `isTerminal` matters for exactly one row: the node the case is standing on. `nodeProgress` calls
- * that node `active` (it reports WHERE the case is, not whether the case is finished), so a case
- * that has run to the end of the graph would otherwise be labelled "Đang xử lý" directly beneath
- * the "Trạng thái kết thúc — không còn hành động" tag on the very same screen. Deciding what "done"
+ * `isTerminal` matters only for rows the case is standing on — one on an ordinary case, one per
+ * branch once a fork has run (E3a), and it must be answered about THAT ROW's node rather than about
+ * the case: a forked case has several `active` rows, and one shared flag would label them all by
+ * whether one arbitrary branch had run out of actions. `nodeProgress` calls those nodes `active`
+ * (it reports WHERE the
+ * case is, not whether the case is finished), so a case that has run to the end of the graph would
+ * otherwise be labelled "Đang xử lý" directly beneath the
+ * "Trạng thái kết thúc — không còn hành động" tag on the very same screen. Deciding what "done"
  * means across the several places this repo already answers it differently is E5's job; this is
  * only the label.
  */

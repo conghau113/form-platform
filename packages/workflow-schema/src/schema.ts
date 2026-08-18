@@ -79,14 +79,17 @@ export const workflowNodeSchema = z.object({
     .optional(),
   /** E2 — marks this node as a parallel-flow gateway rather than a state someone works in.
    *
-   *  ⚠️ CONTRACT ONLY, NOT YET EXECUTED. Nothing reads this key today: `advance` looks up a node by
-   *  id and nothing else, and `validateGraph` has no rule about forks or joins. A definition that
-   *  uses it therefore still runs ONE step at a time. The meaning below is what the engine is being
-   *  built toward, not what it currently does — do not read it as a description of runtime behavior,
-   *  and do not author a graph that depends on it until the engine lands.
+   *  `"fork"` splits the case into one token per outgoing transition; `"join"` parks arriving
+   *  tokens until every sibling of the same fork run has arrived. The engine executes both (E3a).
    *
-   *  Intended meaning: `"fork"` splits the case into one token per outgoing transition; `"join"`
-   *  parks arriving tokens until every sibling of the same fork has arrived. Orthogonal to `kind`: a
+   *  ⚠️ NOT YET VALIDATED. `validateGraph` still has no rule about forks or joins, so a malformed
+   *  gateway — a fork with one way out, a join without exactly one, a fork whose outgoing edges
+   *  carry a `guard` or `role` the engine cannot honour — is accepted when the definition is saved
+   *  and only refused when someone runs the case (`invalid-gateway`). The static rules land in E4,
+   *  and until then a fork's outgoing edges are traversed unconditionally: every one is taken, so a
+   *  gate placed on one would stop nobody.
+   *
+   *  Orthogonal to `kind`: a
    *  fork is still a `kind: "normal"` node in the status catalog, which is why this is NOT folded
    *  into `STATUS_KINDS` (that tuple also types the master-data catalog and the `statusKind` column).
    *
@@ -153,6 +156,19 @@ export const historyEntrySchema = z.object({
    *  workflowVersion bump (same character as `i18n`/`statusCode`). Never a display name: names are
    *  resolved at read time so a renamed user isn't frozen into history. */
   actor: z.string().optional(),
+  /** E3a — WHICH token made this move (see {@link workflowTokenSchema}), not who: `actor` above is
+   *  the person. On a case with no fork the two answers are equivalent and this key is noise; on a
+   *  forked case it is the only thing that says which BRANCH a history entry belongs to, so a reader
+   *  can tell "approved, then approved again" from "both branches approved once".
+   *
+   *  Written for the automatic steps a gateway takes too — a fork's outgoing edges are traversed by
+   *  the engine, not fired by a person, and the entry carries the id of the token that traversal
+   *  CREATED (or, where a root-scoped token merely walks through a join, its own id, because nothing
+   *  was merged and so nothing is new). That is what makes the key answer a question `actor` cannot.
+   *
+   *  Additive/optional ⇒ NO workflowVersion bump (same character as `actor`). Entries written before
+   *  this key existed keep parsing, and nothing about a single-token advance changes. */
+  token: z.string().optional(),
 });
 
 /**
@@ -204,22 +220,20 @@ export const workflowInstanceSchema = z.object({
   id: z.string(),
   definitionId: z.string(),
   definitionVersion: z.number().int(),
-  /** Where the case is, as a SINGLE node id — today, the whole truth: nothing writes `tokens` yet,
-   *  so every stored case has exactly this one place and every reader of it is correct.
+  /** Where the case is, as a SINGLE node id — since E3a, only the REPRESENTATIVE place.
    *
-   *  It stays REQUIRED through the phase-in that follows. Once a writer starts emitting `tokens` it
-   *  will emit both, so a build that predates `tokens` keeps reading this field and working — but
-   *  from that point on this is only the REPRESENTATIVE token, and reading it as "where the case is"
-   *  reports one branch of a parallel case as if it were the whole case. Read a marking through
-   *  `readMarking` (workflow-core), which handles both eras. */
+   *  It stays REQUIRED, and the engine keeps writing it alongside `tokens`, so a build that predates
+   *  markings keeps reading this field and working. But reading it as "where the case is" reports
+   *  one branch of a parallel case as though it were the whole case, and on a case that has passed
+   *  a fork it names an arbitrary (if deterministic) branch. Read a marking through `readMarking`
+   *  (workflow-core), which handles both eras. */
   current: z.string(),
   data: z.record(z.string(), z.unknown()),
   history: z.array(historyEntrySchema),
   /** E2 — the full marking: every place the case currently stands. ABSENT means the case was written
    *  by a build that had no notion of tokens; read it through `readMarking`, which turns that into
-   *  the single token at `current`. ⚠️ No writer emits this key yet, so absent is what EVERY stored
-   *  case looks like right now — the reader exists first so the writer can be added without a
-   *  migration.
+   *  the single token at `current`. Since E3a the engine writes this key on every case it creates or
+   *  advances, so absent means a case that has not been touched since that landed.
    *
    *  `.min(1)` because an empty marking is not a state this model has: a finished case still has its
    *  token PARKED on the end node, and a cancelling join still emits the parent token. Zero tokens
@@ -236,7 +250,13 @@ export const workflowInstanceSchema = z.object({
    *  ⚠️ Only FORK-CREATED scopes appear here. The outermost scope every case starts in has no entry,
    *  on purpose: no fork created it, so it has no `forkNode` and no meaningful `expected`, and
    *  inventing values for those would be a lie stored as data. So `scopes[token.scope] === undefined`
-   *  is a normal answer meaning "this token is at the outermost level" — never assume a hit.
+   *  is a normal answer — never assume a hit.
+   *
+   *  ⚠️ But it only means "outermost" when the scope IS {@link ROOT_SCOPE}. A run created by a fork
+   *  and then retired by its join reads exactly the same way, and reading THAT as "outermost" is how
+   *  a straggler walks through a join a second time and re-runs everything past it. For any other
+   *  scope, missing means the run was retired or lost, and the engine treats it as an error
+   *  (`invalid-gateway`) rather than as root.
    *
    *  Additive/optional ⇒ NO workflowVersion bump. */
   scopes: z

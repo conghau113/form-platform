@@ -1,4 +1,5 @@
 import type { WorkflowDefinition, WorkflowInstance } from "@org/workflow-schema";
+import { readMarking } from "./marking.js";
 
 /** Where a node stands for one running case. */
 export type NodeProgressStatus = "pending" | "active" | "done";
@@ -31,9 +32,14 @@ export type NodeProgress =
  * `history` is keyed by TRANSITION, not by node — this is the projection that turns one into the
  * other. Three states:
  *
- *   - `active`  the case is sitting here (`instance.current`)
+ *   - `active`  the case is sitting here — ANY of its tokens is (E3a)
  *   - `done`    not active, and the case has left this node at least once
  *   - `pending` neither
+ *
+ * "Where the case is" is read through `readMarking`, so a forked case shows every branch it is
+ * standing on rather than the one `current` happens to name. For a case with a single token — every
+ * case written before markings existed, and every graph without gateways — that is the same node
+ * `current` gives, so nothing about an ordinary case changes.
  *
  * ⚠️ THE META IS ONLY ON `done`, ON PURPOSE. A history entry's `at` is the moment the case LEFT the
  * node (the engine writes it when the transition fires), not the moment it arrived. On a loop the
@@ -45,8 +51,9 @@ export type NodeProgress =
  * does not enforce uniqueness, so a definition that never went through the editor could still carry
  * two nodes with one id — the last one wins HERE. (Only here: a caller rendering one row per node
  * still has two nodes sharing a key, which is its problem to handle, not this function's.)
- * A `current` that names no node in `def` (the definition changed under a running case) simply
- * leaves nothing active, mirroring how `advance` answers `unknown-state` instead of throwing.
+ * A token standing on a node `def` does not have (the definition changed under a running case)
+ * simply leaves that node out of the result, mirroring how `advance` answers `unknown-state`
+ * instead of throwing.
  * History referencing nodes the definition no longer has is likewise ignored: the result describes
  * `def.nodes` and nothing else.
  *
@@ -73,9 +80,11 @@ export function nodeProgress(
     });
   }
 
+  const standing = new Set(readMarking(instance).tokens.map((t) => t.at));
+
   const out: Record<string, NodeProgress> = {};
   for (const node of def.nodes) {
-    if (node.id === instance.current) {
+    if (standing.has(node.id)) {
       out[node.id] = { status: "active" };
       continue;
     }

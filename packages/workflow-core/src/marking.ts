@@ -40,10 +40,10 @@ export interface Marking {
  * PURE: no clock, no I/O, no mutation of the input; the same instance always yields the same
  * marking. Both the editor and the backend call it.
  *
- * ⚠️ As of today NO writer emits `tokens`, so every stored case takes the first branch below. The
- * reader lands before the writer on purpose: once the engine starts emitting a marking it will write
- * `current` and `tokens` together, and callers that already read through here need no change and no
- * migration. This is the one place that decides which of the two to believe:
+ * The reader landed a phase before the writer on purpose. Since E3a the engine writes `current` and
+ * `tokens` together on every case it creates or advances, and callers that already read through here
+ * needed no change and no migration — but a case untouched since then still has only `current`, and
+ * always will. This is the one place that decides which of the two to believe:
  *
  *   - `tokens` ABSENT — the case was written by a build that had no marking. Report the single token
  *     parked at `current`. This invents nothing: `current` is a required field that every writer has

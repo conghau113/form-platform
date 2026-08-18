@@ -17,7 +17,8 @@ definition that already carried a `gateway` key holding something other than `"f
 to be accepted with the key silently dropped and now fails to parse — every write path validates
 before storing, so nothing stored can be in that state.)
 
-⚠️ The engine does not act on `gateway` yet — a graph using it still runs one step at a time. Because
-the primitive catalog is rendered straight into the workflow-authoring system prompt, its `gateway`
-entry tells the model NOT to emit one, so generated workflows cannot claim a concurrency that is not
-executed. Remove that instruction only together with the engine support.
+⚠️ This release adds the contract only; the engine that executes it lands in the same release (see
+the E3a entry). Because the primitive catalog is rendered straight into the workflow-authoring system
+prompt, its `gateway` entry tells the model NOT to emit one — still true after E3a, for a different
+reason: `validateGraph` has no fork/join rules yet, so a malformed gateway is accepted at save time
+and only refused when someone runs the case.

@@ -182,3 +182,56 @@ describe("CaseProgressCard (E1)", () => {
     expect(row.textContent).not.toContain("Chuyển tiếp");
   });
 });
+
+describe("CaseProgressCard — a case standing in several places (E3a)", () => {
+  // A fork whose two branches differ in exactly the way the label depends on: `dead` has no
+  // outgoing transition, `live` does.
+  const forkedDef: WorkflowDefinition = {
+    workflowVersion: 1,
+    id: "wf2",
+    title: "WF2",
+    start: "draft",
+    nodes: [
+      { id: "draft", status: "Nháp" },
+      { id: "dead", status: "Nhánh cụt" },
+      { id: "live", status: "Nhánh còn việc" },
+      { id: "after", status: "Sau" },
+    ],
+    transitions: [
+      { id: "a", from: "draft", to: "dead", action: "toDead" },
+      { id: "b", from: "draft", to: "live", action: "toLive" },
+      { id: "c", from: "live", to: "after", action: "go" },
+    ],
+  };
+
+  it("judges each standing branch on its OWN node, not on the representative one", () => {
+    // `current` names the dead branch, so a single shared flag would call the branch that still has
+    // work "Kết thúc" — and swapping the token order would flip the lie to the other row. Neither
+    // row's label may depend on which branch happens to be listed first.
+    const forked: WorkflowInstance = {
+      id: "case-2",
+      definitionId: "wf2",
+      definitionVersion: 1,
+      current: "dead",
+      data: {},
+      history: [],
+      tokens: [
+        { id: "s-1-0", at: "dead", scope: "s-1" },
+        { id: "s-1-1", at: "live", scope: "s-1" },
+      ],
+      scopes: { "s-1": { forkNode: "draft", expected: 2, parent: null } },
+    };
+    render(
+      <CaseProgressCard
+        def={forkedDef}
+        view={forkedDef}
+        instance={forked}
+        byCode={byCode}
+        nameOf={nameOf}
+        locale={undefined}
+      />,
+    );
+    expect(within(rowOf("Nhánh cụt")).getByText("Kết thúc")).toBeTruthy();
+    expect(within(rowOf("Nhánh còn việc")).getByText("Đang xử lý")).toBeTruthy();
+  });
+});
