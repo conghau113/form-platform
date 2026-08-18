@@ -33,6 +33,10 @@ export interface FlowNodeData {
    *  `i18n` above — the authoring UI lands later, and until it does, opening a workflow that has
    *  one and pressing Save would otherwise DELETE it silently. A suggestion, never a permission. */
   defaultAssignee?: WorkflowNode["defaultAssignee"];
+  /** E2: the parallel-flow marker. Carried through for the same reason as the two above — the
+   *  editor has no gateway authoring UI until E6, and until it does, opening a workflow that has one
+   *  and pressing Save would otherwise DELETE it silently. */
+  gateway?: WorkflowNode["gateway"];
   [key: string]: unknown;
 }
 
@@ -113,6 +117,7 @@ export function toFlow(def: WorkflowDefinition): {
       kind: n.kind,
       i18n: n.i18n,
       defaultAssignee: n.defaultAssignee,
+      gateway: n.gateway,
     },
   }));
   const edges: FlowEdge[] = def.transitions.map((t) => ({
@@ -144,8 +149,9 @@ export function fromFlow(
   edges: FlowEdge[],
 ): WorkflowDefinition {
   // Emit keys in the SAME order as workflowNodeSchema (id, status, formId, position, kind,
-  // statusCode, i18n, defaultAssignee) so a round-trip through the server's `migrateWorkflow` (Zod
-  // parse → schema key order) byte-matches `JSON.stringify`, keeping the dirty check clean on load.
+  // statusCode, i18n, defaultAssignee, gateway) so a round-trip through the server's
+  // `migrateWorkflow` (Zod parse → schema key order) byte-matches `JSON.stringify`, keeping the
+  // dirty check clean on load.
   // Each optional key is conditionally spread so an absent value emits no key (matching the
   // Zod-parsed baseline).
   const wfNodes: WorkflowNode[] = nodes.map((n) => ({
@@ -157,6 +163,7 @@ export function fromFlow(
     ...(n.data.statusCode ? { statusCode: n.data.statusCode } : {}),
     ...(n.data.i18n ? { i18n: n.data.i18n } : {}),
     ...(n.data.defaultAssignee ? { defaultAssignee: n.data.defaultAssignee } : {}),
+    ...(n.data.gateway ? { gateway: n.data.gateway } : {}),
   }));
   // Emit keys in workflowTransitionSchema order (id, from, to, action, guard, role, i18n) for the
   // same byte-match reason as nodes — `guard` precedes `role`.

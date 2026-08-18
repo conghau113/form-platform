@@ -77,6 +77,29 @@ export const workflowNodeSchema = z.object({
       value: z.string().min(1),
     })
     .optional(),
+  /** E2 — marks this node as a parallel-flow gateway rather than a state someone works in.
+   *
+   *  ⚠️ CONTRACT ONLY, NOT YET EXECUTED. Nothing reads this key today: `advance` looks up a node by
+   *  id and nothing else, and `validateGraph` has no rule about forks or joins. A definition that
+   *  uses it therefore still runs ONE step at a time. The meaning below is what the engine is being
+   *  built toward, not what it currently does — do not read it as a description of runtime behavior,
+   *  and do not author a graph that depends on it until the engine lands.
+   *
+   *  Intended meaning: `"fork"` splits the case into one token per outgoing transition; `"join"`
+   *  parks arriving tokens until every sibling of the same fork has arrived. Orthogonal to `kind`: a
+   *  fork is still a `kind: "normal"` node in the status catalog, which is why this is NOT folded
+   *  into `STATUS_KINDS` (that tuple also types the master-data catalog and the `statusKind` column).
+   *
+   *  It sits on the NODE, not on the transition, so the editor's one-transition-one-edge mapping and
+   *  its byte-exact save round-trip both stay intact — and so that a fork can become something the
+   *  engine steps into, rather than a drawing with nothing behind it.
+   *
+   *  Additive/optional ⇒ NO workflowVersion bump (same character as `i18n`/`statusCode`/`kind`).
+   *
+   *  ⚠️ Do NOT use `gateway` as a key inside this node's `i18n` map — `localizeWorkflow` overwrites
+   *  any attribute named there with the translated STRING, which would turn this into free text.
+   *  Only text attributes (`status`) belong in `i18n`. */
+  gateway: z.enum(["fork", "join"]).optional(),
 });
 
 /** A directed edge between states. `action` is the event that triggers it; an
@@ -133,6 +156,46 @@ export const historyEntrySchema = z.object({
 });
 
 /**
+ * E2 — one place the case currently is. A case with a fork in its path stands in several places at
+ * once, so "where is it" is a LIST of these rather than a single node id.
+ *
+ * `id` identifies the token itself (not the node), because two tokens can legitimately sit on the
+ * same node — on a loop, or where two branches happen to meet — and an engine that cannot tell them
+ * apart silently merges them into one, losing a branch. `at` is the node it is parked on. `scope`
+ * names the fork RUN that produced it: the same fork traversed twice in a loop yields two different
+ * scopes, so the two rounds never count toward each other's join.
+ */
+export const workflowTokenSchema = z.object({
+  id: z.string().min(1),
+  at: z.string().min(1),
+  scope: z.string().min(1),
+});
+
+/**
+ * E2 — what one fork RUN spawned, recorded so its join knows what it is waiting for.
+ *
+ * `expected` is how many tokens that run created (the fork's out-degree AT THE TIME IT RAN, which is
+ * why it is stored rather than recomputed: the definition can be edited under a running case).
+ * `parent` is the scope the consumed token belonged to — `null` at the outermost level — so nested
+ * forks form a tree and an inner join settles without touching the outer one's tokens.
+ */
+export const workflowScopeSchema = z.object({
+  forkNode: z.string().min(1),
+  expected: z.number().int().positive(),
+  parent: z.string().nullable(),
+});
+
+/**
+ * E2 — the scope every case starts in, before any fork has run.
+ *
+ * It is IMPLICIT: it never appears as a key in an instance's `scopes`, because no fork created it,
+ * so it has no `forkNode` and no meaningful `expected` — inventing values for those would store a
+ * lie. Reserving the id here rather than only documenting it is what keeps a fork from generating a
+ * run that is indistinguishable from "outermost".
+ */
+export const ROOT_SCOPE = "root" as const;
+
+/**
  * A running INSTANCE (case) of a definition. It pins `definitionVersion` so the
  * engine always advances it against the template shape it was started on, even
  * after the definition evolves.
@@ -141,9 +204,47 @@ export const workflowInstanceSchema = z.object({
   id: z.string(),
   definitionId: z.string(),
   definitionVersion: z.number().int(),
+  /** Where the case is, as a SINGLE node id — today, the whole truth: nothing writes `tokens` yet,
+   *  so every stored case has exactly this one place and every reader of it is correct.
+   *
+   *  It stays REQUIRED through the phase-in that follows. Once a writer starts emitting `tokens` it
+   *  will emit both, so a build that predates `tokens` keeps reading this field and working — but
+   *  from that point on this is only the REPRESENTATIVE token, and reading it as "where the case is"
+   *  reports one branch of a parallel case as if it were the whole case. Read a marking through
+   *  `readMarking` (workflow-core), which handles both eras. */
   current: z.string(),
   data: z.record(z.string(), z.unknown()),
   history: z.array(historyEntrySchema),
+  /** E2 — the full marking: every place the case currently stands. ABSENT means the case was written
+   *  by a build that had no notion of tokens; read it through `readMarking`, which turns that into
+   *  the single token at `current`. ⚠️ No writer emits this key yet, so absent is what EVERY stored
+   *  case looks like right now — the reader exists first so the writer can be added without a
+   *  migration.
+   *
+   *  `.min(1)` because an empty marking is not a state this model has: a finished case still has its
+   *  token PARKED on the end node, and a cancelling join still emits the parent token. Zero tokens
+   *  therefore only ever means a writer lost one.
+   *
+   *  ⚠️ This constraint is a CONTRACT, not a runtime fence — the API stores an instance body as
+   *  opaque JSON and never parses it back through this schema, so nothing rejects a bad body at the
+   *  boundary. Readers must not assume it held.
+   *
+   *  Additive/optional ⇒ NO workflowVersion bump. */
+  tokens: z.array(workflowTokenSchema).min(1).optional(),
+  /** E2 — the fork runs behind the tokens above, keyed by scope id.
+   *
+   *  ⚠️ Only FORK-CREATED scopes appear here. The outermost scope every case starts in has no entry,
+   *  on purpose: no fork created it, so it has no `forkNode` and no meaningful `expected`, and
+   *  inventing values for those would be a lie stored as data. So `scopes[token.scope] === undefined`
+   *  is a normal answer meaning "this token is at the outermost level" — never assume a hit.
+   *
+   *  Additive/optional ⇒ NO workflowVersion bump. */
+  scopes: z
+    .record(z.string(), workflowScopeSchema)
+    .refine((scopes) => !(ROOT_SCOPE in scopes), {
+      message: `"${ROOT_SCOPE}" is the implicit outermost scope and must not be given an entry`,
+    })
+    .optional(),
 });
 
 export type Guard = z.infer<typeof guardSchema>;
@@ -151,4 +252,6 @@ export type WorkflowNode = z.infer<typeof workflowNodeSchema>;
 export type WorkflowTransition = z.infer<typeof workflowTransitionSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
 export type HistoryEntry = z.infer<typeof historyEntrySchema>;
+export type WorkflowToken = z.infer<typeof workflowTokenSchema>;
+export type WorkflowScope = z.infer<typeof workflowScopeSchema>;
 export type WorkflowInstance = z.infer<typeof workflowInstanceSchema>;

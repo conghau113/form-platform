@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CURRENT_WORKFLOW_VERSION,
+  ROOT_SCOPE,
   workflowDefinitionSchema,
   workflowInstanceSchema,
 } from "./index.js";
@@ -123,6 +124,42 @@ describe("workflowDefinitionSchema", () => {
     expect(workflowDefinitionSchema.safeParse(bad).success).toBe(false);
   });
 
+  // E2 `gateway` is additive: nodes gained an optional "fork"|"join" marker. Old definitions without
+  // it must keep parsing, so CURRENT_WORKFLOW_VERSION does NOT move.
+  it("parses an old definition without E2 gateway (parse-compat)", () => {
+    const out = workflowDefinitionSchema.parse(validDef);
+    expect(out.nodes[0].gateway).toBeUndefined();
+    expect(CURRENT_WORKFLOW_VERSION).toBe(1);
+  });
+
+  it("parses nodes marked as a fork and as a join", () => {
+    const parallel = {
+      ...validDef,
+      nodes: [
+        { id: "a", status: "split", gateway: "fork" },
+        { id: "b", status: "merge", gateway: "join" },
+      ],
+    };
+    const out = workflowDefinitionSchema.parse(parallel);
+    expect(out.nodes[0].gateway).toBe("fork");
+    expect(out.nodes[1].gateway).toBe("join");
+  });
+
+  it("rejects a gateway outside fork|join", () => {
+    const bad = { ...validDef, nodes: [{ id: "a", status: "x", gateway: "merge" }] };
+    expect(workflowDefinitionSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("keeps gateway orthogonal to kind (a fork is still a catalog `kind`)", () => {
+    const both = {
+      ...validDef,
+      nodes: [{ id: "a", status: "split", kind: "normal", gateway: "fork" }, validDef.nodes[1]],
+    };
+    const out = workflowDefinitionSchema.parse(both);
+    expect(out.nodes[0].kind).toBe("normal");
+    expect(out.nodes[0].gateway).toBe("fork");
+  });
+
   it("rejects a defaultAssignee with an empty value", () => {
     // Separate from the `kind` case on purpose: folded into one test, dropping `.min(1)` from
     // `value` would still leave the assertion green.
@@ -159,5 +196,134 @@ describe("workflowInstanceSchema history actor (Phase E)", () => {
       ],
     });
     expect(out.history[0].actor).toBe("usr_1");
+  });
+});
+
+// E2 marking is additive: an instance gained optional `tokens`/`scopes` while `current` stays
+// required (the dual-write phase). Each constraint gets its OWN test — folded into one, relaxing any
+// single one of them would leave the assertion green.
+describe("workflowInstanceSchema marking (E2)", () => {
+  const base = {
+    id: "case-1",
+    definitionId: "wf",
+    definitionVersion: CURRENT_WORKFLOW_VERSION,
+    current: "b",
+    data: {},
+    history: [],
+  };
+
+  it("parses an instance written before tokens existed (parse-compat)", () => {
+    const out = workflowInstanceSchema.parse(base);
+    expect(out.tokens).toBeUndefined();
+    expect(out.scopes).toBeUndefined();
+    expect(CURRENT_WORKFLOW_VERSION).toBe(1);
+  });
+
+  it("parses a marking of two tokens from one fork run", () => {
+    const out = workflowInstanceSchema.parse({
+      ...base,
+      tokens: [
+        { id: "tk1", at: "review_a", scope: "s1" },
+        { id: "tk2", at: "review_b", scope: "s1" },
+      ],
+      scopes: { s1: { forkNode: "split", expected: 2, parent: null } },
+    });
+    expect(out.tokens).toHaveLength(2);
+    expect(out.tokens?.[1].at).toBe("review_b");
+    expect(out.scopes?.s1.expected).toBe(2);
+  });
+
+  it("rejects an empty marking — zero tokens is not a state this model has", () => {
+    expect(workflowInstanceSchema.safeParse({ ...base, tokens: [] }).success).toBe(false);
+  });
+
+  it("rejects a scope expecting zero branches", () => {
+    const bad = {
+      ...base,
+      tokens: [{ id: "tk1", at: "a", scope: "s1" }],
+      scopes: { s1: { forkNode: "split", expected: 0, parent: null } },
+    };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("accepts a nested scope naming its parent, and a top-level one naming null", () => {
+    const out = workflowInstanceSchema.parse({
+      ...base,
+      tokens: [{ id: "tk1", at: "a", scope: "s2" }],
+      scopes: {
+        s1: { forkNode: "outer", expected: 2, parent: null },
+        s2: { forkNode: "inner", expected: 2, parent: "s1" },
+      },
+    });
+    expect(out.scopes?.s1.parent).toBeNull();
+    expect(out.scopes?.s2.parent).toBe("s1");
+  });
+
+  it("rejects a token with no scope", () => {
+    const bad = { ...base, tokens: [{ id: "tk1", at: "a" }] };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a token with an empty id", () => {
+    const bad = { ...base, tokens: [{ id: "", at: "a", scope: "s1" }] };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a token parked nowhere", () => {
+    const bad = { ...base, tokens: [{ id: "tk1", at: "", scope: "s1" }] };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a token with an empty scope", () => {
+    const bad = { ...base, tokens: [{ id: "tk1", at: "a", scope: "" }] };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("pins the reserved outermost-scope id", () => {
+    // Every other use compares it by symbol, so changing the value would leave those green while
+    // cases persisted by one build stopped being readable by the next. Pinned HERE, in the package
+    // that owns it: workflow-core resolves this package through its BUILT output, so a probe run
+    // there measures the last build rather than this source.
+    expect(ROOT_SCOPE).toBe("root");
+  });
+
+  it("rejects a scope entry for the implicit outermost scope", () => {
+    // The one invariant E2 can actually encode: a fork run named `root` would be indistinguishable
+    // from "this token never went through a fork".
+    const bad = {
+      ...base,
+      tokens: [{ id: "tk1", at: "a", scope: ROOT_SCOPE }],
+      scopes: { [ROOT_SCOPE]: { forkNode: "split", expected: 2, parent: null } },
+    };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a scope expecting a fractional number of branches", () => {
+    const bad = {
+      ...base,
+      tokens: [{ id: "tk1", at: "a", scope: "s1" }],
+      scopes: { s1: { forkNode: "split", expected: 2.5, parent: null } },
+    };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a scope with no parent key — absent must not blur into `null`", () => {
+    // `null` means "outermost"; a missing key would mean the same thing by accident, and the two
+    // would stop being distinguishable to whoever walks the scope tree.
+    const bad = {
+      ...base,
+      tokens: [{ id: "tk1", at: "a", scope: "s1" }],
+      scopes: { s1: { forkNode: "split", expected: 2 } },
+    };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a scope naming no fork node", () => {
+    const bad = {
+      ...base,
+      tokens: [{ id: "tk1", at: "a", scope: "s1" }],
+      scopes: { s1: { forkNode: "", expected: 2, parent: null } },
+    };
+    expect(workflowInstanceSchema.safeParse(bad).success).toBe(false);
   });
 });

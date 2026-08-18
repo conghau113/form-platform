@@ -50,6 +50,14 @@ describe("workflow primitive catalog", () => {
     expect(sorted(WORKFLOW_DEFINITION_SHAPE.optional)).toEqual(optional);
   });
 
+  it("tells an authoring agent not to emit `gateway` while the engine ignores it", () => {
+    // `summary` is rendered verbatim into the workflow-authoring system prompt (workflow-ai's
+    // `prompt.ts`), so this sentence is the only thing stopping a generated workflow from claiming a
+    // concurrency nothing executes. The key-set check above cannot see prose: without this, deleting
+    // the instruction leaves the whole repo green. Remove it only together with engine support.
+    expect(byKind.node.summary).toContain("do NOT emit it");
+  });
+
   it("workflowCapabilities() reports the current version", () => {
     const payload = workflowCapabilities();
     expect(payload.workflowVersion).toBe(CURRENT_WORKFLOW_VERSION);

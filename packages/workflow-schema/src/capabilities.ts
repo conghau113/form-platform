@@ -25,9 +25,9 @@ export const WORKFLOW_PRIMITIVES: readonly WorkflowPrimitive[] = [
   {
     kind: "node",
     required: ["id", "status"],
-    optional: ["defaultAssignee", "formId", "i18n", "kind", "position", "statusCode"],
+    optional: ["defaultAssignee", "formId", "gateway", "i18n", "kind", "position", "statusCode"],
     summary:
-      "A state in the workflow. `status` is the human label; `formId` binds a form (by id) shown in that state. `statusCode` references a project status catalog entry; `kind` (start|normal|end) is a frozen category snapshot for colour fallback. `i18n` localizes the `status` label per locale. `defaultAssignee` ({kind: role|user, value}) is who the state is expected to land on — a SUGGESTION only, never a permission: the engine never consults it, and `transition.role` is the only thing it checks the actor against.",
+      "A state in the workflow. `status` is the human label; `formId` binds a form (by id) shown in that state. `statusCode` references a project status catalog entry; `kind` (start|normal|end) is a frozen category snapshot for colour fallback. `i18n` localizes the `status` label per locale. `defaultAssignee` ({kind: role|user, value}) is who the state is expected to land on — a SUGGESTION only, never a permission: the engine never consults it, and `transition.role` is the only thing it checks the actor against. `gateway` (fork|join) marks a parallel-flow gateway — do NOT emit it: the engine does not act on it yet, so a graph that uses it would claim to run branches in parallel while actually running them one at a time. Model concurrency-free paths only.",
   },
   {
     kind: "transition",

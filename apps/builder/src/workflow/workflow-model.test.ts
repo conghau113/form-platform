@@ -85,16 +85,33 @@ describe("workflow-model boundary", () => {
     expect(fromFlow(meta, nodes, edges)).toEqual(assigned);
   });
 
-  // A node carrying BOTH i18n and defaultAssignee — the only shape that can catch the two keys
-  // being emitted in the wrong ORDER. Neither of the first two inputs has any node-level optional
-  // key after `statusCode`, so on those a swapped order still serializes identically.
-  const nodeWithBothOptionals: WorkflowDefinition = {
+  // E2: same reason as i18n / defaultAssignee above — no gateway authoring UI until E6, so a
+  // fork/join authored in JSON must survive a Save.
+  it("carries a node's gateway through the round-trip", () => {
+    const parallel: WorkflowDefinition = {
+      ...def,
+      nodes: [
+        { ...def.nodes[0], gateway: "fork" },
+        { ...def.nodes[1], gateway: "join" },
+      ],
+    };
+    const { meta, nodes, edges } = toFlow(parallel);
+    expect(fromFlow(meta, nodes, edges)).toEqual(parallel);
+  });
+
+  // A node carrying EVERY trailing optional (i18n, defaultAssignee, gateway) — the only shape that
+  // can catch them being emitted in the wrong ORDER. Neither of the first two inputs has any
+  // node-level optional key after `statusCode`, so on those a swapped order still serializes
+  // identically. Each key added to the tail must be added here too, or the gate loses its teeth for
+  // that key.
+  const nodeWithTrailingOptionals: WorkflowDefinition = {
     ...def,
     nodes: [
       {
         ...def.nodes[0],
         i18n: { status: { vi: "Đã tạo" } },
         defaultAssignee: { kind: "role", value: "manager" },
+        gateway: "fork",
       },
       def.nodes[1],
     ],
@@ -106,7 +123,7 @@ describe("workflow-model boundary", () => {
     for (const input of [
       def,
       { ...def, defaultLocale: "en", i18n: { title: { vi: "QT" } } },
-      nodeWithBothOptionals,
+      nodeWithTrailingOptionals,
     ]) {
       const parsed = workflowDefinitionSchema.parse(input);
       const { meta, nodes, edges } = toFlow(parsed);
