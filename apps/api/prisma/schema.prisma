@@ -423,6 +423,12 @@ model WorkflowInstanceRecord {
   /// expression. Same ownership rule as `dueAt`.
   priority   Int      @default(2)
   body       Json
+  /// Optimistic-concurrency counter for `body` (E3b, parallel track). Every body write is conditional on the value
+  /// it was read at (`updateMany({ where: { id, rev } })`) and bumps it, so two overlapping advances
+  /// can never silently overwrite one another's move — the loser gets 409 instead of disappearing
+  /// from `history`/`tokens`. Deliberately NOT `updatedAt`: that one is re-stamped by column-only
+  /// writes (`setAssignee`, `setWorkOrderFields`), which must not invalidate a running advance.
+  rev        Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   workflow   WorkflowRecord @relation(fields: [workflowId], references: [id], onDelete: Cascade)

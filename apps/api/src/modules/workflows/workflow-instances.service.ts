@@ -140,10 +140,14 @@ export class WorkflowInstancesService {
   /** Load a running case by id (read ⇒ requires `viewer`). */
   async load(ownerId: string, instanceId: string): Promise<WorkflowInstance> {
     const summary = await this.requireInstanceAccess(ownerId, instanceId, "viewer");
-    const instance = await this.instances.load(instanceId);
-    if (!instance) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
-    const def = await this.workflows.load(instance.definitionId);
-    return this.maskInstance(def, instance, await this.caseActorRoles.forCase(ownerId, summary));
+    const stored = await this.instances.load(instanceId);
+    if (!stored) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
+    const def = await this.workflows.load(stored.instance.definitionId);
+    return this.maskInstance(
+      def,
+      stored.instance,
+      await this.caseActorRoles.forCase(ownerId, summary),
+    );
   }
 
   /** List a workflow's cases (read ⇒ requires `viewer`). */
@@ -159,10 +163,12 @@ export class WorkflowInstancesService {
     opts: AdvanceInstanceOptions,
   ): Promise<WorkflowInstance> {
     const summary = await this.requireInstanceRunAccess(ownerId, instanceId);
-    const instance = await this.instances.load(instanceId);
-    if (!instance) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
-    const def = await this.workflows.load(instance.definitionId);
-    if (!def) throw new NotFoundException(`Workflow not found: ${instance.definitionId}`);
+    // E3b (parallel track): `loaded.rev` is the revision this decision is made on. It travels to the write below and
+    // nowhere else — the engine has no business knowing the case is stored at all.
+    const loaded = await this.instances.load(instanceId);
+    if (!loaded) throw new NotFoundException(`Workflow instance not found: ${instanceId}`);
+    const def = await this.workflows.load(loaded.instance.definitionId);
+    if (!def) throw new NotFoundException(`Workflow not found: ${loaded.instance.definitionId}`);
 
     // Phase E3a: the acting roles are the SERVER's answer — project role + tenant roles + this
     // case's cast + `assignee` — never the caller's. `transition.role` is therefore a real check
@@ -170,7 +176,7 @@ export class WorkflowInstancesService {
     // A project role still doubles as a workflow role, so definitions gating on a literal
     // "editor"/"viewer"/"owner" keep working exactly as before.
     const roles = await this.caseActorRoles.forCase(ownerId, summary);
-    const result = advance(def, instance, opts.action, {
+    const result = advance(def, loaded.instance, opts.action, {
       data: opts.data,
       roles,
       actor: ownerId,
@@ -181,15 +187,26 @@ export class WorkflowInstancesService {
         reason: result.reason,
       });
     }
-    // Captured rather than inlined into the `upsert` call: the notification's title has to describe
+    // Captured rather than inlined into the write call: the notification's title has to describe
     // the case as it is AFTER the move (new status, possibly a new label), and it must come from the
     // same ungated derivation the stored columns do — never from `result.instance.data`.
     const meta = await this.denormalize(def, result.instance);
-    const stored = await this.instances.upsert(result.instance, {
-      workflowId: summary.workflowId,
-      projectId: summary.projectId,
-      ...meta,
-    });
+    const stored = await this.instances.update(
+      result.instance,
+      { workflowId: summary.workflowId, projectId: summary.projectId, ...meta },
+      loaded.rev,
+    );
+    // E3b (parallel track): someone else moved the case between our load and our write, so `result.instance` was
+    // computed from state that no longer exists — writing it would drop THEIR move from `history`
+    // and `tokens` without a trace. Refuse, and let the caller decide what to do with the case as
+    // it now stands; retrying here would silently re-run an action against a different situation.
+    if (!stored) {
+      throw new ConflictException(
+        `Workflow instance changed while this action was being processed; reload and retry: ${instanceId}`,
+      );
+    }
+    // Deliberately after the conflict check: telling people "the case moved" for a move that was
+    // refused is a notification about something that did not happen.
     await this.notifyCaseAdvanced(ownerId, summary, meta);
     return this.maskInstance(def, stored, roles);
   }

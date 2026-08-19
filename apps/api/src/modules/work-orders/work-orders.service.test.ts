@@ -84,7 +84,7 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
     );
     return { rows: matched.slice(page.offset, page.offset + page.limit), total: matched.length };
   }
-  async upsert(): Promise<never> {
+  async update(): Promise<never> {
     throw new Error("not used");
   }
   async create(): Promise<never> {

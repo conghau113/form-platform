@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { WorkflowInstance } from "@org/workflow-schema";
 import type { Prisma, WorkflowInstanceRecord } from "@prisma/client";
 import {
+  type StoredInstance,
   type WorkflowInstanceMeta,
   WorkflowInstanceRepo,
   type WorkflowInstanceSummary,
@@ -116,7 +117,9 @@ function buildOrderBy(
 }
 
 /**
- * The columns an instance write owns, shared by `upsert` and `create` so the two can never drift.
+ * The columns an instance write owns, shared by `update` and `create` so the two can never drift.
+ * `rev` is pointedly NOT here: `create` must let the column default to 0, and `update` bumps it
+ * with an `increment` the insert path has nothing to increment from.
  *
  * NOTE: every key here is written on UPDATE too, so nothing the case owns elsewhere may appear in
  * this object — `assigneeId` in particular is only ever written by `setAssignee`, and `dueAt`/
@@ -140,14 +143,19 @@ export class PrismaWorkflowInstanceRepo extends WorkflowInstanceRepo {
     super();
   }
 
-  async upsert(instance: WorkflowInstance, meta: WorkflowInstanceMeta): Promise<WorkflowInstance> {
-    const data = writeData(instance, meta);
-    await this.prisma.workflowInstanceRecord.upsert({
-      where: { id: instance.id },
-      update: data,
-      create: { id: instance.id, ...data },
+  async update(
+    instance: WorkflowInstance,
+    meta: WorkflowInstanceMeta,
+    expectedRev: number,
+  ): Promise<WorkflowInstance | null> {
+    // `updateMany` rather than `update`: it is the only Prisma write that takes a non-unique
+    // `where`, which is what lets `rev` join the id in the condition. A miss returns count 0
+    // instead of throwing.
+    const { count } = await this.prisma.workflowInstanceRecord.updateMany({
+      where: { id: instance.id, rev: expectedRev },
+      data: { ...writeData(instance, meta), rev: { increment: 1 } },
     });
-    return instance;
+    return count === 1 ? instance : null;
   }
 
   async create(
@@ -168,9 +176,10 @@ export class PrismaWorkflowInstanceRepo extends WorkflowInstanceRepo {
     }
   }
 
-  async load(id: string): Promise<WorkflowInstance | null> {
+  async load(id: string): Promise<StoredInstance | null> {
     const record = await this.prisma.workflowInstanceRecord.findUnique({ where: { id } });
-    return record ? (record.body as unknown as WorkflowInstance) : null;
+    if (!record) return null;
+    return { instance: record.body as unknown as WorkflowInstance, rev: record.rev };
   }
 
   async findSummary(id: string): Promise<WorkflowInstanceSummary | null> {

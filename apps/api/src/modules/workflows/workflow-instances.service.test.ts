@@ -45,6 +45,7 @@ import {
   type WorkflowUpsertMeta,
 } from "../../persistence/repositories/workflow.repo.js";
 import {
+  type StoredInstance,
   type WorkflowInstanceMeta,
   WorkflowInstanceRepo,
   type WorkflowInstanceSummary,
@@ -139,14 +140,22 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
   readonly bodies = new Map<string, WorkflowInstance>();
   readonly meta = new Map<string, WorkflowInstanceMeta>();
   readonly updatedAt = new Map<string, Date>();
-  /** Kept OUTSIDE `meta` on purpose — mirrors production, where `upsert` never writes it. */
+  /** Kept OUTSIDE `meta` on purpose — mirrors production, where the body write never writes it. */
   readonly assignees = new Map<string, string | null>();
-  /** Same deal for the Phase E2 work-order attributes: `upsert` must never touch them. */
+  /** Same deal for the Phase E2 work-order attributes: a body write must never touch them. */
   readonly workOrder = new Map<string, { dueAt: Date | null; priority: number }>();
-  async upsert(instance: WorkflowInstance, meta: WorkflowInstanceMeta): Promise<WorkflowInstance> {
-    this.bodies.set(instance.id, instance);
-    this.meta.set(instance.id, meta);
-    this.updatedAt.set(instance.id, new Date());
+  /** E3b (parallel track): the storage revision, like the `rev` column — bumped by body writes and nothing else. */
+  readonly revs = new Map<string, number>();
+  async update(
+    instance: WorkflowInstance,
+    meta: WorkflowInstanceMeta,
+    expectedRev: number,
+  ): Promise<WorkflowInstance | null> {
+    // Absent row → `null`, like `updateMany` matching nothing. Without this line the fake would
+    // RE-CREATE a case deleted mid-advance, which is the behaviour the real repo just gave up.
+    if (!this.bodies.has(instance.id)) return null;
+    if ((this.revs.get(instance.id) ?? 0) !== expectedRev) return null;
+    this.write(instance, meta, expectedRev + 1);
     return instance;
   }
   /** Insert-only, like the real repo: a taken id yields `null` instead of overwriting. */
@@ -155,10 +164,21 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
     meta: WorkflowInstanceMeta,
   ): Promise<WorkflowInstance | null> {
     if (this.bodies.has(instance.id)) return null;
-    return this.upsert(instance, meta);
+    // Writes directly rather than through `update`: starting a case has no revision to check
+    // against, exactly as production lets the column default to 0 instead of going through
+    // `updateMany`.
+    this.write(instance, meta, 0);
+    return instance;
   }
-  async load(id: string): Promise<WorkflowInstance | null> {
-    return this.bodies.get(id) ?? null;
+  private write(instance: WorkflowInstance, meta: WorkflowInstanceMeta, rev: number): void {
+    this.bodies.set(instance.id, instance);
+    this.meta.set(instance.id, meta);
+    this.updatedAt.set(instance.id, new Date());
+    this.revs.set(instance.id, rev);
+  }
+  async load(id: string): Promise<StoredInstance | null> {
+    const instance = this.bodies.get(id);
+    return instance ? { instance, rev: this.revs.get(id) ?? 0 } : null;
   }
   async findSummary(id: string): Promise<WorkflowInstanceSummary | null> {
     const instance = this.bodies.get(id);
@@ -207,6 +227,7 @@ class FakeWorkflowInstanceRepo extends WorkflowInstanceRepo {
   async delete(id: string): Promise<void> {
     this.bodies.delete(id);
     this.meta.delete(id);
+    this.revs.delete(id);
   }
 }
 
@@ -608,7 +629,7 @@ describe("WorkflowInstancesService", () => {
     await seedWorkflow();
     vi.useFakeTimers();
     try {
-      // `upsert` writes by id, so a generated id that repeats does not fail — it REPLACES the case
+      // The body write goes by id, so a generated id that repeats does not fail — it REPLACES the case
       // started a moment earlier, losing it without a word.
       const a = await service.start(OWNER, "wf1", { data: { applicant: "Mai" } });
       const b = await service.start(OWNER, "wf1", { data: { applicant: "Nam" } });
@@ -708,6 +729,127 @@ describe("WorkflowInstancesService", () => {
     await service.start(OWNER, "wf1", { id: "wf1-case-2" });
     await expect(service.list(OWNER, "wf1")).resolves.toHaveLength(2);
     await expect(service.list("stranger", "wf1")).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe("WorkflowInstancesService.advance — concurrent writes (E3b, parallel track)", () => {
+  /** Someone other than the actor, so the "case moved" notification actually has a recipient. */
+  const WATCHER = "watcher-e3b";
+
+  beforeEach(() => {
+    const tenantId = FakeTenantRepo.tenantIdFor(OWNER);
+    tenantRepo.join(WATCHER, tenantId);
+    rbacRepo.grant(WATCHER, tenantId, ["workflow.run"]);
+    userRepo.seed(WATCHER, "watcher-e3b@example.com");
+  });
+
+  /**
+   * Overlap two writers for real, through the service: A reads, `winner` runs to completion, THEN A
+   * writes. `winner` is a callback rather than a fixed advance so a test can let the winner take
+   * SEVERAL steps — which is what makes A's stale write distinguishable from A's write never
+   * landing at all. Returns A's promise for the caller to inspect.
+   */
+  function interleaveOn(instanceId: string, winner: () => Promise<unknown>): Promise<unknown> {
+    const realLoad = instanceRepo.load.bind(instanceRepo);
+    let interleaved = false;
+    instanceRepo.load = async (id: string) => {
+      const readByA = await realLoad(id);
+      if (!interleaved) {
+        // Set BEFORE the nested call so the winner's own `load` takes the plain path.
+        interleaved = true;
+        try {
+          await winner();
+        } catch (err) {
+          // Otherwise a broken winner surfaces as A's rejection and reads as "the guard misfired".
+          throw new Error(`interleaved winner failed: ${(err as Error).message}`);
+        }
+      }
+      return readByA;
+    };
+    return service.advance(OWNER, instanceId, { action: "submit" }).finally(() => {
+      instanceRepo.load = realLoad;
+    });
+  }
+
+  it("keeps working across sequential advances, and the stored revision tracks them", async () => {
+    await seedWorkflow();
+    const review = await startAtReview();
+    // NOT a repeat of `submit`: `t2` is the role+guard transition, so the second move has to bring
+    // the cast and the data with it. Two advances, two revisions.
+    await cast(review.id, "manager");
+    const done = await service.advance(OWNER, review.id, {
+      action: "approve",
+      data: { approved: true },
+    });
+
+    expect(done.current).toBe("done");
+    // The `rev` sent with each write has to be the one that write's own `load` returned. A constant
+    // would survive the first advance and then be stale forever — this is what catches that.
+    expect(instanceRepo.revs.get(review.id)).toBe(2);
+  });
+
+  it("lets exactly one of two overlapping advances win; the loser gets 409, not a silent overwrite", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1", { data: { subject: "Đơn nghỉ phép" } });
+    await cast(started.id, "manager", WATCHER);
+
+    await expect(
+      interleaveOn(started.id, () => service.advance(OWNER, started.id, { action: "submit" })),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    // ONE move happened, so the case's watcher hears about it once. Asserted as a count rather than
+    // "nothing was sent": the winner legitimately notifies, so an empty inbox would pass no matter
+    // where the refusal is raised — this is what catches a 409 thrown after the fan-out.
+    expect(notificationRepo.titlesFor(WATCHER)).toHaveLength(1);
+  });
+
+  it("leaves the winner's move intact — the refused write does not land", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    await cast(started.id, "manager");
+
+    // The winner takes BOTH steps while A is mid-flight. That is what makes the two outcomes tell
+    // apart: A's stale write would put the case back at `review` with one history entry, whereas a
+    // refused write leaves it at `done` with two. A winner taking a single step would land on the
+    // same node either way, and the assertions below would hold no matter what the guard did.
+    await expect(
+      interleaveOn(started.id, async () => {
+        await service.advance(OWNER, started.id, { action: "submit" });
+        await service.advance(OWNER, started.id, { action: "approve", data: { approved: true } });
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    const after = await service.load(OWNER, started.id);
+    expect(after.current).toBe("done");
+    expect(after.history).toHaveLength(2);
+    expect(instanceRepo.revs.get(started.id)).toBe(2);
+  });
+
+  it("does not let assigning the case invalidate an action someone is taking", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    userRepo.seed("mate", "mate@example.com");
+    tenantRepo.join("mate", FakeTenantRepo.tenantIdFor(OWNER));
+
+    // The assignment has to land INSIDE the advance's read-write window; done before it, the
+    // advance would simply read whatever the assign left behind and match, and the test could not
+    // fail however much `setAssignee` disturbed. `rev` guards the body, and assigning is not a
+    // body write — so this must still go through.
+    await expect(
+      interleaveOn(started.id, () => service.assign(OWNER, started.id, "mate")),
+    ).resolves.toMatchObject({ current: "review" });
+  });
+
+  it("does not resurrect a case deleted while an action was in flight", async () => {
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+
+    // The write used to be an upsert, so a case deleted mid-advance came back — carrying only the
+    // state the in-flight actor happened to be holding. It is refused now.
+    await expect(
+      interleaveOn(started.id, () => instanceRepo.delete(started.id)),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(instanceRepo.bodies.has(started.id)).toBe(false);
   });
 });
 
@@ -814,7 +956,7 @@ describe("WorkflowInstancesService.assign (Phase E)", () => {
     expect(mail.sent).toEqual([]);
   });
 
-  it("keeps the assignee when the case is later advanced (upsert must not clobber it)", async () => {
+  it("keeps the assignee when the case is later advanced (the body write must not clobber it)", async () => {
     await seedWorkflow();
     const started = await service.start(OWNER, "wf1");
     await service.assign(OWNER, started.id, MEMBER);
@@ -886,7 +1028,7 @@ describe("WorkflowInstancesService.updateWorkOrder (Phase E2)", () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it("keeps the deadline and urgency when the case is advanced (upsert must not clobber them)", async () => {
+  it("keeps the deadline and urgency when the case is advanced (the body write must not clobber them)", async () => {
     await seedWorkflow();
     const started = await service.start(OWNER, "wf1");
     await service.updateWorkOrder(OWNER, started.id, { dueAt: DUE, priority: 3 });
@@ -1295,7 +1437,7 @@ describe("WorkflowInstancesService — reviewer-found hardening (Phase E)", () =
 
   it("refuses to overwrite when a GENERATED id collides (409, not a silent replace)", async () => {
     // The pre-check above only runs for a client-supplied id, so a collision between two generated
-    // ids used to reach `upsert` unguarded and replace the first case. Force the collision by
+    // ids used to reach the body write unguarded and replace the first case. Force the collision by
     // freezing both halves of the generated id — the clock and the random suffix.
     await seedWorkflow();
     vi.useFakeTimers();

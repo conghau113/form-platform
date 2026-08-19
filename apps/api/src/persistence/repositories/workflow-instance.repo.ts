@@ -2,7 +2,7 @@ import type { WorkflowInstance } from "@org/workflow-schema";
 
 /**
  * Parent links + denormalised display state written on every instance write — deliberately all
- * REQUIRED. `upsert` writes each of these columns unconditionally, so an optional field would be
+ * REQUIRED. `update` writes each of these columns unconditionally, so an optional field would be
  * silently NULLed by any call site that forgot it. `assigneeId` is pointedly NOT here: it is owned
  * by {@link WorkflowInstanceRepo.setAssignee} alone, so running a case never disturbs who it belongs
  * to. `dueAt`/`priority` (Phase E2) follow the same rule via
@@ -23,6 +23,19 @@ export interface WorkflowInstanceMeta {
   statusLabel: string | null;
   /** The current node's engine category — `start` | `normal` | `end` — or null when unset. */
   statusKind: string | null;
+}
+
+/**
+ * A stored case plus the storage revision it was read at (E3b, parallel track) — the token {@link
+ * WorkflowInstanceRepo.update} demands back before it will write.
+ *
+ * `load` returns the pair rather than the bare instance so there is exactly ONE read path, and no
+ * second, rev-less variant a write could be built on by accident.
+ */
+export interface StoredInstance {
+  instance: WorkflowInstance;
+  /** Bumped by every body write; `update` refuses when it no longer matches. */
+  rev: number;
 }
 
 /** Cheap org-index of a running case (no body) — list a workflow's cases without parsing each. */
@@ -92,15 +105,32 @@ export interface WorkOrderPage {
  * the engine. Mirrors {@link WorkflowRepo}.
  */
 export abstract class WorkflowInstanceRepo {
-  /** Upsert by `instance.id`; returns the stored instance. Never touches `assigneeId`. */
-  abstract upsert(
+  /**
+   * Write the body of an EXISTING case, but only if it is still at `expectedRev` (E3b, parallel track); returns the
+   * stored instance, or `null` when the write did not happen. Never touches `assigneeId`.
+   *
+   * `expectedRev` must come from the {@link load} of the same request — it is what makes the write
+   * conditional on the state the caller actually reasoned about. Passing a constant compiles and
+   * usually appears to work, which is exactly why callers must not.
+   *
+   * `null` means "rev no longer matches" OR "the row is gone", deliberately not distinguished: the
+   * second is only reachable by cascade from deleting the workflow or the project (`delete` below
+   * has no callers), and one extra query to tell a 409 from a 404 on a path nobody walks is not
+   * worth the code. The service maps `null` → 409, mirroring {@link create}'s convention so both
+   * write paths report a lost race the same way and neither leaks a Prisma error type.
+   *
+   * NOTE: this used to be an `upsert`, which would silently RE-CREATE a case deleted mid-advance.
+   * It no longer inserts.
+   */
+  abstract update(
     instance: WorkflowInstance,
     meta: WorkflowInstanceMeta,
-  ): Promise<WorkflowInstance>;
+    expectedRev: number,
+  ): Promise<WorkflowInstance | null>;
   /**
    * Insert a NEW case, or return `null` when `instance.id` is already taken.
    *
-   * Starting a case must never go through {@link upsert}: that writes by id, so a collision would
+   * Starting a case must never go through {@link update}: that writes by id, so a collision would
    * silently REWRITE the existing case (and drag it into the caller's project) instead of failing.
    * The "does it exist?" check the service does first still races — two concurrent starts can both
    * see "free" — so the insert itself has to be the decider. Returning `null` rather than throwing
@@ -113,8 +143,12 @@ export abstract class WorkflowInstanceRepo {
     instance: WorkflowInstance,
     meta: WorkflowInstanceMeta,
   ): Promise<WorkflowInstance | null>;
-  /** Load an instance by id, or `null` when absent (service maps null → 404). */
-  abstract load(id: string): Promise<WorkflowInstance | null>;
+  /**
+   * Load an instance by id together with its revision, or `null` when absent (service maps null →
+   * 404). The `rev` comes from the SAME read as the body, so a caller that goes on to write cannot
+   * compare against a revision the body it holds never had.
+   */
+  abstract load(id: string): Promise<StoredInstance | null>;
   /** The org-index summary of an instance (no body), or `null` — for access checks. */
   abstract findSummary(id: string): Promise<WorkflowInstanceSummary | null>;
   /** List instance summaries for a workflow, most-recently-updated first. */
@@ -135,7 +169,9 @@ export abstract class WorkflowInstanceRepo {
    * Write the work-order attributes (Phase E2). Only the keys PRESENT in `patch` are written, so
    * setting a deadline never resets the urgency; `dueAt: null` clears the deadline.
    *
-   * Separate from {@link upsert} on purpose — see {@link WorkflowInstanceMeta}.
+   * Separate from {@link update} on purpose — see {@link WorkflowInstanceMeta}. It also must NOT
+   * bump `rev`: work-order metadata is not body state, and assigning a case while someone is acting
+   * on it would otherwise fail their action with a spurious 409.
    */
   abstract setWorkOrderFields(
     id: string,
