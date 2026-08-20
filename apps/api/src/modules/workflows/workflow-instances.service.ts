@@ -53,6 +53,9 @@ export interface StartInstanceOptions {
 export interface AdvanceInstanceOptions {
   action: string;
   data?: Record<string, unknown>;
+  /** E3c (parallel track) — WHICH branch of a parallel case moves. Forwarded to the engine verbatim;
+   *  see {@link AdvanceInstanceDto.token} for why it is neither validated nor defaulted here. */
+  token?: string;
 }
 
 /**
@@ -176,10 +179,14 @@ export class WorkflowInstancesService {
     // A project role still doubles as a workflow role, so definitions gating on a literal
     // "editor"/"viewer"/"owner" keep working exactly as before.
     const roles = await this.caseActorRoles.forCase(ownerId, summary);
+    // E3c (parallel track): `token` is forwarded, never interpreted. The engine is the ONE place a
+    // caller's string is matched against the live marking (`unknown-token`) — checking it here too
+    // would be a second definition of "a token that exists", to be kept in step with the first.
     const result = advance(def, loaded.instance, opts.action, {
       data: opts.data,
       roles,
       actor: ownerId,
+      token: opts.token,
     });
     if (!result.ok) {
       throw new UnprocessableEntityException({

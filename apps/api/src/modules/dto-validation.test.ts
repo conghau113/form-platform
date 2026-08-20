@@ -163,6 +163,38 @@ describe("Phase E work-order DTOs", () => {
     expect("roles" in out).toBe(false);
   });
 
+  // E3c (parallel track). `whitelist: true` is exactly what makes declaring a field in the DTO the
+  // thing that lets it through, so this is the ONLY layer that can catch `token` going missing: a
+  // service test constructs its options object by hand and never runs the pipe.
+  it("CARRIES a `token` on an advance body (E3c, parallel track)", async () => {
+    const out = (await pipe.transform(
+      { action: "approve", token: "t2" },
+      as(AdvanceInstanceDto),
+    )) as Record<string, unknown>;
+    expect(out).toEqual({ action: "approve", token: "t2" });
+  });
+
+  it("keeps an advance body without a token EXACTLY as it was (E3c, parallel track)", async () => {
+    // The single-token case — every case running today — must go on sending the same two-key body.
+    // `exposeUnsetFields: false` is what keeps `token` from appearing as an explicit `undefined`,
+    // which would turn "did not name a branch" into "named nothing" one layer further in.
+    const out = (await pipe.transform({ action: "approve" }, as(AdvanceInstanceDto))) as Record<
+      string,
+      unknown
+    >;
+    expect(out).toEqual({ action: "approve" });
+    expect("token" in out).toBe(false);
+  });
+
+  it("rejects a non-string or oversized advance token with 400 (E3c, parallel track)", async () => {
+    await expect(
+      pipe.transform({ action: "approve", token: 42 }, as(AdvanceInstanceDto)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      pipe.transform({ action: "approve", token: "x".repeat(129) }, as(AdvanceInstanceDto)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it("STRIPS a `roles` claim from a submit body too (Phase E3c — the other half)", async () => {
     // Same promise on the submissions side, and the same reason to pin it: `main.ts` deliberately
     // does NOT set `forbidNonWhitelisted`, so an old builder still sending `roles` keeps working

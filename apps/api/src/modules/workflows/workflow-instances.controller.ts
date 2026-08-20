@@ -185,6 +185,9 @@ export class WorkflowInstancesController {
       return await this.instances.advance(ownerId, instanceId, {
         action: dto.action,
         data: dto.data,
+        // E3c (parallel track): which branch of a parallel case to move. The global ValidationPipe
+        // runs with `whitelist: true`, so this only reaches us because the DTO declares it.
+        token: dto.token,
       });
     } catch (err) {
       if (err instanceof HttpException) throw err;

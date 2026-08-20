@@ -1,4 +1,4 @@
-import { IsObject, IsOptional, IsString } from "class-validator";
+import { IsObject, IsOptional, IsString, MaxLength } from "class-validator";
 
 /**
  * Body for `POST /workflow-instances/:instanceId/advance`. The action + optional case data are fed
@@ -19,4 +19,23 @@ export class AdvanceInstanceDto {
   @IsOptional()
   @IsObject()
   data?: Record<string, unknown>;
+
+  /**
+   * E3c (parallel track) — WHICH branch moves, when the case stands in more than one place at once.
+   *
+   * Send it only for a case whose marking has MORE than one token. A case standing in one place is
+   * unambiguous by construction, and naming its token buys nothing while exposing the caller to
+   * `unknown-token`: the engine matches this against the marking AFTER gateways settle, so an id
+   * read from a stored case parked on a gateway can already have been consumed (`engine.ts` on
+   * `AdvanceContext.token`). Omitted, the engine moves the only token that CAN fire the action, and
+   * refuses with `ambiguous-token` rather than guessing when two could.
+   *
+   * Not validated against the case here on purpose — the engine owns that check (`unknown-token`),
+   * and a token id that is not in the live marking is refused there, so this is never treated as a
+   * position. `@MaxLength` is hygiene against an unbounded string, not a claim about the id's shape.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  token?: string;
 }

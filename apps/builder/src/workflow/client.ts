@@ -116,20 +116,38 @@ export async function getInstance(instanceId: string): Promise<WorkflowInstance>
 }
 
 /**
+ * Somebody else moved the case between our read and our write, so the server refused the advance
+ * (409) rather than dropping their move (E3c, parallel track).
+ *
+ * A distinct type, not a string match on the message: the server's wording is free to change, and a
+ * caller that recognised this conflict by its text would start treating it as an ordinary failure
+ * the moment it did — silently, and only in production. It is a normal outcome of two people working
+ * one case, not a bug, and the caller's job is to reload rather than to retry: the action would be
+ * re-run against a situation that no longer exists.
+ */
+export class CaseConflictError extends Error {}
+
+/**
  * Fire an action against a case; the server advances it (or 422s with the failure reason).
  *
  * There is no `roles` here on purpose (Phase E3a): the roles the actor is judged by are derived
  * server-side from their project role, their workspace roles and this case's cast. A client that
  * could name its own roles could unlock every field a form gates on `viewRoles`.
+ *
+ * `token` (E3c, parallel track) names WHICH branch of a parallel case to move, and should be sent
+ * only when the case stands in more than one place. Omitting it on a single-branch case is not a
+ * shortcut: the engine matches a token against the marking after gateways settle, so naming one
+ * buys nothing there while opening the door to `unknown-token`.
  */
 export async function advanceInstance(
   instanceId: string,
-  input: { action: string; data?: Record<string, unknown> },
+  input: { action: string; data?: Record<string, unknown>; token?: string },
 ): Promise<WorkflowInstance> {
   const res = await apiFetch(
     `${API_BASE}/workflow-instances/${encodeURIComponent(instanceId)}/advance`,
     { method: "POST", headers: jsonHeaders(), body: JSON.stringify(input) },
   );
+  if (res.status === 409) throw new CaseConflictError(await readError(res));
   if (!res.ok) throw new Error(`Advance case failed: ${await readError(res)}`);
   return (await res.json()) as WorkflowInstance;
 }

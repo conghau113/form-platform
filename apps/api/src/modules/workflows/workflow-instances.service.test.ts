@@ -866,6 +866,98 @@ function gatedForm(id = "f1"): FormSchema {
   } as unknown as FormSchema;
 }
 
+/**
+ * E3c (parallel track) — F-amb. `draft --submit--> F(fork) ⇉ tech, fin --approve--> J(join) --merge--> done`
+ *
+ * Both branches fire the SAME action on purpose: two people approving in parallel is the textbook
+ * use of a fork, and it is exactly the shape that cannot be advanced without naming a token. A
+ * fixture whose branches had different actions would let every test below pass for the wrong reason.
+ */
+function forkDef(id = "wf1"): WorkflowDefinition {
+  return {
+    workflowVersion: 1,
+    id,
+    title: "Parallel approval",
+    start: "draft",
+    nodes: [
+      { id: "draft", status: "draft" },
+      { id: "F", status: "split", gateway: "fork" },
+      { id: "tech", status: "tech" },
+      { id: "fin", status: "fin" },
+      { id: "J", status: "merge", gateway: "join" },
+      { id: "done", status: "done", kind: "end" },
+    ],
+    transitions: [
+      { id: "t1", from: "draft", to: "F", action: "submit" },
+      { id: "ft", from: "F", to: "tech", action: "enterTech" },
+      { id: "ff", from: "F", to: "fin", action: "enterFin" },
+      { id: "at", from: "tech", to: "J", action: "approve" },
+      { id: "af", from: "fin", to: "J", action: "approve" },
+      { id: "tj", from: "J", to: "done", action: "merge" },
+    ],
+  };
+}
+
+describe("WorkflowInstancesService.advance — naming a branch (E3c, parallel track)", () => {
+  /** Start the parallel case and run it through the fork, so it stands at `tech` AND `fin`. */
+  async function startForked(): Promise<WorkflowInstance> {
+    await seedWorkflow(forkDef());
+    const started = await service.start(OWNER, "wf1");
+    return service.advance(OWNER, started.id, { action: "submit" });
+  }
+
+  const tokenAt = (inst: WorkflowInstance, at: string): string => {
+    const token = inst.tokens?.find((t) => t.at === at);
+    if (!token) throw new Error(`no token at ${at}; marking = ${JSON.stringify(inst.tokens)}`);
+    return token.id;
+  };
+
+  it("moves the branch the caller names, and leaves the other one standing", async () => {
+    const forked = await startForked();
+    expect(forked.tokens?.map((t) => t.at)).toEqual(["tech", "fin"]);
+    const techToken = tokenAt(forked, "tech");
+
+    const after = await service.advance(OWNER, forked.id, {
+      action: "approve",
+      token: tokenAt(forked, "fin"),
+    });
+
+    // `fin` walked to the join and parked there (its sibling has not arrived); `tech` did not move,
+    // and kept its id — asserting the id, not just the count, is what makes this a test about WHICH
+    // branch moved rather than about how many tokens survived.
+    expect(after.tokens?.find((t) => t.id === techToken)?.at).toBe("tech");
+    expect(after.tokens?.map((t) => t.at).sort()).toEqual(["J", "tech"]);
+  });
+
+  it("refuses with `ambiguous-token` when a parallel case is advanced without naming a branch", async () => {
+    const forked = await startForked();
+    // The state of the world BEFORE this slice: both branches answer to `approve`, so the engine has
+    // two candidates and will not guess. This is the promise the E3a changeset made, pinned.
+    await expect(service.advance(OWNER, forked.id, { action: "approve" })).rejects.toMatchObject({
+      response: { reason: "ambiguous-token" },
+    });
+  });
+
+  it("refuses a token that is not in the case's marking (`unknown-token`)", async () => {
+    const forked = await startForked();
+    // Security, not tidiness: were a caller's string taken as a position, anyone who can run a case
+    // could fire a transition from any node in the graph and walk past the guards and roles attached
+    // to where the case actually stands.
+    await expect(
+      service.advance(OWNER, forked.id, { action: "approve", token: "not-a-token" }),
+    ).rejects.toMatchObject({ response: { reason: "unknown-token" } });
+  });
+
+  it("still advances a single-token case when no branch is named", async () => {
+    // The regression that matters: every case running today has one token, and none of them send a
+    // `token`. Their path through this service must be exactly what it was before E3c.
+    await seedWorkflow();
+    const started = await service.start(OWNER, "wf1");
+    const advanced = await service.advance(OWNER, started.id, { action: "submit" });
+    expect(advanced.current).toBe("review");
+  });
+});
+
 describe("WorkflowInstancesService — running is its own permission (Phase E)", () => {
   const OPERATOR = "operator-1";
   const tenantId = FakeTenantRepo.tenantIdFor(OWNER);

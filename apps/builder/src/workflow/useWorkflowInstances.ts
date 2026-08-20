@@ -63,17 +63,33 @@ export function useStartInstance(
  * Fires an action against a case. On success it seeds the advanced instance into its own cache and
  * invalidates the workflow's list (the denormalised `current` changed). `mutateAsync` rejects on a
  * 422 so the caller can surface the engine's failure reason.
+ *
+ * `input.token` names which branch of a parallel case to move (E3c, parallel track).
+ *
+ * On a 409 it refetches instead of retrying. The server refused because the case moved under us, so
+ * the state this view is showing is stale — telling the user to reload while leaving the stale case
+ * on screen would be asking them to do something the app can do itself. Retrying is deliberately NOT
+ * done here: the action would be re-run against a different situation than the one it was chosen for.
  */
 export function useAdvanceInstance(
   instanceId: string | undefined,
   workflowId: string | undefined,
-): (input: { action: string; data?: Record<string, unknown> }) => Promise<WorkflowInstance> {
+): (input: {
+  action: string;
+  data?: Record<string, unknown>;
+  token?: string;
+}) => Promise<WorkflowInstance> {
   const qc = useQueryClient();
   const advance = useMutation({
-    mutationFn: (input: { action: string; data?: Record<string, unknown> }) =>
+    mutationFn: (input: { action: string; data?: Record<string, unknown>; token?: string }) =>
       api.advanceInstance(instanceId as string, input),
     onSuccess: (next) => {
       qc.setQueryData(qk.instance(next.id), next);
+      if (workflowId) qc.invalidateQueries({ queryKey: qk.instances(workflowId) });
+    },
+    onError: (err) => {
+      if (!(err instanceof api.CaseConflictError)) return;
+      if (instanceId) qc.invalidateQueries({ queryKey: qk.instance(instanceId) });
       if (workflowId) qc.invalidateQueries({ queryKey: qk.instances(workflowId) });
     },
   });
