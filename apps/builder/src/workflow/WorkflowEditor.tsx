@@ -33,6 +33,7 @@ import {
   Button,
   Divider,
   Drawer,
+  Dropdown,
   Empty,
   Input,
   List,
@@ -56,7 +57,7 @@ import {
   PathHighlightContext,
   type PathHighlightCtx,
 } from "./floating-edge";
-import { tidyLayout } from "./layout";
+import { type LayoutDirection, tidyLayout } from "./layout";
 import { type Direction, isNodeVisible, pickNeighbor } from "./navigate";
 import { traceUpstream } from "./path";
 import {
@@ -181,6 +182,9 @@ function WorkflowEditorInner({
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
   const [highlightNodeId, setHighlightNodeId] = useState<string | null>(null);
+  // Which way "Sắp xếp" grows the graph. Editor state, not contract data: the arrangement itself is
+  // already persisted as node `position`, so a graph arranged vertically reopens vertically.
+  const [layoutDir, setLayoutDir] = useState<LayoutDirection>("LR");
   const [aiOpen, setAiOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   // WE5b keyboard-first: the "?" shortcut overlay.
@@ -588,10 +592,16 @@ function WorkflowEditorInner({
     [selectedEdgeId],
   );
 
-  function onTidy() {
-    const next = tidyLayout(nodesRef.current, edgesRef.current);
+  /**
+   * Arrange the graph. NEVER bind this straight to `onClick` — React hands the handler a
+   * MouseEvent, and a default parameter only fills in for `undefined`, so the event would arrive
+   * as dagre's `rankdir` and crash the editor on this very button. Always `onClick={() => …}`.
+   */
+  function onTidy(dir: LayoutDirection = layoutDir) {
+    const next = tidyLayout(nodesRef.current, edgesRef.current, dir);
+    setLayoutDir(dir);
     setNodes(next);
-    commit("Tidy layout", { nodes: next });
+    commit(dir === "TB" ? "Sắp xếp dọc" : "Sắp xếp ngang", { nodes: next });
     window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
   }
 
@@ -615,7 +625,7 @@ function WorkflowEditorInner({
     (def: WorkflowDefinition) => {
       const gen = toFlow(def);
       const nextMeta = { ...gen.meta, id: metaRef.current.id };
-      const nextNodes = tidyLayout(gen.nodes, gen.edges);
+      const nextNodes = tidyLayout(gen.nodes, gen.edges, layoutDir);
       setMeta(nextMeta);
       setNodes(nextNodes);
       setEdges(gen.edges);
@@ -628,7 +638,9 @@ function WorkflowEditorInner({
       setSelectedEdgeId(null);
       window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
     },
-    [setNodes, setEdges, commit, fitView],
+    // `layoutDir` belongs here: without it the AI path would keep tidying with whatever direction
+    // was selected when this callback was first created.
+    [setNodes, setEdges, commit, fitView, layoutDir],
   );
 
   // --- Validation issue mapping --------------------------------------------
@@ -825,7 +837,24 @@ function WorkflowEditorInner({
             Làm lại
           </Button>
           <Button onClick={addState}>Thêm trạng thái</Button>
-          <Button onClick={onTidy}>Sắp xếp</Button>
+          {/* Body = arrange the way it is set now; the arrow picks the direction AND applies it —
+              someone choosing "dọc" wants to see it vertical, not to arm a setting. */}
+          <Dropdown.Button
+            onClick={() => onTidy()}
+            menu={{
+              selectable: true,
+              selectedKeys: [layoutDir],
+              items: [
+                { key: "LR", label: "Sắp xếp ngang" },
+                { key: "TB", label: "Sắp xếp dọc" },
+              ],
+              // Narrowed rather than cast: a third menu item added later would otherwise hand dagre
+              // an unknown `rankdir`.
+              onClick: ({ key }) => onTidy(key === "TB" ? "TB" : "LR"),
+            }}
+          >
+            {layoutDir === "TB" ? "Sắp xếp dọc" : "Sắp xếp ngang"}
+          </Dropdown.Button>
           <Button danger={issues.length > 0} onClick={onValidate}>
             {issues.length > 0 ? `Kiểm tra (${issues.length})` : "Kiểm tra"}
           </Button>
@@ -894,6 +923,12 @@ function WorkflowEditorInner({
                   setHighlightNodeId(null);
                 }}
                 fitView
+                // xyflow floors zoom at 0.5, and "fit" cannot go below its own floor. Measured on
+                // the 11-node demo workflow arranged vertically: with the default floor the viewport
+                // pins at exactly scale(0.5) and FOUR nodes sit outside the pane; with this floor it
+                // settles at 0.544 and every node is inside. A real approval flow is taller than the
+                // pane, so the floor has to leave room for one.
+                minZoom={0.2}
               >
                 <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d4d4d8" />
                 <MiniMap

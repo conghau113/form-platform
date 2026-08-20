@@ -198,6 +198,35 @@ API + builder UI).
   production, view "đẹp" như kanban chỉ có giá trị vận hành khi đã có case/task thật để xếp, nếu
   không chỉ là trang trí. KHÔNG ưu tiên trước form-version/submission/runtime/audit.
 
+### WE6 — Đọc được đồ thị: tách làn cạnh trùng + hướng sắp xếp (KHÔNG đụng contract)
+- [x] **Tách làn cạnh nối cùng một cặp node.** `edgeLane` (thuần, `floating-edge.tsx`) chia làn cho
+  **mọi** cạnh nối cùng cặp node, bất kể chiều — `getEdgeParams(B,A)` dùng lại đúng hai giao điểm của
+  `getEdgeParams(A,B)` nên `A↔B` vẽ trùng khít, và hai transition **cùng** `from→to` (khác guard) thì
+  còn là cùng một lời gọi. Nhóm được sắp theo `id`, mỗi cạnh nhận một khe quanh trục; cạnh chạy ngược
+  **hệ quy chiếu chuẩn** thì đảo dấu — ⚠️ bước này **bắt buộc**, bỏ đi là cặp hai chiều sụp lại một
+  đường (pháp tuyến tự lật khi source/target đảo). `offsetAlongNormal` dời hai đầu (clamp vào hộp node),
+  `labelOffsetFor` dời nhãn khỏi trung điểm của **chính đường đó** — ⚠️ **không** cộng lại `lane`, vì
+  trung điểm đã lệch làn rồi. Hợp thành nằm trong `edgeGeometry`.
+- [x] **Tuỳ chọn Sắp xếp NGANG / DỌC.** `tidyLayout(nodes, edges, direction)` + `Dropdown.Button`.
+  Hướng là **state của editor, KHÔNG vào contract** (`position` đã ghi lại kết quả). ⚠️ `onClick` phải
+  là `() => onTidy()`: bind thẳng thì React truyền `MouseEvent` làm `rankdir` và sập editor.
+- [x] **Sống lưng thẳng cột:** `align: "UL"` cho dagre. Đo trên `docs/demo/pct` (11 node/17 transition):
+  3/11 → 10/11 chung cột dưới TB, 4/11 → 10/11 dưới LR, đồ thị còn hẹp lại. Đo trong app thật: 10 tâm
+  node trùng x, chỉ nhánh `cancelled` tách ra. ⚠️ so **TÂM**, đừng so mép trái — node rộng khác nhau.
+- [x] **`minZoom={0.2}`.** Sàn mặc định 0.5 khiến "fit" không xuống nổi: đồ thị dọc 11 node ghim đúng
+  `scale(0.5)` với 4 node ngoài màn; bố cục ngang cần tới `0.23`.
+- [ ] 🔴 **NỢ — `fitView` không chạy sau khi sắp xếp.** Tái hiện ổn định trên PCT: đồ thị sắp lại đúng
+  nhưng khung nhìn đứng nguyên. **Không phải lỗi của WE6** — nút "fit view" của **chính xyflow** cũng
+  bất động trong khi zoom-in vẫn chạy; `rAF`/gọi thẳng/`fitBounds` đều không ăn. Đã hoàn nguyên phần
+  fit về nguyên trạng. Xem `~/.claude/plans/workflow-editor-edge-readability.md` §8.1c.
+- [ ] **Tuỳ chọn kiểu nối "theo trục"** (ông chủ chốt 2026-08-19): bật thì mọi cạnh rời cạnh DƯỚI cắm
+  vào cạnh TRÊN (dọc) / PHẢI→TRÁI (ngang); tắt giữ kiểu tự do. ⚠️ **KHÔNG** làm bản "chỉnh từng cạnh":
+  bản đó phải ghi điểm cắm vào workflow JSON = thêm dữ liệu trình bày vào contract.
+- ⚠️ Nợ đã biết: nhóm **≥3** cạnh cùng cặp node thì nhãn còn có thể chạm nhau (`extra` không giãn theo
+  làn); `layout.ts` gọi `g.setEdge` không đặt tên nên nhiều cạnh song song sụp thành MỘT cạnh dagre;
+  selector `edgeLane` chạy cho mỗi cạnh trên mỗi lần store đổi (vô hại ở 17 cạnh); và dây nối
+  `useStore → edgeLane → edgeGeometry` **chưa có cổng tự động** (jsdom không dựng nổi cạnh xyflow).
+
 ---
 
 ## Giao thức resume (sau MỖI phase)

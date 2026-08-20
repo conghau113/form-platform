@@ -49,6 +49,53 @@ describe("tidyLayout", () => {
     expect(gap(labeled)).toBeGreaterThan(gap(bare));
   });
 
+  it("ranks the same chain top-to-bottom by y when asked for a vertical layout", () => {
+    const nodes = [node("a"), node("b"), node("c")];
+    const edges = [edge("a", "b"), edge("b", "c")];
+    const out = tidyLayout(nodes, edges, "TB");
+
+    const pos = Object.fromEntries(out.map((n) => [n.id, n.position]));
+    expect(pos.a.y).toBeLessThan(pos.b.y);
+    expect(pos.b.y).toBeLessThan(pos.c.y);
+    // …and it is a COLUMN, not a row that happens to descend: a chain shares one x under TB, which
+    // is what tells "the direction was applied" apart from "dagre moved things around".
+    expect(pos.a.x).toBe(pos.b.x);
+    expect(pos.b.x).toBe(pos.c.x);
+  });
+
+  it("keeps the spine in one straight column when a state branches", () => {
+    // `a→b→c→e` with `d` hanging off `b`. dagre's default centres `b` over BOTH its children, so the
+    // spine kinks sideways the moment anything branches — measured: a,b at x=216 while c,e sit at 90.
+    // A chain with no branch aligns under either rule, so only this shape tells them apart.
+    const nodes = [node("a"), node("b"), node("c"), node("d"), node("e")];
+    const edges = [edge("a", "b"), edge("b", "c"), edge("b", "d"), edge("c", "e")];
+    const x = Object.fromEntries(tidyLayout(nodes, edges, "TB").map((n) => [n.id, n.position.x]));
+    expect(x.b).toBe(x.a);
+    expect(x.c).toBe(x.a);
+    expect(x.e).toBe(x.a);
+    // …and the side branch is genuinely off to one side, or "all aligned" would be trivially true.
+    expect(x.d).not.toBe(x.a);
+  });
+
+  it("keeps the spine in one straight row when arranged horizontally too", () => {
+    // Same shape, other direction — the owner asked for the straight run in the vertical view, but
+    // the setting applies to both and only this gates the horizontal one.
+    const nodes = [node("a"), node("b"), node("c"), node("d"), node("e")];
+    const edges = [edge("a", "b"), edge("b", "c"), edge("b", "d"), edge("c", "e")];
+    const y = Object.fromEntries(tidyLayout(nodes, edges, "LR").map((n) => [n.id, n.position.y]));
+    expect(y.b).toBe(y.a);
+    expect(y.c).toBe(y.a);
+    expect(y.e).toBe(y.a);
+    expect(y.d).not.toBe(y.a);
+  });
+
+  it("still lays out left-to-right when no direction is given", () => {
+    const nodes = [node("a"), node("b"), node("c")];
+    const edges = [edge("a", "b"), edge("b", "c")];
+    // The three existing call sites pass two arguments; the default is what keeps them working.
+    expect(tidyLayout(nodes, edges)).toEqual(tidyLayout(nodes, edges, "LR"));
+  });
+
   it("preserves id/data and does not mutate the input", () => {
     const nodes = [node("a"), node("b")];
     const input = structuredClone(nodes);
