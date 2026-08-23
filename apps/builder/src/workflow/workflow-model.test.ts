@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type WorkflowDefinition, workflowDefinitionSchema } from "@org/workflow-schema";
 import { describe, expect, it } from "vitest";
-import { fromFlow, toFlow } from "./workflow-model";
+import { fromFlow, newEdge, toFlow } from "./workflow-model";
 
 const def: WorkflowDefinition = {
   workflowVersion: 1,
@@ -53,7 +56,44 @@ describe("workflow-model boundary", () => {
     expect(serialized).not.toContain("selected");
     expect(serialized).not.toContain("dragging");
     expect(serialized).not.toContain("measured");
+    expect(serialized).not.toContain("zIndex");
     expect(out).toEqual(def);
+  });
+
+  // The edge has to sit ABOVE the state cards or it vanishes where it crosses one (xyflow paints
+  // the edge layer first and gives both a z-index of 0). It is presentation, so it rides on every
+  // edge the editor makes — loaded and hand-drawn alike — and must never reach the contract.
+  it("lifts every edge above the state cards without leaking into the contract", () => {
+    const { edges } = toFlow(def);
+    expect(edges).toHaveLength(1); // `every` on an empty array is vacuously true
+    expect(edges.every((e) => e.zIndex === 1)).toBe(true);
+    expect(newEdge("a", "b", "next").zIndex).toBe(1);
+  });
+
+  // The OTHER half of the same fix, and the half nothing else can see. Edge labels are rendered
+  // into `.react-flow__edgelabel-renderer`, a separate layer that the per-edge `zIndex` above does
+  // not touch — raising one without the other leaves every label buried, which is most of what the
+  // reviewer actually complained about. That half is a CSS rule plus the `className` that scopes it,
+  // and neither is reachable from a unit test: no test renders `WorkflowEditor`, and jsdom cannot
+  // build an xyflow edge at all (see `floating-edge.tsx`). So pin the source text, the way
+  // `apps/api/.../external-throttle.test.ts` pins its controller path — deleting either half must
+  // go red rather than silently reopening the bug.
+  it("keeps the edge-LABEL layer raised too, and keeps the class that scopes it", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const css = readFileSync(join(here, "workflow-canvas.css"), "utf8");
+    const editor = readFileSync(join(here, "WorkflowEditor.tsx"), "utf8");
+
+    expect(css).toMatch(
+      /\.workflow-canvas\s+\.react-flow__edgelabel-renderer\s*\{[^}]*z-index:\s*1\s*;/,
+    );
+    expect(editor).toContain('className="workflow-canvas"');
+
+    // Lifting the edge lifts its 20px invisible hit band over the cards too; measured on the demo
+    // workflow, that cost `leader_signed` 2 of its 4 connect handles. The hovered card has to win
+    // back, or "Sắp xếp" produces a graph you cannot draw transitions on.
+    expect(css).toMatch(
+      /\.workflow-canvas\s+\.react-flow__node:hover\s*\{[^}]*z-index:\s*2\s*!important/,
+    );
   });
 
   // WF4b: the editor has no i18n authoring UI yet, so an AI/JSON-authored i18n must survive a

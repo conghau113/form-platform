@@ -69,6 +69,67 @@ export interface EdgeParams {
   targetPos: Position;
 }
 
+/**
+ * PURE. Endpoints anchored to the MIDDLE of the two facing sides, or `null` when the boxes overlap
+ * on both axes and so have no facing sides.
+ *
+ * The axis chosen is the one the boxes are CLOSER on, which is the whole point: leave through the
+ * narrow gap, then travel along the wide one. An orthogonal route runs its long leg down the
+ * corridor BETWEEN two columns, and dagre leaves that corridor empty by construction. Measured on
+ * the demo workflow (11 states, 17 transitions), `created → cancelled` has a 160px horizontal gap
+ * against a 552px vertical one: leaving sideways puts the long vertical leg inside that 160px
+ * corridor, while the obvious "follow the dominant displacement" rule leaves downwards and drags
+ * the horizontal leg straight through the middle of the state column. That is what the graph does
+ * today, and it costs 5 of 17 transitions crossing a third state's box; this rule costs 1 — the
+ * same figure under both `LR` and `TB`.
+ *
+ * The remaining one is `finished → locked` skipping `leader_signed` in the SAME column: no choice of
+ * anchor can help when the corridor is the occupied one. It stays visible instead, via the edge
+ * z-index.
+ *
+ * Boxes far apart horizontally but close vertically get a top/bottom route, which reads oddly at
+ * first glance. It is the same trade deliberately: the narrow gap is the empty one.
+ */
+export function axisEdgeParams(source: NodeBox, target: NodeBox): EdgeParams | null {
+  // Negative gap = the boxes overlap on that axis, so that pair of sides does not face each other.
+  const gapX =
+    Math.max(source.x, target.x) - Math.min(source.x + source.width, target.x + target.width);
+  const gapY =
+    Math.max(source.y, target.y) - Math.min(source.y + source.height, target.y + target.height);
+
+  let horizontal: boolean;
+  if (gapX >= 0 && gapY >= 0) horizontal = gapX <= gapY;
+  else if (gapX >= 0) horizontal = true;
+  else if (gapY >= 0) horizontal = false;
+  else return null;
+
+  const scx = source.x + source.width / 2;
+  const scy = source.y + source.height / 2;
+  const tcx = target.x + target.width / 2;
+  const tcy = target.y + target.height / 2;
+
+  if (horizontal) {
+    const rightwards = tcx > scx;
+    return {
+      sx: rightwards ? source.x + source.width : source.x,
+      sy: scy,
+      tx: rightwards ? target.x : target.x + target.width,
+      ty: tcy,
+      sourcePos: rightwards ? Position.Right : Position.Left,
+      targetPos: rightwards ? Position.Left : Position.Right,
+    };
+  }
+  const downwards = tcy > scy;
+  return {
+    sx: scx,
+    sy: downwards ? source.y + source.height : source.y,
+    tx: tcx,
+    ty: downwards ? target.y : target.y + target.height,
+    sourcePos: downwards ? Position.Bottom : Position.Top,
+    targetPos: downwards ? Position.Top : Position.Bottom,
+  };
+}
+
 /** PURE: compute the floating-edge endpoints between a source and target node box. */
 export function getEdgeParams(source: NodeBox, target: NodeBox): EdgeParams {
   const s = getNodeIntersection(source, target);
@@ -108,10 +169,12 @@ export const LANE_STEP = 2 * RECIPROCAL_LANE;
  * lane either side of centre, and each label steps `extra` further out from ITS OWN path.
  *
  * Stacked must clear a FULL label column — action 26 + role chip 22 + guard chip 22 + the two 2px
- * gaps between = 74px — so `32 + 2*24 = 80` clears it and `32 + 2*20 = 72` does not, by 2px, which
- * is exactly what the demo workflow's guarded `start_work` pair does once arranged horizontally.
+ * gaps between = 74px. `2*16 + 2*24 = 80` clears that by 6px, which is what the demo workflow's
+ * guarded `start_work` pair gets once arranged horizontally — thin enough that the pair still read
+ * as one blob to a reviewer. `2*16 + 2*32 = 96` leaves 22px. Re-measured with 32: labels landing on
+ * a node stayed at 1 of 17 across every layout direction, so the extra room costs nothing.
  */
-export const LABEL_EXTRA_STACKED = 24;
+export const LABEL_EXTRA_STACKED = 32;
 export const LABEL_EXTRA_SIDEWAYS = 80;
 
 /** The shape `edgeLane` needs off an edge — accepts a `FlowEdge` or any bare `{id,source,target}`. */
@@ -223,14 +286,18 @@ export function labelOffsetFor(p: EdgeParams, lane: number): { dx: number; dy: n
 }
 
 /**
- * PURE. The whole chain an edge is drawn from: lane the endpoints, route the path, then place the
- * label off that path.
+ * PURE. The whole chain an edge is drawn from: pick the anchors, lane the endpoints, route the
+ * path, then place the label off that path.
  *
- * It exists as one function because the three steps only mean anything TOGETHER. Testing them apart
- * left the composition ungated — dropping the label shift entirely kept every unit test green while
+ * It exists as one function because the steps only mean anything TOGETHER. Testing them apart left
+ * the composition ungated — dropping the label shift entirely kept every unit test green while
  * putting two labels 32px apart against a 74px label column, which is the bug this all exists to fix.
  *
- * 🔴 The last link is still ungated: nothing tests that the COMPONENT feeds this the store's lane.
+ * Choosing the anchors HERE rather than at the call site is deliberate: it used to take a ready-made
+ * `base`, which left the choice in the component where no test could reach it. Now a pure test
+ * covers it, and the component only supplies the lane and the two boxes.
+ *
+ * 🔴 One link is still ungated: nothing tests that the COMPONENT feeds this the store's lane.
  * Hardcoding `lane` to 0 at the call site below keeps the whole suite green. A jsdom render was
  * attempted and abandoned — xyflow reaches `nodesInitialized: true` with correct `measured` sizes
  * and still emits no edge elements without a live ResizeObserver. So that one line is covered by
@@ -238,11 +305,14 @@ export function labelOffsetFor(p: EdgeParams, lane: number): { dx: number; dy: n
  * the one-way edge beside it. Re-measure it by hand when you touch the call site.
  */
 export function edgeGeometry(
-  base: EdgeParams,
   lane: number,
   sourceBox: NodeBox,
   targetBox: NodeBox,
 ): { path: string; labelX: number; labelY: number } {
+  // Axis-aligned anchors wherever the boxes have facing sides; the free-floating border
+  // intersection only for boxes overlapping on both axes (dragged onto each other), where no pair
+  // of sides faces the other node.
+  const base = axisEdgeParams(sourceBox, targetBox) ?? getEdgeParams(sourceBox, targetBox);
   const { sx, sy, tx, ty, sourcePos, targetPos } = offsetAlongNormal(
     base,
     lane,
@@ -362,12 +432,7 @@ export function FloatingEdge({
 
   const sourceBox = boxOf(sourceNode);
   const targetBox = boxOf(targetNode);
-  const { path, labelX, labelY } = edgeGeometry(
-    getEdgeParams(sourceBox, targetBox),
-    lane,
-    sourceBox,
-    targetBox,
-  );
+  const { path, labelX, labelY } = edgeGeometry(lane, sourceBox, targetBox);
 
   return (
     <>

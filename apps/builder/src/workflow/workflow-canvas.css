@@ -70,6 +70,35 @@
   transform: scale(1.15);
 }
 
+/* Edge labels above the state cards. xyflow renders `.react-flow__edgelabel-renderer` BEFORE
+   `.react-flow__nodes` and leaves it without a z-index, so an action label that lands on a card is
+   painted under it. The edge PATH is lifted separately via `zIndex` on the edge itself
+   (EDGE_PRESENTATION) — raising one without the other only half-fixes "node che mất dây".
+   Scoped to our canvas (className="workflow-canvas") so no other ReactFlow in the app is touched.
+   Stays at 1 so a selected node, which xyflow elevates much higher, still covers its labels. */
+.workflow-canvas .react-flow__edgelabel-renderer {
+  z-index: 1;
+}
+
+/* ...and hand the card back the moment you point at it. Lifting the edge lifts its INVISIBLE hit
+   band too: `BaseEdge` draws a `.react-flow__edge-interaction` path at stroke-width 20 and
+   `.react-flow__edge` is `pointer-events: visibleStroke`, so wherever a transition crosses a card
+   the card stops taking clicks. Measured on the demo workflow (11 states), where `t_lock_direct`
+   crosses `leader_signed`: 16 of 352 sampled points inside cards hit the edge instead, and 2 of
+   that card's 4 connect handles — its LEFT and RIGHT, the two you drag from in a horizontal
+   layout — were unreachable, so you could not draw a transition from it at all.
+   Raising the hovered card above the edges fixes every one of those (measured: 0 and 0). Narrowing
+   the hit band instead was tried and rejected: stroke-width 6 also measured 0/0, but only because
+   it happens to clear THIS graph — a transition passing 3px from a handle brings it straight back.
+   `!important` because xyflow writes the z-index inline from `internals.z`. A selected card is
+   inline 1000 and drops to 2 while hovered, still clear of the edges at 1.
+   Net effect: transitions read on top at rest, the card wins while you are working on it. */
+.workflow-canvas .react-flow__node:hover {
+  /* biome-ignore lint/complexity/noImportantStyles: xyflow writes each node's z-index inline from
+     `internals.z`, so only !important can outrank it — same reason as the handle rule above. */
+  z-index: 2 !important;
+}
+
 /* Edge flow animation — direction hint along transitions (presentation only). */
 @keyframes workflow-edge-flow {
   to {

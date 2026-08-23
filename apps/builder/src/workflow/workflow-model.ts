@@ -54,10 +54,19 @@ export type FlowNode = Node<FlowNodeData, "workflow">;
 export type FlowEdge = Edge<FlowEdgeData>;
 
 /** Presentation shared by every transition edge: float to the nearest border + an arrowhead.
- *  Editor-only — `fromFlow` never reads it, so it stays out of the workflow contract. */
+ *  Editor-only — `fromFlow` never reads it, so it stays out of the workflow contract.
+ *
+ *  `zIndex` lifts the transition ABOVE the state cards. xyflow paints
+ *  `div.react-flow__edges` before `div.react-flow__nodes` and gives both z-index 0, so at the
+ *  default an edge passing behind a card simply disappears — the reviewer's "mất dây". Each edge is
+ *  its own `<svg style={{zIndex}}>`, so a single step is enough to win against an unselected node
+ *  (`internals.z === 0`); a SELECTED node is elevated well past this and still covers its edges,
+ *  which is what we want. The edge LABEL lives in a separate layer and needs the CSS rule in
+ *  `workflow-canvas.css` — raising only this one would leave every label still buried. */
 const EDGE_PRESENTATION = {
   type: "floating",
   markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+  zIndex: 1,
 } as const;
 
 /** Definition-level metadata held alongside the xyflow nodes/edges in the editor. */

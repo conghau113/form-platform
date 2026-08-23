@@ -602,6 +602,20 @@ function WorkflowEditorInner({
     setLayoutDir(dir);
     setNodes(next);
     commit(dir === "TB" ? "Sắp xếp dọc" : "Sắp xếp ngang", { nodes: next });
+    // Say what moved AND that it is not saved yet: only node `position` is persisted, and the
+    // direction itself is never part of the workflow, so "it rearranged" is not "it was kept".
+    // `tidyLayout` is deterministic and ignores the incoming positions, so re-arranging an already
+    // arranged workflow is a no-op — nothing is dirty and "Lưu" stays DISABLED. Telling the reader
+    // to press a greyed-out button is the one thing this message exists to avoid.
+    const moved = next.filter((n, i) => {
+      const was = nodesRef.current[i];
+      return n.position.x !== was.position.x || n.position.y !== was.position.y;
+    }).length;
+    message.success(
+      moved === 0
+        ? "Đã ở đúng bố cục — không có gì thay đổi."
+        : `Đã sắp xếp ${moved} trạng thái — nhấn Lưu để giữ vị trí.`,
+    );
     window.requestAnimationFrame(() => fitView({ duration: 300, padding: 0.2 }));
   }
 
@@ -894,6 +908,8 @@ function WorkflowEditorInner({
           <NodeViewContext.Provider value={nodeViewCtx}>
             <PathHighlightContext.Provider value={pathHighlightCtx}>
               <ReactFlow
+                // Scopes `workflow-canvas.css` (the edge-label layer's z-index) to this canvas.
+                className="workflow-canvas"
                 nodes={displayNodes}
                 edges={displayEdges}
                 nodeTypes={workflowNodeTypes}

@@ -219,13 +219,126 @@ API + builder UI).
   nhưng khung nhìn đứng nguyên. **Không phải lỗi của WE6** — nút "fit view" của **chính xyflow** cũng
   bất động trong khi zoom-in vẫn chạy; `rAF`/gọi thẳng/`fitBounds` đều không ăn. Đã hoàn nguyên phần
   fit về nguyên trạng. Xem `~/.claude/plans/workflow-editor-edge-readability.md` §8.1c.
-- [ ] **Tuỳ chọn kiểu nối "theo trục"** (ông chủ chốt 2026-08-19): bật thì mọi cạnh rời cạnh DƯỚI cắm
-  vào cạnh TRÊN (dọc) / PHẢI→TRÁI (ngang); tắt giữ kiểu tự do. ⚠️ **KHÔNG** làm bản "chỉnh từng cạnh":
-  bản đó phải ghi điểm cắm vào workflow JSON = thêm dữ liệu trình bày vào contract.
+  **Chẩn đoán WE7 (D2) — thu hẹp được, CHƯA đóng.** Đo trên app thật, `@xyflow/react@12.11.0`:
+  - **Bác bỏ** loạt nghi phạm: 11/11 node có `measured`, không node nào `hidden`, `nodesInitialized:
+    true`, store `width/height` = 1256×858 (khác 0), `panZoom` tồn tại, `ReactFlowProvider` bọc đúng.
+    `getFitViewNodes` (`@xyflow/system@0.0.77:415`) chỉ lọc theo `measured` + `hidden` — **không** lọc
+    theo `handleBounds` như tôi đoán ⇒ giả thuyết "node bị loại khỏi tập fit" SAI.
+  - **Đường ống dưới cùng lành**: gọi thẳng `panZoom.setViewport({x:50,y:50,zoom:0.3})` **di chuyển
+    được** khung nhìn.
+  - **Cơ chế thật** (`@xyflow/react/dist/esm/index.js:1207`): `useReactFlow().fitView` **không fit ngay**
+    — nó chỉ đặt `fitViewQueued:true` rồi đẩy `(nodes)=>[...nodes]` vào `batchContext.nodeQueue`. Việc
+    fit CHỈ chạy bên trong `setNodes` **của store** (`:3341`), và chỉ khi `fitViewQueued &&
+    nodesInitialized`. Nếu lượt `setNodes` đó không xảy ra, cờ kẹt `true` và **không có lỗi nào được
+    báo** — đúng chữ ký "im lặng không làm gì". ⇒ hướng điều tra tiếp là **hàng đợi batch trong setup
+    controlled** (`nodes={nodes}` + `useNodesState` của ta), không phải phép đo hay `panZoom`.
+  - 🔴 **KHÔNG đo được S4 bằng automation**: tab do Claude-in-Chrome lái luôn ở
+    `document.visibilityState === "hidden"` ⇒ `requestAnimationFrame` **không bao giờ cháy** (đo được:
+    cả rAF trơn cũng không), nên `rAF(() => fitView(...))` trong `onTidy` chết vì môi trường và che
+    mất hành vi thật. Trong tab ẩn mới mở, ResizeObserver còn không chạy ⇒ 0/11 node được đo. **Mọi
+    phán quyết S4 rút ra từ automation đều là ảo giác** — phải kiểm bằng tay trên tab đang hiển thị.
+    (Mẹo: chụp screenshot buộc trình duyệt render, nhờ đó đo được phần không phụ thuộc rAF.)
+- [x] **Kiểu nối "theo trục"** — làm ở **WE7 hạng mục B**, và ông chủ chốt 2026-08-22 là **mặc định
+  luôn, KHÔNG có nút bật/tắt** (bỏ phần "tuỳ chọn" của ghi chú 2026-08-19). ⚠️ Vẫn giữ nguyên lệnh
+  cấm: **KHÔNG** làm bản "chỉnh từng cạnh" — bản đó phải ghi điểm cắm vào workflow JSON = thêm dữ
+  liệu trình bày vào contract.
 - ⚠️ Nợ đã biết: nhóm **≥3** cạnh cùng cặp node thì nhãn còn có thể chạm nhau (`extra` không giãn theo
   làn); `layout.ts` gọi `g.setEdge` không đặt tên nên nhiều cạnh song song sụp thành MỘT cạnh dagre;
   selector `edgeLane` chạy cho mỗi cạnh trên mỗi lần store đổi (vô hại ở 17 cạnh); và dây nối
   `useStore → edgeLane → edgeGeometry` **chưa có cổng tự động** (jsdom không dựng nổi cạnh xyflow).
+
+### WE7 — Đọc được NHÁNH: dây nổi trên node + neo theo trục + làn bên cho điểm gom (KHÔNG đụng contract)
+
+Xuất phát từ bản đánh giá của người dùng thiết kế quy trình PCT (2026-08-22). **Mọi con số trong bản
+đánh giá đều được đo lại trước khi tin**, và hai đề xuất bị bác vì không có bằng chứng:
+
+| Bản đánh giá nói | Số đo thật |
+|---|---|
+| 16/17 cạnh cắt qua node khác | **5/17** — nhưng đúng 5 cái họ than |
+| Node che mất dây | **ĐÚNG**, và rộng hơn họ nghĩ — **nhãn** cạnh cũng bị chôn |
+| `cancelled` nằm cạnh spine | **SAI** — rank 7/10 (y=1581), cùng hàng `leader_signed`, `done` ở y=2362. Nhưng nó nằm **dưới cả 5 nguồn** ⇒ mũi tên `cancel` dài 277→1329px |
+| Nới `nodesep`/`ranksep` | **BÁC** — nhãn đè node chỉ 1/17, nới ra không đổi |
+| dagre multigraph mỗi transition một cạnh | **BÁC** — output **byte-identical** |
+
+- [x] **A. Dây + nhãn nổi lên trên node.** `EDGE_PRESENTATION.zIndex = 1` trong `workflow-model.ts`
+  (dùng chung cho `toFlow` và `newEdge`, nên `onConnect` cũng hưởng) + `.workflow-canvas
+  .react-flow__edgelabel-renderer { z-index: 1 }`. xyflow vẽ `div.react-flow__edges` **trước**
+  `div.react-flow__nodes` và cho cả hai z-index 0 ⇒ mặc định node đè lên dây. Mỗi cạnh là một
+  `<svg style={{zIndex}}>` riêng nên **một bậc là đủ** thắng node chưa chọn (`internals.z === 0`);
+  node ĐANG CHỌN vẫn được nâng cao hơn và vẫn che dây của nó — đúng ý muốn. ⚠️ Nâng mỗi cạnh mà quên
+  lớp nhãn thì **mọi nhãn vẫn bị chôn** — phải sửa cả hai.
+  🔴 **Và nâng cạnh là nâng luôn vùng BẮT CHUỘT của nó** (`.react-flow__edge-interaction`
+  stroke-width 20 + `pointer-events: visibleStroke`). Đo được: 16/352 điểm trong ô node trúng cạnh,
+  và **2/4 điểm nối của `leader_signed` (trái + phải) bị cướp ⇒ không kéo tạo transition từ card đó
+  được nữa** — một lỗi CHỨC NĂNG do chính hạng mục A đẻ ra, reviewer vòng hai bắt. Chữa bằng
+  `.react-flow__node:hover { z-index: 2 !important }`: nghỉ thì dây nổi lên (đọc được), trỏ vào thì
+  card thắng (bấm được) — đo lại **0 và 0**. ⚠️ **Đã thử và BÁC** cách thu hẹp dải bắt chuột: `6`
+  cũng cho 0/0 nhưng chỉ vì vừa khéo hợp đồ thị NÀY — cạnh đi sát điểm nối 3px là hỏng lại
+  (khớp quá mức). Cả ba nửa (`zIndex` cạnh · lớp nhãn · hover) đều được ghim ở `workflow-model.test.ts`
+  bằng source-pin, vì **không test nào render `WorkflowEditor` và jsdom không dựng nổi cạnh xyflow**.
+- [x] **B. Neo cạnh theo trục — MẶC ĐỊNH LUÔN, không có nút.** `axisEdgeParams()` mới trong
+  `floating-edge.tsx`, `edgeGeometry(lane, sourceBox, targetBox)` tự chọn neo. Luật đo được:
+  **ra ở khe HẸP, chạy dọc khe RỘNG** — hành lang giữa hai cột vốn rỗng do dagre dựng nên. Luật này
+  thắng heuristic "đi theo độ dời trội hơn". Khe âm ⇒ hai hộp chồng trục đó ⇒ trả `null`, rơi về
+  `getEdgeParams` cũ.
+- [x] **C. Làn bên cho điểm gom.** `sideLaneSinks()`: node **không có cạnh ra** và có **≥3 nguồn
+  PHÂN BIỆT và CÓ THẬT** đổ vào. Ba điều kiện, mỗi cái loại một ca khác nhau:
+  - *phân biệt*, không đếm transition — 3 cách hủy từ một trạng thái là một điểm rẽ, không phải điểm gom;
+  - *có thật* — `applyGenerated` sắp xếp output **CHƯA validate**, nên transition trỏ tới trạng thái
+    không tồn tại là chuyện có thật. 🔴 Bản đầu đếm cả nguồn ma ⇒ một terminal thường bị phong thành
+    điểm gom, bị kéo khỏi dagre, rồi `placeSideLane` không có nguồn thật nào để căn ⇒ nó **giữ nguyên
+    vị trí cũ trong khi mọi thứ khác đã dời**, đè lên một card khác. Reviewer vòng một bắt được;
+  - *không có cạnh ra* — `done` một nguồn ⇒ ở lại spine.
+
+  Các node này bị giữ **hoàn toàn ngoài dagre**, rồi `placeSideLane()` đặt vào một làn cách mép xa
+  nhất 160px, ở **trung vị TÂM** các nguồn. **Không có ca "mọi node đều là sink"**: điểm gom cần 3
+  nguồn có thật, mà nguồn thì có cạnh ra nên không bao giờ tự là điểm gom ⇒ luôn còn ≥3 node cho
+  dagre xếp. Hai cổng phòng thủ viết cho ca đó (`sinks.size === nodes.length` và
+  `centres.length === 0`) đã được **đo là không thể chạm tới** (gỡ đi suite vẫn xanh) và **xoá hẳn**
+  thay vì để làm cảnh không ai gác — chứng minh nằm trong JSDoc của `placeSideLane`.
+- [x] **D1. Toast xác nhận.** `Đã sắp xếp N trạng thái — nhấn Lưu để giữ vị trí.`
+- [ ] **D2. `fitView`** — hạ từ "sửa" xuống "chẩn đoán trước", xem mục nợ 🔴 ở WE6 phía trên.
+- [x] **E. `LABEL_EXTRA_STACKED` 24 → 32.**
+- [ ] ⚠️ **NỢ TIỀN-TỒN (không phải của WE7), reviewer vòng hai đo được:** id trạng thái trùng khoá
+  prototype (`__proto__` · `constructor` · `hasOwnProperty`) làm bảng node dạng plain-object của
+  `@dagrejs/graphlib` trả về **thành viên prototype** — `g.node(id)` truthy nhưng `x === undefined`
+  ⇒ **cả đồ thị ra `{x: NaN, y: NaN}`** (đo với id `constructor/hasOwnProperty/toString/sink`: 4/4
+  node NaN). Có sẵn trên `main`, cổng `if (!p) continue;` cũ cũng không đỡ được vì tra cứu bị nhiễm
+  độc vẫn truthy. WE7 chỉ thêm một bước lan (`far` lấy `Math.max` qua NaN). **Đừng nới chứng minh
+  "cổng chết" ở `placeSideLane` để bao ca này** — chữa đúng chỗ là lọc id trước `g.setNode`.
+
+**Kết quả đo bằng ĐÚNG đường chạy thật** (`docs/demo/pct`, 11 node/17 transition): **5/17 → 1/17** cạnh
+cắt node ở **cả TB lẫn LR**; bbox TB 706×2426 → 560×2426, LR 4610×309 → 4610×288; `cancelled` từ rank
+7 giữa spine về `(360, 756)` cạnh spine. Còn lại đúng `t_lock_direct` — **ông chủ chốt để lại**, chỉ
+cần nhìn thấy dây (hạng mục A lo).
+
+**Live smoke** (builder `:5173` + api `:3001`, workflow `we7-smoke-pct-full-931b4c9d` và
+`we7-smoke-nopos` — giữ lại, không dọn):
+- **S1** 17/17 edge svg `z-index:1` + lớp nhãn `1` + node `0`, class `workflow-canvas` vào đúng gốc.
+  Chọn một node: node lên **z=1000**, cạnh của nó **vẫn z=1** ⇒ node đang chọn che dây của nó. (Đo
+  được `elevateEdgesOnSelect` trong store = **`false`**: prop mặc định `:3662` thắng giá trị
+  store-initial `true` ở `:3259` vì `StoreUpdater` ghi đè. Đừng đọc mỗi `:3259` rồi kết luận ngược.)
+- **S2 cả HAI chiều.** NGANG: `cancelled` ở `(1412,227)` trong khi spine ở y=5. DỌC: `(358,749)`, cột
+  bên phải spine (spine x 0–15), tâm y **781 == đúng trung vị tâm nguồn 781**, còn `done` ở y=2340.
+- **S3** hai nhãn `start_work` không chồng nhau, tâm cách nhau **96 flow px** = đúng
+  `2×16 (làn) + 2×32 (LABEL_EXTRA_STACKED)`, khe hở 33.2 flow px; hai path khác nhau thật. ⚠️ Số đo
+  đầu tiên ghi "54px" là **screen px ở zoom 0.26** và chỉ tính trục X — sai đơn vị và sai trục. Ghi
+  khoảng cách nhãn bằng **flow px** và đo **cả hai trục**, vì bố cục NGANG tách nhãn theo trục Y.
+- **S5** toast đúng chữ.
+- **S6(a)** kéo `working` chồng hoàn toàn lên `finished` (chồng cả hai trục ⇒ `axisEdgeParams` trả
+  `null`, rơi về `getEdgeParams`): **0/17** path và **0/17** nhãn có `NaN`/`Infinity`.
+- **S6(b)** đã phát hiện lỗi chức năng do hạng mục A đẻ ra (16/352 điểm kéo + **2/4 điểm nối** của
+  `leader_signed` bị vùng bắt chuột của cạnh cướp) và **đã chữa** bằng luật `:hover` — chi tiết +
+  cách chữa bị bác ở hạng mục A phía trên. ⚠️ **Mức xác minh, nói cho đúng**: *cơ chế* đã đo trực
+  tiếp (ép card lên `z-index:2` ⇒ **0 điểm nối, 0 điểm kéo** bị cướp, so với 2 và 16 lúc nghỉ) và
+  luật CSS đã có thật trong `document.styleSheets` của app đang chạy; nhưng **bản thân cú `:hover`
+  thì chưa chạy được qua automation** — `:hover` do con trỏ THẬT điều khiển, mà tab ẩn không nhận
+  (cùng giới hạn đã chặn S4). Ông chủ rê chuột lên `Lãnh đạo đã ký` xác nhận giúp một cái.
+- **S6(c)** JSON lưu về **không có** `zIndex`/`markerEnd`/`"type":"floating"`; transition chỉ mang
+  khoá hợp đồng; vị trí làn bên round-trip đúng.
+- **S7** workflow không có `position` tự sắp xếp: spine 6 node **đều y=0**, `cancelled` y=224 với tâm
+  **1494 == đúng trung vị tâm nguồn 1494**.
+- **S4 không kết luận được** — lý do ở mục nợ 🔴 phía trên.
 
 ---
 

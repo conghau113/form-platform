@@ -1,6 +1,7 @@
 import { Position } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
 import {
+  axisEdgeParams,
   edgeGeometry,
   edgeLane,
   getEdgeParams,
@@ -14,6 +15,44 @@ import {
 } from "./floating-edge";
 
 const box = (x: number, y: number): NodeBox => ({ x, y, width: 100, height: 50 });
+
+describe("axisEdgeParams", () => {
+  it("anchors bottom-to-top, at the middle of each side, for a box below", () => {
+    const p = axisEdgeParams(box(0, 0), box(0, 300));
+    expect(p).not.toBeNull();
+    expect(p?.sourcePos).toBe(Position.Bottom);
+    expect(p?.targetPos).toBe(Position.Top);
+    expect([p?.sx, p?.sy]).toEqual([50, 50]); // mid-width of the source's bottom side
+    expect([p?.tx, p?.ty]).toEqual([50, 300]);
+  });
+
+  it("anchors right-to-left for a box beside", () => {
+    const p = axisEdgeParams(box(0, 0), box(300, 0));
+    expect(p?.sourcePos).toBe(Position.Right);
+    expect(p?.targetPos).toBe(Position.Left);
+    expect([p?.sx, p?.sy]).toEqual([100, 25]);
+    expect([p?.tx, p?.ty]).toEqual([300, 25]);
+  });
+
+  it("anchors backwards when the target is above / to the left", () => {
+    expect(axisEdgeParams(box(0, 300), box(0, 0))?.sourcePos).toBe(Position.Top);
+    expect(axisEdgeParams(box(300, 0), box(0, 0))?.sourcePos).toBe(Position.Left);
+  });
+
+  // The two branches that decide the whole thing. This is the demo workflow's `created → cancelled`
+  // shape: separated on BOTH axes, and the narrow gap is the one to leave through.
+  it("leaves through the narrow gap when the boxes are apart on both axes", () => {
+    // 160px of horizontal gap against 550px of vertical ⇒ sideways.
+    expect(axisEdgeParams(box(0, 0), box(260, 600))?.sourcePos).toBe(Position.Right);
+    // ...and the other way round: 50px of vertical gap against 300px of horizontal ⇒ downwards.
+    expect(axisEdgeParams(box(0, 0), box(400, 100))?.sourcePos).toBe(Position.Bottom);
+  });
+
+  it("gives up when the boxes overlap on both axes, leaving the floating anchors to cope", () => {
+    // Dragging one state onto another: no pair of sides faces the other box.
+    expect(axisEdgeParams(box(0, 0), box(20, 20))).toBeNull();
+  });
+});
 
 describe("getEdgeParams", () => {
   it("attaches to right/left borders for a horizontal layout", () => {
@@ -216,8 +255,8 @@ describe("labelOffsetFor", () => {
  */
 describe("edgeGeometry", () => {
   function labelsOf(a: NodeBox, b: NodeBox, lane: number) {
-    const ab = edgeGeometry(getEdgeParams(a, b), lane, a, b);
-    const ba = edgeGeometry(getEdgeParams(b, a), lane, b, a);
+    const ab = edgeGeometry(lane, a, b);
+    const ba = edgeGeometry(lane, b, a);
     return {
       dx: Math.abs(ab.labelX - ba.labelX),
       dy: Math.abs(ab.labelY - ba.labelY),
@@ -229,10 +268,16 @@ describe("edgeGeometry", () => {
   it("separates a side-by-side pair's labels by more than a full label column", () => {
     // 2*RECIPROCAL_LANE (the two paths) + 2*LABEL_EXTRA_STACKED (each label off its own path).
     // A label column with an action, a role chip and a guard chip is 74px tall.
+    // Pinned as a LITERAL: writing the sum of the constants makes both sides of the assertion move
+    // together, so shrinking the clearance back to its old value would keep this green.
     const out = labelsOf(box(0, 0), box(300, 0), RECIPROCAL_LANE);
-    expect(out.dy).toBe(2 * RECIPROCAL_LANE + 2 * LABEL_EXTRA_STACKED);
+    expect(out.dy).toBe(96);
     expect(out.dy).toBeGreaterThan(74);
     expect(out.dx).toBe(0);
+  });
+
+  it("holds the stacked clearance at the measured value", () => {
+    expect(LABEL_EXTRA_STACKED).toBe(32);
   });
 
   it("separates a stacked pair's labels by more than a full label width", () => {
@@ -243,10 +288,7 @@ describe("edgeGeometry", () => {
   });
 
   it("leaves a laneless edge's label exactly on its own path midpoint", () => {
-    const a = box(0, 0);
-    const b = box(300, 0);
-    const base = getEdgeParams(a, b);
-    const laneless = edgeGeometry(base, 0, a, b);
+    const laneless = edgeGeometry(0, box(0, 0), box(300, 0));
     expect([laneless.labelX, laneless.labelY]).toEqual([200, 25]);
   });
 
@@ -257,11 +299,35 @@ describe("edgeGeometry", () => {
     const b = box(300, 0);
     // Pinned whole, not by prefix: the un-laned path is the centre line at y=25 and the laned one
     // runs a full lane below it, at y=41, along its entire length.
-    expect(edgeGeometry(getEdgeParams(a, b), RECIPROCAL_LANE, a, b).path).toBe(
+    expect(edgeGeometry(RECIPROCAL_LANE, a, b).path).toBe(
       "M100 41L120 41L200 41L200 41L280 41L300 41",
     );
-    expect(edgeGeometry(getEdgeParams(a, b), 0, a, b).path).toBe(
-      "M100 25L120 25L200 25L200 25L280 25L300 25",
+    expect(edgeGeometry(0, a, b).path).toBe("M100 25L120 25L200 25L200 25L280 25L300 25");
+  });
+
+  it("picks the anchors itself, by the axis rule and not by the centre line", () => {
+    // The fixture is chosen so the two rules DISAGREE — anywhere they agree, forcing the old
+    // free-floating anchors back in would leave this green. Boxes 300px apart horizontally but only
+    // 50px vertically: `getEdgeParams` leaves the source's RIGHT border at (100, 37.5), the axis
+    // rule leaves its BOTTOM at (50, 50) because the vertical gap is the narrow one.
+    const a = box(0, 0);
+    const b = box(400, 100);
+    expect(getEdgeParams(a, b).sourcePos).toBe(Position.Right);
+    // Measured, and pinned whole: down out of the source's bottom, across at y=75, up into the
+    // target's top. Nothing here starts at x=100, which is where the centre line would have left.
+    expect(edgeGeometry(0, a, b).path).toBe(
+      "M50 50L50 70L 50,72.5Q 50,75 52.5,75L 447.5,75Q 450,75 450,77.5L450 80L450 100",
     );
+  });
+
+  it("stays finite when two boxes touch with their centres aligned", () => {
+    // The axis rule can put the source point exactly on the target point (boxes flush, same centre),
+    // which leaves the edge no direction to take a lane from. It must degrade, not emit NaN.
+    const a = box(0, 0);
+    const b = box(0, 50);
+    const out = edgeGeometry(RECIPROCAL_LANE, a, b);
+    expect(Number.isFinite(out.labelX)).toBe(true);
+    expect(Number.isFinite(out.labelY)).toBe(true);
+    expect(out.path).not.toContain("NaN");
   });
 });
