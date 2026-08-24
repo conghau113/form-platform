@@ -1,10 +1,18 @@
 import {
+  ROOT_SCOPE,
   type WorkflowDefinition,
   type WorkflowInstance,
   workflowInstanceSchema,
 } from "@org/workflow-schema";
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { type AdvanceContext, advance, availableTransitions, createInstance } from "./index.js";
+import {
+  type AdvanceContext,
+  advance,
+  availableTransitions,
+  createInstance,
+  validateGraph,
+} from "./index.js";
 
 // created --submit--> inprogress --approve(role:manager, guard:approved==true)--> done
 const def: WorkflowDefinition = {
@@ -443,45 +451,37 @@ describe("advance — refusing a gateway it cannot execute (E3a)", () => {
 
   const fire = (def: WorkflowDefinition) => advance(def, createInstance(def, { id: "b" }), "go");
 
-  it("refuses a fork with a single outgoing edge", () => {
-    const def = badDef(
-      [
-        { id: "s", status: "s" },
-        { id: "F", status: "F", gateway: "fork" },
-        { id: "A", status: "A" },
-      ],
-      [
-        { id: "t0", from: "s", to: "F", action: "go" },
-        { id: "t1", from: "F", to: "A", action: "only" },
-      ],
-    );
-    expect(fire(def)).toEqual({ ok: false, reason: "invalid-gateway" });
-  });
+  // Named rather than inlined into each `it` so the E4 twin test at the bottom can run the SAME
+  // graphs through `validateGraph`. Copying them there instead would let the pairing the twin test
+  // exists to protect drift apart inside the very test meant to pin it.
+  const forkOneOut = badDef(
+    [
+      { id: "s", status: "s" },
+      { id: "F", status: "F", gateway: "fork" },
+      { id: "A", status: "A" },
+    ],
+    [
+      { id: "t0", from: "s", to: "F", action: "go" },
+      { id: "t1", from: "F", to: "A", action: "only" },
+    ],
+  );
 
-  it("refuses a join that does not have exactly one way out", () => {
-    const def = badDef(
-      [
-        { id: "s", status: "s" },
-        { id: "J", status: "J", gateway: "join" },
-        { id: "A", status: "A" },
-        { id: "B", status: "B" },
-      ],
-      [
-        { id: "t0", from: "s", to: "J", action: "go" },
-        { id: "t1", from: "J", to: "A", action: "a" },
-        { id: "t2", from: "J", to: "B", action: "b" },
-      ],
-    );
-    expect(fire(def)).toEqual({ ok: false, reason: "invalid-gateway" });
-  });
+  const joinTwoOut = badDef(
+    [
+      { id: "s", status: "s" },
+      { id: "J", status: "J", gateway: "join" },
+      { id: "A", status: "A" },
+      { id: "B", status: "B" },
+    ],
+    [
+      { id: "t0", from: "s", to: "J", action: "go" },
+      { id: "t1", from: "J", to: "A", action: "a" },
+      { id: "t2", from: "J", to: "B", action: "b" },
+    ],
+  );
 
-  it.each([
-    ["role", { role: "manager" }],
-    ["guard", { guard: { rule: { "==": [1, 1] } } }],
-  ])("refuses a fork whose outgoing edge carries a %s", (_label, extra) => {
-    // The engine takes EVERY edge out of a fork, so such a gate would stop nobody. Running the graph
-    // anyway would quietly disarm a restriction its author believed was in force.
-    const def = badDef(
+  const forkGated = (extra: Partial<WorkflowDefinition["transitions"][number]>) =>
+    badDef(
       [
         { id: "s", status: "s" },
         { id: "F", status: "F", gateway: "fork" },
@@ -494,27 +494,112 @@ describe("advance — refusing a gateway it cannot execute (E3a)", () => {
         { id: "t2", from: "F", to: "B", action: "b" },
       ],
     );
-    expect(fire(def)).toEqual({ ok: false, reason: "invalid-gateway" });
+
+  const joinGated = (extra: Partial<WorkflowDefinition["transitions"][number]>) =>
+    badDef(
+      [
+        { id: "s", status: "s" },
+        { id: "J", status: "J", gateway: "join" },
+        { id: "A", status: "A" },
+      ],
+      [
+        { id: "t0", from: "s", to: "J", action: "go" },
+        { id: "t1", from: "J", to: "A", action: "out", ...extra },
+      ],
+    );
+
+  const forkCycle = badDef(
+    [
+      { id: "s", status: "s" },
+      { id: "F", status: "F", gateway: "fork" },
+      { id: "G", status: "G", gateway: "fork" },
+      { id: "Z", status: "Z" },
+      { id: "W", status: "W" },
+    ],
+    [
+      { id: "t0", from: "s", to: "F", action: "go" },
+      { id: "t1", from: "F", to: "G", action: "a" },
+      { id: "t2", from: "F", to: "Z", action: "b" },
+      { id: "t3", from: "G", to: "F", action: "c" },
+      { id: "t4", from: "G", to: "W", action: "d" },
+    ],
+  );
+
+  it("refuses a fork with a single outgoing edge", () => {
+    expect(fire(forkOneOut)).toEqual({ ok: false, reason: "invalid-gateway" });
+  });
+
+  it("refuses a join that does not have exactly one way out", () => {
+    expect(fire(joinTwoOut)).toEqual({ ok: false, reason: "invalid-gateway" });
+  });
+
+  it.each([
+    ["role", { role: "manager" }],
+    ["guard", { guard: { rule: { "==": [1, 1] } } }],
+  ])("refuses a fork whose outgoing edge carries a %s", (_label, extra) => {
+    // The engine takes EVERY edge out of a fork, so such a gate would stop nobody. Running the graph
+    // anyway would quietly disarm a restriction its author believed was in force.
+    expect(fire(forkGated(extra))).toEqual({ ok: false, reason: "invalid-gateway" });
+  });
+
+  it.each([
+    ["role", { role: "manager" }],
+    ["guard", { guard: { rule: { "==": [1, 1] } } }],
+  ])("refuses a join whose single outgoing edge carries a %s (E4)", (_label, extra) => {
+    // Symmetric with the fork case above: the engine follows a join's way out the moment its last
+    // sibling arrives, without consulting either. Before E4 this restriction was evaluated on
+    // exactly one path — a person firing the join by hand — and that path is the defect E4 removes.
+    expect(fire(joinGated(extra))).toEqual({ ok: false, reason: "invalid-gateway" });
   });
 
   it("gives up on a fork cycle instead of looping forever", () => {
-    const def = badDef(
-      [
-        { id: "s", status: "s" },
-        { id: "F", status: "F", gateway: "fork" },
-        { id: "G", status: "G", gateway: "fork" },
-        { id: "Z", status: "Z" },
-        { id: "W", status: "W" },
-      ],
-      [
-        { id: "t0", from: "s", to: "F", action: "go" },
-        { id: "t1", from: "F", to: "G", action: "a" },
-        { id: "t2", from: "F", to: "Z", action: "b" },
-        { id: "t3", from: "G", to: "F", action: "c" },
-        { id: "t4", from: "G", to: "W", action: "d" },
-      ],
-    );
-    expect(fire(def)).toEqual({ ok: false, reason: "gateway-overflow" });
+    expect(fire(forkCycle)).toEqual({ ok: false, reason: "gateway-overflow" });
+  });
+
+  // E4 — `engine.ts` says the static rules and these runtime refusals are "two views of one rule set
+  // and must be kept in step", but nothing enforced it: each side had its own tests, so either could
+  // be edited alone and the suite would stay green. This table IS the pairing.
+  it.each([
+    ["fork with one way out", forkOneOut, "invalid-gateway", ["fork-single-outgoing"]],
+    ["join without exactly one way out", joinTwoOut, "invalid-gateway", ["join-not-one-outgoing"]],
+    ["fork edge carrying a role", forkGated({ role: "manager" }), "invalid-gateway", ["fork-edge-gated"]],
+    [
+      "fork edge carrying a guard",
+      forkGated({ guard: { rule: { "==": [1, 1] } } }),
+      "invalid-gateway",
+      ["fork-edge-gated"],
+    ],
+    ["join edge carrying a role", joinGated({ role: "manager" }), "invalid-gateway", ["join-edge-gated"]],
+    [
+      "join edge carrying a guard",
+      joinGated({ guard: { rule: { "==": [1, 1] } } }),
+      "invalid-gateway",
+      ["join-edge-gated"],
+    ],
+    // The one case where the two rule sets legitimately DISAGREE. A fork cycle is refused at run
+    // time, but statically it is an ordinary loop — and loops are a supported feature, so no static
+    // rule may forbid it. Pinned so a later reader does not "fix the drift" by adding one.
+    ["fork cycle", forkCycle, "gateway-overflow", []],
+  ])("static rule matches the runtime refusal for a %s", (_label, graph, reason, codes) => {
+    expect(fire(graph)).toEqual({ ok: false, reason });
+    // Exact equality, not `.some()`: each of these graphs satisfies all four pre-E4 rules, so the
+    // new code is the ONLY thing `validateGraph` may report.
+    expect(validateGraph(graph).map((e) => e.code)).toEqual(codes);
+  });
+
+  it("has a static twin for every runtime gateway refusal but the one that cannot have one", () => {
+    // The table above is a SAMPLE: adding a fifth `invalid-gateway` return to `settle` later would
+    // get no static twin and nothing would go red. Source-pinned instead, because the invariant
+    // ("two views of one rule set") has no runtime surface of its own to assert against.
+    const source = readFileSync(new URL("./engine.ts", import.meta.url), "utf8");
+    // Anchored on `return`, not on the reason alone: the union that DECLARES the reason mentions it
+    // too, and counting that made this assertion off by one the first time it ran. It matches ONE
+    // exact rendering, so a refusal written differently (`"invalid-gateway" as const`, say) would
+    // slip past it — this counts, it does not pair; the table above does the pairing.
+    const refusals = source.match(/return \{ ok: false, reason: "invalid-gateway" \}/g) ?? [];
+    // Four with a twin (fork <2 out, gated fork edge, join !=1 out, gated join edge) + the missing
+    // fork run, which is a property of a running case and cannot be read off a definition.
+    expect(refusals).toHaveLength(5);
   });
 
   it("reports unknown-state — not a crash — for a token on a node the definition lost", () => {
@@ -844,5 +929,107 @@ describe("advance — settling does not lose or strand tokens (E3a)", () => {
     const first = both.tokens?.[0].id as string;
     const out = step(meet, both, "merge", { token: first });
     expect(out.tokens?.map((t) => t.at)).toEqual(["end", "J"]);
+  });
+});
+
+describe("advance — a gateway is never fired by hand (E4)", () => {
+  /** parallelDef, one branch done: a token waiting at `J`, its sibling still at `B`. */
+  const waiting = () => step(parallelDef, forked(), "doneA");
+
+  it("refuses the join's own way out while a sibling has not arrived", () => {
+    const inst = waiting();
+    expect(inst.tokens?.map((t) => t.at)).toEqual(["J", "B"]);
+    expect(advance(parallelDef, inst, "merge")).toEqual({
+      ok: false,
+      reason: "waiting-on-join",
+    });
+  });
+
+  it("still lets the join release itself once the last sibling arrives", () => {
+    // The point of the refusal is "not yet", not "never" — if this goes red, E4 broke parallel flow
+    // rather than protecting it.
+    const done = step(parallelDef, waiting(), "doneB");
+    expect(done.tokens?.map((t) => t.at)).toEqual(["end"]);
+  });
+
+  it("does not blame the join for an action nobody could fire anywhere", () => {
+    // `waiting-on-join` is qualified by the action. Without that, a case with any branch parked at a
+    // join would answer "waiting for a sibling" to every typo, for every branch.
+    expect(advance(parallelDef, waiting(), "no-such-action")).toEqual({
+      ok: false,
+      reason: "no-transition",
+    });
+  });
+
+  it("refuses a gated join on ARRIVAL, not once its last sibling shows up", () => {
+    // Placement pin. The gate check sits ABOVE the sibling count on purpose; moved below it, this
+    // advance would SUCCEED — the branch would simply park at `J` and the case would answer
+    // `waiting-on-join` instead. Every OTHER gated-join test stays green under either placement,
+    // because they all reach the join root-scoped (`expected` 1, so the count never blocks), which
+    // is exactly why this one uses a real fork run.
+    const gatedJoin: WorkflowDefinition = {
+      ...parallelDef,
+      transitions: parallelDef.transitions.map((t) =>
+        t.id === "tj" ? { ...t, role: "manager" } : t,
+      ),
+    };
+    expect(advance(gatedJoin, forked(), "doneA")).toEqual({
+      ok: false,
+      reason: "invalid-gateway",
+    });
+  });
+
+  it("reports the waiting branch, not a token the definition lost", () => {
+    // Precedence: `waiting-on-join` outranks `unknown-state`. A branch waiting at a join is an
+    // ordinary live position somebody is working in; `unknown-state` is a ghost left by an edit. The
+    // ghost must not speak over the living.
+    const inst = waiting();
+    const withGhost: WorkflowInstance = {
+      ...inst,
+      tokens: [...(inst.tokens ?? []), { id: "ghost", at: "deleted-node", scope: "root" }],
+    };
+    expect(advance(parallelDef, withGhost, "merge")).toEqual({
+      ok: false,
+      reason: "waiting-on-join",
+    });
+  });
+});
+
+describe("advance — bounding fork runs that never get retired (E4)", () => {
+  /** An instance parked one step before `F`, already carrying `count` open fork runs. */
+  const withScopes = (count: number): WorkflowInstance => ({
+    id: "leaky",
+    definitionId: "par",
+    definitionVersion: 1,
+    current: "start",
+    data: {},
+    history: [],
+    tokens: [{ id: "t", at: "start", scope: ROOT_SCOPE }],
+    scopes: Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`s-${i}`, { forkNode: "F", expected: 2, parent: null }]),
+    ),
+  });
+
+  it("refuses to open one run too many", () => {
+    // The map arrives LOADED FROM THE INSTANCE, so this bounds what has accumulated across every
+    // previous advance — not merely what one settle call added. A single call cannot reach the cap
+    // at all (`maxSteps` stops it far sooner), which is exactly why the bound has to live here.
+    expect(advance(parallelDef, withScopes(256), "submit")).toEqual({
+      ok: false,
+      reason: "scope-overflow",
+    });
+  });
+
+  it("still opens the last run that fits", () => {
+    // Asserts the boundary rather than "a big number fails" — a test that only checks the refusal
+    // passes just as well against a cap of zero.
+    const out = advance(parallelDef, withScopes(255), "submit");
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(Object.keys(out.instance.scopes ?? {})).toHaveLength(256);
+    // Held to this file's standing rule: a success path is checked against the contract, not argued
+    // about. 256 scopes must still be a legal instance, or the cap would be refusing at one number
+    // and the schema at another.
+    expect(workflowInstanceSchema.safeParse(out.instance).success).toBe(true);
   });
 });

@@ -31,7 +31,8 @@ export interface AdvanceContext {
    * really in — not the one it was stored in. A case stored while parked on a gateway therefore
    * hands out token ids that are consumed before the next advance matches, so a caller echoing back
    * an id it legitimately read can still get `unknown-token`. (Reachable only via a definition whose
-   * `start` is a fork; the static rule that rejects one belongs to E4.)
+   * `start` is a fork, which `validateGraph` now refuses — `start-is-fork` — so it survives only on
+   * a case started before E4 or one whose definition was edited underneath it.)
    *
    * ⚠️ SECURITY: this is matched against the live marking and nothing else. A token id that is not
    * currently in the marking is refused (`unknown-token`) — the engine never treats a caller's
@@ -52,15 +53,18 @@ export type AdvanceFailure =
   | "ambiguous-token"
   /**
    * E3a — a gateway in the definition cannot be executed as written: a `fork` with fewer than two
-   * outgoing transitions, a `join` without exactly one, a fork whose outgoing edges carry a `guard`
-   * or a `role` (the engine traverses those edges structurally and would silently ignore the gate),
-   * or a NON-ROOT token whose fork run is missing from `scopes` (a root-scoped one has no run to be
-   * missing, and walks through).
+   * outgoing transitions, a `join` without exactly one, a fork or join whose outgoing edges carry a
+   * `guard` or a `role` (the engine traverses those edges structurally and would silently ignore the
+   * gate), or a NON-ROOT token whose fork run is missing from `scopes` (a root-scoped one has no run
+   * to be missing, and walks through).
    *
    * Reported at RUN time rather than thrown, because a definition can be edited under a running
    * case: `validateGraph` only gates saving, starting and the AI repair loop, so a case can reach a
-   * gateway that was fine when it started. E4 adds the STATIC twins of these rules — they are two
-   * views of one rule set, and must be kept in step.
+   * gateway that was fine when it started. `validateGraph` carries the STATIC twins of the first
+   * four (`fork-single-outgoing`, `join-not-one-outgoing`, `fork-edge-gated`, `join-edge-gated`) —
+   * two views of one rule set, kept in step by a table-driven test in `engine.test.ts`. The last (a
+   * missing fork run) has NO static twin and cannot have one: it is a property of a running case,
+   * not of a graph.
    *
    * Refusing here does not strand the case: the API loads the LATEST definition on every advance,
    * so fixing the graph makes the case runnable again.
@@ -68,7 +72,32 @@ export type AdvanceFailure =
   | "invalid-gateway"
   /** E3a — settling gateways did not reach a resting state (a fork cycle). Bounded rather than
    *  trusted: the settle loop is synchronous, so an unbounded one would hang the whole API. */
-  | "gateway-overflow";
+  | "gateway-overflow"
+  /**
+   * E4 — the branch is standing at a `join` that is still short a sibling, and the action named is
+   * the join's own way out. Nobody fires a gateway by hand: the engine releases a join the moment
+   * its last sibling arrives, so "not yet" is the whole answer.
+   *
+   * Distinct from `no-transition` on purpose. Before E4 this case did not refuse at all — the token
+   * walked straight through the join, ran everything past it, and left its sibling waiting on a
+   * count that could never be reached again. Reporting that as "no such transition" would be a lie
+   * to exactly the callers this rule exists for (curl, MCP, any client without the Run view's
+   * branch picker to explain itself).
+   */
+  | "waiting-on-join"
+  /**
+   * E4 — the case is carrying more live fork runs than {@link MAX_LIVE_SCOPES}.
+   *
+   * A fork run is retired only by the join that closes it, so a graph looping back into a fork
+   * without passing its join mints one scope per lap and never gives one back — the case body grows
+   * with every action a person takes. No static rule can prevent that (loops are a supported
+   * feature), so it is stopped here.
+   *
+   * Deliberately NOT folded into `gateway-overflow`: that one bounds a single settle call, this one
+   * bounds what accumulates ACROSS calls in stored state. Sharing a reason would let a test for
+   * either pass while measuring the other.
+   */
+  | "scope-overflow";
 
 export type AdvanceResult =
   | { ok: true; instance: WorkflowInstance; transition: WorkflowTransition }
@@ -125,6 +154,20 @@ function forkScopeId(): string {
   return `s-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+/**
+ * Ceiling on how many fork runs one case may have open at once.
+ *
+ * Module-private on purpose: a safety valve, not a promise anyone should code against. Fixed rather
+ * than derived from the graph — a bound computed from `def.nodes.length` would let DELETING a node
+ * retroactively kill a case that was running happily, without anyone touching that case.
+ *
+ * What it is not: 256 scopes is only tens of kilobytes, so this does not control the size of a case
+ * body. It stops UNBOUNDED growth, nothing finer. Nor is it checked on load — a case already over
+ * the line (written by a build that predates this) keeps advancing until it next forks, which is the
+ * right trade: refusing to run a case that already exists helps nobody.
+ */
+const MAX_LIVE_SCOPES = 256;
+
 /** A marking plus the history the engine wrote getting it there, or why it could not. */
 type SettleResult =
   | {
@@ -133,7 +176,7 @@ type SettleResult =
       scopes: Record<string, WorkflowScope>;
       history: HistoryEntry[];
     }
-  | { ok: false; reason: "invalid-gateway" | "gateway-overflow" };
+  | { ok: false; reason: "invalid-gateway" | "gateway-overflow" | "scope-overflow" };
 
 /**
  * Run every gateway that is ready to run, until the marking rests.
@@ -209,8 +252,8 @@ function settle(
         //
         // ⚠️ A fork run is only retired by the join that closes it, so a graph that loops back into
         // a fork without ever reaching its join accumulates one scope per lap, and the case body
-        // grows with it. Bounding that needs the STATIC reachability rule E4 adds — the settle cap
-        // below only bounds one call.
+        // grows with it. E4 bounds that with MAX_LIVE_SCOPES below — a static rule cannot, because
+        // the graph shape it would have to forbid is an ordinary supported loop.
         scopes[scopeId] = {
           forkNode: node.id,
           expected: outs.length,
@@ -218,6 +261,12 @@ function settle(
           // rather than by name; see ROOT_SCOPE's contract note.
           parent: token.scope === ROOT_SCOPE ? null : token.scope,
         };
+        // Checked where a run is CREATED, which is the only place the map grows. `scopes` arrives
+        // here loaded from the stored case, so this bounds what has accumulated across every
+        // previous advance, not merely what this call added.
+        if (Object.keys(scopes).length > MAX_LIVE_SCOPES) {
+          return { ok: false, reason: "scope-overflow" };
+        }
         const spawned = outs.map((t, index) => ({
           id: `${scopeId}-${index}`,
           at: t.to,
@@ -234,6 +283,15 @@ function settle(
 
       // join
       if (outs.length !== 1) return { ok: false, reason: "invalid-gateway" };
+      // E4 — a join's way out is taken by the ENGINE the moment the last sibling arrives, exactly
+      // like a fork's edges: `outs[0]` below is followed without consulting anything. So a `guard` or
+      // `role` on it is a gate that stops nobody, and is refused for the same reason a gated fork
+      // edge is. Until E4 this restriction was evaluated on exactly one path — a person firing the
+      // join's transition by hand — and that path is itself the defect E4 removes, so leaving the
+      // edge acceptable would turn a half-working gate into a silently dead one.
+      if (outs[0].role !== undefined || outs[0].guard !== undefined) {
+        return { ok: false, reason: "invalid-gateway" };
+      }
       const run = scopes[token.scope];
       // A token at the outermost level belongs to no fork run, so it has no siblings to wait for
       // and passes straight through. Reached by a case stored before markings (its synthesized
@@ -319,10 +377,13 @@ function guardPasses(transition: WorkflowTransition, data: Record<string, unknow
  * guard can change which token an untargeted advance picks, which is precisely why `ctx.token`
  * exists for callers that care.
  *
- * Failure precedence when nothing fires: role-denied > guard-failed > unknown-state >
- * no-transition. `unknown-state` sits low deliberately: it is now a per-token observation, and
- * ranking it first would let one token left behind by an edited definition mask the real answer for
- * every other token on the case — for every action — until someone fixed the graph.
+ * Failure precedence when nothing fires: role-denied > guard-failed > waiting-on-join >
+ * unknown-state > no-transition. `unknown-state` sits low deliberately: it is a per-token
+ * observation, and ranking it first would let one token left behind by an edited definition mask the
+ * real answer for every other token on the case — for every action — until someone fixed the graph.
+ * `waiting-on-join` sits ABOVE it for the same reason read the other way: a branch waiting at a join
+ * is an ordinary live position somebody is working in, while `unknown-state` is a ghost, and the
+ * ghost must not speak over the living.
  *
  * The returned `transition` is the one a PERSON fired. Gateways the engine walked through on the
  * way are in the instance's history, not here.
@@ -356,11 +417,32 @@ export function advance(
   let sawUnknownState = false;
   let sawRoleDenied = false;
   let sawGuardFailed = false;
+  let sawWaitingJoin = false;
   const fired: Array<{ token: WorkflowToken; transition: WorkflowTransition }> = [];
 
   for (const token of considered) {
-    if (!def.nodes.some((n) => n.id === token.at)) {
+    const node = def.nodes.find((n) => n.id === token.at);
+    if (!node) {
       sawUnknownState = true;
+      continue;
+    }
+    // E4 — a gateway is walked by the ENGINE, never fired by a person. Settling ran first, so a
+    // token still standing on one can only be a join short a sibling; letting it fire the join's way
+    // out took the branch past a merge that had not happened, and left the sibling waiting on a
+    // count that could never be reached again. Both halves of that were silent.
+    //
+    // ⚠️ The "can only be a join" half holds PER CALL. `createInstance` stores a token on a fork
+    // without settling, so `node.gateway` is tested rather than assumed — the reason below must not
+    // claim a fork is waiting for siblings.
+    if (node.gateway) {
+      const out = def.transitions.filter((t) => t.from === node.id);
+      // Qualified by the action, not merely by "a token was skipped": a case with one branch at a
+      // join and another elsewhere must still answer `no-transition` for an action nobody could ever
+      // fire. `waiting-on-join` says something specific — this way out exists here, and this branch
+      // is waiting for its siblings before anyone may take it.
+      if (node.gateway === "join" && out.length === 1 && out[0].action === action) {
+        sawWaitingJoin = true;
+      }
       continue;
     }
     for (const transition of availableTransitions(def, token.at)) {
@@ -381,6 +463,7 @@ export function advance(
   if (fired.length === 0) {
     if (sawRoleDenied) return { ok: false, reason: "role-denied" };
     if (sawGuardFailed) return { ok: false, reason: "guard-failed" };
+    if (sawWaitingJoin) return { ok: false, reason: "waiting-on-join" };
     if (sawUnknownState) return { ok: false, reason: "unknown-state" };
     return { ok: false, reason: "no-transition" };
   }

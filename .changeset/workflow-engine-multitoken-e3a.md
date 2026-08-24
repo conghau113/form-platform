@@ -46,12 +46,9 @@ this ships.
 
 NOT in this change: optimistic concurrency on the instance write (two people
 advancing two branches at once can still overwrite each other — E3b), `token` over
-HTTP (E3c), static fork/join rules in `validateGraph` (E4), and the list/filter
-semantics of "where is this case" (E5).
+HTTP (E3c), and the list/filter semantics of "where is this case" (E5).
 
 ⚠️ Because `token` has no route through HTTP until E3c, a forked case whose branches
 offer the SAME action cannot be advanced through the API at all in the meantime: the
 engine correctly refuses to guess and returns `ambiguous-token` every time. That is
-the textbook parallel case, so do not put one in front of users before E3c lands. Until E4 lands, a malformed gateway is
-accepted at save time and only fails when someone runs the case, which is why the
-authoring capability catalog still tells agents not to emit `gateway`.
+the textbook parallel case, so do not put one in front of users before E3c lands.

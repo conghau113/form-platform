@@ -82,12 +82,13 @@ export const workflowNodeSchema = z.object({
    *  `"fork"` splits the case into one token per outgoing transition; `"join"` parks arriving
    *  tokens until every sibling of the same fork run has arrived. The engine executes both (E3a).
    *
-   *  ⚠️ NOT YET VALIDATED. `validateGraph` still has no rule about forks or joins, so a malformed
-   *  gateway — a fork with one way out, a join without exactly one, a fork whose outgoing edges
-   *  carry a `guard` or `role` the engine cannot honour — is accepted when the definition is saved
-   *  and only refused when someone runs the case (`invalid-gateway`). The static rules land in E4,
-   *  and until then a fork's outgoing edges are traversed unconditionally: every one is taken, so a
-   *  gate placed on one would stop nobody.
+   *  ⚠️ A gateway's outgoing edges are traversed UNCONDITIONALLY — every edge out of a fork, and a
+   *  join's single edge out once its last sibling arrives — so a `guard` or `role` placed on either
+   *  would stop nobody. E4 validates that statically: a malformed gateway (a fork with one way out,
+   *  a join without exactly one, a gated fork OR join edge, or a `start` that is itself a fork) is
+   *  refused by `validateGraph` when the definition is saved, and by the engine again when someone
+   *  runs the case (`invalid-gateway`). Both checks exist because a definition can be edited under a
+   *  running case; they are two views of one rule set.
    *
    *  Orthogonal to `kind`: a
    *  fork is still a `kind: "normal"` node in the status catalog, which is why this is NOT folded
@@ -106,7 +107,11 @@ export const workflowNodeSchema = z.object({
 });
 
 /** A directed edge between states. `action` is the event that triggers it; an
- *  optional `guard` (JSONLogic) and `role` gate whether it may fire. */
+ *  optional `guard` (JSONLogic) and `role` gate whether it may fire.
+ *
+ *  ⚠️ Except on an edge leaving a `gateway` node, which the engine traverses itself without asking
+ *  either. Such an edge is refused outright (`fork-edge-gated` / `join-edge-gated`) rather than run
+ *  with a gate that silently stops nobody — see the `gateway` note above. */
 export const workflowTransitionSchema = z.object({
   id: z.string().min(1),
   from: z.string().min(1),

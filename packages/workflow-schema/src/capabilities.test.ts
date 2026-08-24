@@ -50,19 +50,20 @@ describe("workflow primitive catalog", () => {
     expect(sorted(WORKFLOW_DEFINITION_SHAPE.optional)).toEqual(optional);
   });
 
-  it("tells an authoring agent not to emit `gateway`, and says why that is still true after E3a", () => {
+  it("tells an authoring agent not to emit `gateway`, and says why that is still true after E4", () => {
     // `summary` is rendered verbatim into the workflow-authoring system prompt (workflow-ai's
-    // `prompt.ts`), so these sentences are the only thing stopping a generated workflow from using a
-    // gateway nothing checks. The key-set check above cannot see prose: without this, deleting the
-    // instruction leaves the whole repo green.
+    // `prompt.ts`) and ships to external agents through the MCP server, so these sentences are the
+    // only thing stopping a generated workflow from using a gateway nobody can then maintain. The
+    // key-set check above cannot see prose: without this, deleting the instruction leaves the whole
+    // repo green.
     expect(byKind.node.summary).toContain("do NOT emit it");
-    // The ADVICE alone is not enough to pin. Before E3a the reason given was "the engine does not act
-    // on it yet"; E3a made that false while leaving the advice word-for-word intact, so a gate that
-    // only checked the advice would have stayed green over a sentence that had become a lie. Pin the
-    // REASON verbatim, and retire this line only when the reason itself stops being true (E4 adds the
-    // static rules; E6 adds the editor).
+    // The ADVICE alone is not enough to pin. This reason has now been outlived TWICE while the advice
+    // stayed word-for-word intact: "the engine does not act on it yet" died at E3a, "nothing
+    // validates them yet" died at E4. A gate checking only the advice would have stayed green over
+    // both lies. Pin the REASON verbatim, and retire this line only when the reason itself stops
+    // being true — which is E6, when the editor learns to author a gateway.
     expect(byKind.node.summary).toContain(
-      "the engine now executes forks and joins, but nothing validates them yet",
+      "malformed ones are now rejected at save time, but the editor has no gateway authoring UI yet, so a gateway you write in cannot be removed or retargeted",
     );
   });
 

@@ -35,8 +35,9 @@ export interface Branch {
    * Neither may be offered action buttons: firing a gateway's outgoing transition by hand moves that
    * one token as a normal step — leaving the fork run in `scopes` and the siblings unconsumed, so
    * whichever branch arrives next waits for a count that can never be reached again, or skipping the
-   * spawn a fork exists to do. Refusing this in the ENGINE is E4; until then, not offering it is
-   * what keeps a case out of that state.
+   * spawn a fork exists to do. The ENGINE refuses this as of E4 (`waiting-on-join`), so this is no
+   * longer the only thing standing between a case and that state — but it is still what keeps the
+   * user from being offered a button that can only fail.
    */
   gateway: "fork" | "join" | undefined;
   /** Another branch is parked on the SAME node, so a label naming only the node cannot tell them

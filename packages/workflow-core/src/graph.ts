@@ -4,7 +4,23 @@ export type GraphErrorCode =
   | "duplicate-node"
   | "start-missing"
   | "dangling-transition"
-  | "unreachable";
+  | "unreachable"
+  /** E4 — `start` names a `fork`. The case is STORED parked on the fork (`createInstance` does not
+   *  settle), which the engine itself copes with — it settles before choosing a token — but the
+   *  product does not: the stored token id has already been consumed by that settle, so a client
+   *  echoing it back gets `unknown-token`, and the Run view offers no action for a branch parked on
+   *  a gateway. A product-level dead end, not an engine one. No runtime twin. */
+  | "start-is-fork"
+  /** E4 — a `fork` with fewer than two ways out. Runtime twin: `invalid-gateway` in `advance`. */
+  | "fork-single-outgoing"
+  /** E4 — an edge leaving a `fork` carries a `guard` or a `role` the engine never evaluates.
+   *  Runtime twin: `invalid-gateway` in `advance`. */
+  | "fork-edge-gated"
+  /** E4 — a `join` without exactly one way out. Runtime twin: `invalid-gateway` in `advance`. */
+  | "join-not-one-outgoing"
+  /** E4 — a `join`'s single way out carries a `guard` or a `role`. The engine follows that edge the
+   *  moment the last sibling arrives, without consulting either. Runtime twin: `invalid-gateway`. */
+  | "join-edge-gated";
 
 export interface GraphError {
   code: GraphErrorCode;
@@ -14,10 +30,48 @@ export interface GraphError {
 }
 
 /**
+ * A gateway's outgoing edges are STRUCTURE, not choices — the engine follows them itself (every edge
+ * out of a fork, the single edge out of a join once its last sibling arrives) and never consults
+ * their `guard` or `role`. One placed there is a gate that stops nobody while reading, to whoever
+ * drew it, exactly like a gate that works.
+ *
+ * `ref` is the GATEWAY, not the edge: the editor routes a ref to its edge highlight only for
+ * `dangling-transition` and looks every other one up among NODE ids, so a transition id here would
+ * highlight nothing — or a same-named node. The edge is named in the message instead.
+ */
+function gatedEdges(
+  node: WorkflowDefinition["nodes"][number],
+  outs: WorkflowDefinition["transitions"],
+  errors: GraphError[],
+): void {
+  // Both derived from the node rather than passed in: the code and the wording are not free choices,
+  // they are two spellings of `node.gateway`, and taking them as parameters would let a caller pair
+  // a fork with the join message.
+  const label = node.gateway === "fork" ? "fork" : "join";
+  const code = node.gateway === "fork" ? "fork-edge-gated" : "join-edge-gated";
+  for (const t of outs) {
+    if (t.guard === undefined && t.role === undefined) continue;
+    errors.push({
+      code,
+      message: `Transition "${t.id}" leaves ${label} "${node.id}" carrying a ${
+        t.guard !== undefined ? "guard" : "role"
+      }, which a ${label} never evaluates.`,
+      ref: node.id,
+    });
+  }
+}
+
+/**
  * Structural validation of a workflow definition. Returns [] when the graph is
  * sound. Checks: unique node ids, a single existing `start` node, every
  * transition references existing nodes, and every node is reachable from `start`
  * (BFS over transitions). Used by the editor before export.
+ *
+ * E4 adds the gateway rules below. Every one of them is keyed off `node.gateway`, so a definition
+ * that uses no gateway can satisfy none of them — this function's answer for every graph written
+ * before parallel flow existed is byte-for-byte the answer it gave before. That property is not a
+ * nicety: these codes join a list that gates saving in the editor, starting a case (422) and the AI
+ * repair loop, so a rule that fired on an old graph would break all three at once.
  */
 export function validateGraph(def: WorkflowDefinition): GraphError[] {
   const errors: GraphError[] = [];
@@ -82,6 +136,52 @@ export function validateGraph(def: WorkflowDefinition): GraphError[] {
         });
       }
     }
+  }
+
+  // E4 — the STATIC twins of the `invalid-gateway` refusals in `advance`. They are two views of one
+  // rule set and must be kept in step: a graph the engine will refuse to run should not be saveable
+  // in the first place. The one runtime refusal with NO twin here is a token whose fork run is
+  // missing from `scopes` — that is a property of a running case, not of a definition, so it cannot
+  // be read off the graph at all. Do not go looking for it.
+  for (const node of def.nodes) {
+    if (!node.gateway) continue;
+    const outs = def.transitions.filter((t) => t.from === node.id);
+
+    if (node.gateway === "fork") {
+      if (outs.length < 2) {
+        errors.push({
+          code: "fork-single-outgoing",
+          message: `Fork "${node.id}" has ${outs.length} outgoing transition(s); a fork needs at least 2.`,
+          ref: node.id,
+        });
+      }
+      gatedEdges(node, outs, errors);
+    } else if (node.gateway === "join") {
+      if (outs.length !== 1) {
+        errors.push({
+          code: "join-not-one-outgoing",
+          message: `Join "${node.id}" has ${outs.length} outgoing transition(s); a join needs exactly 1.`,
+          ref: node.id,
+        });
+      }
+      gatedEdges(node, outs, errors);
+    }
+  }
+
+  // Only a FORK, and not because the engine cannot run it — it can. `createInstance` parks the first
+  // token on `def.start` without settling, but `advance` settles BEFORE choosing a token, so the
+  // fork explodes on the first action (see `engine.test.ts`, "settles a case whose START is a fork").
+  // What breaks is the PRODUCT around it: the token id the case was stored with is consumed by that
+  // settle, so a client echoing it back gets `unknown-token`, and the Run view offers no action at
+  // all for a branch parked on a gateway. A start JOIN has neither problem — its token is
+  // root-scoped, with no siblings to wait for, so it merely passes through.
+  const startNode = def.nodes.find((n) => n.id === def.start);
+  if (startNode?.gateway === "fork") {
+    errors.push({
+      code: "start-is-fork",
+      message: `Start node "${def.start}" is a fork; a case would be stored already parked on it, with a token id the next advance has already consumed.`,
+      ref: def.start,
+    });
   }
 
   return errors;

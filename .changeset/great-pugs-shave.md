@@ -19,6 +19,7 @@ before storing, so nothing stored can be in that state.)
 
 ⚠️ This release adds the contract only; the engine that executes it lands in the same release (see
 the E3a entry). Because the primitive catalog is rendered straight into the workflow-authoring system
-prompt, its `gateway` entry tells the model NOT to emit one — still true after E3a, for a different
-reason: `validateGraph` has no fork/join rules yet, so a malformed gateway is accepted at save time
-and only refused when someone runs the case.
+prompt, its `gateway` entry tells the model NOT to emit one — still true after E3a and E4, for a
+reason that has now changed twice: malformed gateways ARE rejected at save time as of E4, but the
+editor still has no gateway authoring UI, so a workflow the model writes one into cannot be edited
+afterwards.
